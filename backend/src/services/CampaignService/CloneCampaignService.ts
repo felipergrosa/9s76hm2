@@ -57,6 +57,8 @@ const CloneCampaignService = async (campaignId: string | number): Promise<Campai
         openTicket: original.openTicket,
         dispatchStrategy: original.dispatchStrategy,
         allowedWhatsappIds: original.allowedWhatsappIds,
+        tagListId: original.tagListId,
+        negativeTagListIds: original.negativeTagListIds,
         // Templates Meta
         metaTemplateName: original.metaTemplateName,
         metaTemplateLanguage: original.metaTemplateLanguage,

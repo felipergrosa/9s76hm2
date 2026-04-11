@@ -15,6 +15,7 @@ interface Data {
   contactListId: number;
   whatsappId?: number;
   tagListId?: string | number | null;
+  negativeTagListIds?: number[] | string | null;
   message1?: string;
   message2?: string;
   message3?: string;
@@ -97,6 +98,17 @@ const UpdateService = async (data: Data): Promise<Campaign> => {
       payload.contactListIds = JSON.stringify(payload.contactListIds);
     } catch (e) {
       payload.contactListIds = String(payload.contactListIds);
+    }
+  }
+
+  if (
+    payload.negativeTagListIds != null &&
+    typeof payload.negativeTagListIds !== "string"
+  ) {
+    try {
+      payload.negativeTagListIds = JSON.stringify(payload.negativeTagListIds);
+    } catch (e) {
+      payload.negativeTagListIds = String(payload.negativeTagListIds);
     }
   }
 

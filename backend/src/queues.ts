@@ -49,6 +49,7 @@ import CreateLogTicketService from "./services/TicketServices/CreateLogTicketSer
 import formatBody from "./helpers/Mustache";
 import TicketTag from "./models/TicketTag";
 import Tag from "./models/Tag";
+import ContactTag from "./models/ContactTag";
 import Plan from "./models/Plan";
 import GetWhatsAppAdapter from "./helpers/GetWhatsAppAdapter";
 import SendTemplateToContact from "./services/MetaServices/SendTemplateToContact";
@@ -108,6 +109,8 @@ interface CampaignData {
   confirmation: boolean;
   dispatchStrategy: string | null;
   allowedWhatsappIds: string | null;
+  tagListId: number | null;
+  negativeTagListIds: string | null;
   statusTicket: string | null;
   // Mensagens
   message1: string | null;
@@ -715,6 +718,8 @@ function serializeCampaign(campaign: any): CampaignData {
     confirmation: campaign.confirmation,
     dispatchStrategy: campaign.dispatchStrategy,
     allowedWhatsappIds: campaign.allowedWhatsappIds,
+    tagListId: campaign.tagListId,
+    negativeTagListIds: campaign.negativeTagListIds,
     statusTicket: campaign.statusTicket,
     // Mensagens
     message1: campaign.message1,
@@ -745,6 +750,123 @@ function serializeCampaign(campaign: any): CampaignData {
     metaTemplateName: campaign.metaTemplateName,
     metaTemplateVariables: campaign.metaTemplateVariables
   };
+}
+
+function parseCampaignTagIds(value: any): number[] {
+  if (value === null || value === undefined || value === "" || value === "Nenhuma") {
+    return [];
+  }
+
+  let parsed = value;
+
+  if (typeof value === "string") {
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      parsed = value.split(",");
+    }
+  }
+
+  const values = Array.isArray(parsed) ? parsed : [parsed];
+
+  return Array.from(new Set(
+    values
+      .map((item: any) => Number(item))
+      .filter((item: number) => Number.isFinite(item) && item > 0)
+  ));
+}
+
+function getContactListItemCanonicalNumber(item: any): string | null {
+  if (item?.canonicalNumber) {
+    return String(item.canonicalNumber);
+  }
+
+  const { canonical } = safeNormalizePhoneNumber(item?.number || "");
+  return canonical || (item?.number ? String(item.number).replace(/\D/g, "") : null);
+}
+
+async function applyCampaignTagFilters(contacts: ContactListItem[], campaign: any): Promise<ContactListItem[]> {
+  const positiveTagId = Number(campaign?.tagListId);
+  const hasPositiveTag = Number.isFinite(positiveTagId) && positiveTagId > 0;
+  const negativeTagIds = parseCampaignTagIds(campaign?.negativeTagListIds);
+  const selectedTagIds = Array.from(new Set([
+    ...(hasPositiveTag ? [positiveTagId] : []),
+    ...negativeTagIds
+  ]));
+
+  if (selectedTagIds.length === 0 || contacts.length === 0) {
+    return contacts;
+  }
+
+  const canonicalNumbers = Array.from(new Set(
+    contacts
+      .map(contact => getContactListItemCanonicalNumber(contact))
+      .filter((value): value is string => !!value)
+  ));
+
+  if (canonicalNumbers.length === 0) {
+    return hasPositiveTag ? [] : contacts;
+  }
+
+  const matchedContacts = await Contact.findAll({
+    where: {
+      companyId: campaign.companyId,
+      canonicalNumber: { [Op.in]: canonicalNumbers }
+    },
+    attributes: ["id", "canonicalNumber"]
+  });
+
+  const contactIdByCanonical = new Map<string, number>();
+  matchedContacts.forEach((contact: any) => {
+    if (contact.canonicalNumber) {
+      contactIdByCanonical.set(String(contact.canonicalNumber), contact.id);
+    }
+  });
+
+  const contactIds = matchedContacts.map((contact: any) => contact.id);
+
+  if (contactIds.length === 0) {
+    return hasPositiveTag ? [] : contacts;
+  }
+
+  const contactTags = await ContactTag.findAll({
+    where: {
+      companyId: campaign.companyId,
+      contactId: { [Op.in]: contactIds },
+      tagId: { [Op.in]: selectedTagIds }
+    },
+    attributes: ["contactId", "tagId"]
+  });
+
+  const tagIdsByContactId = new Map<number, Set<number>>();
+  contactTags.forEach((contactTag: any) => {
+    if (!tagIdsByContactId.has(contactTag.contactId)) {
+      tagIdsByContactId.set(contactTag.contactId, new Set<number>());
+    }
+    tagIdsByContactId.get(contactTag.contactId)?.add(Number(contactTag.tagId));
+  });
+
+  const filteredContacts = contacts.filter((item: any) => {
+    const canonicalNumber = getContactListItemCanonicalNumber(item);
+    const contactId = canonicalNumber ? contactIdByCanonical.get(canonicalNumber) : null;
+    const contactTagIds = contactId ? tagIdsByContactId.get(contactId) : null;
+
+    if (hasPositiveTag && !contactTagIds?.has(positiveTagId)) {
+      return false;
+    }
+
+    if (negativeTagIds.some(tagId => contactTagIds?.has(tagId))) {
+      return false;
+    }
+
+    return true;
+  });
+
+  logger.info(
+    `[ProcessCampaign] Campanha ${campaign.id} | Tag positiva: ${hasPositiveTag ? positiveTagId : "-"} | Tags negativas: ${negativeTagIds.join(",") || "-"} | Após filtros: ${filteredContacts.length}/${contacts.length}`
+  );
+
+  return filteredContacts;
 }
 
 async function getContact(id) {
@@ -1240,12 +1362,12 @@ async function getIntervalSettings(companyId: number, isOfficialApi: boolean = f
       } catch { }
     });
 
-    // Se for API Oficial, usar configurações otimizadas da interface
+    // API Oficial usa o intervalo configurado e os caps da Meta; sem pausa longa oculta.
     if (isOfficialApi) {
       return {
         messageIntervalMs: Math.max(0, officialApiMessageInterval) * 1000,
-        longerIntervalAfter: 100, // Pausa longa após 100 mensagens
-        greaterIntervalMs: 30000,  // Pausa de 30 segundos
+        longerIntervalAfter: 0,
+        greaterIntervalMs: 0,
       };
     }
 
@@ -1259,8 +1381,8 @@ async function getIntervalSettings(companyId: number, isOfficialApi: boolean = f
     if (isOfficialApi) {
       return {
         messageIntervalMs: 1000, // 1 segundo
-        longerIntervalAfter: 100,
-        greaterIntervalMs: 30000
+        longerIntervalAfter: 0,
+        greaterIntervalMs: 0
       };
     }
     return {
@@ -1460,19 +1582,20 @@ async function handleProcessCampaign(job) {
       // IMPORTANTE: Carregar contatos de TODAS as listas e deduplicar por número
       const allContactsRaw = await ContactListItem.findAll({
         where: { contactListId: listIds },
-        attributes: ["id", "name", "number", "email", "isWhatsappValid", "isGroup"]
+        attributes: ["id", "name", "number", "canonicalNumber", "email", "isWhatsappValid", "isGroup"]
       });
 
       // Deduplicação por número de telefone (evita envio duplo se contato estiver em +1 lista)
       const seenNumbers = new Set<string>();
-      const contacts = allContactsRaw.filter(c => {
+      const dedupedContacts = allContactsRaw.filter(c => {
         const num = (c as any).number;
         if (!num || seenNumbers.has(num)) return false;
         seenNumbers.add(num);
         return true;
       });
+      const contacts = await applyCampaignTagFilters(dedupedContacts, campaign);
 
-      logger.info(`[ProcessCampaign] Campanha ${id} | Listas: ${listIds.join(",")} | Total bruto: ${allContactsRaw.length} | Após dedup: ${contacts.length}`);
+      logger.info(`[ProcessCampaign] Campanha ${id} | Listas: ${listIds.join(",")} | Total bruto: ${allContactsRaw.length} | Após dedup: ${dedupedContacts.length} | Após filtros: ${contacts.length}`);
 
       if (!isArray(contacts) || contacts.length === 0) {
         logger.warn(`[ProcessCampaign] Campanha ${id} não tem contatos na lista. Verifique se a lista tem contatos válidos.`);

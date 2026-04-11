@@ -14,6 +14,7 @@ import {
   Box, FormControl, FormControlLabel, Grid, InputLabel, MenuItem, Select,
   Tab, Tabs, Paper, Divider, FormHelperText, Checkbox, Popover,
   Stepper, Step, StepLabel, Dialog, DialogTitle, DialogContent,
+  Accordion, AccordionSummary, AccordionDetails,
 } from "@material-ui/core";
 import { Alert } from "@material-ui/lab";
 import Autocomplete, { createFilterOptions } from "@material-ui/lab/Autocomplete";
@@ -24,7 +25,7 @@ import InfoOutlinedIcon from "@material-ui/icons/InfoOutlined";
 import LocalOfferIcon from "@material-ui/icons/LocalOffer";
 import SaveIcon from "@material-ui/icons/Save";
 import AccessTimeIcon from "@material-ui/icons/AccessTime";
-import { ChevronRight, ChevronLeft, ArrowLeft, Settings as SettingsIcon, Assignment as AssignmentIcon, Event as EventIcon, QuestionAnswer as QuestionAnswerIcon, Send as SendIcon, FlashOn as FlashOnIcon, PlayCircleOutline as PlayCircleOutlineIcon, PauseCircleOutline as PauseCircleOutlineIcon, Refresh as RefreshIcon, OpenInNew as OpenInNewIcon } from "@material-ui/icons";
+import { ChevronRight, ChevronLeft, ArrowLeft, Settings as SettingsIcon, Assignment as AssignmentIcon, Event as EventIcon, QuestionAnswer as QuestionAnswerIcon, Send as SendIcon, FlashOn as FlashOnIcon, PlayCircleOutline as PlayCircleOutlineIcon, PauseCircleOutline as PauseCircleOutlineIcon, Refresh as RefreshIcon, OpenInNew as OpenInNewIcon, ExpandMore as ExpandMoreIcon, HelpOutline as HelpOutlineIcon } from "@material-ui/icons";
 import { Sparkles, Smile, Settings, Rocket, Calendar, Zap } from "lucide-react";
 
 import api from "../../services/api";
@@ -75,6 +76,176 @@ const useStyles = makeStyles((theme) => ({
     "&.MuiPaper-root": { padding: "20px !important" },
   },
   sideCard: { borderRadius: 20, padding: theme.spacing(3), backgroundColor: "#fff", boxShadow: "0 2px 12px rgba(0,0,0,0.03)", position: "sticky", top: 16 },
+  sideCardHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: 14,
+    marginBottom: theme.spacing(2),
+    textAlign: "left",
+  },
+  sideCardIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: "#f0fdfa",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  guideIntro: {
+    color: "#64748b",
+    fontSize: "0.9rem",
+    lineHeight: 1.55,
+    marginBottom: theme.spacing(2),
+  },
+  guideIntroRow: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: theme.spacing(1.25),
+    marginBottom: theme.spacing(2),
+  },
+  guideIntroText: {
+    color: "#64748b",
+    fontSize: "0.9rem",
+    lineHeight: 1.55,
+    margin: 0,
+    flex: 1,
+  },
+  guideIntroIcon: {
+    color: "#0f766e",
+    fontSize: 20,
+    marginTop: 2,
+    flexShrink: 0,
+  },
+  guideList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: theme.spacing(1.5),
+  },
+  guideItem: {
+    padding: theme.spacing(1.5),
+    borderRadius: 14,
+    backgroundColor: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+  guideItemTitle: {
+    color: "#0f172a",
+    fontSize: "0.86rem",
+    fontWeight: 700,
+    marginBottom: 4,
+  },
+  guideItemText: {
+    color: "#64748b",
+    fontSize: "0.82rem",
+    lineHeight: 1.45,
+  },
+  guideFooter: {
+    marginTop: theme.spacing(2),
+    padding: theme.spacing(1.5),
+    borderRadius: 14,
+    backgroundColor: "#ecfdf5",
+    border: "1px solid #bbf7d0",
+    color: "#047857",
+  },
+  helpAccordion: {
+    marginTop: theme.spacing(2),
+    borderRadius: "14px !important",
+    border: "1px solid #e2e8f0",
+    boxShadow: "none",
+    overflow: "hidden",
+    "&:before": {
+      display: "none",
+    },
+    "&.Mui-expanded": {
+      marginTop: theme.spacing(2),
+    },
+  },
+  helpAccordionSummary: {
+    minHeight: 44,
+    backgroundColor: "#f8fafc",
+    "&.Mui-expanded": {
+      minHeight: 44,
+    },
+    "& .MuiAccordionSummary-content": {
+      margin: "10px 0",
+      "&.Mui-expanded": {
+        margin: "10px 0",
+      },
+    },
+  },
+  helpAccordionDetails: {
+    display: "block",
+    padding: theme.spacing(1.5),
+    backgroundColor: "#fff",
+  },
+  helpAccordionSubtle: {
+    marginTop: theme.spacing(1),
+    borderRadius: "12px !important",
+    border: "1px solid #edf2f7",
+    backgroundColor: "#fafcfc",
+    boxShadow: "none",
+    overflow: "hidden",
+    "&:before": {
+      display: "none",
+    },
+    "&.Mui-expanded": {
+      marginTop: theme.spacing(1),
+    },
+  },
+  helpAccordionSummarySubtle: {
+    minHeight: 38,
+    padding: "0 10px",
+    backgroundColor: "transparent",
+    "&.Mui-expanded": {
+      minHeight: 38,
+    },
+    "& .MuiAccordionSummary-content": {
+      margin: "8px 0",
+      "&.Mui-expanded": {
+        margin: "8px 0",
+      },
+    },
+  },
+  negativeTagField: {
+    "& .MuiOutlinedInput-root": {
+      backgroundColor: "#fff1f2",
+      borderRadius: 12,
+    },
+    "& .MuiOutlinedInput-notchedOutline": {
+      borderColor: "#fecdd3",
+    },
+    "& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline": {
+      borderColor: "#fb7185",
+    },
+    "& .MuiChip-root": {
+      backgroundColor: "#ffe4e6",
+      color: "#9f1239",
+    },
+  },
+  tagExplainGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: theme.spacing(1.5),
+    marginTop: theme.spacing(1.5),
+    [theme.breakpoints.down("sm")]: {
+      gridTemplateColumns: "1fr",
+    },
+  },
+  tagExplainPositive: {
+    borderRadius: 12,
+    padding: theme.spacing(1.5),
+    backgroundColor: "#eff6ff",
+    border: "1px solid #bfdbfe",
+    color: "#1e40af",
+  },
+  tagExplainNegative: {
+    borderRadius: 12,
+    padding: theme.spacing(1.5),
+    backgroundColor: "#fff1f2",
+    border: "1px solid #fecdd3",
+    color: "#9f1239",
+  },
   stepTitle: { fontSize: "1.6rem", fontWeight: 800, color: "#0f172a", marginBottom: 4 },
   stepSub: { color: "#64748b", marginBottom: theme.spacing(4), fontSize: "0.95rem" },
   label: { fontWeight: 600, color: "#334155", marginBottom: 6, display: "block", fontSize: "0.875rem" },
@@ -142,8 +313,8 @@ const ColorlibStepIcon = (props) => {
   const icons = { 
     1: <SettingsIcon size={20} />, 
     2: <AssignmentIcon size={20} />, 
-    3: <EventIcon size={20} />, 
-    4: <QuestionAnswerIcon size={20} /> 
+    3: <QuestionAnswerIcon size={20} />,
+    4: <EventIcon size={20} />
   };
   return (
     <div className={`${classes.stepIcon} ${active ? classes.stepIconActive : ""} ${completed ? classes.stepIconCompleted : ""}`}>
@@ -156,7 +327,7 @@ const CampaignSchema = Yup.object().shape({
   name: Yup.string().min(2, "Mínimo 2 caracteres").max(50, "Máximo 50").required("Obrigatório"),
 });
 
-const STEPS = ["Configuração", "Regras", "Agendamento", "Mensagem"];
+const STEPS = ["Configuração", "Regras", "Mensagem", "Confirmação"];
 const META_TEMPLATE_MANAGER_URL = "https://business.facebook.com/wa/manage/message-templates";
 const CAMPAIGN_ESTIMATE_DEFAULTS = {
   messageInterval: 20,
@@ -168,9 +339,6 @@ const CAMPAIGN_ESTIMATE_DEFAULTS = {
   officialApiCapHourly: 1000,
   officialApiCapDaily: 10000,
 };
-const OFFICIAL_ESTIMATE_LONGER_INTERVAL_AFTER = 100;
-const OFFICIAL_ESTIMATE_GREATER_INTERVAL = 30;
-
 const normalizeCampaignSettingValue = (value) => {
   if (value === null || value === undefined) return value;
 
@@ -190,6 +358,11 @@ const getNumericSetting = (value, fallback) => {
   return Number.isFinite(parsedValue) ? parsedValue : fallback;
 };
 
+const getPositiveCap = (value) => {
+  const parsedValue = Number(value);
+  return Number.isFinite(parsedValue) && parsedValue > 0 ? Math.floor(parsedValue) : Infinity;
+};
+
 const getSelectedContactListIds = (values = {}) => {
   const ids = [];
 
@@ -204,12 +377,76 @@ const getSelectedContactListIds = (values = {}) => {
   return Array.from(new Set(ids.map(id => Number(id)).filter(Number.isFinite)));
 };
 
+const parseStoredIdArray = (value) => {
+  if (value === null || value === undefined || value === "" || value === "Nenhuma") {
+    return [];
+  }
+
+  let parsed = value;
+
+  if (typeof value === "string") {
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      parsed = value.split(",");
+    }
+  }
+
+  const values = Array.isArray(parsed) ? parsed : [parsed];
+
+  return Array.from(new Set(
+    values
+      .map(item => Number(item))
+      .filter(item => Number.isFinite(item) && item > 0)
+  ));
+};
+
+const getTagNameById = (tagLists, tagId) => {
+  const tag = (tagLists || []).find(item => Number(item?.id) === Number(tagId));
+  return tag?.name || "";
+};
+
+const getTagNamesByIds = (tagLists, tagIds) => (
+  parseStoredIdArray(tagIds)
+    .map(tagId => getTagNameById(tagLists, tagId))
+    .filter(Boolean)
+);
+
+const getContactListContactsCount = (contactList) => {
+  const rawCount = contactList?.contactsCount
+    ?? contactList?.contactCount
+    ?? contactList?.count
+    ?? contactList?.dataValues?.contactsCount
+    ?? contactList?.contacts?.length
+    ?? 0;
+  const contactsCount = Number(rawCount);
+  return Number.isFinite(contactsCount) ? contactsCount : 0;
+};
+
+const formatContactListOptionLabel = (contactList) => (
+  contactList?.name ? `${contactList.name} (${getContactListContactsCount(contactList)})` : ""
+);
+
+const formatTagOption = (tag) => {
+  const rawCount = tag?.contactCount ?? tag?.contactsCount ?? tag?.count ?? tag?.contacts?.length ?? 0;
+  const contactCount = Number(rawCount);
+  return {
+    ...tag,
+    id: tag.id,
+    name: `${tag.name} (${Number.isFinite(contactCount) ? contactCount : 0})`,
+  };
+};
+
 const formatEstimatedDuration = (totalSeconds) => {
   if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) {
     return "menos de 1 min";
   }
 
-  const roundedSeconds = Math.max(60, Math.round(totalSeconds / 60) * 60);
+  if (totalSeconds < 60) {
+    return `${Math.max(1, Math.ceil(totalSeconds))}s`;
+  }
+
+  const roundedSeconds = Math.max(60, Math.ceil(totalSeconds / 60) * 60);
   const days = Math.floor(roundedSeconds / 86400);
   const hours = Math.floor((roundedSeconds % 86400) / 3600);
   const minutes = Math.floor((roundedSeconds % 3600) / 60);
@@ -226,60 +463,125 @@ const formatEstimatedDuration = (totalSeconds) => {
   return parts.join(" ");
 };
 
-const getConnectionEstimateCaps = (connection, settings) => {
+const getConnectionEstimateSettings = (connection, settings) => {
   const isOfficial = connection?.channelType === "official";
 
   if (isOfficial) {
     const messageInterval = Math.max(0, getNumericSetting(settings.officialApiMessageInterval, CAMPAIGN_ESTIMATE_DEFAULTS.officialApiMessageInterval));
-    const capHourly = Math.max(0, getNumericSetting(settings.officialApiCapHourly, CAMPAIGN_ESTIMATE_DEFAULTS.officialApiCapHourly));
-    const capDaily = Math.max(0, getNumericSetting(settings.officialApiCapDaily, CAMPAIGN_ESTIMATE_DEFAULTS.officialApiCapDaily));
-    const pacingPerHour = messageInterval > 0
-      ? (3600 * OFFICIAL_ESTIMATE_LONGER_INTERVAL_AFTER) / ((OFFICIAL_ESTIMATE_LONGER_INTERVAL_AFTER * messageInterval) + OFFICIAL_ESTIMATE_GREATER_INTERVAL)
-      : capHourly;
-    const effectiveHourly = capHourly > 0 ? Math.min(pacingPerHour, capHourly) : pacingPerHour;
-    const effectiveDaily = capDaily > 0 ? Math.min(capDaily, Math.max(0, effectiveHourly) * 24) : Math.max(0, effectiveHourly) * 24;
+    const hourlyCap = getPositiveCap(settings.officialApiCapHourly ?? CAMPAIGN_ESTIMATE_DEFAULTS.officialApiCapHourly);
+    const dailyCap = getPositiveCap(settings.officialApiCapDaily ?? CAMPAIGN_ESTIMATE_DEFAULTS.officialApiCapDaily);
+    const paceHourlyRate = messageInterval > 0 ? 3600 / messageInterval : hourlyCap;
 
     return {
-      hourlyRate: Math.max(0, effectiveHourly),
-      dailyRate: Math.max(0, Math.floor(effectiveDaily)),
+      isOfficial,
+      messageInterval,
+      longerIntervalAfter: 0,
+      greaterInterval: 0,
+      hourlyCap,
+      dailyCap,
+      paceHourlyRate: Number.isFinite(paceHourlyRate) ? paceHourlyRate : 0,
     };
   }
 
   const messageInterval = Math.max(0, getNumericSetting(settings.messageInterval, CAMPAIGN_ESTIMATE_DEFAULTS.messageInterval));
   const longerIntervalAfter = Math.max(0, getNumericSetting(settings.longerIntervalAfter, CAMPAIGN_ESTIMATE_DEFAULTS.longerIntervalAfter));
   const greaterInterval = Math.max(0, getNumericSetting(settings.greaterInterval, CAMPAIGN_ESTIMATE_DEFAULTS.greaterInterval));
-  const capHourly = Math.max(0, getNumericSetting(settings.capHourly, CAMPAIGN_ESTIMATE_DEFAULTS.capHourly));
-  const capDaily = Math.max(0, getNumericSetting(settings.capDaily, CAMPAIGN_ESTIMATE_DEFAULTS.capDaily));
-  const pacingPerHour = longerIntervalAfter > 0
+  const hourlyCap = getPositiveCap(settings.capHourly ?? CAMPAIGN_ESTIMATE_DEFAULTS.capHourly);
+  const dailyCap = getPositiveCap(settings.capDaily ?? CAMPAIGN_ESTIMATE_DEFAULTS.capDaily);
+  const paceHourlyRate = longerIntervalAfter > 0
     ? (3600 * longerIntervalAfter) / ((longerIntervalAfter * messageInterval) + greaterInterval)
-    : (messageInterval > 0 ? 3600 / messageInterval : capHourly);
-  const effectiveHourly = capHourly > 0 ? Math.min(pacingPerHour, capHourly) : pacingPerHour;
-  const effectiveDaily = capDaily > 0 ? Math.min(capDaily, Math.max(0, effectiveHourly) * 24) : Math.max(0, effectiveHourly) * 24;
+    : (messageInterval > 0 ? 3600 / messageInterval : hourlyCap);
 
   return {
-    hourlyRate: Math.max(0, effectiveHourly),
-    dailyRate: Math.max(0, Math.floor(effectiveDaily)),
+    isOfficial,
+    messageInterval,
+    longerIntervalAfter,
+    greaterInterval,
+    hourlyCap,
+    dailyCap,
+    paceHourlyRate: Number.isFinite(paceHourlyRate) ? paceHourlyRate : 0,
   };
 };
 
+const estimateBatchDurationSeconds = (count, estimateSettings) => {
+  if (count <= 0) return 0;
+
+  const intervalDuration = count * estimateSettings.messageInterval;
+  const longPauseCount = estimateSettings.longerIntervalAfter > 0
+    ? Math.floor((count - 1) / estimateSettings.longerIntervalAfter)
+    : 0;
+
+  return intervalDuration + (longPauseCount * estimateSettings.greaterInterval);
+};
+
+const getEffectiveWindowCap = (cap, windowSeconds, estimateSettings) => {
+  if (!Number.isFinite(cap)) return Infinity;
+
+  const durationToReachCap = estimateBatchDurationSeconds(cap, estimateSettings);
+  return durationToReachCap < windowSeconds ? cap : Infinity;
+};
+
+const estimateConnectionDurationSeconds = (contactCount, estimateSettings) => {
+  if (contactCount <= 0) return 0;
+
+  const hourlyCap = getEffectiveWindowCap(estimateSettings.hourlyCap, 3600, estimateSettings);
+  const dailyCap = getEffectiveWindowCap(estimateSettings.dailyCap, 86400, estimateSettings);
+  let remaining = contactCount;
+  let elapsed = 0;
+  let sentToday = 0;
+
+  while (remaining > 0) {
+    const remainingToday = Number.isFinite(dailyCap) ? Math.max(0, dailyCap - sentToday) : remaining;
+
+    if (remainingToday <= 0) {
+      elapsed = Math.max(elapsed, Math.ceil(elapsed / 86400) * 86400);
+      sentToday = 0;
+      continue;
+    }
+
+    const batchLimit = Math.min(remaining, remainingToday, Number.isFinite(hourlyCap) ? hourlyCap : remaining);
+    const batchDuration = estimateBatchDurationSeconds(batchLimit, estimateSettings);
+    elapsed += batchDuration;
+    remaining -= batchLimit;
+    sentToday += batchLimit;
+
+    if (remaining <= 0) break;
+
+    if (Number.isFinite(dailyCap) && sentToday >= dailyCap) {
+      elapsed = Math.max(elapsed, Math.ceil(elapsed / 86400) * 86400);
+      sentToday = 0;
+      continue;
+    }
+
+    if (Number.isFinite(hourlyCap) && batchLimit >= hourlyCap) {
+      elapsed = Math.max(elapsed, Math.ceil(elapsed / 3600) * 3600);
+    }
+  }
+
+  return elapsed;
+};
+
 // Função para validar e mostrar erros com SweetAlert2 (por step)
-const validateStepAndShowErrors = async (validateForm, values, whatsappId, selectedQueue, currentStep) => {
+const validateStepAndShowErrors = async (validateForm, values, whatsappId, selectedQueue, currentStep, isOfficialConnection = false) => {
   const errors = await validateForm();
   
   // Definir quais campos pertencem a cada step
   const stepFields = {
-    0: ["name", "contactListId", "contactListIds", "whatsappId", "tagListId"],
+    0: ["name", "contactListId", "contactListIds", "whatsappId", "tagListId", "negativeTagListIds"],
     1: ["openTicket", "statusTicket", "queueId", "confirmation"],
-    2: ["scheduledAt"],
-    3: ["message1", "message2", "message3", "message4", "message5"],
+    2: ["message1", "message2", "message3", "message4", "message5", "metaTemplateName"],
+    3: ["scheduledAt"],
   };
   
   // Mapear campos para labels
   const FIELD_LABELS = {
     name: "Nome da Campanha",
     contactListId: "Lista de Contatos",
+    tagListId: "Tags positivas",
+    negativeTagListIds: "Tags negativas",
     whatsappId: "Conexão WhatsApp",
     message1: "Mensagem 1",
+    metaTemplateName: "Template oficial",
     scheduledAt: "Data de Agendamento",
     openTicket: "Abrir Ticket",
     statusTicket: "Status do Ticket",
@@ -319,24 +621,30 @@ const validateStepAndShowErrors = async (validateForm, values, whatsappId, selec
   }
   
   if (currentStep === 2) {
-    // Step 3 (Agendamento) - validação
+    // Step 3 (Mensagem) - validações
+    if (isOfficialConnection) {
+      if (!values.metaTemplateName) {
+        customErrors.metaTemplateName = "Selecione um template oficial";
+      }
+    } else {
+      if (!values.message1 || values.message1.trim() === "") {
+        customErrors.message1 = "A mensagem 1 é obrigatória";
+      }
+      // Validação de tamanho máximo
+      if (values.message1 && values.message1.length > 1024) {
+        customErrors.message1 = "A mensagem 1 deve ter no máximo 1024 caracteres";
+      }
+    }
+  }
+
+  if (currentStep === 3) {
+    // Step 4 (Confirmação/Agendamento) - validação
     if (values.scheduledAt) {
       const scheduledDate = moment(values.scheduledAt);
       const now = moment();
       if (scheduledDate.isBefore(now)) {
         customErrors.scheduledAt = "A data de agendamento deve ser futura";
       }
-    }
-  }
-  
-  if (currentStep === 3) {
-    // Step 4 (Mensagem) - validações
-    if (!values.message1 || values.message1.trim() === "") {
-      customErrors.message1 = "A mensagem 1 é obrigatória";
-    }
-    // Validação de tamanho máximo
-    if (values.message1 && values.message1.length > 1024) {
-      customErrors.message1 = "A mensagem 1 deve ter no máximo 1024 caracteres";
     }
   }
   
@@ -355,7 +663,7 @@ const validateStepAndShowErrors = async (validateForm, values, whatsappId, selec
       })
       .join("<br>");
     
-    const stepNames = ["Configuração", "Regras", "Agendamento", "Mensagem"];
+    const stepNames = ["Configuração", "Regras", "Mensagem", "Confirmação"];
     
     const result = await Swal.fire({
       title: `<span style="color: #dc2626;">⚠️ Etapa ${currentStep + 1}: ${stepNames[currentStep]}</span>`,
@@ -415,7 +723,7 @@ const CampaignForm = () => {
     confirmationMessage1: "", confirmationMessage2: "", confirmationMessage3: "", confirmationMessage4: "", confirmationMessage5: "",
     mediaUrl1: "", mediaName1: "", mediaUrl2: "", mediaName2: "", mediaUrl3: "", mediaName3: "", mediaUrl4: "", mediaName4: "", mediaUrl5: "", mediaName5: "",
     status: "INATIVA", confirmation: false, scheduledAt: "",
-    contactListId: "", contactListIds: [], tagListId: "Nenhuma", companyId,
+    contactListId: "", contactListIds: [], tagListId: "Nenhuma", negativeTagListIds: [], companyId,
     statusTicket: "closed", openTicket: "disabled", dispatchStrategy: "single",
     allowedWhatsappIds: [], metaTemplateName: null, metaTemplateLanguage: null,
     metaTemplateVariables: {}, sendMediaSeparately: false,
@@ -610,7 +918,7 @@ const CampaignForm = () => {
         ]);
         setContactLists(clRes || []);
         setWhatsapps((waRes.data || []).map(w => ({ ...w, selected: false })));
-        setTagLists((tagRes.data || []).map(t => ({ id: t.id, name: `${t.name} (${(t.contacts||[]).length})` })));
+        setTagLists((tagRes.data || []).map(formatTagOption));
 
         if (campaignId) {
           setCampaignLoading(true);
@@ -645,18 +953,16 @@ const CampaignForm = () => {
           
           const prev = {};
           
-          // Garantir que tagListId seja "Nenhuma" quando null/vazio, ou string quando tem valor
-          console.log("[DEBUG] tagListId original:", data?.tagListId, "tipo:", typeof data?.tagListId);
           if (!data?.tagListId || data.tagListId === null || data.tagListId === "" || data.tagListId === undefined) {
             prev.tagListId = "Nenhuma";
           } else {
             prev.tagListId = String(data.tagListId);
           }
-          console.log("[DEBUG] tagListId após processamento:", prev.tagListId);
+          prev.negativeTagListIds = parseStoredIdArray(data?.negativeTagListIds);
           
-          // Copiar demais campos, mas NÃO sobrescrever tagListId já processado
+          // Copiar demais campos, mas NÃO sobrescrever campos normalizados acima
           Object.entries(data).forEach(([k,v]) => { 
-            if (k !== "tagListId") {
+            if (k !== "tagListId" && k !== "negativeTagListIds") {
               prev[k] = k === "scheduledAt" && v ? moment(v).format("YYYY-MM-DDTHH:mm") : (v === null ? "" : v); 
             }
           });
@@ -756,9 +1062,16 @@ const CampaignForm = () => {
   useEffect(() => {
     if (!whatsappId) { setAvailableTemplates([]); return; }
     const wa = whatsapps.find(w => w.id === whatsappId);
-    if (wa?.channelType !== "official") { setAvailableTemplates([]); return; }
+    if (wa?.channelType !== "official") { setAvailableTemplates([]); setSelectedTemplate(null); return; }
     loadOfficialTemplates(whatsappId);
   }, [whatsappId, whatsapps, loadOfficialTemplates]);
+
+  useEffect(() => {
+    const wa = whatsapps.find(w => w.id === whatsappId);
+    if (wa?.channelType === "official" && messageTab !== 0) {
+      setMessageTab(0);
+    }
+  }, [whatsappId, whatsapps, messageTab]);
 
   // Carregar pastas/arquivos da biblioteca quando o dialog abrir
   useEffect(() => {
@@ -794,9 +1107,7 @@ const CampaignForm = () => {
     const selectedListIds = getSelectedContactListIds(values);
     const totalContacts = selectedListIds.reduce((sum, listId) => {
       const list = (contactLists || []).find(item => Number(item?.id) === Number(listId));
-      const rawCount = list?.contactsCount ?? list?.dataValues?.contactsCount ?? list?.contacts?.length ?? 0;
-      const contactsCount = Number(rawCount);
-      return sum + (Number.isFinite(contactsCount) ? contactsCount : 0);
+      return sum + getContactListContactsCount(list);
     }, 0);
 
     const poolIds = dispatchStrategy === "round_robin" && Array.isArray(allowedWhatsappIds) && allowedWhatsappIds.length > 0
@@ -807,39 +1118,36 @@ const CampaignForm = () => {
       .map(id => (whatsapps || []).find(item => Number(item?.id) === id))
       .filter(Boolean);
 
-    const aggregateCaps = selectedConnections.reduce((acc, connection) => {
-      const caps = getConnectionEstimateCaps(connection, campaignSettings);
-      acc.hourlyRate += caps.hourlyRate;
-      acc.dailyRate += caps.dailyRate;
-      return acc;
-    }, { hourlyRate: 0, dailyRate: 0 });
+    const connectionEstimates = selectedConnections.map((connection, index) => {
+      const estimateSettings = getConnectionEstimateSettings(connection, campaignSettings);
+      const baseShare = Math.floor(totalContacts / selectedConnections.length);
+      const extraContact = index < (totalContacts % selectedConnections.length) ? 1 : 0;
+      const assignedContacts = selectedConnections.length > 0 ? baseShare + extraContact : 0;
 
-    let estimatedDurationSeconds = 0;
-    let remainingContacts = totalContacts;
+      return {
+        ...estimateSettings,
+        assignedContacts,
+        durationSeconds: estimateConnectionDurationSeconds(assignedContacts, estimateSettings),
+      };
+    });
 
-    if (aggregateCaps.hourlyRate > 0 && totalContacts > 0) {
-      if (aggregateCaps.dailyRate > 0 && aggregateCaps.dailyRate < aggregateCaps.hourlyRate * 24) {
-        while (remainingContacts > 0) {
-          const contactsToday = Math.min(remainingContacts, aggregateCaps.dailyRate);
-          const secondsToday = (contactsToday / aggregateCaps.hourlyRate) * 3600;
-          estimatedDurationSeconds += secondsToday;
-          remainingContacts -= contactsToday;
-
-          if (remainingContacts > 0) {
-            estimatedDurationSeconds += Math.max(0, 86400 - secondsToday);
-          }
-        }
-      } else {
-        estimatedDurationSeconds = (totalContacts / aggregateCaps.hourlyRate) * 3600;
-      }
-    }
+    const estimatedDurationSeconds = connectionEstimates.reduce(
+      (maxDuration, item) => Math.max(maxDuration, item.durationSeconds),
+      0
+    );
+    const paceHourlyRate = connectionEstimates.reduce((sum, item) => sum + item.paceHourlyRate, 0);
+    const hourlyCap = connectionEstimates.reduce((sum, item) => {
+      if (!Number.isFinite(item.hourlyCap)) return sum;
+      return sum + item.hourlyCap;
+    }, 0);
 
     return {
       totalContacts,
       connectionCount: selectedConnections.length,
-      hourlyRate: aggregateCaps.hourlyRate,
+      hourlyRate: paceHourlyRate,
+      hourlyCap,
       estimatedDurationSeconds,
-      hasTagFilter: values?.tagListId && values.tagListId !== "Nenhuma",
+      hasTagFilter: (values?.tagListId && values.tagListId !== "Nenhuma") || parseStoredIdArray(values?.negativeTagListIds).length > 0,
     };
   };
 
@@ -856,7 +1164,9 @@ const CampaignForm = () => {
       const contactListIds = Array.isArray(values.contactListIds) ? JSON.stringify(values.contactListIds) : values.contactListIds;
       // Process tagListId: "Nenhuma" → null, string → number
       const tagListId = values.tagListId === "Nenhuma" ? null : (values.tagListId ? Number(values.tagListId) : null);
-      const dv = { ...processed, whatsappId, userId, userIds, contactListIds, queueId: selectedQueue || null, dispatchStrategy, allowedWhatsappIds, metaTemplateVariables, tagListId };
+      const negativeTagIds = parseStoredIdArray(values.negativeTagListIds);
+      const negativeTagListIds = negativeTagIds.length > 0 ? JSON.stringify(negativeTagIds) : null;
+      const dv = { ...processed, whatsappId, userId, userIds, contactListIds, queueId: selectedQueue || null, dispatchStrategy, allowedWhatsappIds, metaTemplateVariables, tagListId, negativeTagListIds };
       if (campaignId) { await api.put(`/campaigns/${campaignId}`, dv); if (attachment) { const fd = new FormData(); fd.append("file", attachment); await api.post(`/campaigns/${campaignId}/media-upload`, fd); } }
       else { const { data } = await api.post("/campaigns", dv); if (attachment) { const fd = new FormData(); fd.append("file", attachment); await api.post(`/campaigns/${data.id}/media-upload`, fd); } }
       toast.success(i18n.t("campaigns.toasts.success"));
@@ -876,7 +1186,9 @@ const CampaignForm = () => {
       const contactListIds = Array.isArray(values.contactListIds) ? JSON.stringify(values.contactListIds) : values.contactListIds;
       // Process tagListId: "Nenhuma" → null, string → number
       const tagListId = values.tagListId === "Nenhuma" ? null : (values.tagListId ? Number(values.tagListId) : null);
-      const dv = { ...processed, whatsappId, userId: selectedUsers.length === 1 ? selectedUsers[0].id : null, userIds, contactListIds, queueId: selectedQueue || null, dispatchStrategy, allowedWhatsappIds, metaTemplateVariables, tagListId };
+      const negativeTagIds = parseStoredIdArray(values.negativeTagListIds);
+      const negativeTagListIds = negativeTagIds.length > 0 ? JSON.stringify(negativeTagIds) : null;
+      const dv = { ...processed, whatsappId, userId: selectedUsers.length === 1 ? selectedUsers[0].id : null, userIds, contactListIds, queueId: selectedQueue || null, dispatchStrategy, allowedWhatsappIds, metaTemplateVariables, tagListId, negativeTagListIds };
       if (campaignId) { await api.put(`/campaigns/${campaignId}`, dv); } else { const { data } = await api.post("/campaigns", dv); setCampaignId(data.id); }
       toast.success(hasSched ? "Campanha programada!" : "Rascunho salvo!");
       handleClose();
@@ -957,16 +1269,23 @@ const CampaignForm = () => {
     );
   };
 
-  const renderMessageField = (identifier, setFieldValue, values, label = "Conteúdo da Mensagem") => (
+  const renderMessageField = (identifier, setFieldValue, values, label = "Conteúdo da Mensagem", options = {}) => (
+    (() => {
+      const fieldDisabled = typeof options.disabled === "boolean"
+        ? options.disabled
+        : (!campaignEditable && campaign.status !== "CANCELADA");
+      const tooltipText = options.tooltip || (label.includes("Confirmação")
+        ? "Mensagem reservada para validar a intenção do cliente, caso a opção de Confirmação esteja ativa no Passo 2."
+        : "O texto que seu cliente receberá. Use as tags no botão abaixo para personalizar com o nome do contato, etc.");
+
+      return (
     <>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
         <Box display="flex" alignItems="center" gap={0.5}>
           <Typography variant="subtitle2" style={{ fontWeight: 600, textTransform: "uppercase", fontSize: "0.75rem", letterSpacing: 0.5, color: "#64748b" }}>
             {label}
           </Typography>
-          <Tooltip title={label.includes("Confirmação") 
-            ? "Mensagem reservada para validar a intenção do cliente, caso a opção de Confirmação esteja ativa no Passo 2."
-            : "O texto que seu cliente receberá. Use as tags no botão abaixo para personalizar com o nome do contato, etc."}>
+          <Tooltip title={tooltipText}>
             <InfoOutlinedIcon style={{ fontSize: 13, color: "#94a3b8", cursor: "pointer" }} />
           </Tooltip>
         </Box>
@@ -975,21 +1294,23 @@ const CampaignForm = () => {
         </Typography>
       </Box>
       <Box display="flex" alignItems="center" style={{ gap: 4 }} mb={1}>
-        <Tooltip title="Tags"><IconButton size="small" onClick={(e) => { setTagsTargetField(identifier); handleOpenTags(e); }} disabled={!campaignEditable}><LocalOfferIcon fontSize="small" /></IconButton></Tooltip>
+        <Tooltip title="Tags"><IconButton size="small" onClick={(e) => { setTagsTargetField(identifier); handleOpenTags(e); }} disabled={fieldDisabled}><LocalOfferIcon fontSize="small" /></IconButton></Tooltip>
         <Tooltip title="Emoji">
-          <WhatsAppPopover onSelectEmoji={(emoji) => handleEmojiSelect(identifier, emoji, setFieldValue, values)} disabled={!campaignEditable}>
-            <IconButton size="small" disabled={!campaignEditable}><Smile size={16} /></IconButton>
+          <WhatsAppPopover onSelectEmoji={(emoji) => handleEmojiSelect(identifier, emoji, setFieldValue, values)} disabled={fieldDisabled}>
+            <IconButton size="small" disabled={fieldDisabled}><Smile size={16} /></IconButton>
           </WhatsAppPopover>
         </Tooltip>
-        <Tooltip title="Assistente IA"><IconButton size="small" onClick={() => setAssistantOpen(true)} disabled={!campaignEditable}><Sparkles size={16} /></IconButton></Tooltip>
-        <Tooltip title="Info"><IconButton size="small" onClick={handleOpenInfo} disabled={!campaignEditable}><InfoOutlinedIcon fontSize="small" /></IconButton></Tooltip>
+        <Tooltip title="Assistente IA"><IconButton size="small" onClick={() => setAssistantOpen(true)} disabled={fieldDisabled}><Sparkles size={16} /></IconButton></Tooltip>
+        <Tooltip title="Info"><IconButton size="small" onClick={handleOpenInfo} disabled={fieldDisabled}><InfoOutlinedIcon fontSize="small" /></IconButton></Tooltip>
       </Box>
       <FormattedTextField
         id={identifier} value={values[identifier] || ""} onChange={(e) => setFieldValue(identifier, e.target.value)}
         placeholder="Olá {nome}! 👋 Escreva sua mensagem aqui..." rows={6}
-        disabled={!campaignEditable && campaign.status !== "CANCELADA"}
+        disabled={fieldDisabled}
       />
     </>
+      );
+    })()
   );
 
   if (campaignLoading) return <Box display="flex" justifyContent="center" alignItems="center" height="100vh"><CircularProgress /></Box>;
@@ -1044,6 +1365,10 @@ const CampaignForm = () => {
         {({ values, errors, touched, setFieldValue, isSubmitting, setSubmitting, validateForm }) => {
           setFieldValueRef.current = setFieldValue;
           formValuesRef.current = values;
+          const selectedWhatsapp = whatsapps.find(w => w.id === whatsappId);
+          const isOfficialConnection = selectedWhatsapp?.channelType === "official";
+          const currentMessageField = `message${messageTab + 1}`;
+          const currentConfirmationField = `confirmationMessage${messageTab + 1}`;
           return (
             <Form style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
               {/* Tags Popover */}
@@ -1089,13 +1414,13 @@ const CampaignForm = () => {
                                   multiple
                                   name="contactListIds"
                                   options={contactLists || []}
-                                  getOptionLabel={(option) => option?.name || ""}
-                                  value={(contactLists || []).filter(cl => (values.contactListIds || []).includes(cl?.id))}
+                                  getOptionLabel={formatContactListOptionLabel}
+                                  value={(contactLists || []).filter(cl => getSelectedContactListIds(values).includes(Number(cl?.id)))}
                                   onChange={(e, nv) => setFieldValue("contactListIds", (nv || []).map(cl => cl?.id))}
                                   disabled={!campaignEditable}
                                   renderTags={(value, getTagProps) =>
                                     (value || []).map((option, index) => (
-                                      <Chip key={option?.id || index} label={option?.name || ""} size="small" {...getTagProps({ index })} />
+                                      <Chip key={option?.id || index} label={formatContactListOptionLabel(option)} size="small" {...getTagProps({ index })} />
                                     ))
                                   }
                                   renderInput={(params) => (
@@ -1119,18 +1444,55 @@ const CampaignForm = () => {
                            </Grid>
                          </Grid>
 
-                         <Box mt={3}>
-                           <Box display="flex" alignItems="center" mb={1} gap={0.5}>
-                             <label className={classes.label} style={{ marginBottom: 0 }}>Tags (Filtrar Contatos)</label>
-                             <Tooltip title="Selecione uma tag para enviar APENAS para contatos da lista que possuam essa etiqueta específica."><InfoOutlinedIcon style={{ fontSize: 16, color: "#64748b", cursor: "pointer" }} /></Tooltip>
+                         <Grid container spacing={2} style={{ marginTop: 24 }}>
+                           <Grid item xs={12} md={6}>
+                             <Box display="flex" alignItems="center" mb={1} gap={0.5}>
+                               <label className={classes.label} style={{ marginBottom: 0 }}>Tags positivas (incluir)</label>
+                               <Tooltip title="Envia APENAS para contatos das listas que possuam esta tag. Se ficar como Nenhuma, todos os contatos das listas entram no público."><InfoOutlinedIcon style={{ fontSize: 16, color: "#64748b", cursor: "pointer" }} /></Tooltip>
+                             </Box>
+                             <FormControl variant="outlined" fullWidth className={classes.formField}>
+                               <Select name="tagListId" value={values.tagListId||"Nenhuma"} onChange={e => setFieldValue("tagListId", e.target.value)} disabled={!campaignEditable}>
+                                 <MenuItem value="Nenhuma">Nenhuma</MenuItem>
+                                 {tagLists.map(t => <MenuItem key={t.id} value={String(t.id)}>{t.name}</MenuItem>)}
+                               </Select>
+                             </FormControl>
+                           </Grid>
+
+                           <Grid item xs={12} md={6}>
+                             <Box display="flex" alignItems="center" mb={1} gap={0.5}>
+                               <label className={classes.label} style={{ marginBottom: 0, color: "#9f1239" }}>Tags negativas (excluir)</label>
+                               <Tooltip title="Remove do envio qualquer contato que possua uma das tags negativas selecionadas, mesmo que ele esteja nas listas ou na tag positiva."><InfoOutlinedIcon style={{ fontSize: 16, color: "#be123c", cursor: "pointer" }} /></Tooltip>
+                             </Box>
+                             <Box className={`${classes.autoCompleteField} ${classes.negativeTagField}`}>
+                               <Autocomplete
+                                 multiple
+                                 options={tagLists || []}
+                                 getOptionLabel={(option) => option?.name || ""}
+                                 value={(tagLists || []).filter(tag => parseStoredIdArray(values.negativeTagListIds).includes(Number(tag.id)))}
+                                 onChange={(e, nv) => setFieldValue("negativeTagListIds", (nv || []).map(tag => Number(tag.id)))}
+                                 disabled={!campaignEditable}
+                                 renderTags={(value, getTagProps) =>
+                                   (value || []).map((option, index) => (
+                                     <Chip key={option?.id || index} label={option?.name || ""} size="small" {...getTagProps({ index })} />
+                                   ))
+                                 }
+                                 renderInput={(params) => (
+                                   <TextField {...params} variant="outlined" placeholder="Selecionar tags para excluir..." fullWidth />
+                                 )}
+                               />
+                             </Box>
+                           </Grid>
+                         </Grid>
+
+                         <Box className={classes.tagExplainGrid}>
+                           <Box className={classes.tagExplainPositive}>
+                             <Typography variant="caption" style={{ fontWeight: 700 }}>Tags positivas</Typography>
+                             <Typography variant="body2">Limitam o público: só entra quem estiver nas listas selecionadas e também possuir a tag escolhida.</Typography>
                            </Box>
-                           <FormControl variant="outlined" fullWidth className={classes.formField}>
-                             {(() => { console.log("[DEBUG RENDER] values.tagListId:", values.tagListId, "tagLists:", tagLists); return null; })()}
-                             <Select name="tagListId" value={values.tagListId||"Nenhuma"} onChange={e => setFieldValue("tagListId", e.target.value)} disabled={!campaignEditable}>
-                               <MenuItem value="Nenhuma">Nenhuma</MenuItem>
-                               {tagLists.map(t => <MenuItem key={t.id} value={String(t.id)}>{t.name}</MenuItem>)}
-                             </Select>
-                           </FormControl>
+                           <Box className={classes.tagExplainNegative}>
+                             <Typography variant="caption" style={{ fontWeight: 700 }}>Tags negativas</Typography>
+                             <Typography variant="body2">Removem contatos do público: se o contato tiver qualquer tag negativa selecionada, a campanha não será enviada para ele.</Typography>
+                           </Box>
                          </Box>
 
                          <Box className={classes.tipBox} mt={3}>
@@ -1139,11 +1501,49 @@ const CampaignForm = () => {
                          </Box>
                        </Paper>
                      </Grid>
-                     <Grid item xs={12} md={5}>
-                       <Paper className={classes.sideCard} style={{ textAlign: "center" }}>
-                         <Box p={2} style={{ backgroundColor: "#f8fafc", borderRadius: 16, display: "inline-flex", marginBottom: 12 }}><Settings size={40} color="#005c53" /></Box>
-                         <Typography variant="h6" style={{ fontWeight: 700, color: "#005c53" }}>Primeira Etapa</Typography>
-                         <Typography variant="body2" color="textSecondary" style={{ maxWidth: 260, margin: "8px auto 0" }}>Defina quem receberá suas mensagens e qual canal será utilizado.</Typography>
+                     <Grid item xs={12} md={5} style={{ display: "flex", alignItems: "flex-start" }}>
+                       <Paper className={classes.sideCard} style={{ width: "100%", top: 0 }}>
+                         <Box className={classes.sideCardHeader}>
+                           <Box className={classes.sideCardIcon}>
+                             <Settings size={32} color="#005c53" />
+                           </Box>
+                           <Box>
+                             <Typography variant="overline" style={{ color: "#0f766e", fontWeight: 700, letterSpacing: 0.7 }}>Primeira Etapa</Typography>
+                             <Typography variant="h6" style={{ fontWeight: 800, color: "#005c53", lineHeight: 1.2 }}>Configuração da campanha</Typography>
+                           </Box>
+                         </Box>
+
+                         <Box className={classes.guideIntroRow}>
+                           <HelpOutlineIcon className={classes.guideIntroIcon} />
+                           <Typography className={classes.guideIntroText}>
+                             Preencha estes dados antes de avançar. Eles definem o público, o canal de envio e alimentam o resumo com a estimativa da campanha.
+                           </Typography>
+                         </Box>
+
+                         <Box className={classes.guideList}>
+                           <Box className={classes.guideItem}>
+                             <Typography className={classes.guideItemTitle}>Nome da Campanha</Typography>
+                             <Typography className={classes.guideItemText}>Use um nome interno fácil de localizar depois, como objetivo, público e data da ação.</Typography>
+                           </Box>
+                           <Box className={classes.guideItem}>
+                             <Typography className={classes.guideItemTitle}>Listas de Contatos</Typography>
+                             <Typography className={classes.guideItemText}>Selecione uma ou mais listas. A quantidade total de contatos será somada para calcular o público e a estimativa de envio.</Typography>
+                           </Box>
+                           <Box className={classes.guideItem}>
+                             <Typography className={classes.guideItemTitle}>Conexão</Typography>
+                             <Typography className={classes.guideItemText}>Escolha o WhatsApp remetente. API Oficial usa templates e limites Meta; Baileys usa os intervalos e limites configurados para Baileys.</Typography>
+                           </Box>
+                           <Box className={classes.guideItem}>
+                             <Typography className={classes.guideItemTitle}>Tags positivas e negativas</Typography>
+                             <Typography className={classes.guideItemText}>A tag positiva reduz o público para quem deve receber. As tags negativas são uma lista de exclusão e impedem o envio para contatos marcados com elas.</Typography>
+                           </Box>
+                         </Box>
+
+                         <Box className={classes.guideFooter}>
+                           <Typography variant="body2" style={{ fontWeight: 600 }}>
+                             Antes de continuar, confirme se a conexão está ativa e se as listas possuem números válidos.
+                           </Typography>
+                         </Box>
                        </Paper>
                      </Grid>
                    </>)}
@@ -1202,12 +1602,12 @@ const CampaignForm = () => {
                            <Grid item xs={12} md={6}>
                              <Box display="flex" alignItems="center" mb={1} gap={0.5}>
                                <label className={classes.label} style={{ marginBottom: 0 }}>Usuários</label>
-                               <Tooltip title="Quais atendentes terão acesso a este ticket. Se houver mais de um, o sistema distribui entre eles."><InfoOutlinedIcon style={{ fontSize: 16, color: "#64748b", cursor: "pointer" }} /></Tooltip>
+                               <Tooltip title="Quais atendentes ficarão responsáveis pelo atendimento quando houver resposta ou ticket vinculado."><InfoOutlinedIcon style={{ fontSize: 16, color: "#64748b", cursor: "pointer" }} /></Tooltip>
                              </Box>
                              <Box className={classes.autoCompleteField}>
                                <Autocomplete multiple options={options || []} getOptionLabel={o => o?.name || ""} value={selectedUsers || []} openOnFocus onOpen={ensureUsersLoaded}
                                  onChange={(e, nv) => { setSelectedUsers(nv||[]); if (nv?.length === 1 && nv[0]?.queues) { setQueues(nv[0].queues); if(nv[0].queues?.length===1) setSelectedQueue(nv[0].queues[0]?.id); } else { setQueues(allQueues); if(!nv?.length) setSelectedQueue(""); } }}
-                                 filterOptions={filterOptions} disabled={!campaignEditable || values.openTicket === "disabled"} loading={loading}
+                                 filterOptions={filterOptions} disabled={!campaignEditable} loading={loading}
                                  renderTags={(v, gtp) => (v || []).map((o,i) => <Chip key={o?.id || i} label={o?.name || ""} size="small" {...gtp({index:i})} />)}
                                  renderInput={p => <TextField {...p} variant="outlined" placeholder="Adicionar..." fullWidth />} />
                              </Box>
@@ -1304,30 +1704,74 @@ const CampaignForm = () => {
                          </Grid>
                        </Paper>
                      </Grid>
-                     <Grid item xs={12} md={5}>
-                       <Paper className={classes.sideCard}>
-                          {allowedWhatsappIds.length > 1 && (
-                             <Box mb={2}>
-                               <Typography variant="subtitle2" gutterBottom style={{ fontWeight: 700 }}>📊 Pool de Disparo Ativo</Typography>
-                               <Paper variant="outlined" style={{ padding: 12, borderRadius: 12, backgroundColor: "#f8fafc" }}>
-                                 <Typography variant="body2">{allowedWhatsappIds.length} conexões selecionadas</Typography>
-                                 <Typography variant="caption" color="textSecondary">As mensagens serão enviadas em rodízio aleatório entre estes canais.</Typography>
-                               </Paper>
-                             </Box>
-                          )}
-                         <Box display="flex" alignItems="center" mb={2}><Zap size={22} color="#005c53" style={{ marginRight: 8 }} /><Typography variant="subtitle1" style={{ fontWeight: 700 }}>IA e Automação</Typography></Box>
-                         <Alert severity="info" icon={<InfoOutlinedIcon />} style={{ marginBottom: 12 }}>O motor RAG utilizará sua base de conhecimento para responder automaticamente as dúvidas frequentes.</Alert>
-                         {values.openTicket === "disabled" && <Box p={1.5} style={{ backgroundColor: "#005c53", borderRadius: 12, color: "#fff", textAlign: "center" }}><Typography variant="caption">STATUS DA REGRA</Typography><Typography variant="subtitle2" style={{ fontWeight: 700 }}>Otimização Ativa</Typography></Box>}
+                     <Grid item xs={12} md={5} style={{ display: "flex", alignItems: "flex-start" }}>
+                       <Paper className={classes.sideCard} style={{ width: "100%", top: 0 }}>
+                         <Box className={classes.sideCardHeader}>
+                           <Box className={classes.sideCardIcon}>
+                             <AssignmentIcon style={{ fontSize: 30, color: "#005c53" }} />
+                           </Box>
+                           <Box>
+                             <Typography variant="overline" style={{ color: "#0f766e", fontWeight: 700, letterSpacing: 0.7 }}>Segunda Etapa</Typography>
+                             <Typography variant="h6" style={{ fontWeight: 800, color: "#005c53", lineHeight: 1.2 }}>Regras de atendimento</Typography>
+                           </Box>
+                         </Box>
+
+                         <Box className={classes.guideIntroRow}>
+                           <HelpOutlineIcon className={classes.guideIntroIcon} />
+                           <Typography className={classes.guideIntroText}>
+                             Configure como os tickets serão criados, para onde as respostas serão enviadas e como o disparo deve usar as conexões disponíveis.
+                           </Typography>
+                         </Box>
+
+                         <Box className={classes.guideList}>
+                           <Box className={classes.guideItem}>
+                             <Typography className={classes.guideItemTitle}>Abrir Ticket</Typography>
+                             <Typography className={classes.guideItemText}>Habilitado cria o ticket imediatamente. Desabilitado envia a campanha sem abrir atendimento agora e só organiza a conversa quando houver resposta.</Typography>
+                           </Box>
+                           <Box className={classes.guideItem}>
+                             <Typography className={classes.guideItemTitle}>Status do Ticket</Typography>
+                             <Typography className={classes.guideItemText}>Define se o ticket nascerá fechado, pendente ou aberto. Este campo só vale quando a abertura de ticket estiver habilitada.</Typography>
+                           </Box>
+                           <Box className={classes.guideItem}>
+                             <Typography className={classes.guideItemTitle}>Fila e Usuários</Typography>
+                             <Typography className={classes.guideItemText}>Escolha o departamento e os atendentes responsáveis por receber as respostas. Sem fila definida, o atendimento pode ficar sem roteamento claro.</Typography>
+                           </Box>
+                           <Box className={classes.guideItem}>
+                             <Typography className={classes.guideItemTitle}>Estratégia de Envio</Typography>
+                             <Typography className={classes.guideItemText}>Única conexão usa apenas o WhatsApp principal. Rodízio distribui os envios entre as conexões selecionadas para respeitar limites e reduzir concentração.</Typography>
+                           </Box>
+                           <Box className={classes.guideItem}>
+                             <Typography className={classes.guideItemTitle}>Confirmação</Typography>
+                             <Typography className={classes.guideItemText}>Quando habilitada, a campanha pode enviar uma mensagem de confirmação antes de encaminhar o cliente para o fluxo de atendimento.</Typography>
+                           </Box>
+                         </Box>
+
+                         {allowedWhatsappIds.length > 1 && (
+                           <Box mt={2}>
+                             <Paper variant="outlined" style={{ padding: 12, borderRadius: 12, backgroundColor: "#f8fafc" }}>
+                               <Typography variant="body2" style={{ fontWeight: 700 }}>{allowedWhatsappIds.length} conexões selecionadas</Typography>
+                               <Typography variant="caption" color="textSecondary">As mensagens serão distribuídas entre estes canais conforme a estratégia escolhida.</Typography>
+                             </Paper>
+                           </Box>
+                         )}
+
+                         <Box className={classes.guideFooter}>
+                           <Typography variant="body2" style={{ fontWeight: 600 }}>
+                             {values.openTicket === "disabled"
+                               ? "Otimização ativa: a campanha envia sem abrir tickets imediatamente."
+                               : "Confirme fila, usuários e status antes de avançar para a mensagem."}
+                           </Typography>
+                         </Box>
                        </Paper>
                      </Grid>
                    </>)}
 
-                  {/* ═══ STEP 2: Agendamento ═══ */}
-                  {activeStep === 2 && (<>
+                  {/* ═══ STEP 3: Confirmação / Agendamento ═══ */}
+                  {activeStep === 3 && (<>
                     <Grid item xs={12} md={7}>
                       <Paper className={classes.card}>
-                        <Typography className={classes.stepTitle}>Estratégia de Envio</Typography>
-                        <Typography className={classes.stepSub}>Defina o momento ideal para o disparo das suas mensagens.</Typography>
+                        <Typography className={classes.stepTitle}>Confirmação da Campanha</Typography>
+                        <Typography className={classes.stepSub}>Revise a estratégia e defina quando os disparos devem iniciar.</Typography>
                         <Grid container spacing={2}>
                           <Grid item xs={6}>
                             <Paper className={`${classes.schedCard} ${!values.scheduledAt ? classes.schedCardActive : ""}`} onClick={() => setFieldValue("scheduledAt", "")}>
@@ -1368,10 +1812,15 @@ const CampaignForm = () => {
                         const selectedListNames = contactLists
                           .filter(c => selectedListIds.includes(Number(c?.id)))
                           .map(c => c.name);
+                        const positiveTagName = values.tagListId !== "Nenhuma"
+                          ? getTagNameById(tagLists, values.tagListId)
+                          : "";
+                        const negativeTagNames = getTagNamesByIds(tagLists, values.negativeTagListIds);
                         const deliveryEstimate = buildCampaignDeliveryEstimate(values);
                         const frequencyLabel = deliveryEstimate.hourlyRate > 0
                           ? `~${Math.max(1, Math.round(deliveryEstimate.hourlyRate))} msg/h`
                           : "Defina uma conexão";
+                        const isHourlyCapLowerThanPace = deliveryEstimate.hourlyCap > 0 && deliveryEstimate.hourlyCap < deliveryEstimate.hourlyRate;
                         const estimateDetail = deliveryEstimate.totalContacts > 0 && deliveryEstimate.hourlyRate > 0
                           ? `${deliveryEstimate.totalContacts} contato(s) • conclusão em ~${formatEstimatedDuration(deliveryEstimate.estimatedDurationSeconds)}`
                           : (selectedListIds.length > 0
@@ -1381,7 +1830,7 @@ const CampaignForm = () => {
                         return (
                           <Paper className={classes.sideCard}>
                             <Typography variant="h6" style={{ fontWeight: 700, marginBottom: 16 }}>📊 Resumo da Estratégia</Typography>
-                            
+
                             <Box mb={2}>
                               <Typography variant="caption" color="textSecondary">CAMPANHA</Typography>
                               <Typography variant="body2" style={{ fontWeight: 600 }}>{values.name || "N/A"}</Typography>
@@ -1392,7 +1841,8 @@ const CampaignForm = () => {
                               <Typography variant="body2" style={{ fontWeight: 600 }}>
                                 {selectedListNames.length > 0 ? selectedListNames.join(", ") : "Nenhuma lista selecionada"}
                               </Typography>
-                              {values.tagListId !== "Nenhuma" && <Typography variant="caption" style={{ display: 'block', marginTop: 2, color: '#0369a1' }}>🎯 Filtro de Tag: {tagLists.find(t => t.id === values.tagListId)?.name}</Typography>}
+                              {positiveTagName && <Typography variant="caption" style={{ display: "block", marginTop: 2, color: "#0369a1" }}>Tag positiva: {positiveTagName}</Typography>}
+                              {negativeTagNames.length > 0 && <Typography variant="caption" style={{ display: "block", marginTop: 2, color: "#be123c" }}>Tags negativas: {negativeTagNames.join(", ")}</Typography>}
                             </Box>
 
                             <Box mb={2}>
@@ -1412,7 +1862,7 @@ const CampaignForm = () => {
                             <Box mb={2}>
                               <Typography variant="caption" color="textSecondary">ATENDIMENTO</Typography>
                               <Typography variant="body2" style={{ fontWeight: 600 }}>
-                                {values.openTicket === "enabled" ? "✅ Abre Ticket" : "❌ Apenas Mensagem"} 
+                                {values.openTicket === "enabled" ? "✅ Abre Ticket" : "❌ Apenas Mensagem"}
                                 {values.statusTicket && ` (${values.statusTicket.toUpperCase()})`}
                               </Typography>
                               <Typography variant="caption">{selectedQueue ? `Fila: ${queues.find(q => q.id === selectedQueue)?.name}` : "Sem fila definida"}</Typography>
@@ -1436,141 +1886,266 @@ const CampaignForm = () => {
                               {estimateDetail}
                             </Typography>
 
-                            {deliveryEstimate.hasTagFilter && (
-                              <Typography variant="caption" style={{ display: "block", marginTop: 4, color: "#0369a1" }}>
-                                A estimativa usa o volume bruto das listas. O filtro de tag pode reduzir esse total.
+                            {isHourlyCapLowerThanPace && (
+                              <Typography variant="caption" style={{ display: "block", marginTop: 4, color: "#475569" }}>
+                                Limite configurado: {deliveryEstimate.hourlyCap} msg/h. O intervalo define o ritmo ate esse limite ser atingido.
                               </Typography>
                             )}
+
+                            {deliveryEstimate.hasTagFilter && (
+                              <Typography variant="caption" style={{ display: "block", marginTop: 4, color: "#475569" }}>
+                                Tags positivas e negativas podem reduzir o total no envio real.
+                              </Typography>
+                            )}
+
+                            <Accordion className={classes.helpAccordion}>
+                              <AccordionSummary expandIcon={<ExpandMoreIcon />} className={classes.helpAccordionSummary}>
+                                <Typography variant="body2" style={{ fontWeight: 700, color: "#0f766e" }}>Ajuda do agendamento e estimativa</Typography>
+                              </AccordionSummary>
+                              <AccordionDetails className={classes.helpAccordionDetails}>
+                                <Box className={classes.guideList}>
+                                  <Box className={classes.guideItem}>
+                                    <Typography className={classes.guideItemTitle}>Envio Imediato</Typography>
+                                    <Typography className={classes.guideItemText}>Use quando a campanha deve entrar na fila de disparo assim que a configuração for concluída.</Typography>
+                                  </Box>
+                                  <Box className={classes.guideItem}>
+                                    <Typography className={classes.guideItemTitle}>Agendamento Programado</Typography>
+                                    <Typography className={classes.guideItemText}>Use quando precisa controlar data e horário. Ao programar, informe sempre uma data futura.</Typography>
+                                  </Box>
+                                  <Box className={classes.guideItem}>
+                                    <Typography className={classes.guideItemTitle}>Data e Hora</Typography>
+                                    <Typography className={classes.guideItemText}>Este campo só aparece no modo programado e valida se o início está no futuro antes de salvar.</Typography>
+                                  </Box>
+                                  <Box className={classes.guideItem}>
+                                    <Typography className={classes.guideItemTitle}>Frequência estimada</Typography>
+                                    <Typography className={classes.guideItemText}>A estimativa usa contatos das listas, conexão escolhida e intervalos configurados para API Oficial ou Baileys.</Typography>
+                                  </Box>
+                                  <Box className={classes.guideItem}>
+                                    <Typography className={classes.guideItemTitle}>Proteção anti-spam</Typography>
+                                    <Typography className={classes.guideItemText}>Os limites por hora, por dia e pausas maiores continuam sendo respeitados no envio real.</Typography>
+                                  </Box>
+                                </Box>
+                              </AccordionDetails>
+                            </Accordion>
                           </Paper>
                         );
                       })()}
                     </Grid>
                    </>)}
 
-                   {activeStep === 3 && (<>
+                   {/* ═══ STEP 2: Mensagem ═══ */}
+                   {activeStep === 2 && (<>
                      <Grid item xs={12} md={7}>
                        <Paper className={classes.card}>
                          <Typography className={classes.stepTitle}>Compor Conteúdo</Typography>
                          <Typography className={classes.stepSub}>Personalize a experiência do seu cliente com textos, mídias ou templates oficiais.</Typography>
                          
-                         {/* Templates Meta (API Oficial) - MOVED HERE */}
-                         {(() => {
-                           const selectedWhatsapp = whatsapps.find(w => w.id === whatsappId);
-                           const metaTemplatesManagerUrl = META_TEMPLATE_MANAGER_URL;
-                           return selectedWhatsapp?.channelType === "official" ? (
-                             <Box mb={3} p={2.5} style={{ backgroundColor: "#eff6ff", borderRadius: 16, border: "1px solid #bfdbfe" }}>
-                               <Box display="flex" alignItems="center" mb={1} gap={1}>
-                                 <Zap size={18} color="#1d4ed8" />
-                                 <Typography variant="subtitle2" style={{ fontWeight: 700, color: "#1d4ed8" }}>WhatsApp Business API</Typography>
-                               </Box>
-                               <Box mb={2}>
-                                 <Box display="flex" alignItems="center" mb={1} gap={0.5}>
-                                   <label className={classes.label} style={{ marginBottom: 0 }}>Escolha um Template</label>
-                                   <Tooltip title="Templates pré-aprovados pela Meta. Necessário para iniciar conversas oficiais."><InfoOutlinedIcon style={{ fontSize: 16, color: "#64748b", cursor: "pointer" }} /></Tooltip>
-                                 </Box>
-                                 <FormControl fullWidth variant="outlined" size="small">
-                                   <Select value={selectedTemplate?.id || ""} onChange={(e) => {
-                                       const template = availableTemplates.find(t => t.id === e.target.value);
-                                       setSelectedTemplate(template);
-                                       if (template?.components) {
-                                         const body = template.components.find(c => c.type === "BODY");
-                                         if (body?.text) setFieldValue("message1", body.text);
-                                       }
-                                       if (template) { setFieldValue("metaTemplateName", template.name); setFieldValue("metaTemplateLanguage", template.language); }
-                                       else { setFieldValue("metaTemplateName", null); setFieldValue("metaTemplateLanguage", null); }
-                                     }} disabled={loadingTemplates || !campaignEditable} displayEmpty>
-                                     <MenuItem value=""><em>Nenhum (Mensagem Livre)</em></MenuItem>
-                                     {availableTemplates.map(t => (<MenuItem key={t.id} value={t.id}>{t.name} ({t.language})</MenuItem>))}
-                                   </Select>
-                                   {loadingTemplates && <FormHelperText>Carregando templates...</FormHelperText>}
-                                 </FormControl>
-                               </Box>
-
-                               <Box display="flex" alignItems="center" justifyContent="space-between" flexWrap="wrap" style={{ gap: 8 }}>
-                                 <Button
-                                   size="small"
-                                   variant="outlined"
-                                   color="primary"
-                                   startIcon={<OpenInNewIcon fontSize="small" />}
-                                   onClick={() => window.open(metaTemplatesManagerUrl, "_blank", "noopener,noreferrer")}
-                                 >
-                                   Criar template no Meta
-                                 </Button>
-
-                                 <Tooltip title="Recarregar apenas a lista de templates">
-                                   <span>
-                                     <IconButton
-                                       size="small"
-                                       color="primary"
-                                       onClick={async () => {
-                                         const refreshedTemplates = await loadOfficialTemplates(whatsappId, { showSuccessToast: true });
-
-                                         if (!selectedTemplate) {
-                                           return;
-                                         }
-
-                                         const updatedTemplate = refreshedTemplates.find(template => template.id === selectedTemplate.id);
-
-                                         if (updatedTemplate) {
-                                           setSelectedTemplate(updatedTemplate);
-                                           return;
-                                         }
-
-                                         setSelectedTemplate(null);
-                                         setMetaTemplateVariables({});
-                                         setFieldValue("metaTemplateName", null);
-                                         setFieldValue("metaTemplateLanguage", null);
-                                         setFieldValue("metaTemplateVariables", {});
-                                         toast.info("O template selecionado não está mais disponível na lista atual.");
-                                       }}
-                                       disabled={loadingTemplates || !whatsappId}
-                                     >
-                                       {loadingTemplates ? <CircularProgress size={18} /> : <RefreshIcon fontSize="small" />}
-                                     </IconButton>
-                                   </span>
+                         {/* Templates Meta (API Oficial) */}
+                         {isOfficialConnection ? (
+                           <Box mb={3} p={2.5} style={{ backgroundColor: "#eff6ff", borderRadius: 16, border: "1px solid #bfdbfe" }}>
+                             <Box display="flex" alignItems="center" mb={1} gap={1}>
+                               <Zap size={18} color="#1d4ed8" />
+                               <Typography variant="subtitle2" style={{ fontWeight: 700, color: "#1d4ed8" }}>WhatsApp Business API</Typography>
+                               <Tooltip title="Na API Oficial, o primeiro contato precisa usar template aprovado pela Meta. Depois de criar ou editar um template no Meta, volte aqui e recarregue a lista.">
+                                 <InfoOutlinedIcon style={{ fontSize: 16, color: "#1d4ed8", cursor: "pointer" }} />
+                               </Tooltip>
+                             </Box>
+                             <Box mb={2}>
+                               <Box display="flex" alignItems="center" mb={1} gap={0.5}>
+                                 <label className={classes.label} style={{ marginBottom: 0 }}>Escolha um Template</label>
+                                 <Tooltip title="Selecione um template aprovado e liberado para esta conexão oficial. Sem ele, a abertura da conversa pode falhar na Meta.">
+                                   <InfoOutlinedIcon style={{ fontSize: 16, color: "#64748b", cursor: "pointer" }} />
                                  </Tooltip>
                                </Box>
-
-                               {selectedTemplate && (
-                                 <Box mt={2} p={2} style={{ backgroundColor: "#fff", borderRadius: 12, border: "1px solid #dbeafe" }}>
-                                   <Typography variant="caption" style={{ fontWeight: 700, color: "#1d4ed8", textTransform: "uppercase", display: "block", marginBottom: 12 }}>Relacionar Variáveis do Template</Typography>
-                                   <TemplateVariableMapper whatsappId={whatsappId} templateName={selectedTemplate.name} languageCode={selectedTemplate.language} value={metaTemplateVariables} 
-                                     onChange={(val) => { setMetaTemplateVariables(val); setFieldValue("metaTemplateVariables", val); }} disabled={!campaignEditable} />
-                                 </Box>
-                               )}
+                               <FormControl fullWidth variant="outlined" size="small">
+                                 <Select value={selectedTemplate?.id || ""} onChange={(e) => {
+                                     const template = availableTemplates.find(t => t.id === e.target.value);
+                                     setSelectedTemplate(template);
+                                     if (template?.components) {
+                                       const body = template.components.find(c => c.type === "BODY");
+                                       if (body?.text) setFieldValue("message1", body.text);
+                                     }
+                                     if (template) { setFieldValue("metaTemplateName", template.name); setFieldValue("metaTemplateLanguage", template.language); }
+                                     else { setFieldValue("metaTemplateName", null); setFieldValue("metaTemplateLanguage", null); }
+                                   }} disabled={loadingTemplates || !campaignEditable} displayEmpty>
+                                   <MenuItem value=""><em>Nenhum (Mensagem Livre)</em></MenuItem>
+                                   {availableTemplates.map(t => (<MenuItem key={t.id} value={t.id}>{t.name} ({t.language})</MenuItem>))}
+                                 </Select>
+                                 {loadingTemplates && <FormHelperText>Carregando templates...</FormHelperText>}
+                               </FormControl>
                              </Box>
-                           ) : null;
-                         })()}
 
-                         <Box display="flex" mb={2} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                           {[1,2,3,4,5].map((n,idx) => (
-                             <Button key={n} className={`${classes.msgTab} ${messageTab === idx ? classes.msgTabActive : ""}`}
-                               variant={messageTab === idx ? "contained" : "text"} onClick={() => setMessageTab(idx)}>Msg {n}</Button>
-                           ))}
-                         </Box>
+                             <Box display="flex" alignItems="center" justifyContent="space-between" flexWrap="wrap" style={{ gap: 8 }}>
+                               <Tooltip title="Abre o gerenciador da Meta em nova aba para criar ou editar templates oficiais desta conta.">
+                                 <span>
+                                   <Button
+                                     size="small"
+                                     variant="outlined"
+                                     color="primary"
+                                     startIcon={<OpenInNewIcon fontSize="small" />}
+                                     onClick={() => window.open(META_TEMPLATE_MANAGER_URL, "_blank", "noopener,noreferrer")}
+                                   >
+                                     Criar template no Meta
+                                   </Button>
+                                 </span>
+                               </Tooltip>
 
-                         {renderMessageField(`message${messageTab+1}`, setFieldValue, values, "Mensagem Principal")}
-                         {renderTabAttachment(messageTab, values, !campaignEditable)}
+                               <Tooltip title="Recarrega apenas a lista local de templates aprovados, sem atualizar a página inteira.">
+                                 <span>
+                                   <IconButton
+                                     size="small"
+                                     color="primary"
+                                     onClick={async () => {
+                                       const refreshedTemplates = await loadOfficialTemplates(whatsappId, { showSuccessToast: true });
+
+                                       if (!selectedTemplate) {
+                                         return;
+                                       }
+
+                                       const updatedTemplate = refreshedTemplates.find(template => template.id === selectedTemplate.id);
+
+                                       if (updatedTemplate) {
+                                         setSelectedTemplate(updatedTemplate);
+                                         return;
+                                       }
+
+                                       setSelectedTemplate(null);
+                                       setMetaTemplateVariables({});
+                                       setFieldValue("metaTemplateName", null);
+                                       setFieldValue("metaTemplateLanguage", null);
+                                       setFieldValue("metaTemplateVariables", {});
+                                       toast.info("O template selecionado não está mais disponível na lista atual.");
+                                     }}
+                                     disabled={loadingTemplates || !whatsappId}
+                                   >
+                                     {loadingTemplates ? <CircularProgress size={18} /> : <RefreshIcon fontSize="small" />}
+                                   </IconButton>
+                                 </span>
+                               </Tooltip>
+                             </Box>
+
+                             {selectedTemplate && (
+                               <Box mt={2} p={2} style={{ backgroundColor: "#fff", borderRadius: 12, border: "1px solid #dbeafe" }}>
+                                 <Box display="flex" alignItems="center" gap={0.5} mb={1.5}>
+                                   <Typography variant="caption" style={{ fontWeight: 700, color: "#1d4ed8", textTransform: "uppercase" }}>Relacionar Variáveis do Template</Typography>
+                                   <Tooltip title="Associe cada variável exigida pelo template, como nome, vencimento ou valor. Esses dados serão enviados exatamente nas posições definidas na Meta.">
+                                     <InfoOutlinedIcon style={{ fontSize: 15, color: "#1d4ed8", cursor: "pointer" }} />
+                                   </Tooltip>
+                                 </Box>
+                                 <TemplateVariableMapper whatsappId={whatsappId} templateName={selectedTemplate.name} languageCode={selectedTemplate.language} value={metaTemplateVariables}
+                                   onChange={(val) => { setMetaTemplateVariables(val); setFieldValue("metaTemplateVariables", val); }} disabled={!campaignEditable} />
+                               </Box>
+                             )}
+                           </Box>
+                         ) : null}
+
+                         {!isOfficialConnection && (
+                           <Box display="flex" mb={2} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                             {[1,2,3,4,5].map((n,idx) => (
+                               <Button key={n} className={`${classes.msgTab} ${messageTab === idx ? classes.msgTabActive : ""}`}
+                                 variant={messageTab === idx ? "contained" : "text"} onClick={() => setMessageTab(idx)}>Msg {n}</Button>
+                             ))}
+                           </Box>
+                         )}
+
+                         {!isOfficialConnection && renderMessageField(currentMessageField, setFieldValue, values, "Mensagem Principal")}
+
+                         {!isOfficialConnection && renderTabAttachment(messageTab, values, !campaignEditable)}
                          
-                         {/* Enviar anexo separado - NEW FROM SCREENSHOT */}
-                         <Box display="flex" alignItems="center" mt={1} mb={2} p={1.5} style={{ backgroundColor: "#f8fafc", borderRadius: 12 }}>
-                           <FormControlLabel control={<Checkbox checked={values.sendMediaSeparately} onChange={e => setFieldValue("sendMediaSeparately", e.target.checked)} color="primary" disabled={!campaignEditable} />}
-                             label={<Box><Typography variant="body2" style={{ fontWeight: 600 }}>Enviar anexo separado</Typography><Typography variant="caption" color="textSecondary">Quando ativado, envia o texto e o anexo em mensagens separadas (2 mensagens). Quando desativado, envia o texto como legenda do anexo.</Typography></Box>}
-                           />
-                           <Tooltip title="Útil se o arquivo for muito grande ou se você quiser que o texto apareça antes do arquivo."><InfoOutlinedIcon style={{ fontSize: 16, color: "#64748b", marginLeft: 8 }} /></Tooltip>
-                         </Box>
+                         {!isOfficialConnection && (
+                           <Box display="flex" alignItems="center" mt={1} mb={2} p={1.5} style={{ backgroundColor: "#f8fafc", borderRadius: 12 }}>
+                             <FormControlLabel control={<Checkbox checked={values.sendMediaSeparately} onChange={e => setFieldValue("sendMediaSeparately", e.target.checked)} color="primary" disabled={!campaignEditable} />}
+                               label={<Box><Typography variant="body2" style={{ fontWeight: 600 }}>Enviar anexo separado</Typography><Typography variant="caption" color="textSecondary">Quando ativado, envia o texto e o anexo em mensagens separadas (2 mensagens). Quando desativado, envia o texto como legenda do anexo.</Typography></Box>}
+                             />
+                             <Tooltip title="Útil se o arquivo for muito grande ou se você quiser que o texto apareça antes do arquivo."><InfoOutlinedIcon style={{ fontSize: 16, color: "#64748b", marginLeft: 8 }} /></Tooltip>
+                           </Box>
+                         )}
 
                          {values.confirmation && (<Box mt={3} p={2} style={{ border: "1px dashed #cbd5e1", borderRadius: 16 }}>
                            <Typography variant="subtitle2" style={{ fontWeight: 700, marginBottom: 8, color: "#475569" }}>Confirmação Requerida</Typography>
                            <Alert severity="warning" style={{ marginBottom: 16, fontSize: "0.75rem", borderRadius: 10 }}>Esta mensagem só será enviada para verificar a intenção do cliente.</Alert>
-                           {renderMessageField(`confirmationMessage${messageTab+1}`, setFieldValue, values, "Conteúdo da Confirmação")}
+                           {renderMessageField(currentConfirmationField, setFieldValue, values, "Conteúdo da Confirmação")}
                          </Box>)}
                        </Paper>
                      </Grid>
-                     <Grid item xs={12} md={5}>
-                       <Paper className={classes.sideCard}>
-                         <Typography variant="h6" style={{ fontWeight: 700, marginBottom: 16 }}>Live Preview</Typography>
-                         <WhatsAppPreview messages={[values[`message${messageTab+1}`], values.confirmation ? values[`confirmationMessage${messageTab+1}`] : null].filter(Boolean)} />
+                     <Grid item xs={12} md={5} style={{ display: "flex", alignItems: "flex-start" }}>
+                       <Paper className={classes.sideCard} style={{ width: "100%", top: 0 }}>
+                         <Box className={classes.sideCardHeader}>
+                           <Box className={classes.sideCardIcon}>
+                             <QuestionAnswerIcon style={{ fontSize: 30, color: "#005c53" }} />
+                           </Box>
+                           <Box>
+                             <Typography variant="overline" style={{ color: "#0f766e", fontWeight: 700, letterSpacing: 0.7 }}>Terceira Etapa</Typography>
+                             <Typography variant="h6" style={{ fontWeight: 800, color: "#005c53", lineHeight: 1.2 }}>Mensagem</Typography>
+                           </Box>
+                         </Box>
+
+                         <Accordion className={classes.helpAccordionSubtle}>
+                           <AccordionSummary expandIcon={<ExpandMoreIcon style={{ fontSize: 18, color: "#94a3b8" }} />} className={classes.helpAccordionSummarySubtle}>
+                             <Box display="flex" alignItems="center" style={{ gap: 8 }}>
+                               <HelpOutlineIcon style={{ fontSize: 20, color: "#64748b" }} />
+                               <Typography variant="body2" style={{ fontWeight: 600, color: "#475569" }}>
+                                 {isOfficialConnection ? "Ajuda da API Oficial" : "Ajuda da etapa de mensagem"}
+                               </Typography>
+                             </Box>
+                           </AccordionSummary>
+                           <AccordionDetails className={classes.helpAccordionDetails}>
+                             <Box className={classes.guideIntroRow}>
+                               <HelpOutlineIcon className={classes.guideIntroIcon} />
+                               <Typography className={classes.guideIntroText}>
+                                 {isOfficialConnection
+                                   ? "Nesta conexão, a abertura da conversa é guiada por templates aprovados pela Meta. Use a lista de templates, recarregue quando necessário e confira as variáveis obrigatórias."
+                                   : "Monte o conteúdo que será enviado, use variações quando fizer sentido e revise a prévia antes de avançar para a confirmação final."}
+                               </Typography>
+                             </Box>
+                             <Box className={classes.guideList}>
+                               {isOfficialConnection ? (
+                                 <>
+                                   <Box className={classes.guideItem}>
+                                     <Typography className={classes.guideItemTitle}>Escolha do template</Typography>
+                                     <Typography className={classes.guideItemText}>Selecione um template aprovado para iniciar a conversa oficial. O conteúdo principal e a estrutura da mensagem vêm dele.</Typography>
+                                   </Box>
+                                   <Box className={classes.guideItem}>
+                                     <Typography className={classes.guideItemTitle}>Criar e recarregar</Typography>
+                                     <Typography className={classes.guideItemText}>Se o template ainda não existir, crie no Meta e depois use o botão de recarregar para atualizar apenas a lista local.</Typography>
+                                   </Box>
+                                   <Box className={classes.guideItem}>
+                                     <Typography className={classes.guideItemTitle}>Variáveis do template</Typography>
+                                     <Typography className={classes.guideItemText}>Mapeie cada variável obrigatória exatamente na posição esperada pela Meta. Isso evita erro de envio ou placeholder vazio.</Typography>
+                                   </Box>
+                                   <Box className={classes.guideItem}>
+                                     <Typography className={classes.guideItemTitle}>Variações ocultas</Typography>
+                                     <Typography className={classes.guideItemText}>As abas Msg 2-5 e o anexo livre ficam ocultos porque a abertura oficial é controlada pelo template escolhido.</Typography>
+                                   </Box>
+                                 </>
+                               ) : (
+                                 <>
+                                   <Box className={classes.guideItem}>
+                                     <Typography className={classes.guideItemTitle}>Mensagem Principal</Typography>
+                                     <Typography className={classes.guideItemText}>A primeira mensagem é obrigatória e deve respeitar o limite de 1024 caracteres.</Typography>
+                                   </Box>
+                                   <Box className={classes.guideItem}>
+                                     <Typography className={classes.guideItemTitle}>Variações de mensagem</Typography>
+                                     <Typography className={classes.guideItemText}>Use as abas Msg 2-5 para preparar alternativas de texto e testar abordagens diferentes no disparo.</Typography>
+                                   </Box>
+                                   <Box className={classes.guideItem}>
+                                     <Typography className={classes.guideItemTitle}>Anexo e envio separado</Typography>
+                                     <Typography className={classes.guideItemText}>Você pode anexar arquivo livre e escolher se ele será enviado junto da legenda ou em mensagem separada.</Typography>
+                                   </Box>
+                                   <Box className={classes.guideItem}>
+                                     <Typography className={classes.guideItemTitle}>Mensagem de confirmação</Typography>
+                                     <Typography className={classes.guideItemText}>Quando a confirmação estiver habilitada na etapa de regras, preencha o texto que solicita a resposta do cliente.</Typography>
+                                   </Box>
+                                 </>
+                               )}
+                             </Box>
+                           </AccordionDetails>
+                         </Accordion>
+
+                         <Divider style={{ margin: "16px 0" }} />
+
+                         <Typography variant="subtitle2" style={{ fontWeight: 700, marginBottom: 12, color: "#0f172a" }}>Prévia da mensagem</Typography>
+                         <WhatsAppPreview messages={[values[currentMessageField], values.confirmation ? values[currentConfirmationField] : null].filter(Boolean)} />
                        </Paper>
                      </Grid>
                    </>)}
@@ -1616,14 +2191,14 @@ const CampaignForm = () => {
                    <Box display="flex" style={{ gap: 8 }}>
                      {activeStep === 0 && (
                        <Button variant="contained" onClick={async () => { 
-                         const isValid = await validateStepAndShowErrors(validateForm, values, whatsappId, selectedQueue, 0);
+                         const isValid = await validateStepAndShowErrors(validateForm, values, whatsappId, selectedQueue, 0, isOfficialConnection);
                          if (isValid) setActiveStep(1);
                        }} className={classes.primaryBtn} endIcon={<ChevronRight />}>PRÓXIMO PASSO</Button>
                      )}
                      {activeStep === 1 && (<>
                        <Button onClick={() => setActiveStep(0)} className={classes.secondaryBtn} startIcon={<ChevronLeft />}>Anterior</Button>
                        <Button variant="contained" onClick={async () => {
-                         const isValid = await validateStepAndShowErrors(validateForm, values, whatsappId, selectedQueue, 1);
+                         const isValid = await validateStepAndShowErrors(validateForm, values, whatsappId, selectedQueue, 1, isOfficialConnection);
                          if (isValid) setActiveStep(2);
                        }} className={classes.primaryBtn} endIcon={<ChevronRight />}>PRÓXIMO PASSO</Button>
                      </>)}
@@ -1631,7 +2206,7 @@ const CampaignForm = () => {
                        <Button onClick={() => setActiveStep(1)} className={classes.secondaryBtn} startIcon={<ChevronLeft />}>Anterior</Button>
                        <Button variant="outlined" onClick={() => handleSaveOnly(values, setSubmitting)} className={classes.btnSave} startIcon={<SaveIcon />} disabled={isSubmitting}>Salvar Rascunho</Button>
                        <Button variant="contained" onClick={async () => {
-                         const isValid = await validateStepAndShowErrors(validateForm, values, whatsappId, selectedQueue, 2);
+                         const isValid = await validateStepAndShowErrors(validateForm, values, whatsappId, selectedQueue, 2, isOfficialConnection);
                          if (isValid) setActiveStep(3);
                        }} className={classes.primaryBtn} endIcon={<ChevronRight />}>PRÓXIMO PASSO</Button>
                      </>)}
@@ -1643,7 +2218,7 @@ const CampaignForm = () => {
                          variant="outlined"
                          disabled={isSubmitting || !values.scheduledAt}
                          onClick={async () => {
-                           const isValid = await validateStepAndShowErrors(validateForm, values, whatsappId, selectedQueue, 3);
+                           const isValid = await validateStepAndShowErrors(validateForm, values, whatsappId, selectedQueue, 3, isOfficialConnection);
                            if (isValid) handleSaveOnly(values, setSubmitting);
                          }}
                          className={classes.btnSchedule}
@@ -1657,7 +2232,7 @@ const CampaignForm = () => {
                          disabled={isSubmitting}
                          onClick={async (e) => {
                            e.preventDefault();
-                           const isValid = await validateStepAndShowErrors(validateForm, values, whatsappId, selectedQueue, 3);
+                           const isValid = await validateStepAndShowErrors(validateForm, values, whatsappId, selectedQueue, 3, isOfficialConnection);
                            if (isValid) {
                              const form = e.target.closest('form');
                              if (form) form.requestSubmit();

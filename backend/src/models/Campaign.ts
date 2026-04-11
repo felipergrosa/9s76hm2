@@ -142,6 +142,10 @@ class Campaign extends Model<Campaign> {
   @Column({ type: DataType.INTEGER, allowNull: true })
   tagListId: number;
 
+  // Tags para excluir contatos da campanha
+  @Column({ type: DataType.TEXT, allowNull: true })
+  negativeTagListIds: string;
+
   // Campos de mídia por mensagem (1..5)
   @Column
   mediaUrl1: string;
