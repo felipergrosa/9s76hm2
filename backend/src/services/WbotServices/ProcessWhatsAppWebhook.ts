@@ -124,6 +124,10 @@ interface WebhookChange {
           description?: string;
         };
       };
+      context?: {
+        from?: string;
+        id?: string;
+      };
     }>;
     statuses?: Array<{
       id: string;
@@ -135,6 +139,76 @@ interface WebhookChange {
   };
   field: string;
 }
+
+const serializeOfficialWebhookMessage = (message: any): string =>
+  JSON.stringify({
+    source: "official-webhook",
+    message
+  });
+
+const findReferencedOfficialMessage = async (
+  message: any,
+  companyId: number
+): Promise<Message | null> => {
+  const referencedWid = message?.context?.id || message?.reaction?.message_id;
+
+  if (!referencedWid) {
+    return null;
+  }
+
+  const referencedMessage = await Message.findOne({
+    where: {
+      wid: referencedWid,
+      companyId
+    },
+    attributes: ["id", "wid", "body"]
+  });
+
+  if (!referencedMessage) {
+    logger.warn(`[WebhookProcessor] Mensagem referenciada não encontrada: wid=${referencedWid}`);
+    return null;
+  }
+
+  logger.info(`[WebhookProcessor] Mensagem referenciada encontrada: wid=${referencedWid}, id=${referencedMessage.id}`);
+  return referencedMessage;
+};
+
+const extractOfficialReplyContent = (
+  message: any
+): { body: string; mediaType: string } | null => {
+  if (message?.type === "button") {
+    return {
+      body:
+        message.button?.text ||
+        message.button?.payload ||
+        "🔘 Resposta de botão",
+      mediaType: "templateButtonReplyMessage"
+    };
+  }
+
+  if (message?.type === "interactive" && message?.interactive?.type === "button_reply") {
+    return {
+      body:
+        message.interactive?.button_reply?.title ||
+        message.interactive?.button_reply?.id ||
+        "🔘 Resposta de botão",
+      mediaType: "buttonsResponseMessage"
+    };
+  }
+
+  if (message?.type === "interactive" && message?.interactive?.type === "list_reply") {
+    return {
+      body:
+        message.interactive?.list_reply?.title ||
+        message.interactive?.list_reply?.id ||
+        message.interactive?.list_reply?.description ||
+        "📋 Opção selecionada",
+      mediaType: "listResponseMessage"
+    };
+  }
+
+  return null;
+};
 
 /**
  * Processa eventos do webhook WhatsApp Business API
@@ -244,11 +318,18 @@ async function processMessageWithExistingContact(
   // Processar corpo da mensagem de forma simplificada
   let body = "";
   let mediaType: string | undefined;
+  const referencedMessage = await findReferencedOfficialMessage(message, companyId);
+  const interactiveReply = extractOfficialReplyContent(message);
 
   switch (message.type) {
     case "text":
       body = message.text?.body || "";
       mediaType = "conversation";
+      break;
+    case "button":
+    case "interactive":
+      body = interactiveReply?.body || `[${message.type}]`;
+      mediaType = interactiveReply?.mediaType;
       break;
     default:
       body = `[${message.type}]`;
@@ -264,7 +345,9 @@ async function processMessageWithExistingContact(
       fromMe: false,
       mediaType,
       read: false,
-      ack: 0
+      ack: 0,
+      quotedMsgId: referencedMessage?.id || null,
+      dataJson: serializeOfficialWebhookMessage(message)
     },
     companyId
   });
@@ -443,6 +526,8 @@ async function processIncomingMessage(
     let body = "";
     let mediaType: string | undefined;
     let mediaUrl: string | undefined;
+    const referencedMessage = await findReferencedOfficialMessage(message, companyId);
+    const interactiveReply = extractOfficialReplyContent(message);
 
     switch (message.type) {
       case "text":
@@ -577,6 +662,13 @@ async function processIncomingMessage(
         logger.info(`[WebhookProcessor] Reação recebida: ${body}`);
         break;
 
+      case "button":
+      case "interactive":
+        body = interactiveReply?.body || `[${message.type}]`;
+        mediaType = interactiveReply?.mediaType || "interactiveMessage";
+        logger.info(`[WebhookProcessor] Resposta interativa recebida: ${body}`);
+        break;
+
       default:
         logger.warn(`[WebhookProcessor] Tipo de mensagem não suportado: ${message.type}`);
         body = `[${message.type}]`;
@@ -593,7 +685,9 @@ async function processIncomingMessage(
         mediaType,
         mediaUrl,
         read: false,
-        ack: 0
+        ack: 0,
+        quotedMsgId: referencedMessage?.id || null,
+        dataJson: serializeOfficialWebhookMessage(message)
       },
       companyId
     });

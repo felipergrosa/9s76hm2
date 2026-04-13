@@ -10,6 +10,7 @@ import RefreshContactAvatarService from "../ContactServices/RefreshContactAvatar
 import logger from "../../utils/logger";
 import ResolveSendJid from "../../helpers/ResolveSendJid";
 import { IWhatsAppMessage } from "../../libs/whatsapp";
+import { buildOfficialPreviewData } from "../../utils/officialMessagePreview";
 
 interface TemplateButton {
   index: number;
@@ -106,6 +107,41 @@ const SendWhatsAppMessageUnified = async ({
     }
 
     let sentMessage: IWhatsAppMessage;
+    const persistOfficialOutgoingMessage = async ({
+      body: persistedBody,
+      mediaType,
+      mediaUrl,
+      dataJson
+    }: {
+      body: string;
+      mediaType: string;
+      mediaUrl?: string;
+      dataJson?: string | null;
+    }) => {
+      if (channelType !== "official" || !sentMessage?.id) {
+        return;
+      }
+
+      const CreateMessageService = (await import("../MessageServices/CreateMessageService")).default;
+
+      await CreateMessageService({
+        messageData: {
+          wid: sentMessage.id,
+          ticketId: ticket.id,
+          contactId: ticket.contactId,
+          body: persistedBody,
+          fromMe: true,
+          mediaType,
+          mediaUrl,
+          read: true,
+          ack: 1,
+          quotedMsgId: quotedMsg?.id || null,
+          remoteJid: contactNumber?.remoteJid,
+          dataJson: dataJson || null
+        },
+        companyId: ticket.companyId
+      });
+    };
 
     // ===== ENVIO DE VCARD =====
     if (vCard) {
@@ -124,6 +160,11 @@ const SendWhatsAppMessageUnified = async ({
       sentMessage = await adapter.sendMessage({
         to: number.split("@")[0], // Apenas o número
         vcard: vcardContent
+      });
+
+      await persistOfficialOutgoingMessage({
+        body: formatBody(vcardContent, ticket),
+        mediaType: "contactMessage"
       });
 
       await ticket.update({
@@ -165,6 +206,23 @@ const SendWhatsAppMessageUnified = async ({
         });
       }
 
+      await persistOfficialOutgoingMessage({
+        body: formattedBody,
+        mediaType: "buttonsMessage",
+        dataJson: buildOfficialPreviewData({
+          body: formattedBody,
+          footer: messageTitle || "",
+          buttons: buttons.map(button => ({
+            id: button.id,
+            text: button.title,
+            type: "quick_reply"
+          })),
+          meta: {
+            kind: "interactive-buttons"
+          }
+        })
+      });
+
       await ticket.update({
         lastMessage: formattedBody,
         imported: null
@@ -181,15 +239,39 @@ const SendWhatsAppMessageUnified = async ({
       const formattedBody = formatBody(bodyString, ticket);
 
       // Se tem mensagem citada
-      let quotedMsgId: string | undefined;
+      let quotedMsgWid: string | undefined;
       if (quotedMsg) {
-        quotedMsgId = quotedMsg.wid || String(quotedMsg.id) || undefined;
+        // PRIORIDADE 1: Usar wid se disponível
+        if (quotedMsg.wid) {
+          quotedMsgWid = quotedMsg.wid;
+        } 
+        // PRIORIDADE 2: Se tem ID numérico, buscar no banco para obter o wid
+        else if (quotedMsg.id) {
+          const Message = (await import("../../models/Message")).default;
+          const msgFromDb = await Message.findByPk(quotedMsg.id, {
+            attributes: ["id", "wid"]
+          });
+          if (msgFromDb?.wid) {
+            quotedMsgWid = msgFromDb.wid;
+            logger.info(`[SendWhatsAppMessageUnified] Buscou wid do banco para quotedMsg: id=${quotedMsg.id}, wid=${quotedMsgWid}`);
+          } else {
+            logger.warn(`[SendWhatsAppMessageUnified] Não encontrou wid no banco para quotedMsg id=${quotedMsg.id}`);
+          }
+        }
+        
+        logger.info(`[SendWhatsAppMessageUnified] quotedMsg resolvido:`, {
+          hasQuotedMsg: !!quotedMsg,
+          quotedMsgWid: quotedMsg?.wid,
+          quotedMsgId: quotedMsg?.id,
+          resolvedWid: quotedMsgWid,
+          channelType
+        });
       }
       
       sentMessage = await adapter.sendMessage({
         to: number.split("@")[0],
         body: formattedBody,
-        quotedMsgId
+        quotedMsgId: quotedMsgWid
       });
 
       // CRÍTICO: Para API Oficial, salvar mensagem no banco ANTES que o webhook retorne
@@ -206,7 +288,7 @@ const SendWhatsAppMessageUnified = async ({
             mediaType: "conversation",
             read: true,
             ack: 1,
-            quotedMsgId: quotedMsgId ? String(quotedMsgId) : null
+            quotedMsgId: quotedMsg?.id || null
           },
           companyId: ticket.companyId
         });

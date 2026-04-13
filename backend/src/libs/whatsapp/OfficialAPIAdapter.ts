@@ -181,7 +181,19 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
    */
   async sendMessage(options: ISendMessageOptions): Promise<IWhatsAppMessage> {
     try {
-      const { to, body, mediaType, mediaUrl, caption, buttons, listSections, listTitle, listButtonText, vcard } = options;
+      const {
+        to,
+        body,
+        mediaType,
+        mediaUrl,
+        caption,
+        buttons,
+        listSections,
+        listTitle,
+        listButtonText,
+        vcard,
+        quotedMsgId
+      } = options;
 
       // Normalizar número para formato canônico (DDI + nacional)
       const normalized = safeNormalizePhoneNumber(to);
@@ -199,20 +211,8 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
         to: recipient
       };
 
-      // Mensagem de texto simples
-      if (mediaType === "text" || !mediaType) {
-        // CRITICAL: Validar se body é string
-        const bodyText = typeof body === 'string' ? body : String(body || "");
-        
-        if (typeof body !== 'string') {
-          logger.error(`[OfficialAPI] ⚠️ BODY NÃO É STRING! Tipo: ${typeof body}, Valor:`, body);
-        }
-        
-        payload.type = "text";
-        payload.text = { body: bodyText };
-      }
       // Mensagem com botões interativos
-      else if (buttons && buttons.length > 0) {
+      if (buttons && buttons.length > 0) {
         payload.type = "interactive";
         payload.interactive = {
           type: "button",
@@ -301,6 +301,24 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
               "UNSUPPORTED_MEDIA_TYPE"
             );
         }
+      }
+      // Mensagem de texto simples
+      else {
+        const bodyText = typeof body === "string" ? body : String(body || "");
+
+        if (typeof body !== "string" && body !== undefined) {
+          logger.error(`[OfficialAPI] ⚠️ BODY NÃO É STRING! Tipo: ${typeof body}, Valor:`, body);
+        }
+
+        payload.type = "text";
+        payload.text = { body: bodyText };
+      }
+
+      if (quotedMsgId) {
+        payload.context = {
+          message_id: quotedMsgId
+        };
+        logger.info(`[OfficialAPI] Enviando mensagem com quote - message_id: ${quotedMsgId}`);
       }
 
       // Enviar mensagem

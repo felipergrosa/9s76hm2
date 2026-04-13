@@ -6,24 +6,27 @@ const useStyles = makeStyles((theme) => ({
   buttonsContainer: {
     display: "flex",
     flexDirection: "column",
-    gap: 6,
     marginTop: 8,
     width: "100%",
-    maxWidth: 280,
+    borderTop: "1px solid rgba(0, 0, 0, 0.08)",
   },
   interactiveButton: {
     backgroundColor: "transparent",
-    border: "1px solid rgba(0, 168, 132, 0.5)",
-    borderRadius: 8,
-    padding: "10px 16px",
+    border: "none",
+    borderRadius: 0,
+    padding: "10px 12px",
     color: "#00a884",
     fontWeight: 500,
     fontSize: 14,
     textTransform: "none",
-    justifyContent: "center",
+    justifyContent: "flex-start",
+    minHeight: 0,
     "&:hover": {
       backgroundColor: "rgba(0, 168, 132, 0.08)",
-      border: "1px solid #00a884",
+    },
+    "& .MuiButton-label": {
+      justifyContent: "flex-start",
+      width: "100%",
     },
   },
   buttonDescription: {
@@ -49,6 +52,26 @@ const ButtonsPreview = ({ message }) => {
       const data = typeof message.dataJson === "string" 
         ? JSON.parse(message.dataJson) 
         : message.dataJson;
+
+      if (data?.preview) {
+        return {
+          type: data.preview.type || "buttons",
+          title: data.preview.title || "",
+          footer: data.preview.footer || "",
+          buttons: (data.preview.buttons || []).map((button) => ({
+            id: button.id || "",
+            text: button.text || "",
+            url: button.url || null,
+            phone: button.phone || null,
+            type: button.type || "quick_reply"
+          })),
+          rows: (data.preview.rows || []).map((row) => ({
+            id: row.id || "",
+            text: row.text || "",
+            description: row.description || ""
+          }))
+        };
+      }
 
       // buttonsMessage (botões simples)
       if (data?.message?.buttonsMessage) {
@@ -271,6 +294,7 @@ const ButtonsPreview = ({ message }) => {
         >
           {btn.type === "url" && "🔗 "}
           {btn.type === "call" && "📞 "}
+          {btn.type !== "url" && btn.type !== "call" && "↩ "}
           {btn.text}
         </Button>
       ))}

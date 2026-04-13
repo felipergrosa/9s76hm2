@@ -2807,6 +2807,8 @@ const MessagesList = ({
         ? JSON.parse(message.dataJson)
         : message.dataJson;
       return !!(
+        data?.preview?.buttons?.length ||
+        data?.preview?.rows?.length ||
         data?.message?.buttonsMessage?.buttons?.length ||
         data?.message?.interactiveMessage?.nativeFlowMessage?.buttons?.length ||
         data?.message?.viewOnceMessage?.message?.interactiveMessage?.nativeFlowMessage?.buttons?.length ||

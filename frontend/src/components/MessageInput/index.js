@@ -1734,6 +1734,15 @@ const MessageInput = ({
       ? `*${userName}:*\n${sendMessage}`
       : sendMessage;
 
+    // DEBUG: Verificar se replyingMessage tem wid
+    if (replyingMessage) {
+      console.log('[MessageInput] Enviando mensagem com reply:', {
+        replyingMessageId: replyingMessage.id,
+        replyingMessageWid: replyingMessage.wid,
+        hasWid: !!replyingMessage.wid
+      });
+    }
+
     const message = {
       read: 1,
       fromMe: true,

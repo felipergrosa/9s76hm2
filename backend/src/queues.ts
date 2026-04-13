@@ -56,6 +56,7 @@ import SendTemplateToContact from "./services/MetaServices/SendTemplateToContact
 import GetTemplateDefinition from "./services/MetaServices/GetTemplateDefinition";
 import MapTemplateParameters from "./services/MetaServices/MapTemplateParameters";
 import CreateMessageService from "./services/MessageServices/CreateMessageService";
+import { buildOfficialPreviewData } from "./utils/officialMessagePreview";
 
 const connection = process.env.REDIS_URI || "";
 const limiterMax = process.env.REDIS_OPT_LIMITER_MAX || 1;
@@ -2134,11 +2135,15 @@ async function handleDispatchCampaign(job) {
           let templateHeaderMediaType: string | null = null;
           let templateHeaderHandle: string | null = null;
           let templateBodyText: string = "";
+          let templateFooterText: string = "";
+          let templateButtonsPreview: Array<{ type: string; text: string }> = [];
           try {
             const templateDef = await GetTemplateDefinition(selectedWhatsappId, templateName, languageCode);
 
             // Extrair texto do body do template
             templateBodyText = templateDef.body || "";
+            templateFooterText = templateDef.footer || "";
+            templateButtonsPreview = templateDef.buttons || [];
 
             // Substituir variáveis {{1}}, {{2}}, etc. pelos valores reais
             if (templateComponents && Array.isArray(templateComponents)) {
@@ -2259,6 +2264,20 @@ async function handleDispatchCampaign(job) {
                 read: true,
                 ack: 1,
                 remoteJid: contact.remoteJid,
+                dataJson: buildOfficialPreviewData({
+                  body: templateBodyText || campaignShipping.message || `Template: ${templateName}`,
+                  footer: templateFooterText,
+                  buttons: templateButtonsPreview.map((button, index) => ({
+                    id: `tpl-btn-${index + 1}`,
+                    text: button.text,
+                    type: button.type
+                  })),
+                  meta: {
+                    kind: "campaign-template",
+                    templateName,
+                    languageCode
+                  }
+                }) || null,
                 isCampaign: true // Não emite para a sala (evita notificação)
               },
               companyId: campaign.companyId

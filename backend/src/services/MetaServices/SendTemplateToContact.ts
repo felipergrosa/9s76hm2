@@ -11,6 +11,7 @@ import GetTemplateDefinition, { TemplateDefinition } from "./GetTemplateDefiniti
 import MapTemplateParameters from "./MapTemplateParameters";
 import { Op } from "sequelize";  // NOVO: para query de ticket existente
 import { safeNormalizePhoneNumber } from "../../utils/phone";
+import { buildOfficialPreviewData } from "../../utils/officialMessagePreview";
 
 interface SendTemplateToContactParams {
   whatsappId: number;
@@ -288,6 +289,20 @@ const SendTemplateToContact = async ({
         mediaUrl,  // URL do arquivo se houver
         ack: sent.ack ?? 1,
         remoteJid: ticket.contact?.remoteJid,
+        dataJson: buildOfficialPreviewData({
+          body: messageBody,
+          footer: templateDefinition?.footer || "",
+          buttons: (templateDefinition?.buttons || []).map((button, index) => ({
+            id: `tpl-btn-${index + 1}`,
+            text: button.text,
+            type: button.type
+          })),
+          meta: {
+            kind: "template",
+            templateName,
+            languageCode
+          }
+        }) || null,
         isCampaign: true  // Evita emitir para a sala da conversa (background)
       },
       companyId
