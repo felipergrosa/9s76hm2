@@ -1397,14 +1397,24 @@ const MessageInput = ({
       }
     }
 
+    // Verificar se há mídia no fluxo para ativar a barra de progresso adequada
+    const hasMediaInFlow = flow.some(item => item.type === 'media');
+    
     const executeFlow = async () => {
       setLoading(true);
+      if (hasMediaInFlow) {
+        setUploadingFile(true); // Ativa barra de progresso para uploads de mídia
+        setUploadProgress(0);
+      }
       
       // Buscar o primeiro texto do fluxo para usar como legenda
       const firstTextItem = flow.find(item => item.type === 'text');
       const captionText = (value.sendAsCaption && firstTextItem) 
         ? expandPlaceholders(firstTextItem.value, contactData, ticketData, user) 
         : null;
+      
+      let mediaIndex = 0;
+      const totalMedias = flow.filter(item => item.type === 'media').length;
       
       for (let i = 0; i < flow.length; i++) {
         const item = flow[i];
@@ -1431,15 +1441,27 @@ const MessageInput = ({
           const caption = captionText || "";
 
           try {
+            // Atualiza progresso simulado baseado no índice da mídia
+            if (hasMediaInFlow && totalMedias > 0) {
+              const progress = Math.round((mediaIndex / totalMedias) * 100);
+              setUploadProgress(progress);
+            }
+            
             const { data } = await axios.get(mediaUrl, { responseType: "blob" });
             await handleUploadQuickMessageMedia(data, caption);
+            mediaIndex++;
           } catch (err) {
             console.error("Erro ao enviar mídia do fluxo:", err);
             toastError(err);
           }
         }
       }
+      // Finaliza progresso
+      if (hasMediaInFlow) {
+        setUploadProgress(100);
+      }
       setLoading(false);
+      setUploadingFile(false);
     };
 
     executeFlow();
