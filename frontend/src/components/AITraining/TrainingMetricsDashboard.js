@@ -16,8 +16,35 @@ import AssessmentIcon from "@material-ui/icons/Assessment";
 import BuildIcon from "@material-ui/icons/Build";
 import CheckCircleIcon from "@material-ui/icons/CheckCircle";
 import { Line, Doughnut, Bar } from "react-chartjs-2";
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+} from "chart.js";
 
 import api from "../../services/api";
+
+// Registrar componentes do Chart.js
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+);
 
 const useStyles = makeStyles((theme) => ({
   container: {
@@ -84,21 +111,23 @@ const MetricCard = ({ title, value, icon, color, subtitle }) => {
   );
 };
 
-const TrainingMetricsDashboard = ({ agentId }) => {
+const TrainingMetricsDashboard = ({ agentId, stageId }) => {
   const classes = useStyles();
   const [loading, setLoading] = useState(true);
   const [metrics, setMetrics] = useState(null);
 
   useEffect(() => {
     loadMetrics();
-  }, [agentId]);
+  }, [agentId, stageId]);
 
   const loadMetrics = async () => {
     setLoading(true);
     try {
-      const { data } = await api.get("/ai/training/metrics", {
-        params: { agentId }
-      });
+      const params = {};
+      if (agentId) params.agentId = agentId;
+      if (stageId) params.stageId = stageId;
+      
+      const { data } = await api.get("/ai/training/metrics", { params });
       setMetrics(data);
     } catch (err) {
       setMetrics({
@@ -119,10 +148,20 @@ const TrainingMetricsDashboard = ({ agentId }) => {
     }
   };
 
-  if (loading || !metrics) {
+  if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" height={400}>
         <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (!metrics) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" height={400}>
+        <Typography color="textSecondary">
+          Selecione um agente para visualizar as métricas
+        </Typography>
       </Box>
     );
   }

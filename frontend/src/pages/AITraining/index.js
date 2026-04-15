@@ -77,11 +77,14 @@ const useStyles = makeStyles((theme) => ({
     height: "calc(100vh - 320px)",
     minHeight: 400,
     padding: theme.spacing(2),
-    backgroundColor: theme.mode === "light" ? "#0b1020" : "#05070f",
-    color: "#d7e0ff",
-    fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
-    fontSize: 12,
-    overflow: "auto"
+    backgroundColor: "#0d1117",
+    color: "#e6edf3",
+    fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', Monaco, Consolas, 'Courier New', monospace",
+    fontSize: 13,
+    overflow: "auto",
+    border: "1px solid #30363d",
+    borderRadius: 8,
+    boxShadow: "inset 0 0 20px rgba(0,0,0,0.5)"
   },
   mockPhone: {
     width: "100%",
@@ -106,7 +109,18 @@ const useStyles = makeStyles((theme) => ({
   logLine: {
     whiteSpace: "pre-wrap",
     wordBreak: "break-word",
-    marginBottom: theme.spacing(0.5)
+    marginBottom: theme.spacing(0.5),
+    fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', Monaco, Consolas, monospace",
+    fontSize: 12,
+    lineHeight: "1.5",
+    color: "#e6edf3",
+    padding: "2px 0",
+    borderLeft: "2px solid transparent",
+    paddingLeft: theme.spacing(0.5),
+    "&:hover": {
+      backgroundColor: "rgba(48, 54, 61, 0.5)",
+      borderLeftColor: "#58a6ff"
+    }
   },
   contextSelector: {
     padding: theme.spacing(2),
@@ -764,7 +778,9 @@ const AITraining = () => {
         </TabPanel>
 
         <TabPanel value={activeTab} index={3} className={classes.tabPanel}>
-          <PromptFlowVisualization prompt={promptOverride} />
+          <Box height="calc(100vh - 300px)" minHeight={500}>
+            <PromptFlowVisualization prompt={promptOverride} />
+          </Box>
         </TabPanel>
 
         <TabPanel value={activeTab} index={4} className={classes.tabPanel}>
@@ -784,7 +800,12 @@ const AITraining = () => {
         </TabPanel>
 
         <TabPanel value={activeTab} index={6} className={classes.tabPanel}>
-          <TrainingMetricsDashboard agentId={selectedAgentId} />
+          <Box height="100%" minHeight={500}>
+            <TrainingMetricsDashboard 
+              agentId={selectedAgentId || null} 
+              stageId={selectedStageId || null}
+            />
+          </Box>
         </TabPanel>
       </Paper>
 

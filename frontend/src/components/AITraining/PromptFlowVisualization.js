@@ -35,48 +35,68 @@ const useStyles = makeStyles((theme) => ({
     borderRadius: 8,
     overflow: "auto",
     position: "relative",
-    minHeight: 400
+    minHeight: 400,
+    padding: theme.spacing(2)
   },
   flowCanvas: {
     padding: theme.spacing(4),
     minWidth: "100%",
-    minHeight: "100%"
+    minHeight: "100%",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center"
   },
   node: {
     position: "relative",
-    padding: theme.spacing(2),
+    padding: theme.spacing(1.5),
     borderRadius: 8,
-    marginBottom: theme.spacing(2),
-    minWidth: 200,
-    maxWidth: 300,
+    marginBottom: theme.spacing(1),
+    minWidth: 220,
+    maxWidth: 320,
     cursor: "pointer",
     transition: "all 0.2s",
+    wordBreak: "break-word",
+    textAlign: "center",
+    boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
     "&:hover": {
       transform: "scale(1.02)",
-      boxShadow: theme.shadows[4]
+      boxShadow: theme.shadows[6]
     }
   },
   startNode: {
     backgroundColor: "#4caf50",
-    color: "#fff"
+    color: "#fff",
+    fontWeight: 600,
+    border: "2px solid #2e7d32"
   },
   conditionNode: {
     backgroundColor: "#ff9800",
     color: "#fff",
     clipPath: "polygon(10% 0%, 90% 0%, 100% 50%, 90% 100%, 10% 100%, 0% 50%)",
-    padding: theme.spacing(2, 4)
+    padding: theme.spacing(2, 3),
+    fontWeight: 500
   },
   actionNode: {
     backgroundColor: "#2196f3",
-    color: "#fff"
+    color: "#fff",
+    fontWeight: 500,
+    border: "2px solid #1565c0"
   },
   endNode: {
     backgroundColor: "#f44336",
-    color: "#fff"
+    color: "#fff",
+    fontWeight: 600,
+    border: "2px solid #c62828",
+    borderRadius: "50%",
+    padding: theme.spacing(2),
+    minWidth: 100
   },
   instructionNode: {
     backgroundColor: "#9c27b0",
-    color: "#fff"
+    color: "#fff",
+    fontWeight: 500,
+    borderLeft: "4px solid #6a1b9a",
+    textAlign: "left"
   },
   connector: {
     position: "absolute",
@@ -141,66 +161,120 @@ const useStyles = makeStyles((theme) => ({
 }));
 
 const parsePromptToFlow = (prompt) => {
-  if (!prompt) return { nodes: [], edges: [] };
+  if (!prompt || typeof prompt !== 'string') return { nodes: [], edges: [] };
 
   const nodes = [];
-  const lines = prompt.split("\n").filter(l => l.trim());
   let nodeId = 0;
 
+  // Nó inicial
   nodes.push({
     id: nodeId++,
     type: "start",
-    label: "Início",
-    description: "Ponto de entrada da conversa"
+    label: "Início da Conversa",
+    description: "Ponto de entrada da conversa com o cliente"
   });
 
-  const conditionalKeywords = ["se", "if", "quando", "when", "caso", "unless", "senão", "else", "otherwise"];
-  const actionKeywords = ["responda", "envie", "pergunte", "informe", "solicite", "ask", "respond", "send", "tell"];
-  const instructionKeywords = ["você é", "you are", "atue como", "act as", "sempre", "nunca", "always", "never"];
+  // Extrair seções principais do prompt
+  const sections = [
+    { name: "objective", pattern: /#\s*(?:objetivo|Objetivo|PROPÓSITO|Papel e objetivo)[\s\S]*?(?=#|$)/i },
+    { name: "persona", pattern: /#\s*(?:perfil|Persona|Tom e estilo|Voz da marca)[\s\S]*?(?=#|$)/i },
+    { name: "rules", pattern: /#\s*(?:regras|Regras|Instruções|DIRETRIZES)[\s\S]*?(?=#|$)/i },
+    { name: "instructions", pattern: /#\s*(?:instruções|Instruções de|Como responder)[\s\S]*?(?=#|$)/i },
+    { name: "functions", pattern: /#\s*(?:funções|Ferramentas|Funções disponíveis)[\s\S]*?(?=#|$)/i },
+    { name: "conditions", pattern: /(?:se\s+(?:o\s+)?cliente|quando\s+(?:o\s+)?|caso\s+|if\s+|when\s+)/i },
+    { name: "actions", pattern: /(?:responda|envie|pergunte|solicite|transferir|aguarde)/i }
+  ];
 
-  let currentContext = null;
-  let branchStack = [];
+  // Processar linha por linha com contexto
+  const lines = prompt.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+  
+  let currentSection = null;
+  let sectionContent = [];
 
   lines.forEach((line, idx) => {
-    const lowerLine = line.toLowerCase().trim();
+    const lowerLine = line.toLowerCase();
+    
+    // Detectar headers de seção
+    if (line.startsWith('#') || line.startsWith('===') || line.startsWith('---')) {
+      // Salvar seção anterior
+      if (sectionContent.length > 0 && currentSection) {
+        nodes.push({
+          id: nodeId++,
+          type: "instruction",
+          label: currentSection.substring(0, 40) + (currentSection.length > 40 ? "..." : ""),
+          description: sectionContent.join("\n"),
+          section: true
+        });
+        sectionContent = [];
+      }
+      currentSection = line.replace(/[#=\-]/g, '').trim();
+      return;
+    }
 
-    const isConditional = conditionalKeywords.some(k => lowerLine.startsWith(k) || lowerLine.includes(` ${k} `));
-    const isAction = actionKeywords.some(k => lowerLine.includes(k));
-    const isInstruction = instructionKeywords.some(k => lowerLine.includes(k));
-    const isBullet = /^[-*•]\s/.test(line.trim());
-    const isNumbered = /^\d+[.)]\s/.test(line.trim());
+    // Detectar bullets e numbered lists como ações
+    if (/^[-*•]\s/.test(line) || /^\d+[.)]\s/.test(line)) {
+      const cleanLine = line.replace(/^[-*•\d.)]\s*/, '').trim();
+      if (cleanLine.length > 5) {
+        const isConditional = /\b(se|quando|caso|if|when|senão|else)\b/i.test(cleanLine);
+        const isTransfer = /\b(transferir|falar com|atendente|humano|vendedor)\b/i.test(cleanLine);
+        const isQuestion = /\b(pergunte|perguntar|qual|quais|quando|como|por que)\b/i.test(cleanLine);
+        
+        nodes.push({
+          id: nodeId++,
+          type: isConditional ? "condition" : isTransfer ? "end" : "action",
+          label: cleanLine.substring(0, 45) + (cleanLine.length > 45 ? "..." : ""),
+          description: cleanLine,
+          bullet: true
+        });
+      }
+      return;
+    }
 
-    if (isConditional) {
+    // Detectar condicionais em texto
+    if (/\b(se\s+(?:o\s+)?cliente|quando\s+(?:o\s+)?|caso\s+|unless\s+|senão\s+|else\s+)/i.test(line)) {
       nodes.push({
         id: nodeId++,
         type: "condition",
-        label: line.trim().substring(0, 50) + (line.length > 50 ? "..." : ""),
-        description: line.trim(),
-        branches: []
+        label: line.substring(0, 45) + (line.length > 45 ? "..." : ""),
+        description: line
       });
-      currentContext = "condition";
-    } else if (isInstruction && !isBullet && !isNumbered) {
-      nodes.push({
-        id: nodeId++,
-        type: "instruction",
-        label: line.trim().substring(0, 50) + (line.length > 50 ? "..." : ""),
-        description: line.trim()
-      });
-    } else if (isAction || isBullet || isNumbered) {
+      return;
+    }
+
+    // Detectar ações
+    if (/\b(responda|envie|pergunte|informe|solicite|use|execute|transferir|aguarde)\b/i.test(line)) {
       nodes.push({
         id: nodeId++,
         type: "action",
-        label: line.trim().substring(0, 50) + (line.length > 50 ? "..." : ""),
-        description: line.trim()
+        label: line.substring(0, 45) + (line.length > 45 ? "..." : ""),
+        description: line
       });
+      return;
+    }
+
+    // Linhas importantes (mínimo 20 caracteres)
+    if (line.length > 20 && !line.startsWith('//')) {
+      sectionContent.push(line);
     }
   });
 
+  // Adicionar seção final se houver conteúdo
+  if (sectionContent.length > 0) {
+    const combined = sectionContent.slice(0, 3).join("; ");
+    nodes.push({
+      id: nodeId++,
+      type: "instruction",
+      label: combined.substring(0, 40) + (combined.length > 40 ? "..." : ""),
+      description: sectionContent.join("\n")
+    });
+  }
+
+  // Sempre adicionar nó de fim
   nodes.push({
     id: nodeId++,
     type: "end",
-    label: "Fim",
-    description: "Fim do fluxo"
+    label: "Encerramento",
+    description: "Fim da interação ou transferência"
   });
 
   return { nodes };
@@ -242,15 +316,41 @@ const FlowNode = ({ node, classes }) => {
   };
 
   return (
-    <Tooltip title={node.description} placement="right">
+    <Tooltip title={node.description} placement="right" arrow>
       <Paper
         className={`${classes.node} ${getNodeClass(node.type)}`}
-        elevation={2}
+        elevation={3}
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center"
+        }}
       >
-        <Typography variant="caption" style={{ opacity: 0.7 }}>
-          {getNodeIcon(node.type)} {node.type.toUpperCase()}
+        <Typography 
+          variant="caption" 
+          style={{ 
+            opacity: 0.9, 
+            fontSize: 10,
+            fontWeight: 600,
+            letterSpacing: "0.5px",
+            marginBottom: 4,
+            textTransform: "uppercase"
+          }}
+        >
+          {getNodeIcon(node.type)} {node.type}
         </Typography>
-        <Typography variant="body2" style={{ fontWeight: 500 }}>
+        <Typography 
+          variant="body2" 
+          style={{ 
+            fontWeight: 500,
+            fontSize: 13,
+            lineHeight: 1.3,
+            textAlign: "center",
+            wordBreak: "break-word",
+            width: "100%"
+          }}
+        >
           {node.label}
         </Typography>
       </Paper>
@@ -268,7 +368,7 @@ const PromptFlowVisualization = ({ prompt, onNodeClick }) => {
   const handleZoomOut = () => setZoom(prev => Math.max(prev - 0.1, 0.5));
   const handleResetZoom = () => setZoom(1);
 
-  if (!prompt) {
+  if (!prompt || prompt.trim().length === 0) {
     return (
       <Box className={classes.container}>
         <Box className={classes.header}>
@@ -277,9 +377,22 @@ const PromptFlowVisualization = ({ prompt, onNodeClick }) => {
             Visualização de Fluxo
           </Typography>
         </Box>
-        <Paper variant="outlined" style={{ padding: 32, textAlign: "center" }}>
+        <Paper 
+          variant="outlined" 
+          style={{ 
+            padding: 48, 
+            textAlign: "center",
+            backgroundColor: "#f5f5f5",
+            border: "2px dashed #ccc"
+          }}
+        >
+          <AccountTreeIcon style={{ fontSize: 48, color: "#999", marginBottom: 16 }} />
+          <Typography variant="h6" color="textSecondary" gutterBottom>
+            Nenhum prompt para visualizar
+          </Typography>
           <Typography color="textSecondary">
-            Insira um prompt para visualizar o fluxo de regras de negócio.
+            Selecione um agente e etapa, ou edite o prompt na aba "Editor de Prompt"
+            para visualizar o fluxograma das diretrizes.
           </Typography>
         </Paper>
       </Box>

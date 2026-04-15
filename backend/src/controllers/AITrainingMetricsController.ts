@@ -155,6 +155,20 @@ export const getTrainingMetrics = async (
     });
   } catch (err: any) {
     console.error("Error getting training metrics:", err);
-    return res.status(500).json({ error: "Failed to get training metrics" });
+    // Retornar dados padrão em vez de erro 500
+    return res.json({
+      totalFeedbacks: 0,
+      positiveFeedbacks: 0,
+      negativeFeedbacks: 0,
+      improvementsSuggested: 0,
+      improvementsApplied: 0,
+      testsTotal: 0,
+      testsPassed: 0,
+      avgSimilarity: 0,
+      recentNegatives: 0,
+      promptVersions: 0,
+      feedbackTrend: [],
+      categoryDistribution: {}
+    });
   }
 };
