@@ -1400,21 +1400,51 @@ const MessageInput = ({
     // Verificar se há mídia no fluxo para ativar a barra de progresso adequada
     const hasMediaInFlow = flow.some(item => item.type === 'media');
     
+    // ===== OPTIMISTIC UI: Criar mensagens visuais imediatamente =====
+    const optimisticTempIds = [];
+    const mediaItems = flow.filter(item => item.type === 'media');
+    const totalMedias = mediaItems.length;
+    
+    // Buscar o primeiro texto do fluxo para usar como legenda
+    const firstTextItem = flow.find(item => item.type === 'text');
+    const captionText = (value.sendAsCaption && firstTextItem) 
+      ? expandPlaceholders(firstTextItem.value, contactData, ticketData, user) 
+      : null;
+    
+    // Para cada mídia, adicionar mensagem otimista imediatamente
+    mediaItems.forEach((item, index) => {
+      const mediaUrl = buildQuickMessageMediaUrl(item.serverFilename || item.value);
+      const filename = item.filename || item.filenameOriginal || item.value || `arquivo-${index}`;
+      
+      // Detectar tipo de mídia pela extensão
+      const ext = filename.split('.').pop()?.toLowerCase() || '';
+      const mediaType = ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext) ? 'image'
+        : ['mp4', 'avi', 'mov', 'webm'].includes(ext) ? 'video'
+        : ['mp3', 'ogg', 'm4a', 'wav'].includes(ext) ? 'audio'
+        : 'document';
+      
+      const tempId = addOptimisticMessage(ticketId, {
+        body: index === 0 ? (captionText || filename) : filename, // Primeira mídia recebe a legenda
+        fromMe: true,
+        read: 1,
+        mediaType,
+        mediaUrl: mediaUrl, // URL direta do servidor para preview instantâneo
+        _pendingMedia: true,
+        _fileName: filename,
+        _isQuickMessage: true, // Flag para identificar origem
+      });
+      
+      optimisticTempIds.push({ tempId, item, mediaUrl, filename, mediaType });
+    });
+    
     const executeFlow = async () => {
       setLoading(true);
       if (hasMediaInFlow) {
-        setUploadingFile(true); // Ativa barra de progresso para uploads de mídia
+        setUploadingFile(true);
         setUploadProgress(0);
       }
       
-      // Buscar o primeiro texto do fluxo para usar como legenda
-      const firstTextItem = flow.find(item => item.type === 'text');
-      const captionText = (value.sendAsCaption && firstTextItem) 
-        ? expandPlaceholders(firstTextItem.value, contactData, ticketData, user) 
-        : null;
-      
       let mediaIndex = 0;
-      const totalMedias = flow.filter(item => item.type === 'media').length;
       
       for (let i = 0; i < flow.length; i++) {
         const item = flow[i];
@@ -1435,27 +1465,38 @@ const MessageInput = ({
           await sleep((item.value || 1) * 1000);
         } 
         else if (item.type === 'media') {
-          const mediaUrl = buildQuickMessageMediaUrl(item.serverFilename || item.value);
-          
-          // Se sendAsCaption está ativo, usar o caption preparado
-          const caption = captionText || "";
+          // Encontrar a mensagem otimista correspondente
+          const optimisticData = optimisticTempIds[mediaIndex];
+          const caption = mediaIndex === 0 ? (captionText || "") : "";
 
           try {
-            // Atualiza progresso simulado baseado no índice da mídia
+            // Atualiza progresso
             if (hasMediaInFlow && totalMedias > 0) {
               const progress = Math.round((mediaIndex / totalMedias) * 100);
               setUploadProgress(progress);
             }
             
-            const { data } = await axios.get(mediaUrl, { responseType: "blob" });
-            await handleUploadQuickMessageMedia(data, caption);
+            // Download do arquivo
+            const { data: blob } = await axios.get(optimisticData.mediaUrl, { responseType: "blob" });
+            
+            // Upload para o servidor
+            await handleUploadQuickMessageMedia(blob, caption);
+            
+            // Confirmar mensagem otimista - o servidor vai emitir a real via socket
+            confirmOptimisticMessage(ticketId, optimisticData.tempId, null);
+            
             mediaIndex++;
           } catch (err) {
             console.error("Erro ao enviar mídia do fluxo:", err);
             toastError(err);
+            // Marcar mensagem otimista como falha
+            if (optimisticData) {
+              failOptimisticMessage(ticketId, optimisticData.tempId, err.message);
+            }
           }
         }
       }
+      
       // Finaliza progresso
       if (hasMediaInFlow) {
         setUploadProgress(100);
@@ -1464,6 +1505,7 @@ const MessageInput = ({
       setUploadingFile(false);
     };
 
+    // Iniciar fluxo em background (mensagens já estão visíveis)
     executeFlow();
     setTypeBar(false);
     setInputMessage("");
