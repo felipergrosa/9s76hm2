@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { Paper, Typography, Box, Avatar, IconButton } from "@material-ui/core";
 import { makeStyles } from "@material-ui/core/styles";
 import CheckIcon from "@material-ui/icons/Check";
@@ -57,8 +57,11 @@ const useStyles = makeStyles((theme) => ({
   chatArea: {
     flex: 1,
     padding: 16,
+    paddingBottom: 24,
     overflowY: "auto",
-    height: 520,
+    display: "flex",
+    flexDirection: "column",
+    minHeight: 0,
     "&::-webkit-scrollbar": {
       width: 6,
     },
@@ -168,8 +171,8 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
-const WhatsAppPreview = ({ 
-  messages = [], 
+const WhatsAppPreview = ({
+  messages = [],
   contactName = "Cliente Exemplo",
   mediaUrls = {},
   companyName = "Empresa",
@@ -177,6 +180,14 @@ const WhatsAppPreview = ({
   messageRatings = {}
 }) => {
   const classes = useStyles();
+  const chatAreaRef = useRef(null);
+
+  // Scroll automático para última mensagem
+  useEffect(() => {
+    if (chatAreaRef.current) {
+      chatAreaRef.current.scrollTop = chatAreaRef.current.scrollHeight;
+    }
+  }, [messages]);
 
   const normalizeMessages = (msgs) => {
     if (!Array.isArray(msgs)) return [];
@@ -260,7 +271,7 @@ const WhatsAppPreview = ({
       </Box>
       
       {/* Área de mensagens */}
-      <Box className={classes.chatArea}>
+      <Box ref={chatAreaRef} className={classes.chatArea}>
         {!hasMessages ? (
           <div className={classes.emptyState}>
             <Typography variant="body2" gutterBottom>

@@ -74,44 +74,49 @@ const useStyles = makeStyles((theme) => ({
     backgroundColor: "#4caf50 !important",
     color: "#fff !important",
     fontWeight: 600,
-    border: "2px solid #2e7d32",
-    '& *': { color: "#fff !important" }
+    border: "2px solid #2e7d32 !important",
+    '& *': { color: "#fff !important" },
+    '&.MuiPaper-root': { backgroundColor: "#4caf50 !important" }
   },
   conditionNode: {
     backgroundColor: "#ff9800 !important",
     color: "#fff !important",
     fontWeight: 500,
-    border: "2px solid #e65100",
-    borderRadius: 16,
-    '& *': { color: "#fff !important" }
+    border: "2px solid #e65100 !important",
+    borderRadius: "16px !important",
+    '& *': { color: "#fff !important" },
+    '&.MuiPaper-root': { backgroundColor: "#ff9800 !important" }
   },
   actionNode: {
     backgroundColor: "#2196f3 !important",
     color: "#fff !important",
     fontWeight: 500,
-    border: "2px solid #1565c0",
-    borderLeft: "4px solid #0d47a1",
-    '& *': { color: "#fff !important" }
+    border: "2px solid #1565c0 !important",
+    borderLeft: "4px solid #0d47a1 !important",
+    '& *': { color: "#fff !important" },
+    '&.MuiPaper-root': { backgroundColor: "#2196f3 !important" }
   },
   endNode: {
     backgroundColor: "#f44336 !important",
     color: "#fff !important",
     fontWeight: 600,
-    border: "2px solid #c62828",
-    borderRadius: "50%",
+    border: "2px solid #c62828 !important",
+    borderRadius: "50% !important",
     minWidth: 80,
     minHeight: 80,
-    '& *': { color: "#fff !important" }
+    '& *': { color: "#fff !important" },
+    '&.MuiPaper-root': { backgroundColor: "#f44336 !important", borderRadius: "50% !important" }
   },
   instructionNode: {
     backgroundColor: "#9c27b0 !important",
     color: "#fff !important",
     fontWeight: 500,
-    border: "2px solid #6a1b9a",
-    borderLeft: "6px solid #4a148c",
+    border: "2px solid #6a1b9a !important",
+    borderLeft: "6px solid #4a148c !important",
     textAlign: "left",
     alignItems: "flex-start",
-    '& *': { color: "#fff !important" }
+    '& *': { color: "#fff !important" },
+    '&.MuiPaper-root': { backgroundColor: "#9c27b0 !important" }
   },
   connector: {
     position: "absolute",
@@ -353,7 +358,7 @@ const FlowNode = ({ node, classes }) => {
     <Tooltip title={node.description} placement="right" arrow>
       <Paper
         className={`${classes.node} ${getNodeClass(node.type)}`}
-        elevation={3}
+        elevation={0}
         style={{
           display: "flex",
           flexDirection: "column",
@@ -361,35 +366,36 @@ const FlowNode = ({ node, classes }) => {
           justifyContent: "center",
           backgroundColor: colors.bg,
           borderColor: colors.border,
-          color: "#ffffff"
+          color: "#ffffff",
+          boxShadow: "0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23)"
         }}
       >
-        <Typography 
-          variant="caption" 
-          style={{ 
-            color: "#ffffff !important",
-            opacity: 0.95, 
+        <Typography
+          variant="caption"
+          style={{
+            color: "#ffffff",
+            opacity: 0.95,
             fontSize: 11,
             fontWeight: 600,
             letterSpacing: "0.5px",
             marginBottom: 4,
             textTransform: "uppercase",
-            textShadow: "0 1px 2px rgba(0,0,0,0.3)"
+            textShadow: "0 1px 2px rgba(0,0,0,0.5)"
           }}
         >
           {getNodeIcon(node.type)} {node.type}
         </Typography>
-        <Typography 
-          variant="body2" 
-          style={{ 
-            color: "#ffffff !important",
+        <Typography
+          variant="body2"
+          style={{
+            color: "#ffffff",
             fontWeight: 500,
             fontSize: 14,
             lineHeight: 1.4,
             textAlign: node.type === "instruction" ? "left" : "center",
             wordBreak: "break-word",
             width: "100%",
-            textShadow: "0 1px 2px rgba(0,0,0,0.3)"
+            textShadow: "0 1px 3px rgba(0,0,0,0.5)"
           }}
         >
           {node.label}

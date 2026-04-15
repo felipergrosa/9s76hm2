@@ -85,11 +85,18 @@ const useStyles = makeStyles((theme) => ({
     fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', Monaco, Consolas, 'Courier New', monospace !important",
     fontSize: 13,
     overflow: "auto",
-    border: "1px solid #30363d",
+    border: "1px solid #30363d !important",
     borderRadius: 8,
-    boxShadow: "inset 0 0 20px rgba(0,0,0,0.5)",
+    boxShadow: "inset 0 0 20px rgba(0,0,0,0.5) !important",
     '& *': {
-      color: "#e6edf3 !important"
+      color: "#e6edf3 !important",
+      backgroundColor: "transparent !important"
+    },
+    '&.MuiPaper-root': {
+      backgroundColor: "#0d1117 !important"
+    },
+    '&.MuiPaper-outlined': {
+      backgroundColor: "#0d1117 !important"
     }
   },
   mockPhone: {
@@ -728,7 +735,7 @@ const AITraining = () => {
             </Grid>
 
             <Grid item xs={12} md={6}>
-              <Paper className={classes.rightPane} variant="outlined">
+              <Paper className={classes.rightPane} variant="outlined" elevation={0} style={{ backgroundColor: '#0d1117' }}>
                 <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
                   <Typography variant="subtitle2" style={{ color: "#d7e0ff" }}>Logs & Tool Calls</Typography>
                 </Box>
