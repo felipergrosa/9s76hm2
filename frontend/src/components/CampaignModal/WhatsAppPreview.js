@@ -181,13 +181,26 @@ const WhatsAppPreview = ({
 }) => {
   const classes = useStyles();
   const chatAreaRef = useRef(null);
+  const prevMessagesLength = useRef(messages?.length || 0);
+  const userScrolledUp = useRef(false);
 
-  // Scroll automático para última mensagem
+  // Scroll automático apenas quando nova mensagem é adicionada
   useEffect(() => {
-    if (chatAreaRef.current) {
+    const currentLength = messages?.length || 0;
+    const hasNewMessage = currentLength > prevMessagesLength.current;
+    prevMessagesLength.current = currentLength;
+
+    if (chatAreaRef.current && hasNewMessage && !userScrolledUp.current) {
       chatAreaRef.current.scrollTop = chatAreaRef.current.scrollHeight;
     }
   }, [messages]);
+
+  // Detectar scroll do usuário
+  const handleScroll = (e) => {
+    const el = e.target;
+    const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
+    userScrolledUp.current = !isAtBottom;
+  };
 
   const normalizeMessages = (msgs) => {
     if (!Array.isArray(msgs)) return [];
@@ -271,7 +284,7 @@ const WhatsAppPreview = ({
       </Box>
       
       {/* Área de mensagens */}
-      <Box ref={chatAreaRef} className={classes.chatArea}>
+      <Box ref={chatAreaRef} className={classes.chatArea} onScroll={handleScroll}>
         {!hasMessages ? (
           <div className={classes.emptyState}>
             <Typography variant="body2" gutterBottom>

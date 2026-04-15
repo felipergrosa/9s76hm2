@@ -356,16 +356,15 @@ const FlowNode = ({ node, classes }) => {
 
   return (
     <Tooltip title={node.description} placement="right" arrow>
-      <Paper
+      <div
         className={`${classes.node} ${getNodeClass(node.type)}`}
-        elevation={0}
         style={{
           display: "flex",
           flexDirection: "column",
           alignItems: node.type === "instruction" ? "flex-start" : "center",
           justifyContent: "center",
           backgroundColor: colors.bg,
-          borderColor: colors.border,
+          border: `2px solid ${colors.border}`,
           color: "#ffffff",
           boxShadow: "0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23)"
         }}
@@ -400,7 +399,7 @@ const FlowNode = ({ node, classes }) => {
         >
           {node.label}
         </Typography>
-      </Paper>
+      </div>
     </Tooltip>
   );
 };

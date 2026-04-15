@@ -735,23 +735,25 @@ const AITraining = () => {
             </Grid>
 
             <Grid item xs={12} md={6}>
-              <Paper className={classes.rightPane} variant="outlined" elevation={0} style={{ backgroundColor: '#0d1117' }}>
-                <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
-                  <Typography variant="subtitle2" style={{ color: "#d7e0ff" }}>Logs & Tool Calls</Typography>
-                </Box>
-                {logs.length === 0 ? (
-                  <div className={classes.logLine}>Aguardando ações...</div>
-                ) : (
-                  logs.map((l, idx) => (
-                    <div key={idx} className={classes.logLine}>{l}</div>
-                  ))
-                )}
-                {toolCalls.length > 0 && (
-                  <Box mt={2}>
-                    <ToolCallsHistory toolCalls={toolCalls} />
+              <div style={{ height: "calc(100vh - 320px)", minHeight: 400, backgroundColor: "#0d1117", borderRadius: 8, border: "1px solid #30363d", overflow: "auto" }}>
+                <Box p={2} style={{ backgroundColor: "#0d1117", color: "#e6edf3" }}>
+                  <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
+                    <Typography variant="subtitle2" style={{ color: "#d7e0ff", fontFamily: "'JetBrains Mono', monospace" }}>Logs & Tool Calls</Typography>
                   </Box>
-                )}
-              </Paper>
+                  {logs.length === 0 ? (
+                    <div className={classes.logLine}>Aguardando ações...</div>
+                  ) : (
+                    logs.map((l, idx) => (
+                      <div key={idx} className={classes.logLine}>{l}</div>
+                    ))
+                  )}
+                  {toolCalls.length > 0 && (
+                    <Box mt={2}>
+                      <ToolCallsHistory toolCalls={toolCalls} />
+                    </Box>
+                  )}
+                </Box>
+              </div>
             </Grid>
           </Grid>
         </TabPanel>
