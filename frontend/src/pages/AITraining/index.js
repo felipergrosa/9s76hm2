@@ -46,7 +46,8 @@ import {
   TrainingMetricsDashboard,
   ABTestingComparison,
   PromptFlowVisualization,
-  ToolCallsHistory
+  ToolCallsHistory,
+  OnboardingTour
 } from "../../components/AITraining";
 
 import api from "../../services/api";
@@ -601,13 +602,13 @@ const AITraining = () => {
           indicatorColor="primary"
           textColor="primary"
         >
-          <Tab icon={<PlayArrowIcon />} label="Sandbox" />
-          <Tab icon={<EditIcon />} label="Editor de Prompt" />
-          <Tab icon={<BugReportIcon />} label="Testes" />
-          <Tab icon={<AccountTreeIcon />} label="Fluxograma" />
+          <Tab icon={<PlayArrowIcon />} label="Sandbox" data-tour="sandbox" />
+          <Tab icon={<EditIcon />} label="Editor de Prompt" data-tour="prompt-assistant" />
+          <Tab icon={<BugReportIcon />} label="Testes" data-tour="test-scenarios" />
+          <Tab icon={<AccountTreeIcon />} label="Fluxograma" data-tour="flow-visualization" />
           <Tab icon={<HistoryIcon />} label="Versões" />
           <Tab icon={<CompareArrowsIcon />} label="A/B Testing" />
-          <Tab icon={<AssessmentIcon />} label="Métricas" />
+          <Tab icon={<AssessmentIcon />} label="Métricas" data-tour="metrics" />
         </Tabs>
 
         <TabPanel value={activeTab} index={0} className={classes.tabPanel}>
@@ -813,6 +814,8 @@ const AITraining = () => {
           </Box>
         </TabPanel>
       </Paper>
+
+      <OnboardingTour />
 
       <Dialog open={rateModalOpen} onClose={closeRateModal} fullWidth maxWidth="sm">
         <DialogTitle>Corrigir resposta do agente</DialogTitle>

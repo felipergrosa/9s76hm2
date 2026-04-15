@@ -257,10 +257,11 @@ class AIAuditService {
   }> {
     const { default: AIAuditLog } = await import("../../models/AIAuditLog");
 
+    const { Op } = await import("sequelize");
     const logs = await AIAuditLog.findAll({
       where: {
         companyId,
-        createdAt: { $between: [startDate, endDate] },
+        createdAt: { [Op.between]: [startDate.getTime(), endDate.getTime()] } as any,
         isDeleted: false
       },
       order: [["createdAt", "ASC"]]
@@ -330,11 +331,12 @@ class AIAuditService {
   async getStats(companyId: number): Promise<any> {
     const { default: AIAuditLog } = await import("../../models/AIAuditLog");
 
+    const { Sequelize } = await import("sequelize");
     const [total, byType, totalCost] = await Promise.all([
       AIAuditLog.count({ where: { companyId, isDeleted: false } }),
       AIAuditLog.findAll({
         where: { companyId, isDeleted: false },
-        attributes: ["eventType", [AIAuditLog.sequelize.fn("COUNT", "*"), "count"]],
+        attributes: ["eventType", [Sequelize.fn("COUNT", "*"), "count"]],
         group: ["eventType"],
         raw: true
       }),

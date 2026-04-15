@@ -118,18 +118,19 @@ class AIMemoryService {
     currentContext?: string
   ): Promise<MemoryEntry[]> {
     const { default: AIMemory } = await import("../../models/AIMemory");
+    const { Op } = await import("sequelize");
 
     const memories = await AIMemory.findAll({
       where: {
         contactId,
         companyId,
-        expiresAt: { $or: [{ $gt: new Date() }, { $eq: null }] }
+        expiresAt: { [Op.or]: [{ [Op.gt]: new Date() }, { [Op.eq]: null }] }
       },
       order: [["confidence", "DESC"], ["createdAt", "DESC"]],
       limit: 10
     });
 
-    return memories.map(m => m.toJSON());
+    return memories.map(m => m.toJSON() as MemoryEntry);
   }
 
   /**
@@ -174,13 +175,14 @@ class AIMemoryService {
   ): Promise<{ summaries: ConversationSummary[]; facts: MemoryEntry[] }> {
     const { default: AIMemory } = await import("../../models/AIMemory");
     const { default: ConversationSummary } = await import("../../models/ConversationSummary");
+    const { Op } = await import("sequelize");
 
     const [summaries, facts] = await Promise.all([
       ConversationSummary.findAll({
         where: {
           contactId,
           companyId,
-          ...(excludeTicketId && { ticketId: { $ne: excludeTicketId } })
+          ...(excludeTicketId && { ticketId: { [Op.ne]: excludeTicketId } })
         },
         order: [["createdAt", "DESC"]],
         limit: 5
@@ -197,8 +199,8 @@ class AIMemoryService {
     ]);
 
     return {
-      summaries: summaries.map(s => s.toJSON()),
-      facts: facts.map(f => f.toJSON())
+      summaries: summaries.map(s => s.toJSON() as ConversationSummary),
+      facts: facts.map(f => f.toJSON() as MemoryEntry)
     };
   }
 

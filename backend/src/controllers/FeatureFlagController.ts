@@ -83,7 +83,7 @@ export const update = async (req: Request, res: Response): Promise<Response> => 
     if (isNaN(flagId)) {
       return res.status(400).json({ error: "ID inválido" });
     }
-    const flag = await featureFlagService.updateFlag(flagId, updates, userId);
+    const flag = await featureFlagService.updateFlag(flagId, updates, Number(userId));
 
     return res.json({
       flag: flag.toJSON(),
@@ -179,7 +179,7 @@ export const bulkUpdate = async (req: Request, res: Response): Promise<Response>
     for (const { id, ...updates } of flags) {
       const flagId = parseInt(id as string, 10);
       if (!isNaN(flagId)) {
-        const flag = await featureFlagService.updateFlag(flagId, updates, userId);
+        const flag = await featureFlagService.updateFlag(flagId, updates, Number(userId));
         results.push(flag);
       }
     }
