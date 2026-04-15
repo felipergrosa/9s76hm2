@@ -68,6 +68,8 @@ import mediaRoutes from "./mediaRoutes";
 import userGroupPermissionRoutes from "./userGroupPermissionRoutes";
 import debugRoutes from "./debugRoutes";
 import promptRoutes from "./promptRoutes";
+import skillRoutes from "./skillRoutes";
+import featureFlagRoutes from "./featureFlagRoutes";
 import { getLinkPreviewData, detectAndPreview } from "../controllers/LinkPreviewController";
 
 const routes = Router();
@@ -151,6 +153,8 @@ routes.use("/media", mediaRoutes);
 routes.use(userGroupPermissionRoutes);
 routes.use(debugRoutes);
 routes.use(promptRoutes);
+routes.use(skillRoutes);
+routes.use(featureFlagRoutes);
 
 // Link Preview routes
 routes.post("/link-preview", isAuth, getLinkPreviewData);

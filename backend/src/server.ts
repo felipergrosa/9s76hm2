@@ -307,6 +307,11 @@ startUserStatusJob();
 // }, 300_000);
 
 initIO(server);
+
+// Inicializar WebSocket de Skills para notificações em tempo real
+import { skillWebSocket } from "./services/IA/SkillWebSocketService";
+skillWebSocket.initialize();
+
 gracefulShutdown(server);
 
 

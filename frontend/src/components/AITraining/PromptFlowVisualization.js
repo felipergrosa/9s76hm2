@@ -48,55 +48,70 @@ const useStyles = makeStyles((theme) => ({
   },
   node: {
     position: "relative",
-    padding: theme.spacing(1.5),
+    padding: theme.spacing(2),
     borderRadius: 8,
-    marginBottom: theme.spacing(1),
-    minWidth: 220,
-    maxWidth: 320,
+    marginBottom: theme.spacing(2),
+    minWidth: 240,
+    maxWidth: 350,
+    minHeight: 60,
     cursor: "pointer",
-    transition: "all 0.2s",
+    transition: "all 0.2s ease",
     wordBreak: "break-word",
-    textAlign: "center",
-    boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    boxShadow: "0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23)",
+    border: "2px solid transparent",
     "&:hover": {
-      transform: "scale(1.02)",
-      boxShadow: theme.shadows[6]
+      transform: "scale(1.02) translateY(-2px)",
+      boxShadow: "0 10px 20px rgba(0,0,0,0.19), 0 6px 6px rgba(0,0,0,0.23)"
     }
   },
   startNode: {
-    backgroundColor: "#4caf50",
-    color: "#fff",
+    backgroundColor: "#4caf50 !important",
+    color: "#fff !important",
     fontWeight: 600,
-    border: "2px solid #2e7d32"
+    border: "2px solid #2e7d32",
+    '& *': { color: "#fff !important" }
   },
   conditionNode: {
-    backgroundColor: "#ff9800",
-    color: "#fff",
-    clipPath: "polygon(10% 0%, 90% 0%, 100% 50%, 90% 100%, 10% 100%, 0% 50%)",
-    padding: theme.spacing(2, 3),
-    fontWeight: 500
+    backgroundColor: "#ff9800 !important",
+    color: "#fff !important",
+    fontWeight: 500,
+    border: "2px solid #e65100",
+    borderRadius: 16,
+    '& *': { color: "#fff !important" }
   },
   actionNode: {
-    backgroundColor: "#2196f3",
-    color: "#fff",
+    backgroundColor: "#2196f3 !important",
+    color: "#fff !important",
     fontWeight: 500,
-    border: "2px solid #1565c0"
+    border: "2px solid #1565c0",
+    borderLeft: "4px solid #0d47a1",
+    '& *': { color: "#fff !important" }
   },
   endNode: {
-    backgroundColor: "#f44336",
-    color: "#fff",
+    backgroundColor: "#f44336 !important",
+    color: "#fff !important",
     fontWeight: 600,
     border: "2px solid #c62828",
     borderRadius: "50%",
-    padding: theme.spacing(2),
-    minWidth: 100
+    minWidth: 80,
+    minHeight: 80,
+    '& *': { color: "#fff !important" }
   },
   instructionNode: {
-    backgroundColor: "#9c27b0",
-    color: "#fff",
+    backgroundColor: "#9c27b0 !important",
+    color: "#fff !important",
     fontWeight: 500,
-    borderLeft: "4px solid #6a1b9a",
-    textAlign: "left"
+    border: "2px solid #6a1b9a",
+    borderLeft: "6px solid #4a148c",
+    textAlign: "left",
+    alignItems: "flex-start",
+    '& *': { color: "#fff !important" }
   },
   connector: {
     position: "absolute",
@@ -315,6 +330,25 @@ const FlowNode = ({ node, classes }) => {
     }
   };
 
+  const getNodeColors = (type) => {
+    switch (type) {
+      case "start":
+        return { bg: "#4caf50", border: "#2e7d32", icon: "▶" };
+      case "condition":
+        return { bg: "#ff9800", border: "#e65100", icon: "◆" };
+      case "action":
+        return { bg: "#2196f3", border: "#1565c0", icon: "●" };
+      case "instruction":
+        return { bg: "#9c27b0", border: "#6a1b9a", icon: "📋" };
+      case "end":
+        return { bg: "#f44336", border: "#c62828", icon: "■" };
+      default:
+        return { bg: "#757575", border: "#424242", icon: "•" };
+    }
+  };
+
+  const colors = getNodeColors(node.type);
+
   return (
     <Tooltip title={node.description} placement="right" arrow>
       <Paper
@@ -323,19 +357,24 @@ const FlowNode = ({ node, classes }) => {
         style={{
           display: "flex",
           flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center"
+          alignItems: node.type === "instruction" ? "flex-start" : "center",
+          justifyContent: "center",
+          backgroundColor: colors.bg,
+          borderColor: colors.border,
+          color: "#ffffff"
         }}
       >
         <Typography 
           variant="caption" 
           style={{ 
-            opacity: 0.9, 
-            fontSize: 10,
+            color: "#ffffff !important",
+            opacity: 0.95, 
+            fontSize: 11,
             fontWeight: 600,
             letterSpacing: "0.5px",
             marginBottom: 4,
-            textTransform: "uppercase"
+            textTransform: "uppercase",
+            textShadow: "0 1px 2px rgba(0,0,0,0.3)"
           }}
         >
           {getNodeIcon(node.type)} {node.type}
@@ -343,12 +382,14 @@ const FlowNode = ({ node, classes }) => {
         <Typography 
           variant="body2" 
           style={{ 
+            color: "#ffffff !important",
             fontWeight: 500,
-            fontSize: 13,
-            lineHeight: 1.3,
-            textAlign: "center",
+            fontSize: 14,
+            lineHeight: 1.4,
+            textAlign: node.type === "instruction" ? "left" : "center",
             wordBreak: "break-word",
-            width: "100%"
+            width: "100%",
+            textShadow: "0 1px 2px rgba(0,0,0,0.3)"
           }}
         >
           {node.label}

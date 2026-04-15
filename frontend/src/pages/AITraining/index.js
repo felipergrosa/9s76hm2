@@ -66,7 +66,9 @@ const useStyles = makeStyles((theme) => ({
     borderBottom: `1px solid ${theme.palette.divider}`
   },
   tabPanel: {
-    minHeight: "calc(100vh - 280px)"
+    minHeight: "calc(100vh - 280px)",
+    padding: theme.spacing(2),
+    backgroundColor: theme.palette.background.paper
   },
   leftPane: {
     height: "calc(100vh - 320px)",
@@ -77,14 +79,17 @@ const useStyles = makeStyles((theme) => ({
     height: "calc(100vh - 320px)",
     minHeight: 400,
     padding: theme.spacing(2),
-    backgroundColor: "#0d1117",
-    color: "#e6edf3",
-    fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', Monaco, Consolas, 'Courier New', monospace",
+    backgroundColor: "#0d1117 !important",
+    color: "#e6edf3 !important",
+    fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', Monaco, Consolas, 'Courier New', monospace !important",
     fontSize: 13,
     overflow: "auto",
     border: "1px solid #30363d",
     borderRadius: 8,
-    boxShadow: "inset 0 0 20px rgba(0,0,0,0.5)"
+    boxShadow: "inset 0 0 20px rgba(0,0,0,0.5)",
+    '& *': {
+      color: "#e6edf3 !important"
+    }
   },
   mockPhone: {
     width: "100%",
@@ -110,10 +115,10 @@ const useStyles = makeStyles((theme) => ({
     whiteSpace: "pre-wrap",
     wordBreak: "break-word",
     marginBottom: theme.spacing(0.5),
-    fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', Monaco, Consolas, monospace",
-    fontSize: 12,
+    fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', Monaco, Consolas, monospace !important",
+    fontSize: "12px !important",
     lineHeight: "1.5",
-    color: "#e6edf3",
+    color: "#e6edf3 !important",
     padding: "2px 0",
     borderLeft: "2px solid transparent",
     paddingLeft: theme.spacing(0.5),
