@@ -6,62 +6,39 @@ import DoneOutlineIcon from "@material-ui/icons/DoneOutline";
 import CloseIcon from "@material-ui/icons/Close";
 
 const useStyles = makeStyles((theme) => ({
-  phoneFrame: {
-    width: 320,
-    height: 640,
-    borderRadius: 40,
-    border: "12px solid #1f1f1f",
-    background: "#e5ddd5", // Fundo do WhatsApp 
-    backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'260\' height=\'260\'%3E%3Cpath d=\'M129.92 0c71.686 0 129.92 58.234 129.92 129.92s-58.234 129.92-129.92 129.92S0 201.606 0 129.92 58.234 0 129.92 0z\' fill=\'%23d9d9d9\' fill-opacity=\'.05\'/%3E%3C/svg%3E")',
-    position: "relative",
-    overflow: "hidden",
-    boxShadow: "0 20px 60px rgba(0,0,0,0.3), inset 0 0 0 1px rgba(255,255,255,0.1)",
-  },
-  notch: {
-    position: "absolute",
-    top: 0,
-    left: "50%",
-    transform: "translateX(-50%)",
-    width: 140,
-    height: 28,
-    background: "#1f1f1f",
-    borderRadius: "0 0 20px 20px",
-    zIndex: 10,
+  chatWindow: {
+    width: "100%",
+    maxWidth: 480,
+    height: "100%",
+    minHeight: 400,
+    borderRadius: 12,
+    border: "1px solid #ddd",
+    background: "#e5ddd5",
     display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingTop: 4,
-  },
-  camera: {
-    width: 10,
-    height: 10,
-    borderRadius: "50%",
-    background: "#333",
-  },
-  speaker: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    background: "#333",
+    flexDirection: "column",
+    overflow: "hidden",
+    boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
   },
   header: {
-    background: "#075e54", // Verde cor WhatsApp
+    background: "#075e54",
     color: "#fff",
-    padding: "32px 16px 12px", // Espaço para notch
+    padding: "12px 16px",
     display: "flex",
     alignItems: "center",
-    gap: 8,
+    gap: 12,
     boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+    flexShrink: 0,
   },
   chatArea: {
     flex: 1,
     padding: 16,
-    paddingBottom: 24,
+    paddingBottom: 16,
     overflowY: "auto",
     display: "flex",
     flexDirection: "column",
     minHeight: 0,
+    background: "#e5ddd5",
+    backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'260\' height=\'260\'%3E%3Cpath d=\'M129.92 0c71.686 0 129.92 58.234 129.92 129.92s-58.234 129.92-129.92 129.92S0 201.606 0 129.92 58.234 0 129.92 0z\' fill=\'%23d9d9d9\' fill-opacity=\'.05\'/%3E%3C/svg%3E")',
     "&::-webkit-scrollbar": {
       width: 6,
     },
@@ -261,13 +238,7 @@ const WhatsAppPreview = ({
   const canRate = typeof onRateMessage === "function";
 
   return (
-    <Box className={classes.phoneFrame}>
-      {/* Notch do iPhone */}
-      <div className={classes.notch}>
-        <div className={classes.camera} />
-        <div className={classes.speaker} />
-      </div>
-      
+    <Box className={classes.chatWindow}>
       {/* Header do WhatsApp */}
       <Box className={classes.header}>
         <Avatar className={classes.avatar}>
