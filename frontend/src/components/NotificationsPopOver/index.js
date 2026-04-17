@@ -210,6 +210,13 @@ const NotificationsPopOver = ({ volume = 1 }) => {
         ticket?.status === "pending" && showNotificationPending === true ||
         ticket?.status === "group" && ticket?.whatsapp?.groupAsTicket === "enabled" && showGroupNotification === true;
 
+      // FILTRO DE CONEXÕES: Verificar se usuário tem permissão para ver notificações desta conexão
+      const hasAllConnectionsPermission = user?.super === true || user?.profile === "admin" ||
+        (user?.permissions && user.permissions.includes("all-connections.view"));
+      const isConnectionAllowed = hasAllConnectionsPermission ||
+        !ticket?.whatsappId || // Se não tem whatsappId, permite (fallback seguro)
+        (user?.allowedConnectionIds && user.allowedConnectionIds.includes(ticket.whatsappId));
+
       if (
         data?.action === "create" &&
         message &&
@@ -218,7 +225,8 @@ const NotificationsPopOver = ({ volume = 1 }) => {
         hasUnreadSignal &&
         isAssignedToCurrentUser &&
         isQueueAllowed &&
-        isStatusAllowed
+        isStatusAllowed &&
+        isConnectionAllowed
       ) {
         setNotifications(prevState => {
           const ticketIndex = prevState.findIndex(t => t.id === ticket.id);

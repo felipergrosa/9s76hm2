@@ -565,7 +565,10 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 
 		try {
 			if (contactId) {
-				await api.put(`/contacts/${contactId}`, payload);
+				const { data } = await api.put(`/contacts/${contactId}`, payload);
+				if (onSave) {
+					onSave(data);
+				}
 				handleClose();
 			} else {
 				const { data } = await api.post("/contacts", payload);

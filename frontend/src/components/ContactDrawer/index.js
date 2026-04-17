@@ -658,6 +658,18 @@ const ContactDrawer = ({ open, handleDrawerClose, contact, ticket, loading, acti
                     open={modalOpen}
                     onClose={() => setModalOpen(false)}
                     contactId={contact.id}
+                    onSave={async (updatedContact) => {
+                        // Atualizar dados do contato no drawer após edição
+                        try {
+                            const { data } = await api.get(`/contacts/${contact.id}`);
+                            // Atualiza o contato no componente pai (Ticket) via contexto ou callback
+                            if (ticket && ticket.contact) {
+                                ticket.contact = { ...ticket.contact, ...data };
+                            }
+                        } catch (err) {
+                            toastError(err);
+                        }
+                    }}
                 ></ContactModal>
             </Suspense>
             {/* Modal para exibir a imagem do avatar ampliada diretamente */}

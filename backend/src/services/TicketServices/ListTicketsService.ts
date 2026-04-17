@@ -505,6 +505,16 @@ const ListTicketsService = async ({
             queueId: { [Op.or]: [userQueueIds, null] },
           };
         }
+
+        // FILTRO DE CONEXÕES: Aplicar restrição de allowedConnectionIds para notificações
+        // Usuários sem all-connections.view só veem notificações de suas conexões permitidas
+        const hasAllConnectionsPermission = user.permissions?.includes("all-connections.view") || user.super === true || user.profile === "admin";
+        if (!hasAllConnectionsPermission && user.allowedConnectionIds && user.allowedConnectionIds.length > 0) {
+          whereCondition = {
+            ...whereCondition,
+            whatsappId: { [Op.in]: user.allowedConnectionIds }
+          };
+        }
       }
 
   whereCondition = {
