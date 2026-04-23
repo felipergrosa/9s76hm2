@@ -28,9 +28,6 @@ export default {
   directory: publicFolder,
   storage: multer.diskStorage({
     destination: async function (req: UploadRequest, file, cb) {
-      console.log(`[Upload] Iniciando upload. File: ${file.originalname}, mimetype: ${file.mimetype}`);
-      console.log(`[Upload] publicFolder: ${publicFolder}`);
-      
       let companyId: number | undefined;
 
       // Verificação segura de usuário e companyId
@@ -149,10 +146,9 @@ export default {
 
       // Criar pasta de forma segura
       try {
-        console.log(`[Upload] Criando pasta: ${folder}`);
         fs.mkdirSync(folder, { recursive: true });
-        fs.chmodSync(folder, 0o777);
-        console.log(`[Upload] Pasta criada com sucesso. Callback com folder: ${folder}`);
+        // Permissão 755: owner rwx, group/other rx (antes era 777, excessivo).
+        fs.chmodSync(folder, 0o755);
         return cb(null, folder);
       } catch (error) {
         console.error("[Upload] Erro ao criar pasta:", error);
@@ -200,7 +196,8 @@ export default {
       // Documentos
       'application/pdf',
       'text/plain',
-      'application/octet-stream',
+      // Removido 'application/octet-stream' por segurança (aceitava qualquer binário).
+      // validateUploadedFiles middleware valida magic bytes para casos legítimos.
 
       // Áudio (permitir formatos comuns usados por navegadores e celulares)
       'audio/mpeg',

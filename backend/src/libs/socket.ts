@@ -36,19 +36,20 @@ const ALLOWED_ORIGINS = process.env.FRONTEND_URL
   ? process.env.FRONTEND_URL.split(",").map((url) => url.trim())
   : ["http://localhost:3000", "https://chats.nobreluminarias.com.br"];
 
-// Função para verificar se origem é permitida (mais flexível)
+// Regex seguros (alinhados com app.ts) para matching de origem.
+const LOCALHOST_REGEX = /^https?:\/\/localhost(:\d+)?$/;
+const LOCAL_IP_REGEX = /^https?:\/\/(127\.0\.0\.1|\[::1\])(:\d+)?$/;
+const TRUSTED_DOMAIN_REGEX = /^https?:\/\/([a-z0-9-]+\.)*nobreluminarias\.com\.br$/i;
+const isDevelopment = process.env.NODE_ENV !== "production";
+
 const isOriginAllowed = (origin: string | undefined): boolean => {
-  if (!origin) return true; // Permitir requisições sem origin
-  
-  // Verificar se a origem está na lista explícita
+  // Sem origin: permitido apenas em dev (bibliotecas internas, healthcheck).
+  if (!origin) return isDevelopment;
+
   if (ALLOWED_ORIGINS.includes(origin)) return true;
-  
-  // Verificar se é subdomínio de nobreluminarias.com.br
-  if (origin.endsWith('nobreluminarias.com.br')) return true;
-  
-  // Verificar localhost para desenvolvimento
-  if (origin.includes('localhost')) return true;
-  
+  if (TRUSTED_DOMAIN_REGEX.test(origin)) return true;
+  if (isDevelopment && (LOCALHOST_REGEX.test(origin) || LOCAL_IP_REGEX.test(origin))) return true;
+
   return false;
 };
 
@@ -121,32 +122,43 @@ export const initIO = (httpServer: Server): SocketIO => {
     logger.error("Falha ao configurar Socket.IO Redis adapter", err);
   }
 
-  // Middleware de autenticação JWT (permissivo durante diagnóstico)
+  // Middleware de autenticação JWT obrigatória.
+  // Feature flag SOCKET_AUTH_PERMISSIVE permite rollback emergencial (não recomendado em produção).
+  const isSocketAuthPermissive = process.env.SOCKET_AUTH_PERMISSIVE === "true";
   io.use((socket, next) => {
     try {
       const token = socket.handshake.query.token as string;
       const origin = socket.handshake.headers.origin;
 
-      logger.info(`[SOCKET AUTH] Nova conexão - Origin: ${origin}, Token: ${token ? "presente" : "ausente"}`);
-
       if (!token) {
-        logger.warn("[SOCKET AUTH] Conexão sem token no handshake: permitindo (diagnóstico)");
-        return next();
+        logger.warn(`[SOCKET AUTH] Conexão sem token - origin=${origin}`);
+        if (isSocketAuthPermissive) {
+          logger.warn("[SOCKET AUTH] SOCKET_AUTH_PERMISSIVE=true - permitindo conexão sem token");
+          return next();
+        }
+        return next(new SocketCompatibleAppError("Token de autenticação obrigatório", 401));
       }
 
       try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || "default_secret");
+        // Usa mesmo secret validado em config/auth.ts (falha em produção se ausente).
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || "dev-only-do-not-use-in-production");
         const validatedPayload = validateJWTPayload(decoded);
         socket.data.user = validatedPayload;
-        logger.info(`[SOCKET AUTH] Token válido - UserId: ${validatedPayload.userId}`);
         return next();
       } catch (err) {
-        logger.warn(`[SOCKET AUTH] Token inválido no handshake: ${err.message} - permitindo (diagnóstico)`);
-        return next();
+        logger.warn(`[SOCKET AUTH] Token inválido - origin=${origin} erro=${err.message}`);
+        if (isSocketAuthPermissive) {
+          logger.warn("[SOCKET AUTH] SOCKET_AUTH_PERMISSIVE=true - permitindo token inválido");
+          return next();
+        }
+        return next(new SocketCompatibleAppError("Token inválido ou expirado", 401));
       }
     } catch (e) {
-      logger.warn(`[SOCKET AUTH] Erro inesperado no middleware: ${e.message} - permitindo (diagnóstico)`);
-      return next();
+      logger.error(`[SOCKET AUTH] Erro inesperado no middleware: ${e.message}`);
+      if (isSocketAuthPermissive) {
+        return next();
+      }
+      return next(new SocketCompatibleAppError("Falha na autenticação do socket", 401));
     }
   });
 

@@ -51,7 +51,7 @@ const SendWhatsAppMediaImage = async ({
     }
 
     try {
-        wbot.sendPresenceUpdate('available');
+        // Nao enviar 'available' global para preservar notificacoes push no celular
         await delay(msdelay)
         const sentMessage = await wbot.sendMessage(
             `${number}`,

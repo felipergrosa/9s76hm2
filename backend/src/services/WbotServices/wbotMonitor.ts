@@ -804,9 +804,11 @@ const wbotMonitor = async (
 
         // Tentar ping leve: sendPresenceUpdate com timeout mais curto
         // Usar SESSION ao invés de wbot
+        // Usar "unavailable" para não marcar sessão como online no WhatsApp
+        // (mantém notificações push no celular do usuário)
         try {
           await Promise.race([
-            (session as any).sendPresenceUpdate("available"),
+            (session as any).sendPresenceUpdate("unavailable"),
             new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3000))
           ]);
 
@@ -914,8 +916,10 @@ const wbotMonitor = async (
           if (ws && ws.readyState === 1) {
             try {
               // Enviar presence update para "despertar" conexão
+              // Usar "unavailable" para não marcar sessão como online
+              // (mantém notificações push no celular do usuário)
               await Promise.race([
-                (session as any).sendPresenceUpdate("available"),
+                (session as any).sendPresenceUpdate("unavailable"),
                 new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3000))
               ]);
 
@@ -980,8 +984,10 @@ const wbotMonitor = async (
             }
 
             // 2. Tentar atualizar presença para "despertar" conexão
+            // Usar "unavailable" para não marcar sessão como online
+            // (mantém notificações push no celular do usuário)
             await Promise.race([
-              (session as any).sendPresenceUpdate("available"),
+              (session as any).sendPresenceUpdate("unavailable"),
               new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3000))
             ]);
 

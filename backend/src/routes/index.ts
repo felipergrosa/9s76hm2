@@ -74,13 +74,10 @@ import { getLinkPreviewData, detectAndPreview } from "../controllers/LinkPreview
 
 const routes = Router();
 
-// Healthcheck endpoint for Docker Swarm
+// Healthcheck endpoint for Docker Swarm.
+// Não expor uptime/timestamp (ajuda atacante a mapear janelas de deploy/restart).
 routes.get("/health", (req, res) => {
-    res.status(200).json({
-        status: "ok",
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime()
-    });
+    res.status(200).json({ status: "ok" });
 });
 
 routes.use(userRoutes);

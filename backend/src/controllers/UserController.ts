@@ -127,7 +127,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     password,
     name,
     phone,
-    profile,
+    profile: rawProfile,
     companyId: bodyCompanyId,
     queueIds,
     companyName,
@@ -147,9 +147,9 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     allowRealTime,
     allowConnections,
     allowedContactTags,
-    permissions,
-    allowedConnectionIds,
-    isPrivate,
+    permissions: rawPermissions,
+    allowedConnectionIds: rawAllowedConnectionIds,
+    isPrivate: rawIsPrivate,
     color
   } = req.body;
   let userCompanyId: number | null = null;
@@ -167,6 +167,17 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
   ) {
     throw new AppError("ERR_USER_CREATION_DISABLED", 403);
   } else if (req.url !== "/signup" && req.user.profile !== "admin") {
+    throw new AppError("ERR_NO_PERMISSION", 403);
+  }
+
+  // SEGURANÇA: Sanitiza campos privilegiados em rota pública /signup.
+  // Previne escalação de privilégio por usuário auto-cadastrado.
+  const isPublicSignup = req.url === "/signup";
+  const profile = isPublicSignup ? "user" : rawProfile;
+  const permissions = isPublicSignup ? [] : rawPermissions;
+  const allowedConnectionIds = isPublicSignup ? [] : rawAllowedConnectionIds;
+  const isPrivate = isPublicSignup ? false : rawIsPrivate;
+  if (isPublicSignup && req.body.super === true) {
     throw new AppError("ERR_NO_PERMISSION", 403);
   }
 

@@ -58,19 +58,27 @@ const allowedOrigins = (process.env.FRONTEND_URL || "http://localhost:3000,https
   .map(s => s.trim())
   .filter(Boolean);
 
-// Função para verificar se origem é permitida (mais flexível)
+// Regex seguros para matching de origem.
+// IMPORTANTE: não usar `includes('localhost')` (aceita https://evil.com/localhost)
+// nem `endsWith('nobreluminarias.com.br')` (aceita fakenobreluminarias.com.br).
+const LOCALHOST_REGEX = /^https?:\/\/localhost(:\d+)?$/;
+const LOCAL_IP_REGEX = /^https?:\/\/(127\.0\.0\.1|\[::1\])(:\d+)?$/;
+const TRUSTED_DOMAIN_REGEX = /^https?:\/\/([a-z0-9-]+\.)*nobreluminarias\.com\.br$/i;
+const isDevelopment = process.env.NODE_ENV !== "production";
+
 const isOriginAllowed = (origin: string | undefined): boolean => {
-  if (!origin) return true; // Permitir requisições sem origin (ex: Postman, mobile apps)
-  
-  // Verificar se a origem está na lista explícita
+  // Requisições sem origin (mobile apps, curl) só permitidas em dev.
+  if (!origin) return isDevelopment;
+
+  // Lista explícita via FRONTEND_URL.
   if (allowedOrigins.includes(origin)) return true;
-  
-  // Verificar se é subdomínio de nobreluminarias.com.br
-  if (origin.endsWith('nobreluminarias.com.br')) return true;
-  
-  // Verificar localhost para desenvolvimento
-  if (origin.includes('localhost')) return true;
-  
+
+  // Subdomínio de nobreluminarias.com.br (match estrito).
+  if (TRUSTED_DOMAIN_REGEX.test(origin)) return true;
+
+  // Localhost/127.0.0.1 apenas em desenvolvimento.
+  if (isDevelopment && (LOCALHOST_REGEX.test(origin) || LOCAL_IP_REGEX.test(origin))) return true;
+
   return false;
 };
 
@@ -80,24 +88,15 @@ if (String(process.env.BULL_BOARD).toLocaleLowerCase() === 'true' && process.env
   app.use('/admin/queues', isBullAuth, BullBoard.UI);
 }
 
-// Middlewares
-// app.use(helmet({
-//   contentSecurityPolicy: {
-//     directives: {
-//       defaultSrc: ["'self'", "http://localhost:8080"],
-//       imgSrc: ["'self'", "data:", "http://localhost:8080"],
-//       scriptSrc: ["'self'", "http://localhost:8080"],
-//       styleSrc: ["'self'", "'unsafe-inline'", "http://localhost:8080"],
-//       connectSrc: ["'self'", "http://localhost:8080"]
-//     }
-//   },
-//   crossOriginResourcePolicy: false, // Permite recursos de diferentes origens
-//   crossOriginEmbedderPolicy: false, // Permite incorporação de diferentes origens
-//   crossOriginOpenerPolicy: false, // Permite abertura de diferentes origens
-//   // crossOriginResourcePolicy: {
-//   //   policy: "cross-origin" // Permite carregamento de recursos de diferentes origens
-//   // }
-// }));
+// Middlewares de segurança com Helmet.
+// CSP desabilitado por enquanto para não quebrar UI existente.
+// Habilita: X-Content-Type-Options, X-Frame-Options, HSTS, Referrer-Policy, etc.
+app.use(helmet({
+  contentSecurityPolicy: false, // TODO: habilitar CSP gradualmente em deploy futuro
+  crossOriginResourcePolicy: { policy: "cross-origin" }, // Permite carregar mídias de outros domínios
+  crossOriginEmbedderPolicy: false, // Permite embeds (ex: iframes de flow builder)
+  crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" }
+}));
 
 app.use(compression()); // Compressão HTTP
 app.use(bodyParser.json({ limit: '5mb' })); // Aumentar o limite de carga para 5 MB

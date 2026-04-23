@@ -20,7 +20,8 @@ const getBackendVersion = async () => {
 import app from "./app";
 import sequelize from "./database";
 
-// --- Endpoint de Healthcheck ---
+// --- Endpoint de Healthcheck (também registrado em routes/index.ts) ---
+// Mantido aqui por compatibilidade com monitoramento que bate antes das rotas.
 app.get('/health', (req, res) => {
   res.status(200).send('ok');
 });

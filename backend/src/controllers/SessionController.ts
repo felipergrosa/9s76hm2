@@ -15,12 +15,11 @@ import UpdateUserOnlineStatusService from "../services/UserServices/UpdateUserOn
 export const forgotPassword = async (req: Request, res: Response): Promise<Response> => {
   const { email } = req.body;
 
-  console.log('Forgot password request received:', { email });
-
   const user = await User.findOne({ where: { email } });
+  // SEGURANÇA: sempre retornar resposta genérica para evitar enumeração de usuários.
+  // Se o email não existe, apenas loga internamente (sem expor no response).
   if (!user) {
-    console.warn('No user found for email:', email);
-    throw new AppError("E-mail não encontrado.", 404);
+    return res.status(200).json({ message: "Se o e-mail existir, um link de redefinição foi enviado." });
   }
 
   const token = crypto.randomBytes(32).toString("hex");
@@ -29,13 +28,8 @@ export const forgotPassword = async (req: Request, res: Response): Promise<Respo
   user.passwordResetToken = token;
   user.passwordResetExpires = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
   await user.save();
-
-  console.log('Password reset token generated:', {
-    userId: user.id,
-    email,
-    token,
-    expires: user.passwordResetExpires,
-  });
+  // Log apenas o userId; nunca logar token ou email completo.
+  // Token expõe reset de senha, email permite enumeração.
 
   const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
@@ -54,13 +48,13 @@ export const forgotPassword = async (req: Request, res: Response): Promise<Respo
       subject: "Redefinição de Senha",
       text: `Clique no link para redefinir sua senha: ${resetUrl}`,
     });
-    console.log('Password reset email sent to:', email);
   } catch (error) {
-    console.error('Failed to send password reset email:', error);
+    console.error('Failed to send password reset email');
     throw new AppError("Erro ao enviar e-mail de redefinição.", 500);
   }
 
-  return res.status(200).json({ message: "E-mail enviado com sucesso." });
+  // Resposta genérica para prevenir enumeração.
+  return res.status(200).json({ message: "Se o e-mail existir, um link de redefinição foi enviado." });
 };
 
 export const store = async (req: Request, res: Response): Promise<Response> => {
@@ -148,7 +142,10 @@ export const remove = async (
 export const resetPassword = async (req: Request, res: Response): Promise<Response> => {
   const { token, newPassword } = req.body;
 
-  console.log('Reset password request received:', { token, newPassword: '***' }); // Hide password in logs
+  // Validação básica de entrada.
+  if (!token || !newPassword || typeof token !== "string" || typeof newPassword !== "string") {
+    throw new AppError("Token e nova senha são obrigatórios.", 400);
+  }
 
   const user = await User.findOne({
     where: {
@@ -158,28 +155,14 @@ export const resetPassword = async (req: Request, res: Response): Promise<Respon
   });
 
   if (!user) {
-    console.warn('No user found for token:', token);
-    // Check if token exists but is expired or invalid
-    const userWithToken = await User.findOne({
-      where: { passwordResetToken: token },
-    });
-    if (userWithToken) {
-      console.warn('Token found but expired or invalid:', {
-        token,
-        expires: userWithToken.passwordResetExpires,
-      });
-    }
+    // Nunca logar token (permite reuso se vazar no log).
     throw new AppError("Token inválido ou expirado.", 400);
   }
-
-  console.log('User found for password reset:', { userId: user.id, email: user.email });
 
   user.password = newPassword;
   user.passwordResetToken = null;
   user.passwordResetExpires = null;
   await user.save();
-
-  console.log('Password reset successful for user:', user.id);
 
   return res.status(200).json({ message: "Senha redefinida com sucesso." });
 };

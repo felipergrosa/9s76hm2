@@ -140,7 +140,9 @@ class User extends Model<User> {
   @BeforeCreate
   static hashPassword = async (instance: User): Promise<void> => {
     if (instance.password) {
-      instance.passwordHash = await hash(instance.password, 8);
+      // Cost 12 conforme OWASP 2024 (era 8, insuficiente contra brute force em GPU).
+      // Hashes antigos com cost 8 continuam válidos (bcrypt compara corretamente).
+      instance.passwordHash = await hash(instance.password, 12);
     }
   };
 

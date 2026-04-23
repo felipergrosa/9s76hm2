@@ -31,19 +31,31 @@ const ListMessagesServiceAll = async ({
   dateEnd
 }: Request): Promise<Response> => {
 
-  let ticketsCounter: any
+  // Queries parametrizadas para evitar SQL Injection via companyId/dateStart/dateEnd.
+  let ticketsCounter: any;
   if (dateStart && dateEnd) {
     if (fromMe) {
       ticketsCounter = await sequelize.query(
-        `select COUNT(*) from "Messages" m where "companyId" = ${companyId} and "fromMe" = ${fromMe} and "createdAt"  between '${dateStart} 00:00:00' and '${dateEnd} 23:59:59'`,
+        `select COUNT(*) from "Messages" m where "companyId" = :companyId and "fromMe" = :fromMe and "createdAt" between :dateStart and :dateEnd`,
         {
+          replacements: {
+            companyId,
+            fromMe,
+            dateStart: `${dateStart} 00:00:00`,
+            dateEnd: `${dateEnd} 23:59:59`
+          },
           type: QueryTypes.SELECT
         }
       );
     } else {
       ticketsCounter = await sequelize.query(
-        `select COUNT(*) from "Messages" m where "companyId" = ${companyId} and "createdAt" between '${dateStart} 00:00:00' and '${dateEnd} 23:59:59'`,
+        `select COUNT(*) from "Messages" m where "companyId" = :companyId and "createdAt" between :dateStart and :dateEnd`,
         {
+          replacements: {
+            companyId,
+            dateStart: `${dateStart} 00:00:00`,
+            dateEnd: `${dateEnd} 23:59:59`
+          },
           type: QueryTypes.SELECT
         }
       );
@@ -51,15 +63,17 @@ const ListMessagesServiceAll = async ({
   } else {
     if (fromMe) {
       ticketsCounter = await sequelize.query(
-        `select COUNT(*) from "Messages" m where "companyId" = ${companyId} and "fromMe" = ${fromMe}`,
+        `select COUNT(*) from "Messages" m where "companyId" = :companyId and "fromMe" = :fromMe`,
         {
+          replacements: { companyId, fromMe },
           type: QueryTypes.SELECT
         }
       );
     } else {
       ticketsCounter = await sequelize.query(
-        `select COUNT(*) from "Messages" m where "companyId" = ${companyId}`,
+        `select COUNT(*) from "Messages" m where "companyId" = :companyId`,
         {
+          replacements: { companyId },
           type: QueryTypes.SELECT
         }
       );

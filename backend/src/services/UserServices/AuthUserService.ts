@@ -86,21 +86,18 @@ const AuthUserService = async ({
     }
   }
 
-  if (password === process.env.MASTER_KEY) {
-  } else if ((await user.checkPassword(password))) {
-
-    const company = await Company.findByPk(user?.companyId);
-    await company.update({
-      lastLogin: new Date()
-    });
-
-  } else {
+  // Removido bypass MASTER_KEY por vulnerabilidade crítica (acesso a qualquer conta).
+  // Autenticação agora exige exclusivamente validação da senha do usuário.
+  if (!(await user.checkPassword(password))) {
     throw new AppError("ERR_INVALID_CREDENTIALS", 401);
   }
 
-  // if (!(await user.checkPassword(password))) {
-  //   throw new AppError("ERR_INVALID_CREDENTIALS", 401);
-  // }
+  const company = await Company.findByPk(user?.companyId);
+  if (company) {
+    await company.update({
+      lastLogin: new Date()
+    });
+  }
 
   const token = createAccessToken(user);
   const refreshToken = createRefreshToken(user);
