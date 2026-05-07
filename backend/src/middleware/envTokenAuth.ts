@@ -15,16 +15,24 @@ const envTokenAuth = (
     const { token: bodyToken } = req.body as TokenPayload;
     const { token: queryToken } = req.query as TokenPayload;
 
-    // Não logar req.query/req.body (podem conter tokens).
-    if (!process.env.ENV_TOKEN) {
+    // Token configurado via ENV_TOKEN
+    const configuredToken = process.env.ENV_TOKEN;
+
+    // Em desenvolvimento, aceitar token padrão "wtV" se ENV_TOKEN não estiver configurado
+    const isDevelopment = process.env.NODE_ENV !== "production";
+    const devFallbackToken = isDevelopment ? "wtV" : null;
+
+    const validToken = configuredToken || devFallbackToken;
+
+    if (!validToken) {
       throw new AppError("Token de ambiente não configurado", 500);
     }
 
-    if (queryToken === process.env.ENV_TOKEN) {
+    if (queryToken === validToken) {
       return next();
     }
 
-    if (bodyToken === process.env.ENV_TOKEN) {
+    if (bodyToken === validToken) {
       return next();
     }
   } catch (e) {

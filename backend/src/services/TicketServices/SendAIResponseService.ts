@@ -210,8 +210,9 @@ const SendAIResponseService = async ({
       const io = getIO();
       io.of(String(companyId))
         .to(String(ticketId))
-        .to(`company-${companyId}-mainchannel`)
-        .emit(`company-${companyId}-appMessage`, {
+        .to(ticket.status)
+        .to("notification")
+        .emit("appMessage", {
           action: "create",
           message: newMessage,
           ticket,

@@ -77,7 +77,8 @@ const ImportDeviceContactsAutoService = async ({
   const importLogs: ImportContactLog[] = [];
 
   // Emitir progresso inicial
-  io.to(`company-${companyId}-mainchannel`).emit(`importContacts-${companyId}`, {
+  // CRÍTICO: Usar namespace correto /workspace-{companyId} (não company-{companyId}-mainchannel)
+  io.of(String(companyId)).to(`company-${companyId}-mainchannel`).emit(`importContacts-${companyId}`, {
     action: "progress",
     total,
     processed: 0,
@@ -428,7 +429,7 @@ const ImportDeviceContactsAutoService = async ({
 
     // Emitir progresso a cada 10 contatos ou no final
     if (processed % 10 === 0 || processed === total) {
-      io.to(`company-${companyId}-mainchannel`).emit(`importContacts-${companyId}`, {
+      io.of(String(companyId)).to(`company-${companyId}-mainchannel`).emit(`importContacts-${companyId}`, {
         action: "progress",
         total,
         processed,
@@ -441,7 +442,7 @@ const ImportDeviceContactsAutoService = async ({
   }
 
   // Emitir conclusão
-  io.to(`company-${companyId}-mainchannel`).emit(`importContacts-${companyId}`, {
+  io.of(String(companyId)).to(`company-${companyId}-mainchannel`).emit(`importContacts-${companyId}`, {
     action: "complete",
     total,
     processed,

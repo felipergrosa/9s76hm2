@@ -88,6 +88,9 @@ if (String(process.env.BULL_BOARD).toLocaleLowerCase() === 'true' && process.env
   app.use('/admin/queues', isBullAuth, BullBoard.UI);
 }
 
+// Servir arquivos estáticos antes do Helmet para evitar bloqueio de avatares
+app.use("/public", express.static(uploadConfig.directory));
+
 // Middlewares de segurança com Helmet.
 // CSP desabilitado por enquanto para não quebrar UI existente.
 // Habilita: X-Content-Type-Options, X-Frame-Options, HSTS, Referrer-Policy, etc.
@@ -117,7 +120,6 @@ app.use(
 app.use(cookieParser());
 app.use(express.json());
 app.use(Sentry.Handlers.requestHandler());
-app.use("/public", express.static(uploadConfig.directory));
 
 // Desabilitar HTTP/2 para evitar erros de protocolo
 app.use((req, res, next) => {

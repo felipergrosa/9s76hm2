@@ -20,7 +20,11 @@ const ColorBoxModal = ({ onChange, currentColor, handleClose, open }) => {
     }, [currentColor]);
 
     const handleOk = () => {
-        onChange(selectedColor);
+        // Validar que selectedColor não é undefined antes de chamar onChange
+        // Previne bug de "#undefined" sendo salvo nas configurações
+        if (selectedColor && typeof selectedColor === 'string' && selectedColor.trim()) {
+            onChange(selectedColor);
+        }
         handleClose();
     };
 

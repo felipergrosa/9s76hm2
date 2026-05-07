@@ -368,8 +368,8 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
         }
       };
 
-      io.to(`company-${companyId}-mainchannel`).emit(`company-${companyId}-contact`, payload);
-      io.of(`/workspace-${companyId}`).emit(`company-${companyId}-contact`, payload);
+      // CRÍTICO: Usar namespace correto /workspace-{companyId} (não company-{companyId}-mainchannel)
+      io.of(String(companyId)).emit("contact", payload);
       logger.debug(`[RefreshAvatar] Socket emitido para contactId=${contact.id} (nameUpdated=${nameUpdated}, avatarUpdated=${avatarUpdated})`);
     }
     

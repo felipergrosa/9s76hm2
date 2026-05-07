@@ -104,15 +104,16 @@ const UpdateMessageService = async ({
     await message.update(updateData);
 
     // Notificar frontend via Socket.IO
+    // CRÍTICO: Usar namespace correto /workspace-{companyId} (não /company-{companyId}-mainchannel)
     const io = getIO();
     const ticket = message.ticket;
 
     if (ticket) {
-      io.of(`/company-${companyId}-mainchannel`)
-        .to(`company-${companyId}-mainchannel`)
+      io.of(String(companyId))
         .to(ticket.id.toString())
         .to(ticket.status)
-        .emit(`company-${companyId}-appMessage`, {
+        .to("notification")
+        .emit("appMessage", {
           action: "update",
           message,
           ticket

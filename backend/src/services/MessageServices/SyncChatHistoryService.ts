@@ -248,12 +248,13 @@ const SyncChatHistoryService = async ({
           const createdMessage = await Message.create(messageData);
 
           // Notificar frontend via Socket.IO
-          io.of(`/company-${companyId}-mainchannel`)
-            .to(`company-${companyId}-mainchannel`)
+          // CRÍTICO: Usar namespace correto /workspace-{companyId} (não /company-{companyId}-mainchannel)
+          // O socket.ts só aceita namespaces /workspace-\d+ (ALLOWED_NAMESPACES)
+          io.of(String(companyId))
             .to(ticket.id.toString())
             .to(ticket.status)
             .to("notification")
-            .emit(`company-${companyId}-appMessage`, {
+            .emit("appMessage", {
               action: "create",
               message: createdMessage,
               ticket,
