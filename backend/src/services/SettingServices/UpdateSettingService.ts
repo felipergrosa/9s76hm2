@@ -12,11 +12,16 @@ const UpdateSettingService = async ({
   value,
   companyId
 }: Request): Promise<Setting | undefined> => {
+  // Validar que o valor não é #undefined ou undefined string
+  if (value === "#undefined" || value === "undefined" || value === undefined) {
+    throw new AppError("Valor inválido para configuração", 400);
+  }
+
   const [setting] = await Setting.findOrCreate({
     where: {
       key,
       companyId
-    }, 
+    },
     defaults: {
       key,
       value,

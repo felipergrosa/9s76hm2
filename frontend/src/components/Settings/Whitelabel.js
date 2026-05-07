@@ -187,8 +187,23 @@ export default function Whitelabel(props) {
       const appName = settings.find((s) => s.key === "appName")?.value;
       const viewMode = settings.find((s) => s.key === "viewMode")?.value;
 
+      // Limpar valores corrompidos (#undefined)
+      const cleanColor = (color) => {
+        if (!color || color === "#undefined" || color === "undefined") return "";
+        return color;
+      };
+
       setAppName(appName || "");
-      setSettingsLoaded({ ...settingsLoaded, primaryColorLight, primaryColorDark, appLogoLight, appLogoDark, appLogoFavicon, appName, viewMode });
+      setSettingsLoaded({
+        ...settingsLoaded,
+        primaryColorLight: cleanColor(primaryColorLight),
+        primaryColorDark: cleanColor(primaryColorDark),
+        appLogoLight,
+        appLogoDark,
+        appLogoFavicon,
+        appName,
+        viewMode
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings]);
@@ -278,11 +293,12 @@ export default function Whitelabel(props) {
                   open={primaryColorLightModalOpen}
                   handleClose={() => setPrimaryColorLightModalOpen(false)}
                   onChange={(color) => {
-                    handleSaveSetting("primaryColorLight", `#${color.hex}`);
-                    colorMode.setPrimaryColorLight(`#${color.hex}`);
+                    // Validar que color e color.hex existem antes de salvar
+                    if (color && color.hex) {
+                      handleSaveSetting("primaryColorLight", `#${color.hex}`);
+                      colorMode.setPrimaryColorLight(`#${color.hex}`);
+                    }
                   }}
-
-
                   currentColor={settingsLoaded.primaryColorLight}
                 />
 
@@ -321,8 +337,11 @@ export default function Whitelabel(props) {
                   open={primaryColorDarkModalOpen}
                   handleClose={() => setPrimaryColorDarkModalOpen(false)}
                   onChange={(color) => {
-                    handleSaveSetting("primaryColorDark", `#${color.hex}`);
-                    colorMode.setPrimaryColorDark(`#${color.hex}`);
+                    // Validar que color e color.hex existem antes de salvar
+                    if (color && color.hex) {
+                      handleSaveSetting("primaryColorDark", `#${color.hex}`);
+                      colorMode.setPrimaryColorDark(`#${color.hex}`);
+                    }
                   }}
                   currentColor={settingsLoaded.primaryColorDark}
                 />
