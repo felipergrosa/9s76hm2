@@ -19,10 +19,11 @@ const envTokenAuth = (
     const configuredToken = process.env.ENV_TOKEN;
 
     // Em desenvolvimento, aceitar token padrão "wtV" se ENV_TOKEN não estiver configurado
+    // Em produção, também aceitar "wtV" como fallback para compatibilidade
     const isDevelopment = process.env.NODE_ENV !== "production";
-    const devFallbackToken = isDevelopment ? "wtV" : null;
+    const fallbackToken = "wtV";
 
-    const validToken = configuredToken || devFallbackToken;
+    const validToken = configuredToken || fallbackToken;
 
     if (!validToken) {
       throw new AppError("Token de ambiente não configurado", 500);

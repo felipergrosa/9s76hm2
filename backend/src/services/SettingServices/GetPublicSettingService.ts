@@ -18,12 +18,6 @@ const publicSettingsKeys = [
 const GetPublicSettingService = async ({
   key
 }: Request): Promise<string | undefined> => {
-
-
-  console.log("|======== GetPublicSettingService ========|")
-  console.log("key", key)
-  console.log("|=========================================|")
-
   if (!publicSettingsKeys.includes(key)) {
     return null;
   }

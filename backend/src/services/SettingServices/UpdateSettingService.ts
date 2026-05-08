@@ -13,7 +13,8 @@ const UpdateSettingService = async ({
   companyId
 }: Request): Promise<Setting | undefined> => {
   // Validar que o valor não é #undefined ou undefined string
-  if (value === "#undefined" || value === "undefined" || value === undefined) {
+  // Permitir string vazia (pode ser intencional para limpar configuração)
+  if (value === "#undefined" || value === "undefined" || value === undefined || value === null) {
     throw new AppError("Valor inválido para configuração", 400);
   }
 

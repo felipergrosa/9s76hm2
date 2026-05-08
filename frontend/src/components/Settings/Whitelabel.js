@@ -160,15 +160,16 @@ export default function Whitelabel(props) {
   const { update } = useSettings();
 
   function updateSettingsLoaded(key, value) {
-    console.log("|=========== updateSettingsLoaded ==========|")
-    console.log(key, value)
-    console.log("|===========================================|")
     if (key === 'primaryColorLight' || key === 'primaryColorDark' || key === 'appName') {
       localStorage.setItem(key, value);
     };
-    const newSettings = { ...settingsLoaded };
-    newSettings[key] = value;
-    setSettingsLoaded(newSettings);
+
+    // Usar função de atualização para garantir que usa o estado mais recente
+    setSettingsLoaded(prev => {
+      const newSettings = { ...prev };
+      newSettings[key] = value;
+      return newSettings;
+    });
   }
 
   useEffect(() => {
@@ -209,11 +210,11 @@ export default function Whitelabel(props) {
   }, [settings]);
 
   async function handleSaveSetting(key, value) {
-
-    await update({
+    const result = await update({
       key,
       value,
     });
+
     updateSettingsLoaded(key, value);
     toast.success("Operação atualizada com sucesso.");
   }

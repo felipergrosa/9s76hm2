@@ -22,8 +22,17 @@ const ColorBoxModal = ({ onChange, currentColor, handleClose, open }) => {
     const handleOk = () => {
         // Validar que selectedColor não é undefined antes de chamar onChange
         // Previne bug de "#undefined" sendo salvo nas configurações
-        if (selectedColor && typeof selectedColor === 'string' && selectedColor.trim()) {
-            onChange(selectedColor);
+        // material-ui-color retorna um objeto com propriedades hex, raw, etc.
+        let colorValue = null;
+
+        if (typeof selectedColor === 'string' && selectedColor.trim()) {
+            colorValue = selectedColor.startsWith('#') ? selectedColor.substring(1) : selectedColor;
+        } else if (selectedColor && typeof selectedColor === 'object' && selectedColor.hex) {
+            colorValue = selectedColor.hex;
+        }
+
+        if (colorValue) {
+            onChange({ hex: colorValue });
         }
         handleClose();
     };
