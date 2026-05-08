@@ -192,8 +192,20 @@ const AudioModal = ({ url, contact, fromMe }) => {
       for (const src of srcList) {
         if (!src || aborted) continue;
         try {
-          const resp = await openApi.get(src, { responseType: "arraybuffer", withCredentials: false });
-          data = resp.data;
+          // Usar api em vez de openApi para manter autenticação/cookies
+          // Isso resolve problemas de CORS em URLs protegidas
+          const isAbsoluteUrl = /^https?:\/\//i.test(src);
+          let resp;
+          if (isAbsoluteUrl) {
+            // URL absoluta: fetch com credentials
+            resp = await fetch(src, { credentials: 'include' });
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            data = await resp.arrayBuffer();
+          } else {
+            // URL relativa: usar api.get (axios com baseURL e cookies)
+            resp = await openApi.get(src, { responseType: "arraybuffer", withCredentials: true });
+            data = resp.data;
+          }
           break; // Sucesso, sai do loop
         } catch (e) {
           loadError = e;

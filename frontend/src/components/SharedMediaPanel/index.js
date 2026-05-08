@@ -239,8 +239,20 @@ const SharedMediaPanel = ({ ticketId, contact }) => {
 
   const handleDownload = async (url) => {
     try {
-      const response = await fetch(url);
-      const blob = await response.blob();
+      const isAbsoluteUrl = /^https?:\/\//i.test(url);
+      let blob;
+
+      if (isAbsoluteUrl) {
+        // URL absoluta: usar fetch com credentials
+        const response = await fetch(url, { credentials: 'include' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        blob = await response.blob();
+      } else {
+        // URL relativa: usar api.get (axios com baseURL e cookies)
+        const res = await api.get(url, { responseType: 'blob' });
+        blob = res.data;
+      }
+
       const blobUrl = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = blobUrl;

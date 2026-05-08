@@ -36,14 +36,25 @@ const ModalImageContatc = ({ imageUrl }) => {
   }, [imageUrl]);
 
   return (
-    <ModalImage
-      className={classes.messageMedia}
-      smallSrcSet={fetching ? imageUrl : blobUrl}
-      medium={fetching ? imageUrl : blobUrl}
-      large={fetching ? imageUrl : blobUrl}
-      showRotate="true"
-      alt="image"
-    />
+    <>
+      {fetching ? (
+        <div
+          className={classes.messageMedia}
+          style={{ backgroundColor: '#e0e0e0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        >
+          <span style={{ color: '#999', fontSize: 10 }}>...</span>
+        </div>
+      ) : (
+        <ModalImage
+          className={classes.messageMedia}
+          smallSrcSet={blobUrl}
+          medium={blobUrl}
+          large={blobUrl}
+          showRotate="true"
+          alt="image"
+        />
+      )}
+    </>
   );
 };
 
