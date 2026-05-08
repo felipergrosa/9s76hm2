@@ -73,10 +73,10 @@ const ModalImageCors = ({ imageUrl, disableModal = false }) => {
 		const isGifUrl = /\.gif(\?.*)?$/i.test(imageUrl || "");
 		// Detecta sticker pela URL (.webp ou .gif pequenos)
 		const isStickerUrl = /\.(webp|gif)(\?.*)?$/i.test(imageUrl || "");
-		
+
 		setIsGif(isGifUrl);
 		setIsSticker(isStickerUrl);
-		
+
 		const fetchImage = async () => {
 			try {
 				// Limpar duplicação de caminho se existir
@@ -85,10 +85,10 @@ const ModalImageCors = ({ imageUrl, disableModal = false }) => {
 					// Remove a primeira ocorrência de /public/companyX/
 					cleanUrl = cleanUrl.replace(/^\/public\/company\d+\//, '/');
 				}
-				
+
 				// Verificar se URL é absoluta (começa com http:// ou https://)
 				const isAbsoluteUrl = /^https?:\/\//i.test(cleanUrl);
-				
+
 				// URLs externas (WhatsApp CDN, etc): usar diretamente sem fetch
 				// Isso evita problemas de CORS e carrega mais rápido
 				if (isAbsoluteUrl && (cleanUrl.includes('whatsapp.net') || cleanUrl.includes('fbcdn.net'))) {
@@ -96,19 +96,19 @@ const ModalImageCors = ({ imageUrl, disableModal = false }) => {
 					setFetching(false);
 					return;
 				}
-				
+
 				let data, headers;
-				
+
 				if (isAbsoluteUrl) {
 					// URL absoluta: usar fetch direto para evitar conflito com baseURL do axios
 					const response = await fetch(cleanUrl, {
 						credentials: 'include'  // Enviar cookies para autenticação
 					});
-					
+
 					if (!response.ok) {
 						throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 					}
-					
+
 					data = await response.blob();
 					headers = {
 						"content-type": response.headers.get("content-type") || "image/jpeg"
@@ -121,7 +121,7 @@ const ModalImageCors = ({ imageUrl, disableModal = false }) => {
 					data = res.data;
 					headers = res.headers;
 				}
-				
+
 				const contentType = headers["content-type"] || "";
 				if (contentType.includes("gif")) {
 					setIsGif(true);
@@ -137,7 +137,6 @@ const ModalImageCors = ({ imageUrl, disableModal = false }) => {
 				setFetching(false);
 			} catch (error) {
 				console.error('[ModalImageCors] Erro ao carregar imagem:', error);
-				console.error('[ModalImageCors] URL tentada:', imageUrl);
 				setFetching(false);
 			}
 		};
@@ -158,19 +157,27 @@ const ModalImageCors = ({ imageUrl, disableModal = false }) => {
 	return (
 		<div className={classes.mediaWrapper}>
 			{!isGif && isHd && <span className={classes.hdBadge}>HD</span>}
-			{disableModal ? (
+			{fetching ? (
+				// Placeholder enquanto carrega - evita mostrar imagem quebrada
+				<div
+					className={isSticker ? classes.stickerMedia : classes.messageMedia}
+					style={{ backgroundColor: '#e0e0e0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+				>
+					<span style={{ color: '#999', fontSize: 12 }}>Carregando...</span>
+				</div>
+			) : disableModal ? (
 				<img
 					className={isSticker ? classes.stickerMedia : classes.messageMedia}
-					src={fetching ? imageUrl : blobUrl}
+					src={blobUrl}
 					alt={isSticker ? "sticker" : "image"}
 					loading="lazy"
 				/>
 			) : (
 				<ModalImage
 					className={isSticker ? classes.stickerMedia : classes.messageMedia}
-					smallSrcSet={fetching ? imageUrl : blobUrl}
-					medium={fetching ? imageUrl : blobUrl}
-					large={fetching ? imageUrl : blobUrl}
+					smallSrcSet={blobUrl}
+					medium={blobUrl}
+					large={blobUrl}
 					alt={isSticker ? "sticker" : "image"}
 					showRotate={true}
 				/>
