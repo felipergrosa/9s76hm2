@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Avatar } from "@material-ui/core";
+import ContactAvatar from "../ContactAvatar";
 
 // Extrair iniciais do nome para avatar (até 2 caracteres)
 const getInitials = (name, number) => {
@@ -153,44 +154,14 @@ const LazyContactAvatar = ({ contact, className, style, ...props }) => {
     );
   }
 
-  // Determina a URL da imagem baseado na estrutura de dados
-  let imageUrl = null;
-
-  // Se tem contact.contact (estrutura de ContactListItems)
-  if (contact.contact) {
-    // Priorizar urlPicture (local) sobre profilePicUrl (WhatsApp externo que expira)
-    imageUrl = contact.contact.urlPicture || contact.contact.profilePicUrl;
-  } else {
-    // Priorizar urlPicture (local) sobre profilePicUrl (WhatsApp externo que expira)
-    imageUrl = contact.urlPicture || contact.profilePicUrl;
-  }
-
-  // Se não tem imagem, usa fallback colorido com iniciais
-  if (!imageUrl) {
-    return (
-      <Avatar
-        className={className}
-        style={coloredAvatarStyle}
-        {...props}
-      >
-        {initials}
-      </Avatar>
-    );
-  }
-
-  // Usa a URL da imagem com lazy loading
   return (
-    <Avatar
+    <ContactAvatar
       className={className}
       style={{ width, height, ...style }}
-      src={imageUrl}
+      contact={contact}
       onError={handleImageError}
-      alt={contactName || "Avatar"}
-      loading="lazy"
       {...props}
-    >
-      {initials}
-    </Avatar>
+    />
   );
 };
 

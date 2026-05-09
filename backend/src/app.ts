@@ -67,8 +67,8 @@ const TRUSTED_DOMAIN_REGEX = /^https?:\/\/([a-z0-9-]+\.)*nobreluminarias\.com\.b
 const isDevelopment = process.env.NODE_ENV !== "production";
 
 const isOriginAllowed = (origin: string | undefined): boolean => {
-  // Requisições sem origin (mobile apps, curl) só permitidas em dev.
-  if (!origin) return isDevelopment;
+  // Requisições sem Origin não são CORS e devem continuar funcionando em produção.
+  if (!origin) return true;
 
   // Lista explícita via FRONTEND_URL.
   if (allowedOrigins.includes(origin)) return true;
@@ -78,9 +78,6 @@ const isOriginAllowed = (origin: string | undefined): boolean => {
 
   // Localhost/127.0.0.1 apenas em desenvolvimento.
   if (isDevelopment && (LOCALHOST_REGEX.test(origin) || LOCAL_IP_REGEX.test(origin))) return true;
-
-  // Permitir origem undefined (necessário para Socket.IO e algumas conexões)
-  if (!origin || origin === 'null' || origin === 'undefined') return true;
 
   return false;
 };
@@ -96,8 +93,13 @@ app.use(
   cors({
     credentials: true,
     origin: (origin, callback) => {
+      if (!origin) {
+        callback(null, false);
+        return;
+      }
+
       if (isOriginAllowed(origin)) {
-        callback(null, true);
+        callback(null, origin);
       } else {
         logger.warn(`CORS bloqueado para origem: ${origin}`);
         callback(new Error('Origem não autorizada pelo CORS'));
@@ -110,9 +112,12 @@ app.use(
 app.use("/public", (req, res, next) => {
   // Adiciona headers CORS para permitir carregamento de imagens/mídias cross-origin
   // Deve usar o origin específico (não wildcard) quando credentials estiver ativo
-  const origin = req.headers.origin || '*';
-  res.setHeader('Access-Control-Allow-Origin', origin);
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  const origin = req.headers.origin;
+  if (typeof origin === "string" && isOriginAllowed(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Vary', 'Origin');
+  }
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   next();
 }, express.static(uploadConfig.directory));

@@ -43,8 +43,8 @@ const TRUSTED_DOMAIN_REGEX = /^https?:\/\/([a-z0-9-]+\.)*nobreluminarias\.com\.b
 const isDevelopment = process.env.NODE_ENV !== "production";
 
 const isOriginAllowed = (origin: string | undefined): boolean => {
-  // Sem origin: permitido apenas em dev (bibliotecas internas, healthcheck).
-  if (!origin) return isDevelopment;
+  // Conexões sem Origin não são CORS e devem continuar funcionando.
+  if (!origin) return true;
 
   if (ALLOWED_ORIGINS.includes(origin)) return true;
   if (TRUSTED_DOMAIN_REGEX.test(origin)) return true;

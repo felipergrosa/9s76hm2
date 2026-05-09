@@ -1,16 +1,30 @@
-import React, { useState, useEffect, memo, useCallback } from "react";
+import React, { useState, useEffect, memo, useCallback, useMemo } from "react";
 import { Avatar } from "@material-ui/core";
 import api from "../../services/api";
 import avatarCache from "../../utils/avatarCache";
 
+const getContactAvatarData = (contact) => {
+  const nestedContact = contact?.contact || {};
+  const contactId = nestedContact.id || contact?.id;
+  const urlPicture = nestedContact.urlPicture || contact?.urlPicture;
+  const profilePicUrl = nestedContact.profilePicUrl || contact?.profilePicUrl;
+
+  return {
+    contactId,
+    urlPicture,
+    profilePicUrl,
+    imageUrl: urlPicture || profilePicUrl,
+    contactName: nestedContact.name || contact?.name,
+    contactNumber: nestedContact.number || contact?.number
+  };
+};
+
 const getContactAvatarIdentity = (contact) => {
   if (!contact) return "no-contact";
 
-  const nestedContact = contact.contact || {};
-  const contactId = contact.id || nestedContact.id || "no-id";
-  const imageUrl = nestedContact.urlPicture || nestedContact.profilePicUrl || contact.urlPicture || contact.profilePicUrl || "no-image";
+  const { contactId, imageUrl } = getContactAvatarData(contact);
 
-  return `${contactId}:${imageUrl}`;
+  return `${contactId || "no-id"}:${imageUrl || "no-image"}`;
 };
 
 // Extrair iniciais do nome para avatar (até 2 caracteres)
@@ -50,41 +64,39 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
   const [blobUrl, setBlobUrl] = useState(null);
   const [loading, setLoading] = useState(true);
   const avatarIdentity = getContactAvatarIdentity(contact);
+  const avatarData = useMemo(() => getContactAvatarData(contact), [avatarIdentity]);
 
   // Verificar cache ao montar ou quando contato muda
   useEffect(() => {
     setImageError(false);
-    setLoading(true);
-    
-    if (!contact) {
+
+    if (avatarIdentity === "no-contact") {
       setCachedUrl(null);
       setBlobUrl(null);
       setLoading(false);
       return;
     }
 
-    const contactId = contact.id || contact.contact?.id;
-    const urlPicture = contact.urlPicture || contact.contact?.urlPicture;
-    const profilePicUrl = contact.profilePicUrl || contact.contact?.profilePicUrl;
-
     // Buscar no cache primeiro
-    const cached = avatarCache.get(contactId, urlPicture, profilePicUrl);
+    const cached = avatarCache.get(avatarData.contactId, avatarData.urlPicture, avatarData.profilePicUrl);
     setCachedUrl(cached);
-  }, [avatarIdentity, contact]);
+    setBlobUrl(null);
+    setLoading(Boolean(cached || avatarData.imageUrl));
+  }, [avatarIdentity, avatarData]);
 
   // Carrega imagem como blob para evitar problemas de CORS/autenticação
   useEffect(() => {
     // Determina a URL da imagem
-    let imageUrl = cachedUrl;
-    
-    if (contact?.contact) {
-      imageUrl = imageUrl || contact.contact.urlPicture || contact.contact.profilePicUrl;
-    } else {
-      imageUrl = imageUrl || contact?.urlPicture || contact?.profilePicUrl;
+    let imageUrl = cachedUrl || avatarData.imageUrl;
+
+    if (!imageUrl || avatarIdentity === "no-contact") {
+      setBlobUrl(null);
+      setLoading(false);
+      return;
     }
 
-    if (!imageUrl || !contact) {
-      setBlobUrl(null);
+    if (imageUrl.startsWith('blob:') || imageUrl.startsWith('data:')) {
+      setBlobUrl(imageUrl);
       setLoading(false);
       return;
     }
@@ -93,6 +105,9 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
     if (imageUrl.includes('whatsapp.net') || imageUrl.includes('fbcdn.net') || imageUrl.includes('instagram.com')) {
       setBlobUrl(imageUrl);
       setLoading(false);
+      if (avatarData.contactId) {
+        avatarCache.set(avatarData.contactId, avatarData.urlPicture, avatarData.profilePicUrl, imageUrl);
+      }
       return;
     }
 
@@ -119,6 +134,9 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
           const objectUrl = window.URL.createObjectURL(new Blob([data], { type: contentType }));
           setBlobUrl(objectUrl);
           setLoading(false);
+          if (avatarData.contactId) {
+            avatarCache.set(avatarData.contactId, avatarData.urlPicture, avatarData.profilePicUrl, objectUrl);
+          }
         }
       } catch (err) {
         if (isMounted) {
@@ -134,7 +152,7 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
     return () => {
       isMounted = false;
     };
-  }, [cachedUrl, contact]);
+  }, [avatarIdentity, avatarData, cachedUrl]);
 
   // DESABILITADO: Busca em tempo real causa lag massivo
   // O backend já busca avatares automaticamente via ShowTicketService
@@ -150,7 +168,6 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
   const handleImageError = useCallback((e) => {
     // Se for URL externa (WhatsApp/Instagram) com erro, marcar como erro
     // para mostrar avatar com iniciais ao invés de imagem quebrada
-    const src = e?.target?.src || '';
     setImageError(true);
   }, []);
 
@@ -165,28 +182,9 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
 
   // Determina a URL da imagem e dados do contato
   // Prioridade: blobUrl (carregado com auth) > cachedUrl > URL original
-  let imageUrl = blobUrl || cachedUrl;
-  let contactName = contact.name;
-  let contactNumber = contact.number;
-
-  // Se tem contact.contact (estrutura de ContactListItems)
-  if (contact.contact) {
-    // Priorizar urlPicture (local) sobre profilePicUrl (WhatsApp externo que expira)
-    imageUrl = imageUrl || contact.contact.urlPicture || contact.contact.profilePicUrl;
-    contactName = contact.contact.name || contact.name;
-    contactNumber = contact.contact.number || contact.number;
-  } else {
-    // Priorizar urlPicture (local) sobre profilePicUrl (WhatsApp externo que expira)
-    imageUrl = imageUrl || contact.urlPicture || contact.profilePicUrl;
-  }
-  
-  // Armazenar no cache se temos uma URL válida
-  if (imageUrl && contact.id) {
-    const contactId = contact.id || contact.contact?.id;
-    const urlPicture = contact.urlPicture || contact.contact?.urlPicture;
-    const profilePicUrl = contact.profilePicUrl || contact.contact?.profilePicUrl;
-    avatarCache.set(contactId, urlPicture, profilePicUrl, imageUrl);
-  }
+  const imageUrl = blobUrl || cachedUrl || avatarData.imageUrl;
+  const contactName = avatarData.contactName;
+  const contactNumber = avatarData.contactNumber;
 
   // Se houve erro, está carregando ou não tem imagem, usa avatar colorido com iniciais
   if (imageError || !imageUrl || loading) {
