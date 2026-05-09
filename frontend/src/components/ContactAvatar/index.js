@@ -47,14 +47,20 @@ const getAvatarColor = (seed) => {
 const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) => {
   const [imageError, setImageError] = useState(false);
   const [cachedUrl, setCachedUrl] = useState(null);
+  const [blobUrl, setBlobUrl] = useState(null);
+  const [loading, setLoading] = useState(true);
   const avatarIdentity = getContactAvatarIdentity(contact);
 
   // Verificar cache ao montar ou quando contato muda
   useEffect(() => {
     setImageError(false);
+    setLoading(true);
     
     if (!contact) {
       setCachedUrl(null);
+      setBlobUrl(null);
+      setLoading(false);
+      console.log('[ContactAvatar] Sem contato, loading=false');
       return;
     }
 
@@ -64,12 +70,80 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
 
     // Buscar no cache primeiro
     const cached = avatarCache.get(contactId, urlPicture, profilePicUrl);
-    if (cached) {
-      setCachedUrl(cached);
-    } else {
-      setCachedUrl(null);
-    }
+    console.log('[ContactAvatar] Cache check:', { contactId, cached: cached?.substring(0, 50) });
+    setCachedUrl(cached);
   }, [avatarIdentity, contact]);
+
+  // Carrega imagem como blob para evitar problemas de CORS/autenticação
+  useEffect(() => {
+    // Determina a URL da imagem
+    let imageUrl = cachedUrl;
+    
+    if (contact?.contact) {
+      imageUrl = imageUrl || contact.contact.urlPicture || contact.contact.profilePicUrl;
+    } else {
+      imageUrl = imageUrl || contact?.urlPicture || contact?.profilePicUrl;
+    }
+
+    if (!imageUrl || !contact) {
+      setBlobUrl(null);
+      setLoading(false);
+      console.log('[ContactAvatar] Sem imageUrl ou contato, loading=false');
+      return;
+    }
+
+    // Se for URL externa (WhatsApp, etc), usar diretamente sem carregar blob
+    if (imageUrl.includes('whatsapp.net') || imageUrl.includes('fbcdn.net') || imageUrl.includes('instagram.com')) {
+      setBlobUrl(imageUrl);
+      setLoading(false);
+      console.log('[ContactAvatar] URL externa, loading=false');
+      return;
+    }
+    
+    console.log('[ContactAvatar] Iniciando carregamento blob:', imageUrl.substring(0, 50));
+
+    // Para URLs locais, tenta carregar como blob
+    let isMounted = true;
+    
+    const loadAvatar = async () => {
+      try {
+        const isAbsoluteUrl = /^https?:\/\//i.test(imageUrl);
+        let data, contentType;
+
+        if (isAbsoluteUrl) {
+          const response = await fetch(imageUrl, { credentials: 'include' });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          data = await response.blob();
+          contentType = response.headers.get('content-type') || 'image/jpeg';
+        } else {
+          const res = await api.get(imageUrl, { responseType: 'blob' });
+          data = res.data;
+          contentType = res.headers['content-type'] || 'image/jpeg';
+        }
+
+        if (isMounted) {
+          const objectUrl = window.URL.createObjectURL(new Blob([data], { type: contentType }));
+          setBlobUrl(objectUrl);
+          setLoading(false);
+          console.log('[ContactAvatar] Blob carregado com sucesso, loading=false');
+        }
+      } catch (err) {
+        console.error('[ContactAvatar] Erro ao carregar avatar:', err);
+        if (isMounted) {
+          // Fallback: usar URL direta mesmo em caso de erro
+          setBlobUrl(imageUrl);
+          setLoading(false);
+          console.log('[ContactAvatar] Erro no blob, usando URL direta, loading=false');
+        }
+      }
+    };
+
+    loadAvatar();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [cachedUrl, contact]);
 
   // DESABILITADO: Busca em tempo real causa lag massivo
   // O backend já busca avatares automaticamente via ShowTicketService
@@ -82,7 +156,13 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
   //
   // Solução: Backend atualiza em background + Socket.IO notifica frontend
 
-  const handleImageError = useCallback(() => {
+  const handleImageError = useCallback((e) => {
+    // Se for URL externa (WhatsApp/Instagram) com erro, marcar como erro
+    // para mostrar avatar com iniciais ao invés de imagem quebrada
+    const src = e?.target?.src || '';
+    if (src.includes('whatsapp.net') || src.includes('fbcdn.net') || src.includes('instagram.com')) {
+      console.log('[ContactAvatar] URL externa expirou ou bloqueada:', src.substring(0, 50));
+    }
     setImageError(true);
   }, []);
 
@@ -96,7 +176,8 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
   }
 
   // Determina a URL da imagem e dados do contato
-  let imageUrl = cachedUrl; // Prioridade para URL do cache
+  // Prioridade: blobUrl (carregado com auth) > cachedUrl > URL original
+  let imageUrl = blobUrl || cachedUrl;
   let contactName = contact.name;
   let contactNumber = contact.number;
 
@@ -119,8 +200,18 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
     avatarCache.set(contactId, urlPicture, profilePicUrl, imageUrl);
   }
 
-  // Se houve erro ou não tem imagem, usa avatar colorido com iniciais
-  if (imageError || !imageUrl) {
+  // Log de debug para investigar problema
+  console.log('[ContactAvatar] Render:', { 
+    contactId: contact?.id || contact?.contact?.id, 
+    loading, 
+    imageUrl: imageUrl?.substring(0, 30), 
+    blobUrl: blobUrl?.substring(0, 30),
+    cachedUrl: cachedUrl?.substring(0, 30),
+    imageError 
+  });
+
+  // Se houve erro, está carregando ou não tem imagem, usa avatar colorido com iniciais
+  if (imageError || !imageUrl || loading) {
     const initials = getInitials(contactName, contactNumber);
     const bgColor = getAvatarColor(contactName || contactNumber);
 

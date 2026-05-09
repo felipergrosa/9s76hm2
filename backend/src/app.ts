@@ -104,15 +104,13 @@ app.use(
 );
 
 // Servir arquivos estáticos com headers CORS explícitos
-app.use("/public", (req, res, next) => {
-  // Adiciona headers CORS para permitir carregamento de imagens/mídias cross-origin
-  res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-  next();
-}, express.static(uploadConfig.directory));
+app.use("/public", express.static(uploadConfig.directory, {
+  setHeaders: (res, path, stat) => {
+    // Adiciona headers CORS para permitir carregamento de imagens/mídias cross-origin
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  }
+}));
 
 // Middlewares de segurança com Helmet (depois do CORS).
 // CSP desabilitado por enquanto para não quebrar UI existente.
