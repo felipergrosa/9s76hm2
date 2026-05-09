@@ -13,6 +13,7 @@ import EmailIcon from "@material-ui/icons/Email";
 import LockIcon from "@material-ui/icons/Lock";
 import { Helmet } from "react-helmet";
 import { AuthContext } from "../../context/Auth/AuthContext";
+import logo from "../../assets/logo.png";
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -208,7 +209,7 @@ const Login = () => {
 
       <div className={classes.root}>
         <form className={classes.formContainer} onSubmit={handleSubmit}>
-          <img src={`${process.env.REACT_APP_BACKEND_URL}/logo.png`} alt="Logo" className={classes.logoImg} crossOrigin="anonymous" />
+          <img src={logo} alt="Logo" className={classes.logoImg} />
           {error && <Typography color="error">{error}</Typography>}
           <TextField
             label="Email"

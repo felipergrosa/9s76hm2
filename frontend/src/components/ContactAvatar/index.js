@@ -60,7 +60,6 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
       setCachedUrl(null);
       setBlobUrl(null);
       setLoading(false);
-      console.log('[ContactAvatar] Sem contato, loading=false');
       return;
     }
 
@@ -70,7 +69,6 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
 
     // Buscar no cache primeiro
     const cached = avatarCache.get(contactId, urlPicture, profilePicUrl);
-    console.log('[ContactAvatar] Cache check:', { contactId, cached: cached?.substring(0, 50) });
     setCachedUrl(cached);
   }, [avatarIdentity, contact]);
 
@@ -88,7 +86,6 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
     if (!imageUrl || !contact) {
       setBlobUrl(null);
       setLoading(false);
-      console.log('[ContactAvatar] Sem imageUrl ou contato, loading=false');
       return;
     }
 
@@ -96,11 +93,8 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
     if (imageUrl.includes('whatsapp.net') || imageUrl.includes('fbcdn.net') || imageUrl.includes('instagram.com')) {
       setBlobUrl(imageUrl);
       setLoading(false);
-      console.log('[ContactAvatar] URL externa, loading=false');
       return;
     }
-    
-    console.log('[ContactAvatar] Iniciando carregamento blob:', imageUrl.substring(0, 50));
 
     // Para URLs locais, tenta carregar como blob
     let isMounted = true;
@@ -125,15 +119,12 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
           const objectUrl = window.URL.createObjectURL(new Blob([data], { type: contentType }));
           setBlobUrl(objectUrl);
           setLoading(false);
-          console.log('[ContactAvatar] Blob carregado com sucesso, loading=false');
         }
       } catch (err) {
-        console.error('[ContactAvatar] Erro ao carregar avatar:', err);
         if (isMounted) {
           // Fallback: usar URL direta mesmo em caso de erro
           setBlobUrl(imageUrl);
           setLoading(false);
-          console.log('[ContactAvatar] Erro no blob, usando URL direta, loading=false');
         }
       }
     };
@@ -160,9 +151,6 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
     // Se for URL externa (WhatsApp/Instagram) com erro, marcar como erro
     // para mostrar avatar com iniciais ao invés de imagem quebrada
     const src = e?.target?.src || '';
-    if (src.includes('whatsapp.net') || src.includes('fbcdn.net') || src.includes('instagram.com')) {
-      console.log('[ContactAvatar] URL externa expirou ou bloqueada:', src.substring(0, 50));
-    }
     setImageError(true);
   }, []);
 
@@ -199,16 +187,6 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
     const profilePicUrl = contact.profilePicUrl || contact.contact?.profilePicUrl;
     avatarCache.set(contactId, urlPicture, profilePicUrl, imageUrl);
   }
-
-  // Log de debug para investigar problema
-  console.log('[ContactAvatar] Render:', { 
-    contactId: contact?.id || contact?.contact?.id, 
-    loading, 
-    imageUrl: imageUrl?.substring(0, 30), 
-    blobUrl: blobUrl?.substring(0, 30),
-    cachedUrl: cachedUrl?.substring(0, 30),
-    imageError 
-  });
 
   // Se houve erro, está carregando ou não tem imagem, usa avatar colorido com iniciais
   if (imageError || !imageUrl || loading) {
