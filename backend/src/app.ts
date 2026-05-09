@@ -88,22 +88,7 @@ if (String(process.env.BULL_BOARD).toLocaleLowerCase() === 'true' && process.env
   app.use('/admin/queues', isBullAuth, BullBoard.UI);
 }
 
-// Servir arquivos estáticos antes do Helmet para evitar bloqueio de avatares
-app.use("/public", express.static(uploadConfig.directory));
-
-// Middlewares de segurança com Helmet.
-// CSP desabilitado por enquanto para não quebrar UI existente.
-// Habilita: X-Content-Type-Options, X-Frame-Options, HSTS, Referrer-Policy, etc.
-app.use(helmet({
-  contentSecurityPolicy: false, // TODO: habilitar CSP gradualmente em deploy futuro
-  crossOriginResourcePolicy: { policy: "cross-origin" }, // Permite carregar mídias de outros domínios
-  crossOriginEmbedderPolicy: false, // Permite embeds (ex: iframes de flow builder)
-  crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" }
-}));
-
-app.use(compression()); // Compressão HTTP
-app.use(bodyParser.json({ limit: '5mb' })); // Aumentar o limite de carga para 5 MB
-app.use(bodyParser.urlencoded({ limit: '5mb', extended: true }));
+// Middleware CORS deve vir primeiro para incluir headers em todas as respostas
 app.use(
   cors({
     credentials: true,
@@ -117,6 +102,23 @@ app.use(
     }
   })
 );
+
+// Servir arquivos estáticos - CORS já está configurado acima
+app.use("/public", express.static(uploadConfig.directory));
+
+// Middlewares de segurança com Helmet (depois do CORS).
+// CSP desabilitado por enquanto para não quebrar UI existente.
+// Habilita: X-Content-Type-Options, X-Frame-Options, HSTS, Referrer-Policy, etc.
+app.use(helmet({
+  contentSecurityPolicy: false, // TODO: habilitar CSP gradualmente em deploy futuro
+  crossOriginResourcePolicy: false, // Desabilita CORP do Helmet - já gerenciado pelo CORS acima
+  crossOriginEmbedderPolicy: false, // Permite embeds (ex: iframes de flow builder)
+  crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" }
+}));
+
+app.use(compression()); // Compressão HTTP
+app.use(bodyParser.json({ limit: '5mb' })); // Aumentar o limite de carga para 5 MB
+app.use(bodyParser.urlencoded({ limit: '5mb', extended: true }));
 app.use(cookieParser());
 app.use(express.json());
 app.use(Sentry.Handlers.requestHandler());
