@@ -38,6 +38,7 @@ import {
   Menu,
 } from "@material-ui/core";
 import ConfirmationModal from "../ConfirmationModal";
+import SafeMediaPreview from "../SafeMediaPreview";
 import Autocomplete, { createFilterOptions } from "@material-ui/lab/Autocomplete";
 import { Tooltip, Popover, Box, Paper } from "@material-ui/core";
 import ChatAssistantPanel from "../ChatAssistantPanel";
@@ -762,11 +763,25 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
 
     const renderPreviewContent = () => {
       if (isImage) {
-        return <img src={mediaUrl} alt="preview" style={{ maxWidth: '100%', maxHeight: '80vh', objectFit: 'contain' }} />;
+        return (
+          <SafeMediaPreview 
+            src={mediaUrl} 
+            type="image"
+            alt="preview" 
+            style={{ maxWidth: '100%', maxHeight: '80vh', objectFit: 'contain' }} 
+          />
+        );
       }
 
       if (isVideo) {
-        return <video src={mediaUrl} controls style={{ maxWidth: '100%', maxHeight: '80vh' }} />;
+        return (
+          <SafeMediaPreview 
+            src={mediaUrl} 
+            type="video"
+            controls 
+            style={{ maxWidth: '100%', maxHeight: '80vh' }} 
+          />
+        );
       }
 
       if (isAudio) {
@@ -786,10 +801,12 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
             >
               <AttachFileIcon style={{ color: '#8B5CF6', fontSize: 32 }} />
             </Box>
-            <audio controls style={{ width: '100%', maxWidth: 520 }}>
-              <source src={mediaUrl} />
-              Seu navegador nao suporta reproducao de audio.
-            </audio>
+            <SafeMediaPreview 
+              src={mediaUrl} 
+              type="audio"
+              controls 
+              style={{ width: '100%', maxWidth: 520 }} 
+            />
             <Typography variant="body2" color="textSecondary" style={{ marginTop: 12 }}>
               {fileLabel}
             </Typography>

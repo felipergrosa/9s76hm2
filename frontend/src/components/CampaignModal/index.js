@@ -57,7 +57,8 @@ import useQueues from "../../hooks/useQueues";
 import ChatAssistantPanel from "../ChatAssistantPanel";
 import WhatsAppPreview from "./WhatsAppPreview";
 import { Sparkles, Smile } from "lucide-react";
-import TemplateVariableMapper from "../TemplateVariableMapper";  // NOVO
+import TemplateVariableMapper from "../TemplateVariableMapper";
+import SafeMediaPreview from "../SafeMediaPreview";
 import * as libraryApi from "../../services/libraryApi";
 import Sidebar from "../../pages/LibraryManager/components/Sidebar";
 import TopBar from "../../pages/LibraryManager/components/TopBar";
@@ -2332,13 +2333,28 @@ const CampaignModal = ({
                       <DialogTitle>{previewName || 'Pré-visualização'}</DialogTitle>
                       <DialogContent dividers>
                         {isImage(previewUrl) && (
-                          <img src={previewUrl} alt={previewName || 'preview'} style={{ maxWidth: '100%', borderRadius: 4 }} />
+                          <SafeMediaPreview 
+                            src={previewUrl} 
+                            type="image"
+                            alt={previewName || 'preview'} 
+                            style={{ maxWidth: '100%', borderRadius: 4 }} 
+                          />
                         )}
                         {isVideo(previewUrl) && (
-                          <video src={previewUrl} controls style={{ width: '100%', borderRadius: 4 }} />
+                          <SafeMediaPreview 
+                            src={previewUrl} 
+                            type="video"
+                            controls 
+                            style={{ width: '100%', borderRadius: 4 }} 
+                          />
                         )}
                         {isAudio(previewUrl) && (
-                          <audio src={previewUrl} controls style={{ width: '100%' }} />
+                          <SafeMediaPreview 
+                            src={previewUrl} 
+                            type="audio"
+                            controls 
+                            style={{ width: '100%' }} 
+                          />
                         )}
                         {isPdf(previewUrl) && (
                           <iframe title="pdf" src={previewUrl} style={{ width: '100%', height: '70vh', border: 'none' }} />

@@ -25,6 +25,7 @@ import {
 import { format, parseISO } from "date-fns";
 import api from "../../services/api";
 import MediaModal from "../MediaModal";
+import SafeMediaPreview from "../SafeMediaPreview";
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -276,10 +277,20 @@ const SharedMediaPanel = ({ ticketId, contact }) => {
           onClick={() => handleOpenMedia(msg)}
         >
           {tab === 0 ? (
-            <img src={msg.mediaUrl} alt="" className={classes.mediaImage} />
+            <SafeMediaPreview 
+              src={msg.mediaUrl} 
+              type="image"
+              alt="" 
+              className={classes.mediaImage} 
+            />
           ) : (
             <>
-              <video src={msg.mediaUrl} className={classes.mediaImage} />
+              <SafeMediaPreview 
+                src={msg.mediaUrl} 
+                type="video"
+                className={classes.mediaImage} 
+                muted
+              />
               <div className={classes.videoOverlay}>
                 <PlayIcon style={{ color: "#fff", fontSize: 24 }} />
               </div>

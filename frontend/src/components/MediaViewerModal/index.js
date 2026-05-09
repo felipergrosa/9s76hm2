@@ -1,7 +1,8 @@
-import React from 'react';
-import { Modal, makeStyles, Backdrop, Fade, IconButton, Typography } from '@material-ui/core';
+import React, { useState, useEffect } from 'react';
+import { Modal, makeStyles, Backdrop, Fade, IconButton, Typography, Box } from '@material-ui/core';
 import CloseIcon from '@material-ui/icons/Close';
 import GetAppIcon from '@material-ui/icons/GetApp';
+import api from '../../services/api';
 
 const useStyles = makeStyles((theme) => ({
   modal: {
@@ -47,27 +48,112 @@ const useStyles = makeStyles((theme) => ({
 
 const MediaViewerModal = ({ open, onClose, url, mediaType, name }) => {
   const classes = useStyles();
+  const [blobUrl, setBlobUrl] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const handleDownload = () => {
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = name || 'arquivo';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  // Carrega mídia como blob para evitar problemas de CORS/autenticação
+  useEffect(() => {
+    if (!url || !open) {
+      setBlobUrl(null);
+      setLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+    const loadMedia = async () => {
+      setLoading(true);
+      try {
+        const isAbsoluteUrl = /^https?:\/\//i.test(url);
+        let data, contentType;
+
+        if (isAbsoluteUrl) {
+          const response = await fetch(url, { credentials: 'include' });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          data = await response.blob();
+          contentType = response.headers.get('content-type') || mediaType || 'application/octet-stream';
+        } else {
+          const res = await api.get(url, { responseType: 'blob' });
+          data = res.data;
+          contentType = res.headers['content-type'] || mediaType || 'application/octet-stream';
+        }
+
+        if (isMounted) {
+          const objectUrl = window.URL.createObjectURL(new Blob([data], { type: contentType }));
+          setBlobUrl(objectUrl);
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error('[MediaViewerModal] Erro ao carregar mídia:', err);
+        if (isMounted) {
+          // Fallback: tenta usar URL direta
+          setBlobUrl(url);
+          setLoading(false);
+        }
+      }
+    };
+
+    loadMedia();
+
+    return () => {
+      isMounted = false;
+      if (blobUrl && blobUrl !== url) {
+        window.URL.revokeObjectURL(blobUrl);
+      }
+    };
+  }, [url, open, mediaType]);
+
+  const handleDownload = async () => {
+    try {
+      const isAbsoluteUrl = /^https?:\/\//i.test(url);
+      let blob;
+
+      if (isAbsoluteUrl) {
+        const response = await fetch(url, { credentials: 'include' });
+        blob = await response.blob();
+      } else {
+        const res = await api.get(url, { responseType: 'blob' });
+        blob = res.data;
+      }
+
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = name || 'arquivo';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (err) {
+      console.error('[MediaViewerModal] Erro no download:', err);
+      // Fallback: tenta download direto
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = name || 'arquivo';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
   };
 
   const renderMedia = () => {
-    if (!url) return null;
+    if (loading) {
+      return (
+        <Box display="flex" alignItems="center" justifyContent="center" height="200px">
+          <Typography color="textSecondary">Carregando...</Typography>
+        </Box>
+      );
+    }
+
+    if (!blobUrl) return null;
 
     if (mediaType?.startsWith('image/')) {
-      return <img src={url} alt={name} className={classes.media} />;
+      return <img src={blobUrl} alt={name} className={classes.media} />;
     }
     if (mediaType?.startsWith('audio/')) {
-      return <audio src={url} controls autoPlay className={classes.media} style={{ width: '100%' }} />;
+      return <audio src={blobUrl} controls autoPlay className={classes.media} style={{ width: '100%' }} />;
     }
     if (mediaType?.startsWith('video/')) {
-      return <video src={url} controls autoPlay className={classes.media} />;
+      return <video src={blobUrl} controls autoPlay className={classes.media} />;
     }
     if (mediaType === 'application/pdf') {
       return (

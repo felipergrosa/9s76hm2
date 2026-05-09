@@ -10,6 +10,7 @@ import DialogContent from '@material-ui/core/DialogContent';
 import ZoomInIcon from '@material-ui/icons/ZoomIn';
 import PhotoCameraIcon from '@material-ui/icons/PhotoCamera';
 import DeleteOutlineIcon from '@material-ui/icons/DeleteOutline';
+import api from '../../services/api';
 
 const useStyles = makeStyles((theme) => ({
   avatar: {
@@ -45,12 +46,53 @@ const AvatarUploader = ({ setAvatar, avatar, companyId, onRemove }) => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewImage, setPreviewImage] = useState(null);
   const [openPreview, setOpenPreview] = useState(false);
+  const [blobUrl, setBlobUrl] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (avatar && !selectedFile) {
       setPreviewImage(null);
     }
   }, [avatar, selectedFile]);
+
+  // Carrega avatar como blob para evitar problemas de CORS
+  useEffect(() => {
+    if (!avatar || selectedFile) {
+      setBlobUrl(null);
+      setLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+    const loadAvatar = async () => {
+      setLoading(true);
+      try {
+        const avatarUrl = `/public/company${companyId}/${avatar}?v=${new Date().getTime()}`;
+        const res = await api.get(avatarUrl, { responseType: 'blob' });
+        const contentType = res.headers['content-type'] || 'image/jpeg';
+
+        if (isMounted) {
+          const objectUrl = window.URL.createObjectURL(new Blob([res.data], { type: contentType }));
+          setBlobUrl(objectUrl);
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error('[AvatarUpload] Erro ao carregar avatar:', err);
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadAvatar();
+
+    return () => {
+      isMounted = false;
+      if (blobUrl) {
+        window.URL.revokeObjectURL(blobUrl);
+      }
+    };
+  }, [avatar, companyId, selectedFile]);
 
   const handleFileChange = (event) => {
     const file = event.target.files[0];
@@ -66,9 +108,10 @@ const AvatarUploader = ({ setAvatar, avatar, companyId, onRemove }) => {
     }
   };
 
-  const currentSrc = !previewImage && avatar
+  // URL da imagem: preview local > blob do servidor > URL direta (fallback)
+  const currentSrc = previewImage || blobUrl || (avatar
     ? `${process.env.REACT_APP_BACKEND_URL}/public/company${companyId}/${avatar}?v=${new Date().getTime()}`
-    : previewImage || `${process.env.REACT_APP_BACKEND_URL}/public/app/noimage.png`;
+    : `${process.env.REACT_APP_BACKEND_URL}/public/app/noimage.png`);
 
   return (
     <Box display="flex" flexDirection="column" alignItems="center">
@@ -123,7 +166,13 @@ const AvatarUploader = ({ setAvatar, avatar, companyId, onRemove }) => {
 
       <Dialog open={openPreview} onClose={() => setOpenPreview(false)} maxWidth="sm" fullWidth>
         <DialogContent>
-          <img src={currentSrc} alt="Pré-visualização do avatar" className={classes.modalImage} />
+          {loading ? (
+            <Box display="flex" alignItems="center" justifyContent="center" height="200px">
+              Carregando...
+            </Box>
+          ) : (
+            <img src={currentSrc} alt="Pré-visualização do avatar" className={classes.modalImage} />
+          )}
         </DialogContent>
       </Dialog>
     </Box>

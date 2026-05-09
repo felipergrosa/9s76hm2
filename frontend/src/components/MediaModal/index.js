@@ -27,6 +27,69 @@ import { ReplyMessageContext } from "../../context/ReplyingMessage/ReplyingMessa
 import { ForwardMessageContext } from "../../context/ForwarMessage/ForwardMessageContext";
 import api from "../../services/api";
 
+// Componente seguro para miniaturas com autenticação
+const SafeThumbnail = ({ src, alt, className, onClick, isVideo }) => {
+  const [blobUrl, setBlobUrl] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!src) {
+      setBlobUrl(null);
+      setLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+    const loadThumbnail = async () => {
+      try {
+        const isAbsoluteUrl = /^https?:\/\//i.test(src);
+        let data, contentType;
+
+        if (isAbsoluteUrl) {
+          const response = await fetch(src, { credentials: 'include' });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          data = await response.blob();
+          contentType = response.headers.get('content-type') || (isVideo ? 'video/mp4' : 'image/jpeg');
+        } else {
+          const res = await api.get(src, { responseType: 'blob' });
+          data = res.data;
+          contentType = res.headers['content-type'] || (isVideo ? 'video/mp4' : 'image/jpeg');
+        }
+
+        if (isMounted) {
+          const objectUrl = window.URL.createObjectURL(new Blob([data], { type: contentType }));
+          setBlobUrl(objectUrl);
+          setLoading(false);
+        }
+      } catch (err) {
+        if (isMounted) {
+          setBlobUrl(src); // Fallback
+          setLoading(false);
+        }
+      }
+    };
+
+    loadThumbnail();
+
+    return () => {
+      isMounted = false;
+      if (blobUrl && blobUrl !== src) {
+        window.URL.revokeObjectURL(blobUrl);
+      }
+    };
+  }, [src, isVideo]);
+
+  if (loading) {
+    return <div className={className} style={{ backgroundColor: '#333' }} />;
+  }
+
+  if (isVideo) {
+    return <video src={blobUrl || src} className={className} onClick={onClick} muted />;
+  }
+
+  return <img src={blobUrl || src} alt={alt} className={className} onClick={onClick} />;
+};
+
 const useStyles = makeStyles((theme) => ({
   modal: {
     "& .MuiDialog-paper": {
@@ -581,18 +644,18 @@ const MediaModal = ({
               <div key={media.id || index} className={classes.thumbnailWrapper}>
                 {media.mediaType === "video" ? (
                   <>
-                    <video
+                    <SafeThumbnail
                       src={media.mediaUrl}
+                      isVideo={true}
                       className={`${classes.thumbnail} ${index === currentIndex ? classes.thumbnailActive : ""}`}
                       onClick={() => handleThumbnailClick(index)}
-                      muted
                     />
                     <span className={classes.videoDuration}>
                       {media.duration || "0:00"}
                     </span>
                   </>
                 ) : (
-                  <img
+                  <SafeThumbnail
                     src={media.mediaUrl}
                     alt=""
                     className={`${classes.thumbnail} ${index === currentIndex ? classes.thumbnailActive : ""}`}

@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { makeStyles } from "@material-ui/core/styles";
 import DescriptionIcon from '@material-ui/icons/Description';
 import { Box, Typography, Tooltip } from '@material-ui/core';
+import api from '../../services/api';
 
 const useStyles = makeStyles((theme) => ({
   mediaContainer: {
@@ -60,6 +61,58 @@ const useStyles = makeStyles((theme) => ({
 
 const MediaPreview = ({ url, mediaType, name, onClick, fileSize, createdAt }) => {
   const classes = useStyles();
+  const [blobUrl, setBlobUrl] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Carrega imagem como blob para evitar problemas de CORS
+  useEffect(() => {
+    if (!url || !mediaType?.startsWith('image/')) {
+      setBlobUrl(null);
+      setLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+    const loadImage = async () => {
+      setLoading(true);
+      try {
+        const isAbsoluteUrl = /^https?:\/\//i.test(url);
+        let data, contentType;
+
+        if (isAbsoluteUrl) {
+          const response = await fetch(url, { credentials: 'include' });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          data = await response.blob();
+          contentType = response.headers.get('content-type') || mediaType;
+        } else {
+          const res = await api.get(url, { responseType: 'blob' });
+          data = res.data;
+          contentType = res.headers['content-type'] || mediaType;
+        }
+
+        if (isMounted) {
+          const objectUrl = window.URL.createObjectURL(new Blob([data], { type: contentType }));
+          setBlobUrl(objectUrl);
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error('[MediaPreview] Erro ao carregar imagem:', err);
+        if (isMounted) {
+          setBlobUrl(url); // Fallback para URL direta
+          setLoading(false);
+        }
+      }
+    };
+
+    loadImage();
+
+    return () => {
+      isMounted = false;
+      if (blobUrl && blobUrl !== url) {
+        window.URL.revokeObjectURL(blobUrl);
+      }
+    };
+  }, [url, mediaType]);
 
   const formatFileSize = (bytes) => {
     if (!bytes) return '';
@@ -115,7 +168,17 @@ const MediaPreview = ({ url, mediaType, name, onClick, fileSize, createdAt }) =>
     }
 
     if (mediaType?.startsWith('image/')) {
-      return <img src={url} alt={name} className={classes.media} />;
+      if (loading) {
+        return (
+          <div style={{ textAlign: 'center', padding: '8px' }}>
+            <DescriptionIcon className={classes.icon} style={{ fontSize: '2rem', color: '#ccc' }} />
+            <Typography variant="caption" style={{ fontSize: '0.7rem', color: '#999' }}>
+              ...
+            </Typography>
+          </div>
+        );
+      }
+      return <img src={blobUrl || url} alt={name} className={classes.media} />;
     }
 
     if (mediaType?.startsWith('audio/')) {
