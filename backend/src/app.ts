@@ -111,7 +111,7 @@ app.use("/public", express.static(uploadConfig.directory));
 // Habilita: X-Content-Type-Options, X-Frame-Options, HSTS, Referrer-Policy, etc.
 app.use(helmet({
   contentSecurityPolicy: false, // TODO: habilitar CSP gradualmente em deploy futuro
-  crossOriginResourcePolicy: false, // Desabilita CORP do Helmet - já gerenciado pelo CORS acima
+  crossOriginResourcePolicy: { policy: "cross-origin" }, // Permite recursos cross-origin (imagens, avatares, logos)
   crossOriginEmbedderPolicy: false, // Permite embeds (ex: iframes de flow builder)
   crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" }
 }));
