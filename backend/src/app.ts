@@ -79,6 +79,9 @@ const isOriginAllowed = (origin: string | undefined): boolean => {
   // Localhost/127.0.0.1 apenas em desenvolvimento.
   if (isDevelopment && (LOCALHOST_REGEX.test(origin) || LOCAL_IP_REGEX.test(origin))) return true;
 
+  // Permitir origem undefined (necessário para Socket.IO e algumas conexões)
+  if (!origin || origin === 'null' || origin === 'undefined') return true;
+
   return false;
 };
 

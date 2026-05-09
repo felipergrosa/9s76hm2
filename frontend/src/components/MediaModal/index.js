@@ -26,6 +26,7 @@ import {
 import { ReplyMessageContext } from "../../context/ReplyingMessage/ReplyingMessageContext";
 import { ForwardMessageContext } from "../../context/ForwarMessage/ForwardMessageContext";
 import api from "../../services/api";
+import SafeMediaPreview from "../SafeMediaPreview";
 
 // Componente seguro para miniaturas com autenticação
 const SafeThumbnail = ({ src, alt, className, onClick, isVideo }) => {
@@ -493,7 +494,12 @@ const MediaModal = ({
         <div className={classes.header}>
           <div className={classes.headerLeft}>
             {contactAvatar && (
-              <img src={contactAvatar} alt="" className={classes.contactAvatar} />
+              <SafeMediaPreview 
+                src={contactAvatar} 
+                type="image"
+                alt="" 
+                className={classes.contactAvatar} 
+              />
             )}
             <div className={classes.contactInfo}>
               <span className={classes.contactName}>{contactName || "Mídia"}</span>

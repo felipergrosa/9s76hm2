@@ -38,6 +38,7 @@ import useQueues from "../../hooks/useQueues";
 import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
 import Title from "../../components/Title";
+import SafeMediaPreview from "../../components/SafeMediaPreview";
 import ConfirmationModal from "../../components/ConfirmationModal";
 import UserStatusIcon from "../../components/UserModal/statusIcon";
 import ChatAssistantPanel from "../../components/ChatAssistantPanel";
@@ -848,7 +849,16 @@ const CampaignForm = () => {
   const renderMediaPreview = (url, name) => {
     if (!url) return null;
     const wrapperStyle = { cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 };
-    if (isImage(url)) return <div style={wrapperStyle}><img src={url} alt={name || 'preview'} style={{ maxWidth: 120, maxHeight: 90, borderRadius: 4, border: '1px solid #eee' }} /></div>;
+    if (isImage(url)) return (
+      <div style={wrapperStyle}>
+        <SafeMediaPreview 
+          src={url} 
+          type="image"
+          alt={name || 'preview'} 
+          style={{ maxWidth: 120, maxHeight: 90, borderRadius: 4, border: '1px solid #eee' }} 
+        />
+      </div>
+    );
     return <Button size="small" variant="outlined" style={{ pointerEvents: "none" }}>Pré-visualizar</Button>;
   };
 

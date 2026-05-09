@@ -50,6 +50,7 @@ import useCompanySettings from "../../hooks/useSettings/companySettings";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import { QueueSelectedContext } from "../../context/QueuesSelected/QueuesSelectedContext";
 import AudioModal from "../AudioModal";
+import SafeMediaPreview from "../SafeMediaPreview";
 import AdMetaPreview from "../AdMetaPreview";
 import ButtonsPreview from "../ButtonsPreview";
 // import PdfModal from "../PdfModal";
@@ -3208,7 +3209,12 @@ const MessagesList = ({
       <Dialog open={videoDialog.open} onClose={() => setVideoDialog({ open: false, url: null })} maxWidth="md">
         <DialogContent style={{ padding: 0 }}>
           {videoDialog.url && (
-            <video src={videoDialog.url} controls style={{ maxWidth: '90vw', maxHeight: '85vh', display: 'block' }} />
+            <SafeMediaPreview 
+              src={videoDialog.url} 
+              type="video"
+              controls 
+              style={{ maxWidth: '90vw', maxHeight: '85vh', display: 'block' }} 
+            />
           )}
         </DialogContent>
       </Dialog>

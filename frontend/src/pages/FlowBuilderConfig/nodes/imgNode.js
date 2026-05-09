@@ -3,6 +3,7 @@ import React, { memo } from "react";
 
 import { Handle } from "react-flow-renderer";
 import { useNodeStorage } from "../../../stores/useNodeStorage";
+import SafeMediaPreview from "../../../components/SafeMediaPreview";
 
 export default memo(({ data, isConnectable, id }) => {
 
@@ -55,7 +56,11 @@ export default memo(({ data, isConnectable, id }) => {
         </div>
       </div>
       <div style={{color: '#ededed', fontSize: '12px', width: 180}}>
-        <img src={`${link}/public/${data.url}`} style={{width: '180px'}} />
+        <SafeMediaPreview 
+          src={`${link}/public/${data.url}`} 
+          type="image"
+          style={{width: '180px'}} 
+        />
       </div>
       <Handle
         type="source"

@@ -208,7 +208,7 @@ const Login = () => {
 
       <div className={classes.root}>
         <form className={classes.formContainer} onSubmit={handleSubmit}>
-          <img src="/logo.png" alt="Logo" className={classes.logoImg} />
+          <img src={`${process.env.REACT_APP_BACKEND_URL}/logo.png`} alt="Logo" className={classes.logoImg} crossOrigin="anonymous" />
           {error && <Typography color="error">{error}</Typography>}
           <TextField
             label="Email"
