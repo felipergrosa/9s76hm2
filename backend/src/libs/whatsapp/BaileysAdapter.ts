@@ -10,6 +10,7 @@ import * as Sentry from "@sentry/node";
 import fs from "fs";
 import path from "path";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
+import { getBaileysTimestamp } from "../../helpers/BaileysTimestampHelper";
 import {
   IWhatsAppAdapter,
   IWhatsAppMessage,
@@ -818,7 +819,7 @@ export class BaileysAdapter implements IWhatsAppAdapter {
       from: msg.key.remoteJid!,
       to: msg.key.remoteJid!,
       body,
-      timestamp: Number(msg.messageTimestamp),
+      timestamp: getBaileysTimestamp(msg.messageTimestamp),
       fromMe: msg.key.fromMe || false,
       mediaType,
       ack: msg.status,

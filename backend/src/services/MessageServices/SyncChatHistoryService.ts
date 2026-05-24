@@ -17,6 +17,7 @@ import {
 } from "../../libs/messageHistoryHandler";
 import { acquireFetchLock } from "../../libs/fetchHistoryMutex";
 import { downloadMediaMessage, getContentType, extractMessageContent, WASocket } from "@whiskeysockets/baileys";
+import { getBaileysTimestamp } from "../../helpers/BaileysTimestampHelper";
 import * as fs from "fs";
 import * as path from "path";
 import { promisify } from "util";
@@ -241,8 +242,8 @@ const SyncChatHistoryService = async ({
             participant: msg.key.participant || msg.participant || null,
             dataJson: JSON.stringify(msg),
             companyId,
-            createdAt: new Date(msg.messageTimestamp * 1000),
-            updatedAt: new Date(msg.messageTimestamp * 1000)
+            createdAt: new Date(getBaileysTimestamp(msg.messageTimestamp) * 1000),
+            updatedAt: new Date(getBaileysTimestamp(msg.messageTimestamp) * 1000)
           };
 
           const createdMessage = await Message.create(messageData);

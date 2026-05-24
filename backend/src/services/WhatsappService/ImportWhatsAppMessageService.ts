@@ -15,6 +15,7 @@ import { safeNormalizePhoneNumber } from "../../utils/phone";
 import FindOrCreateTicketService from "../TicketServices/FindOrCreateTicketService";
 import { getBodyMessage, getQuotedMessage } from "../WbotServices/wbotMessageListener";
 import { jidNormalizedUser } from "@whiskeysockets/baileys";
+import { getBaileysTimestamp } from "../../helpers/BaileysTimestampHelper";
 
 // Funções Auxiliares (Cleaner e Sorter)
 function sortByMessageTimestamp(a, b) {
@@ -260,7 +261,7 @@ const ImportWhatsAppMessageService = async (whatsappId: number | string) => {
 
         if (body || msg.message) {
           // Timestamp original da mensagem (em segundos → milissegundos)
-          const originalTimestamp = (msg.messageTimestamp as number) * 1000;
+          const originalTimestamp = getBaileysTimestamp(msg.messageTimestamp) * 1000;
           const originalDate = new Date(originalTimestamp);
 
           // PROTEÇÃO: Usar contactId seguro - sempre usar contact.id (nunca undefined)
@@ -287,7 +288,7 @@ const ImportWhatsAppMessageService = async (whatsappId: number | string) => {
 
         // 5. Emitir Progresso (Batch)
         if (processedCount % 20 === 0 || processedCount === totalImport) {
-          const timestampMsg = (msg.messageTimestamp as number) * 1000;
+          const timestampMsg = getBaileysTimestamp(msg.messageTimestamp) * 1000;
           io.of(`/workspace-${companyId}`).emit(`importMessages-${companyId}`, {
             action: "update",
             status: {

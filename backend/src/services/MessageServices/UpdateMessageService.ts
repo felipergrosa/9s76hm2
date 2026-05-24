@@ -3,6 +3,7 @@ import Ticket from "../../models/Ticket";
 import { getIO } from "../../libs/socket";
 import logger from "../../utils/logger";
 import { WAMessageUpdate } from "@whiskeysockets/baileys";
+import { getBaileysTimestamp } from "../../helpers/BaileysTimestampHelper";
 
 /**
  * Atualiza mensagem com dados de edição ou deleção do Baileys v7
@@ -62,7 +63,7 @@ const UpdateMessageService = async ({
       if (newBody && newBody !== message.body) {
         updateData.body = newBody;
         updateData.isEdited = true;
-        updateData.editedTimestamp = (editedContent as any).editedMessageTimestamp || Date.now();
+        updateData.editedTimestamp = getBaileysTimestamp((editedContent as any).editedMessageTimestamp) || Date.now();
         wasUpdated = true;
         
         logger.info(`[UpdateMessage] Mensagem editada: wid=${key.id}, nova body="${newBody.substring(0, 50)}..."`);

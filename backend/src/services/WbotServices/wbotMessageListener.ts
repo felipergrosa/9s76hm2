@@ -381,8 +381,14 @@ function removeFile(directory) {
   });
 }
 
-const getTimestampMessage = (msgTimestamp: any) => {
-  return msgTimestamp * 1;
+const getTimestampMessage = (msgTimestamp: any): number => {
+  if (!msgTimestamp) return 0;
+  // Baileys v7 rc.10+: messageTimestamp pode ser objeto Long {low, high, unsigned}
+  if (typeof msgTimestamp === "object" && msgTimestamp !== null) {
+    if (typeof msgTimestamp.low === "number") return msgTimestamp.low;
+    if (typeof msgTimestamp.toNumber === "function") return msgTimestamp.toNumber();
+  }
+  return Number(msgTimestamp) || 0;
 };
 
 const multVecardGet = function (param: any) {

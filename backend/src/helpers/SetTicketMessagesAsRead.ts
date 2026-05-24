@@ -86,25 +86,35 @@ const SetTicketMessagesAsRead = async (ticket: Ticket): Promise<void> => {
               });
 
               if (getJsonMessage.length > 0) {
-                // Usar for...of em vez de forEach para permitir await adequado
+                // LOTEAMENTO: agrupa todas as chaves válidas e envia de UMA vez.
+                // Reduz o flood de acks individualizados que acelera o bug Stream Errored (ack).
+                const keysToRead: proto.IMessageKey[] = [];
                 for (const message of getJsonMessage) {
                   try {
                     const msg: proto.IWebMessageInfo = JSON.parse(message.dataJson);
                     if (msg.key && msg.key.fromMe === false && !ticket.isBot && (ticket.userId || ticket.isGroup)) {
-                      // Verificar se socket ainda está vivo antes de CADA mensagem
-                      if (!isSocketAlive(wbot)) {
-                        logger.debug(`[SetTicketMessagesAsRead] Socket morreu durante iteração, parando`);
-                        break;
-                      }
-                      await wbot.readMessages([msg.key]);
+                      keysToRead.push(msg.key);
                     }
-                  } catch (readErr: any) {
-                    // Ignorar erro de Connection Closed - socket pode ter morrido durante a iteração
-                    if (readErr?.message?.includes('Connection Closed')) {
-                      logger.debug(`[SetTicketMessagesAsRead] Connection Closed ao marcar mensagem como lida, parando`);
-                      break;
-                    } else {
-                      logger.warn(`[SetTicketMessagesAsRead] Erro ao marcar mensagem como lida: ${readErr?.message}`);
+                  } catch (parseErr: any) {
+                    logger.warn(`[SetTicketMessagesAsRead] Erro ao parsear mensagem: ${parseErr?.message}`);
+                  }
+                }
+
+                if (keysToRead.length > 0) {
+                  // Verificar socket uma última vez antes do lote
+                  if (!isSocketAlive(wbot)) {
+                    logger.debug(`[SetTicketMessagesAsRead] Socket morreu antes do lote de readMessages, pulando`);
+                  } else {
+                    try {
+                      // Enviar todos os acks em um único lote
+                      await wbot.readMessages(keysToRead);
+                      logger.info(`[SetTicketMessagesAsRead] ${keysToRead.length} mensagens marcadas como lidas em lote (ticketId=${ticket.id})`);
+                    } catch (readErr: any) {
+                      if (readErr?.message?.includes('Connection Closed')) {
+                        logger.debug(`[SetTicketMessagesAsRead] Connection Closed ao marcar lote de mensagens como lidas`);
+                      } else {
+                        logger.warn(`[SetTicketMessagesAsRead] Erro ao marcar lote de mensagens como lidas: ${readErr?.message}`);
+                      }
                     }
                   }
                 }

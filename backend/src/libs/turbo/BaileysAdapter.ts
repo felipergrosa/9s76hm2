@@ -17,6 +17,7 @@ import {
   fetchLatestBaileysVersion,
   Browsers,
 } from "@whiskeysockets/baileys";
+import { getBaileysTimestamp } from "../../helpers/BaileysTimestampHelper";
 
 // isJidUser removido na v6 - usar verificação manual
 const isJidUser = (jid: string | undefined): boolean => {
@@ -710,7 +711,7 @@ export class BaileysAdapter implements ITurboEngine {
       from: msg.key.remoteJid || "",
       to: msg.key.fromMe ? msg.key.remoteJid || "" : "",
       body: this.getBodyFromMessage(message, messageType),
-      timestamp: msg.messageTimestamp as number || Date.now(),
+      timestamp: getBaileysTimestamp(msg.messageTimestamp) || Date.now(),
       fromMe: msg.key.fromMe || false,
       status: String(msg.status || ""),
       hasMedia: this.hasMedia(messageType),
