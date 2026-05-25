@@ -90,14 +90,41 @@ export const cancelFetchRequest = (fetchId: string): void => {
  * Handler principal para o evento messaging-history.set
  * Este deve ser registrado no wbot.ev.on("messaging-history.set", handleMessagingHistorySet)
  */
-export const handleMessagingHistorySet = async (event: any): Promise<void> => {
+export const handleMessagingHistorySet = async (event: any, whatsappId?: number, companyId?: number): Promise<void> => {
   try {
-    const { messages = [], chats = [], contacts = [], isLatest, progress, syncType, peerDataRequestSessionId } = event || {};
+    const { messages = [], chats = [], contacts = [], lidPnMappings = [], isLatest, progress, syncType, peerDataRequestSessionId } = event || {};
 
     // ON_DEMAND sync: syncType=6 (ON_DEMAND) OU peerDataRequestSessionId presente
     // O Baileys pode retornar isLatest=false ou undefined para ON_DEMAND — nunca true
     const isOnDemand = syncType === 6 || !!peerDataRequestSessionId;
-    logger.info(`[HistoryHandler] messaging-history.set recebido: msgs=${messages.length} chats=${chats.length} contacts=${contacts.length} isLatest=${isLatest} progress=${progress} syncType=${syncType} peerSessionId=${peerDataRequestSessionId || 'N/A'} isOnDemand=${isOnDemand}`);
+    logger.info(`[HistoryHandler] messaging-history.set recebido: msgs=${messages.length} chats=${chats.length} contacts=${contacts.length} lids=${lidPnMappings.length} isLatest=${isLatest} progress=${progress} syncType=${syncType} peerSessionId=${peerDataRequestSessionId || 'N/A'} isOnDemand=${isOnDemand}`);
+
+    // Persistir mapeamentos LID→PN vindos junto com o history sync (novo no rc10)
+    if (lidPnMappings.length > 0 && whatsappId && companyId) {
+      try {
+        const LidMapping = require("../models/LidMapping").default;
+        await Promise.all(
+          lidPnMappings.map(async (mapping: any) => {
+            const lid = mapping?.lid || mapping?.id;
+            const pn = mapping?.phoneNumber || mapping?.pn;
+            if (!lid || !pn) return;
+            const phoneNumber = String(pn).replace(/\D/g, "");
+            if (phoneNumber.length < 8) return;
+            await LidMapping.upsert({
+              lid: lid.includes("@") ? lid : `${lid}@lid`,
+              phoneNumber,
+              whatsappId,
+              companyId,
+              source: "history_sync",
+              confidence: 0.9
+            }).catch(() => {});
+          })
+        );
+        logger.info(`[HistoryHandler] ${lidPnMappings.length} mapeamentos LID→PN persistidos do history sync`);
+      } catch (err: any) {
+        logger.warn(`[HistoryHandler] Erro ao persistir lidPnMappings: ${err?.message}`);
+      }
+    }
 
     // Log diagnóstico: estrutura das primeiras 3 mensagens
     if (messages.length > 0) {

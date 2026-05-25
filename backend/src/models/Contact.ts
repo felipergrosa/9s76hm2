@@ -71,6 +71,13 @@ class Contact extends Model<Contact> {
   @Column
   pushName: string;
 
+  @Column({
+    type: DataType.STRING(100),
+    allowNull: true,
+    comment: "@ handle do WhatsApp (ex: joao123). Novo no Baileys rc10, nem todos os contatos tem."
+  })
+  username: string;
+
   @Column
   verifiedName: string;
 

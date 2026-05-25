@@ -181,6 +181,12 @@ const wbotMonitor = async (
                   name: contact.name
                     ? cleanStringForJSON(contact.name)
                     : contact.id.split("@")[0].split(":")[0],
+                  // rc10: preservar campos enriquecidos do Baileys
+                  ...(contact.notify ? { notify: cleanStringForJSON(contact.notify) } : {}),
+                  ...(contact.verifiedName ? { verifiedName: cleanStringForJSON(contact.verifiedName) } : {}),
+                  // rc10: username é o @handle do WhatsApp (nem todos têm)
+                  ...((contact as any).username ? { username: (contact as any).username } : {}),
+                  ...(contact.phoneNumber ? { phoneNumber: contact.phoneNumber } : {}),
                 };
                 filteredContacts.push(contactArray);
               }

@@ -1348,7 +1348,12 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
           // Handler centralizado de messaging-history.set
           // Este handler processa todos os eventos de history sync e distribui para handlers registrados
           wsocket.ev.on("messaging-history.set", async (messageSet: any) => {
-            await handleMessagingHistorySet(messageSet);
+            await handleMessagingHistorySet(messageSet, whatsapp.id, whatsapp.companyId);
+          });
+
+          // Novo evento do rc10: sinaliza conclusão ou pausa por tipo de sync
+          (wsocket.ev as any).on("messaging-history.status", (status: any) => {
+            logger.info(`[wbot] messaging-history.status: syncType=${status?.syncType} status=${status?.status} explicit=${status?.explicit} whatsappId=${whatsapp.id}`);
           });
 
           // Processamento em tempo real de labels vindas por updates de chats
