@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM node:20-bullseye AS build
+FROM node:20-bookworm AS build
 WORKDIR /app
 ENV NODE_ENV=development
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
@@ -53,7 +53,7 @@ RUN npm prune --omit=dev \
   && npm cache clean --force
 
 # --- Runtime ---
-FROM node:20-bullseye-slim AS runner
+FROM node:20-bookworm-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 # Aumentar heap limit para 4GB para evitar OOM com múltiplas sessões WhatsApp
