@@ -43,6 +43,9 @@ const SIGNAL_ERROR_PATTERNS = [
   "decryptwithsessions",
   "failed to decrypt",
   "invalid prekey id",
+  "prekey",
+  "invalid key id",
+  "no prekey",
 ];
 
 // Padrões de erro de PROTOCOLO críticos (WebSocket/XML)
@@ -140,7 +143,7 @@ class SignalErrorHandler {
 
     // Verificar limite de recoveries por hora
     const now = Date.now();
-    if (now - tracker.lastRecovery < 3600000) {
+    if (now - tracker.lastRecovery < 7200000) {
       if (tracker.recoveryCount >= MAX_RECOVERIES_PER_HOUR) {
         logger.error(
           `[SignalError] Limite de ${MAX_RECOVERIES_PER_HOUR} recoveries/hora atingido para ` +
@@ -224,6 +227,7 @@ class SignalErrorHandler {
         } finally {
           tracker.recovering = false;
           tracker.count = 0;
+          tracker.firstError = 0;
         }
       }, RECOVERY_DELAY_MS);
 
