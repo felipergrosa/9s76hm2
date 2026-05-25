@@ -355,21 +355,18 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
     // Emitir socket se houve QUALQUER atualização (nome ou avatar)
     if (nameUpdated || avatarUpdated) {
       const io = getIO();
-      // Importante: usar getDataValue("urlPicture") para enviar caminho relativo, não URL completa do getter
-      const urlPictureRaw = contact.getDataValue("urlPicture");
       const payload = {
         action: "update",
         contact: {
           id: contact.id,
           name: contact.name,
-          urlPicture: urlPictureRaw, // Caminho relativo (ex: contacts/uuid/avatar.jpg)
-          profilePicUrl: contact.profilePicUrl,
+          urlPicture: contact.urlPicture,       // URL completa via getter (ex: https://backend/public/company1/contacts/uuid/avatar/avatar.jpg)
+          profilePicUrl: contact.profilePicUrl, // URL CDN do WhatsApp
           updatedAt: contact.updatedAt
         }
       };
 
-      // CRÍTICO: Usar namespace correto /workspace-{companyId} (não company-{companyId}-mainchannel)
-      io.of(String(companyId)).emit("contact", payload);
+      io.of(`/workspace-${companyId}`).emit(`company-${companyId}-contact`, payload);
       logger.debug(`[RefreshAvatar] Socket emitido para contactId=${contact.id} (nameUpdated=${nameUpdated}, avatarUpdated=${avatarUpdated})`);
     }
     
