@@ -702,11 +702,10 @@ export const getBodyMessage = (msg: proto.IWebMessageInfo): string | null => {
       adMetaPreview: (() => {
         const ctx: any = msg.message?.extendedTextMessage?.contextInfo;
         if (!ctx) {
-          logger.info(`[adMetaPreview] contextInfo não existe para mensagem ${msg.key?.id}`);
           return msg.message?.extendedTextMessage?.text || null;
         }
         
-        logger.info(`[adMetaPreview] contextInfo encontrado: ${JSON.stringify({
+        logger.debug(`[adMetaPreview] contextInfo encontrado: ${JSON.stringify({
           hasExternalAdReply: !!ctx.externalAdReply,
           hasMatchedText: !!ctx.matchedText,
           matchedText: ctx.matchedText,

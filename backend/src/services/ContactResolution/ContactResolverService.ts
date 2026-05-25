@@ -628,20 +628,17 @@ export async function resolveMessageContact(
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // FALLBACK: Criar contato PENDING_ (aguardando resolução futura)
+    // LID não resolvido — bloquear criação de contato
     // ═══════════════════════════════════════════════════════════════════
-    // CRÍTICO: NÃO criar contato se LID não foi resolvido
-    // Isso evita que o frontend mostre o número do LID (ex: 3810206466207) 
-    // ao invés do número real (ex: +554138911718)
-    // O contato só deve ser criado quando o número real for descoberto
+    // Não criar contato com LID como número: evita dados incorretos no banco.
+    // A mensagem será descartada. As estratégias de resolução acima devem ser
+    // suficientes após a sessão sincronizar os mapeamentos LID→PN.
     logger.warn({
       lidJid: ids.lidJid,
       contactName,
       strategy: "LID-BLOCKED"
-    }, "[ContactResolver] LID não resolvido — BLOQUEANDO criação de contato (aguardando lid-mapping.update)");
+    }, "[ContactResolver] LID não resolvido — bloqueando criação de contato");
 
-    // Retornar indicando que precisa de resolução de LID
-    // O chamador deve ignorar esta mensagem ou aguardar resolução
     return {
       contact: null as any,
       identifiers: ids,

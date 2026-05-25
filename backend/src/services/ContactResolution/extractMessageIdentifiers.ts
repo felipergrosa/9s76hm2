@@ -93,12 +93,14 @@ export function extractMessageIdentifiers(
     }
 
     // Estratégia 2: consultar signalRepository in-memory (sem I/O de banco)
+    // Baileys v7: wbot.signalRepository (não wbot.authState.keys.signalRepository)
     if (!pnJid) {
       try {
-        const signalRepo = (wbot as any).authState?.keys?.signalRepository;
-        if (signalRepo?.getPNForLID) {
+        const sock = wbot as any;
+        const lidStore = sock.signalRepository?.lidMapping || sock.authState?.keys?.signalRepository;
+        if (lidStore?.getPNForLID) {
           const lidId = String(primaryJid || "").replace("@lid", "");
-          const pn = signalRepo.getPNForLID(primaryJid) || signalRepo.getPNForLID(lidId);
+          const pn = lidStore.getPNForLID(primaryJid) || lidStore.getPNForLID(lidId);
           if (pn) {
             const pnDigits = String(pn).replace(/\D/g, "");
             if (isRealPhoneNumber(pnDigits)) {

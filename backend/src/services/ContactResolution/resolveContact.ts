@@ -559,21 +559,23 @@ export async function resolveContact(
   }
 
   // ─────────────────────────────────────────────────
-  // BUSCA 9: Via signalRepository.lidMapping (Baileys v7)
-  // Quando temos LID mas não temos PN, consultar o repositório Signal
-  // do Baileys que mantém mapeamento LID↔PN em memória.
+  // BUSCA 9: Via signalRepository.lidMapping (Baileys v7 — API oficial)
+  // Caminho correto: wbot.signalRepository.lidMapping.getPNForLID()
+  // Persiste no banco ao encontrar para acelerar futuras consultas.
   // ─────────────────────────────────────────────────
   if (ids.lidJid && !ids.pnCanonical && wbot) {
     try {
-      const signalRepo = (wbot as any).authState?.keys?.signalRepository;
-      if (signalRepo?.getPNForLID) {
+      const sock = wbot as any;
+      // Baileys v7: wbot.signalRepository.lidMapping (não wbot.authState.keys.signalRepository)
+      const lidStore = sock.signalRepository?.lidMapping;
+      if (lidStore?.getPNForLID) {
         const lidId = ids.lidJid.replace("@lid", "");
-        const resolvedPN = signalRepo.getPNForLID(ids.lidJid) || signalRepo.getPNForLID(lidId);
-        
+        const resolvedPN = await lidStore.getPNForLID(ids.lidJid) ||
+                           await lidStore.getPNForLID(lidId);
+
         if (resolvedPN) {
           const pnDigits = String(resolvedPN).replace(/\D/g, "");
           if (pnDigits.length >= 10 && pnDigits.length <= 13) {
-            // Buscar contato pelo PN resolvido
             const contact = await Contact.findOne({
               where: {
                 companyId,
@@ -590,10 +592,9 @@ export async function resolveContact(
                 contactId: contact.id,
                 lidJid: ids.lidJid,
                 resolvedPN: pnDigits,
-                strategy: "signalRepository"
+                strategy: "signalRepository.lidMapping"
               }, "[resolveContact] Contato encontrado via signalRepository.lidMapping");
 
-              // Vincular LID ao contato
               if (!contact.lidJid) {
                 try {
                   await contact.update({ lidJid: ids.lidJid });
@@ -603,7 +604,6 @@ export async function resolveContact(
                 }
               }
 
-              // Persistir no LidMapping
               try {
                 await LidMapping.upsert({
                   lid: ids.lidJid,
@@ -616,12 +616,155 @@ export async function resolveContact(
               } catch { /* ok */ }
 
               return { contact, lidJidUpdated, pnFromMapping: pnDigits };
+            } else {
+              // PN resolvido mas contato não existe: persistir para acelerar criação futura
+              try {
+                await LidMapping.upsert({
+                  lid: ids.lidJid,
+                  phoneNumber: pnDigits,
+                  companyId,
+                  source: "signal_repository",
+                  confidence: 0.95,
+                  verified: true
+                });
+              } catch { /* ok */ }
+              // Atualizar ids para que a Camada 3 crie o contato com o PN correto
+              ids.pnDigits = pnDigits;
+              ids.pnJid = `${pnDigits}@s.whatsapp.net`;
+              logger.info({
+                lidJid: ids.lidJid,
+                pnDigits,
+                strategy: "signalRepository.lidMapping-new-contact"
+              }, "[resolveContact] PN resolvido via signalRepository — contato será criado");
             }
           }
         }
       }
     } catch (err: any) {
       logger.debug({ err: err?.message }, "[resolveContact] signalRepository não disponível");
+    }
+  }
+
+  // ─────────────────────────────────────────────────
+  // BUSCA 10: Via authState.keys.get('lid-mapping') (KeyStore persistido)
+  // Útil quando signalRepository não expõe getPNForLID mas o mapping
+  // foi persistido no KeyStore pelo Baileys durante a sessão anterior.
+  // ─────────────────────────────────────────────────
+  if (ids.lidJid && !ids.pnCanonical && wbot) {
+    try {
+      const lidId = ids.lidJid.replace("@lid", "");
+      const authKeys = (wbot as any).authState?.keys;
+      if (authKeys?.get) {
+        const data = await authKeys.get("lid-mapping", [lidId]);
+        const raw = data?.[lidId];
+        const tryExtract = (v: any): string | null => {
+          if (!v) return null;
+          if (typeof v === "string") return v;
+          return String(v?.jid || v?.pnJid || v?.pn || v?.phoneNumber || v?.number || "") || null;
+        };
+        const resolved = tryExtract(raw);
+        if (resolved) {
+          const pnDigits = resolved.replace(/\D/g, "");
+          if (pnDigits.length >= 10 && pnDigits.length <= 13) {
+            const contact = await Contact.findOne({
+              where: {
+                companyId,
+                isGroup: false,
+                [Op.or]: [
+                  { canonicalNumber: pnDigits },
+                  { number: pnDigits }
+                ]
+              }
+            });
+
+            if (contact) {
+              logger.info({
+                contactId: contact.id,
+                lidJid: ids.lidJid,
+                resolvedPN: pnDigits,
+                strategy: "authState.keys.lid-mapping"
+              }, "[resolveContact] Contato encontrado via authState.keys lid-mapping");
+
+              if (!contact.lidJid) {
+                try { await contact.update({ lidJid: ids.lidJid }); lidJidUpdated = true; } catch { /* ok */ }
+              }
+              try {
+                await LidMapping.upsert({ lid: ids.lidJid, phoneNumber: pnDigits, companyId, source: "authstate_keystore", confidence: 0.90, verified: true });
+              } catch { /* ok */ }
+              return { contact, lidJidUpdated, pnFromMapping: pnDigits };
+            } else {
+              ids.pnDigits = pnDigits;
+              ids.pnJid = `${pnDigits}@s.whatsapp.net`;
+              logger.info({ lidJid: ids.lidJid, pnDigits, strategy: "authState.keys.lid-mapping-new-contact" }, "[resolveContact] PN resolvido via authState.keys — contato será criado");
+            }
+          }
+        }
+      }
+    } catch (err: any) {
+      logger.debug({ err: err?.message }, "[resolveContact] authState.keys.get não disponível");
+    }
+  }
+
+  // ─────────────────────────────────────────────────
+  // BUSCA 11: Via wbot.onWhatsApp(lidJid) — consulta ao servidor WA
+  // Último recurso em memória: o servidor WA pode resolver LID→PN.
+  // Só executa se ainda não temos PN e o wbot está conectado.
+  // Persiste resultado para acelerar futuras consultas.
+  // ─────────────────────────────────────────────────
+  if (ids.lidJid && !ids.pnCanonical && wbot) {
+    try {
+      const results = await (wbot as any).onWhatsApp(ids.lidJid);
+      if (results && results.length > 0) {
+        const result = results[0];
+        if (result?.jid && result.jid.includes("@s.whatsapp.net")) {
+          const pnDigits = result.jid.replace(/\D/g, "");
+          // Rejeitar se é eco dos dígitos do LID (false positive)
+          const lidDigits = ids.lidJid.replace(/\D/g, "");
+          if (pnDigits.length >= 10 && pnDigits.length <= 13 && pnDigits !== lidDigits) {
+            const contact = await Contact.findOne({
+              where: {
+                companyId,
+                isGroup: false,
+                [Op.or]: [
+                  { canonicalNumber: pnDigits },
+                  { number: pnDigits }
+                ]
+              }
+            });
+
+            if (contact) {
+              logger.info({
+                contactId: contact.id,
+                lidJid: ids.lidJid,
+                resolvedPN: pnDigits,
+                strategy: "onWhatsApp"
+              }, "[resolveContact] Contato encontrado via onWhatsApp(lidJid)");
+
+              if (!contact.lidJid) {
+                try { await contact.update({ lidJid: ids.lidJid }); lidJidUpdated = true; } catch { /* ok */ }
+              }
+              try {
+                await LidMapping.upsert({ lid: ids.lidJid, phoneNumber: pnDigits, companyId, source: "on_whatsapp", confidence: 1.0, verified: true });
+              } catch { /* ok */ }
+              return { contact, lidJidUpdated, pnFromMapping: pnDigits };
+            } else {
+              // Contato não existe ainda: setar pnJid para que a Camada 3 crie com número correto
+              ids.pnDigits = pnDigits;
+              ids.pnJid = `${pnDigits}@s.whatsapp.net`;
+              try {
+                await LidMapping.upsert({ lid: ids.lidJid, phoneNumber: pnDigits, companyId, source: "on_whatsapp", confidence: 1.0, verified: true });
+              } catch { /* ok */ }
+              logger.info({
+                lidJid: ids.lidJid,
+                pnDigits,
+                strategy: "onWhatsApp-new-contact"
+              }, "[resolveContact] PN resolvido via onWhatsApp — contato será criado");
+            }
+          }
+        }
+      }
+    } catch (err: any) {
+      logger.debug({ err: err?.message, lidJid: ids.lidJid }, "[resolveContact] onWhatsApp não disponível ou falhou");
     }
   }
 
