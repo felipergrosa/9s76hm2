@@ -6806,6 +6806,12 @@ const filterMessages = (msg: any): boolean => {
     return false;
   }
 
+  // Rejeitar mensagens sem conteúdo e sem stub tratado (notificações de sistema)
+  if (!msg.message) {
+    logger.info(`[filterMessages] Rejeitando mensagem sem conteúdo: wid=${msg.key?.id}, remoteJid=${msg.key?.remoteJid}, stubType=${msg.messageStubType}, stubParams=${JSON.stringify(msg.messageStubParameters)}`);
+    return false;
+  }
+
   logger.debug(`[filterMessages] APROVADO: wid=${msg.key?.id}, hasMessage=${!!msg.message}, fromMe=${msg.key?.fromMe}, remoteJid=${msg.key?.remoteJid}`);
   return true;
 };

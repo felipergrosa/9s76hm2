@@ -78,9 +78,13 @@ const SyncChatHistoryService = async ({
   }
 
   const contact = ticket.contact;
-  const jid = `${contact.number}@s.whatsapp.net`;
+  // Usar remoteJid do contato se disponível (pode ser @lid em sessões novas)
+  // Fallback para number@s.whatsapp.net
+  const jidPN = `${contact.number}@s.whatsapp.net`;
+  const jid = (contact.remoteJid && contact.remoteJid !== jidPN) ? contact.remoteJid : jidPN;
+  const jidAlt = jid !== jidPN ? jidPN : null; // JID alternativo para registrar handler
 
-  logger.info(`[SyncChatHistory] Iniciando sync para ticket=${ticketId}, jid=${jid}, messageCount=${messageCount}`);
+  logger.info(`[SyncChatHistory] Iniciando sync para ticket=${ticketId}, jid=${jid}, jidAlt=${jidAlt}, messageCount=${messageCount}`);
 
   // Adquirir lock para evitar múltiplas chamadas concorrentes (usa whatsappId)
   const releaseLock = await acquireFetchLock(ticket.whatsappId, 'SyncChatHistory');
@@ -99,14 +103,28 @@ const SyncChatHistoryService = async ({
     };
     
     registerHistoryHandler(jid, messageHandler);
+    // Registrar também no JID alternativo (PN vs LID) para capturar resposta independente do formato
+    if (jidAlt) {
+      registerHistoryHandler(jidAlt, messageHandler);
+    }
 
     try {
       // Iniciar Promise que aguarda resposta
       const fetchPromise = startFetchRequest(fetchId, jid, 60000); // 60s timeout
       
-      // Executar fetchMessageHistory
+      // Executar fetchMessageHistory — tentar com o JID real do contato
       logger.info(`[SyncChatHistory] Chamando fetchMessageHistory para ${jid} (${messageCount} msgs)`);
-      await wbot.fetchMessageHistory(messageCount, { remoteJid: jid }, undefined);
+      try {
+        await wbot.fetchMessageHistory(messageCount, { remoteJid: jid }, undefined);
+      } catch (fetchErr: any) {
+        // Se falhou com jid principal, tentar com jidAlt (ex: PN quando jid é LID)
+        if (jidAlt) {
+          logger.warn(`[SyncChatHistory] fetchMessageHistory falhou para ${jid}, tentando ${jidAlt}: ${fetchErr?.message}`);
+          await wbot.fetchMessageHistory(messageCount, { remoteJid: jidAlt }, undefined);
+        } else {
+          throw fetchErr;
+        }
+      }
       
       // Aguardar resposta via messaging-history.set
       const result = await fetchPromise;
@@ -251,11 +269,11 @@ const SyncChatHistoryService = async ({
           // Notificar frontend via Socket.IO
           // CRÍTICO: Usar namespace correto /workspace-{companyId} (não /company-{companyId}-mainchannel)
           // O socket.ts só aceita namespaces /workspace-\d+ (ALLOWED_NAMESPACES)
-          io.of(String(companyId))
-            .to(ticket.id.toString())
+          io.of(`/workspace-${companyId}`)
+            .to(ticket.uuid)
             .to(ticket.status)
             .to("notification")
-            .emit("appMessage", {
+            .emit(`company-${companyId}-appMessage`, {
               action: "create",
               message: createdMessage,
               ticket,
@@ -277,6 +295,7 @@ const SyncChatHistoryService = async ({
 
     } finally {
       unregisterHistoryHandler(jid, messageHandler);
+      if (jidAlt) unregisterHistoryHandler(jidAlt, messageHandler);
       cancelFetchRequest(fetchId);
     }
 
