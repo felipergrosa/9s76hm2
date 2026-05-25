@@ -101,8 +101,11 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
       return;
     }
 
-    // Se for URL externa (WhatsApp, etc), usar diretamente sem carregar blob
-    if (imageUrl.includes('whatsapp.net') || imageUrl.includes('fbcdn.net') || imageUrl.includes('instagram.com')) {
+    // Se for URL externa (WhatsApp CDN, Facebook, etc), usar diretamente sem carregar blob
+    if (imageUrl.includes('whatsapp.net') || imageUrl.includes('whatsapp.com') ||
+        imageUrl.includes('fbcdn.net') || imageUrl.includes('instagram.com') ||
+        imageUrl.includes('pps.') || imageUrl.includes('mmg.') ||
+        imageUrl.includes('amazonaws.com')) {
       setBlobUrl(imageUrl);
       setLoading(false);
       if (avatarData.contactId) {
@@ -117,21 +120,25 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
     const loadAvatar = async () => {
       try {
         const isAbsoluteUrl = /^https?:\/\//i.test(imageUrl);
-        let data, contentType;
+        let blob;
 
         if (isAbsoluteUrl) {
           const response = await fetch(imageUrl, { credentials: 'include' });
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          data = await response.blob();
-          contentType = response.headers.get('content-type') || 'image/jpeg';
+          // fetch().blob() já retorna Blob — usar diretamente, sem new Blob([blob])
+          blob = await response.blob();
         } else {
+          // axios com responseType='blob' já retorna Blob — usar diretamente
           const res = await api.get(imageUrl, { responseType: 'blob' });
-          data = res.data;
-          contentType = res.headers['content-type'] || 'image/jpeg';
+          blob = res.data;
+          // Se por algum motivo retornou ArrayBuffer, converter
+          if (blob instanceof ArrayBuffer) {
+            blob = new Blob([blob], { type: 'image/jpeg' });
+          }
         }
 
         if (isMounted) {
-          const objectUrl = window.URL.createObjectURL(new Blob([data], { type: contentType }));
+          const objectUrl = window.URL.createObjectURL(blob);
           setBlobUrl(objectUrl);
           setLoading(false);
           if (avatarData.contactId) {
