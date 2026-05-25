@@ -226,7 +226,7 @@ export async function resolveMessageContact(
     // CORREÇÃO CRÍTICA: Se descobrimos o PN agora (via LidMapping ou USync),
     // mas o contato foi encontrado pelo LID (e tem number = LID ou PENDING),
     // devemos atualizar o number/remoteJid para o PN real!
-    if (ids.pnJid && ids.pnDigits) {
+    if (ids.pnJid && ids.pnDigits && !existingContact.isGroup) {
       const currentNumber = existingContact.number || "";
       const isLidNumber = currentNumber.includes("@lid") || currentNumber.includes("@") || currentNumber.startsWith("PENDING_");
       // Se number não parece um telefone válido (tem letras, @, ou length errado)
