@@ -7417,8 +7417,8 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
           )
         ]);
       } catch (e) {
+        // Não salvar placeholder — deixa vazio para RefreshContactAvatarService buscar depois
         Sentry.captureException(e);
-        profilePicUrl = `${process.env.FRONTEND_URL}/nopicture.png`;
       }
       const contactData = {
         name: nameGroup,
@@ -7426,7 +7426,7 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
         isGroup: true,
         companyId: companyId,
         remoteJid: group.id,
-        profilePicUrl,
+        profilePicUrl: profilePicUrl || undefined, // Nunca salvar placeholder
         whatsappId: wbot.id,
         wbot: wbot
       };

@@ -2,9 +2,14 @@ import { Request, Response, NextFunction } from "express";
 import User from "../models/User";
 import UpdateUserOnlineStatusService from "../services/UserServices/UpdateUserOnlineStatusService";
 
+// Map em memória para throttle de atualizações de atividade do usuário
+// Chave: userId, Valor: timestamp da última atualização
+const userActivityThrottleMap = new Map<number | string, number>();
+const ACTIVITY_THROTTLE_MS = 5 * 60 * 1000; // 5 minutos
+
 /**
  * Middleware para rastrear atividade do usuário
- * Atualiza lastActivityAt a cada requisição autenticada
+ * Atualiza lastActivityAt a cada requisição autenticada (com throttle de 5 minutos)
  * Se usuário estava offline, coloca online novamente
  */
 const trackUserActivity = async (req: Request, res: Response, next: NextFunction) => {
@@ -16,7 +21,17 @@ const trackUserActivity = async (req: Request, res: Response, next: NextFunction
   const userId = req.user.id;
   const companyId = req.user.companyId;
 
-  console.log(`[TrackActivity] Requisição detectada - User ${userId}`);
+  // Verifica throttle antes de consultar ou atualizar o banco de dados
+  const nowMs = Date.now();
+  const lastUpdate = userActivityThrottleMap.get(userId) || 0;
+
+  if (nowMs - lastUpdate < ACTIVITY_THROTTLE_MS) {
+    // Menos de 5 minutos desde a última atualização, pula processamento de banco
+    return next();
+  }
+
+  // Atualiza o throttle map imediatamente para evitar race conditions em requisições paralelas
+  userActivityThrottleMap.set(userId, nowMs);
 
   // Atualiza lastActivityAt e verifica status de forma assíncrona
   (async () => {
@@ -27,18 +42,15 @@ const trackUserActivity = async (req: Request, res: Response, next: NextFunction
       });
 
       if (!user) {
-        console.log(`[TrackActivity] Usuário ${userId} não encontrado`);
         return;
       }
 
       const now = new Date();
       const threeHoursAgo = new Date(now.getTime() - 3 * 60 * 60 * 1000);
 
-      console.log(`[TrackActivity] User ${userId} - online=${user.online}, lastActivity=${user.lastActivityAt}, now=${now}`);
-
       // Se usuário está offline ou inativo há mais de 3h, colocar online
       if (!user.online || !user.lastActivityAt || user.lastActivityAt < threeHoursAgo) {
-        console.log(`[TrackActivity] Usuário ${userId} voltando à atividade - online=${user.online}, lastActivity=${user.lastActivityAt}`);
+        console.log(`[TrackActivity] Usuário ${userId} voltando à atividade - online=${user.online}`);
         
         // Atualizar para online
         await User.update(
@@ -58,7 +70,6 @@ const trackUserActivity = async (req: Request, res: Response, next: NextFunction
         });
       } else {
         // Apenas atualizar lastActivityAt
-        console.log(`[TrackActivity] User ${userId} - apenas atualizando lastActivityAt`);
         await User.update(
           { lastActivityAt: now },
           { where: { id: userId }, silent: true }
@@ -66,6 +77,8 @@ const trackUserActivity = async (req: Request, res: Response, next: NextFunction
       }
     } catch (err) {
       console.error(`[TrackActivity] Erro ao rastrear atividade do usuário ${userId}:`, err);
+      // Remove do cache em caso de erro para tentar na próxima requisição
+      userActivityThrottleMap.delete(userId);
     }
   })();
 

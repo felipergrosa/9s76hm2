@@ -81,7 +81,7 @@ const SyncAllGroupsService = async ({
           new Promise<string>((_, reject) => setTimeout(() => reject(new Error("timeout")), 3000))
         ]) as string;
       } catch {
-        profilePicUrl = `${process.env.FRONTEND_URL}/nopicture.png`;
+        // Não salvar placeholder — deixa vazio para RefreshContactAvatarService buscar depois
       }
 
       // Criar ou atualizar contato do grupo
@@ -91,7 +91,7 @@ const SyncAllGroupsService = async ({
         isGroup: true,
         companyId,
         remoteJid: groupJid,
-        profilePicUrl,
+        profilePicUrl: profilePicUrl || undefined, // Nunca salvar placeholder
         whatsappId,
         wbot,
         checkProfilePic: false // Não verificar foto novamente

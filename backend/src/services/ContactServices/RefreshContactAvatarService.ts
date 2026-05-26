@@ -267,9 +267,16 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
     // Considerar arquivo legado salvo com outro nome: se não existe o arquivo desejado, vamos baixar
     let shouldRedownload = !desiredExists || newProfileUrl !== contact.profilePicUrl;
 
-    // Não substituir por fallback se já existe uma imagem local válida
+    // Nunca salvar placeholder como avatar real
     const fallbackUrl = `${process.env.FRONTEND_URL}/nopicture.png`;
-    if (newProfileUrl === fallbackUrl && desiredExists) {
+    const isPlaceholderUrl = !newProfileUrl || newProfileUrl === fallbackUrl || newProfileUrl.includes('/nopicture.png');
+    
+    if (isPlaceholderUrl) {
+      // Se é placeholder, não faz download e não atualiza a URL no banco
+      shouldRedownload = false;
+      logger.debug(`[RefreshAvatar] contactId=${contact.id} - URL é placeholder, ignorando atualização`);
+    } else if (newProfileUrl === fallbackUrl && desiredExists) {
+      // Caso específico: fallback com arquivo existente
       shouldRedownload = false;
     }
 
@@ -321,13 +328,19 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
       return false;
     };
 
-    if (newProfileUrl && shouldRedownload) {
+    if (newProfileUrl && shouldRedownload && !isPlaceholderUrl) {
       const filename = await downloadProfileImage(newProfileUrl, absoluteAvatarDir, desiredFilename);
       if (filename) {
         const relativePathForDb = path.posix.join(relativeAvatarDirDb, filename);
-        await contact.update({ profilePicUrl: newProfileUrl, urlPicture: relativePathForDb, pictureUpdated: true });
-        await contact.reload();
-        avatarUpdated = true;
+        // Verificação extra: nunca salvar placeholder no banco
+        if (!newProfileUrl.includes('/nopicture.png') && newProfileUrl !== fallbackUrl) {
+          await contact.update({ profilePicUrl: newProfileUrl, urlPicture: relativePathForDb, pictureUpdated: true });
+          await contact.reload();
+          avatarUpdated = true;
+          logger.debug(`[RefreshAvatar] contactId=${contact.id} - Avatar atualizado com sucesso`);
+        } else {
+          logger.warn(`[RefreshAvatar] contactId=${contact.id} - Tentativa de salvar placeholder bloqueada`);
+        }
       } else {
         // silencioso
         // Tentar adotar avatar legado se houver

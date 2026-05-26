@@ -896,10 +896,10 @@ const wbotMonitor = async (
     // Estratégia: Keepalive moderado + detecção com margem + reconexão com delay adequado
     // REVERTIDO: Valores agressivos causavam erros xml-not-well-formed e ciclos de reconexão
     // =================================================================
-    const ANDROID_SYNC_INTERVAL = 2 * 60 * 1000; // 2 minutos (conservador)
-    const ANDROID_KEEPALIVE_INTERVAL = 60 * 1000; // 60s entre keepalives (menos agressivo)
-    const ANDROID_STALLED_THRESHOLD = 3 * 60 * 1000; // 3min sem atividade = stalled
-    const ANDROID_FORCE_RECONNECT_THRESHOLD = 10 * 60 * 1000; // 10min = forçar reconexão
+    const ANDROID_SYNC_INTERVAL = 10 * 60 * 1000; // 10 minutos (alta performance)
+    const ANDROID_KEEPALIVE_INTERVAL = 3 * 60 * 1000; // 3 minutos entre keepalives (evita sobrecarga)
+    const ANDROID_STALLED_THRESHOLD = 15 * 60 * 1000; // 15min sem atividade = stalled
+    const ANDROID_FORCE_RECONNECT_THRESHOLD = 20 * 60 * 1000; // 20min = forçar reconexão
     
     let lastActivityTimestamp = Date.now();
     let lastSyncAttempt = 0;

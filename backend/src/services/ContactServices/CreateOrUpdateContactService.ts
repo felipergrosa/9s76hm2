@@ -534,9 +534,6 @@ const CreateOrUpdateContactService = async ({
         newRemoteJid = isGroup ? `${rawNumber}@g.us` : `${rawNumber}@s.whatsapp.net`;
       }
 
-      // Busca de avatar centralizada no RefreshContactAvatarService
-      profilePicUrl = profilePicUrl || `${process.env.FRONTEND_URL}/nopicture.png`;
-
       // Definir nome efetivo na criação: se não vier nome válido, buscar da agenda WhatsApp
       {
         const incomingName = (name || "").trim();

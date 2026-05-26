@@ -320,7 +320,7 @@ export const importXls = async (req: Request, res: Response): Promise<Response> 
   const contactData = {
     name: `${name}`,
     number: validNumber,
-    profilePicUrl: "",
+    profilePicUrl: undefined, // Deixa undefined para RefreshContactAvatarService buscar
     isGroup: false,
     email,
     companyId,
