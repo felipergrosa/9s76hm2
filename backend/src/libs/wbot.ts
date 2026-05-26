@@ -327,10 +327,23 @@ export const getWbotOrRecover = async (
   whatsappId: number,
   maxWaitMs: number = 30000
 ): Promise<Session | null> => {
-  // Se já existe, retornar imediatamente
+  // Fast path: já existe no pool
   const existingIndex = sessions.findIndex(s => s.id === whatsappId);
   if (existingIndex !== -1) {
     return sessions[existingIndex];
+  }
+
+  // Fast-fail: verificar status no banco antes de iniciar loop de espera
+  // DISCONNECTED = desconectado manualmente, nunca vai voltar sozinho
+  try {
+    const wa = await Whatsapp.findByPk(whatsappId, { attributes: ["id", "status"] });
+    if (!wa || wa.status === "DISCONNECTED") {
+      logger.debug(`[getWbotOrRecover] Sessão ${whatsappId} ${!wa ? "inexistente" : "DISCONNECTED"} no banco. Fast-fail sem aguardar ${maxWaitMs}ms.`);
+      return null;
+    }
+  } catch (dbErr: any) {
+    // Não bloquear se o banco falhou — continua com o fluxo normal
+    logger.debug(`[getWbotOrRecover] Erro ao checar DB para ${whatsappId}: ${dbErr?.message}`);
   }
 
   const isReconnecting = reconnectingWhatsapps.get(whatsappId);

@@ -147,9 +147,11 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
 
     if (contact.channels?.includes("whatsapp") && resolvedWhatsappId) {
       try {
-        // CORREÇÃO: Usar getWbotOrRecover para aguardar sessão durante reconexão
-        const wbot = await getWbotOrRecover(resolvedWhatsappId, 30000);
+        // Timeout curto: avatar é não-crítico, não vale bloquear 30s
+        const wbot = await getWbotOrRecover(resolvedWhatsappId, 5000);
         if (!wbot) {
+          // Throttle mesmo quando sessão indisponível — evita re-tentativa a cada mensagem
+          lastAvatarRefreshMap.set(key, now);
           return contact;
         }
         const jid = contact.remoteJid

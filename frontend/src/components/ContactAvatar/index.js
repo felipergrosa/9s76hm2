@@ -78,7 +78,14 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
     }
 
     // Buscar no cache primeiro
-    const cached = avatarCache.get(avatarData.contactId, avatarData.urlPicture, avatarData.profilePicUrl);
+    let cached = avatarCache.get(avatarData.contactId, avatarData.urlPicture, avatarData.profilePicUrl);
+    // IMPORTANTE: URLs blob: são revogadas automaticamente pelo navegador após reload/desmontagem
+    // Não devem ser reutilizadas do cache — apenas URLs externas permanentes (CDN)
+    if (cached?.startsWith('blob:')) {
+      console.debug(`[ContactAvatar:${avatarData.contactId}] Cache ignorado (blob revogado): ${cached.substring(0, 50)}...`);
+      cached = null;
+    }
+    console.debug(`[ContactAvatar:${avatarData.contactId}] Cache check:`, cached ? `HIT ${cached.substring(0, 50)}...` : 'MISS', '| urlPicture:', avatarData.urlPicture?.substring(0, 40), '| profilePicUrl:', avatarData.profilePicUrl?.substring(0, 40));
     setCachedUrl(cached);
     setBlobUrl(null);
     setLoading(Boolean(cached || avatarData.imageUrl));
@@ -127,18 +134,32 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
       }
       const isAbsoluteUrl = /^https?:\/\//i.test(url);
       let blob;
+      let contentType;
       if (isAbsoluteUrl) {
         const response = await fetch(url, { credentials: 'include' });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        contentType = response.headers.get('content-type');
         blob = await response.blob();
       } else {
         const res = await api.get(url, { responseType: 'blob' });
         blob = res.data;
+        contentType = res.headers?.['content-type'];
         if (blob instanceof ArrayBuffer) {
           blob = new Blob([blob], { type: 'image/jpeg' });
         }
       }
       if (!blob || blob.size === 0) throw new Error('Blob vazio');
+      // Validação: deve ser imagem
+      const isImage = contentType?.startsWith('image/') || blob.type?.startsWith('image/');
+      if (!isImage) {
+        console.warn(`[ContactAvatar] URL não retornou imagem: ${url.substring(0, 50)}... | content-type: ${contentType} | blob.type: ${blob.type} | size: ${blob.size}`);
+        throw new Error(`Não é imagem: ${contentType || blob.type}`);
+      }
+      // Se blob.type está vazio/mas o contentType indica imagem, forçar tipo correto
+      const finalType = blob.type || contentType || 'image/jpeg';
+      if (blob.type !== finalType && finalType.startsWith('image/')) {
+        blob = new Blob([blob], { type: finalType });
+      }
       return { blobUrl: window.URL.createObjectURL(blob), direct: false };
     };
 
@@ -149,23 +170,30 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
         urlsToTry.push(avatarData.profilePicUrl);
       }
 
+      console.debug(`[ContactAvatar:${avatarData.contactId}] Iniciando carregamento | URLs:`, urlsToTry);
+
       for (const url of urlsToTry) {
         try {
+          console.debug(`[ContactAvatar:${avatarData.contactId}] Tentando: ${url?.substring(0, 60)}...`);
           const result = await fetchBlob(url);
+          console.debug(`[ContactAvatar:${avatarData.contactId}] Sucesso: ${result.direct ? 'URL externa' : 'Blob criado'}`);
           if (isMounted) {
             setBlobUrl(result.blobUrl);
             setLoading(false);
-            if (avatarData.contactId) {
+            // Cache: apenas URLs externas (CDN) ou data URLs — NUNCA blobs revogáveis
+            if (avatarData.contactId && (result.direct || result.blobUrl.startsWith('data:'))) {
               avatarCache.set(avatarData.contactId, avatarData.urlPicture, avatarData.profilePicUrl, result.blobUrl);
             }
           }
           return;
         } catch (err) {
+          console.warn(`[ContactAvatar:${avatarData.contactId}] Falha em URL: ${err?.message}`);
           // Tenta próxima URL
         }
       }
 
       // Todas as URLs falharam — mostrar iniciais
+      console.warn(`[ContactAvatar:${avatarData.contactId}] Todas URLs falharam — mostrando iniciais`);
       if (isMounted) {
         setImageError(true);
         setLoading(false);
@@ -193,8 +221,9 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
   const handleImageError = useCallback((e) => {
     // Se for URL externa (WhatsApp/Instagram) com erro, marcar como erro
     // para mostrar avatar com iniciais ao invés de imagem quebrada
+    console.warn(`[ContactAvatar:${avatarData.contactId}] onError disparado no <img> | src: ${e?.target?.src?.substring(0, 60)}...`);
     setImageError(true);
-  }, []);
+  }, [avatarData.contactId]);
 
   // Se não tem contato, usa fallback
   if (!contact) {
@@ -211,8 +240,14 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
   const contactName = avatarData.contactName;
   const contactNumber = avatarData.contactNumber;
 
+  // Log de diagnóstico na renderização
+  const shouldShowInitials = imageError || !imageUrl || loading;
+  if (shouldShowInitials && avatarData.contactId) {
+    console.debug(`[ContactAvatar:${avatarData.contactId}] Render: ${imageError ? 'ERROR' : !imageUrl ? 'NO_URL' : 'LOADING'} | imageError=${imageError} | hasUrl=${!!imageUrl} | loading=${loading}`);
+  }
+
   // Se houve erro, está carregando ou não tem imagem, usa avatar colorido com iniciais
-  if (imageError || !imageUrl || loading) {
+  if (shouldShowInitials) {
     const initials = getInitials(contactName, contactNumber);
     const bgColor = getAvatarColor(contactName || contactNumber);
 
