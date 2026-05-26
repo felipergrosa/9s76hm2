@@ -66,6 +66,9 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
   const avatarIdentity = getContactAvatarIdentity(contact);
   const avatarData = useMemo(() => getContactAvatarData(contact), [avatarIdentity]);
 
+  // Log inicial do componente
+  console.log(`[ContactAvatar:MOUNT] contactId=${avatarData.contactId} | urlPicture=${avatarData.urlPicture ? 'YES' : 'NO'} | profilePicUrl=${avatarData.profilePicUrl ? 'YES' : 'NO'} | imageUrl=${avatarData.imageUrl ? 'YES' : 'NO'}`);
+
   // Verificar cache ao montar ou quando contato muda
   useEffect(() => {
     setImageError(false);
@@ -82,10 +85,10 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
     // IMPORTANTE: URLs blob: são revogadas automaticamente pelo navegador após reload/desmontagem
     // Não devem ser reutilizadas do cache — apenas URLs externas permanentes (CDN)
     if (cached?.startsWith('blob:')) {
-      console.debug(`[ContactAvatar:${avatarData.contactId}] Cache ignorado (blob revogado): ${cached.substring(0, 50)}...`);
+      console.log(`[ContactAvatar:${avatarData.contactId}] Cache ignorado (blob revogado): ${cached.substring(0, 50)}...`);
       cached = null;
     }
-    console.debug(`[ContactAvatar:${avatarData.contactId}] Cache check:`, cached ? `HIT ${cached.substring(0, 50)}...` : 'MISS', '| urlPicture:', avatarData.urlPicture?.substring(0, 40), '| profilePicUrl:', avatarData.profilePicUrl?.substring(0, 40));
+    console.log(`[ContactAvatar:${avatarData.contactId}] Cache check:`, cached ? `HIT ${cached.substring(0, 50)}...` : 'MISS', '| urlPicture:', avatarData.urlPicture?.substring(0, 40), '| profilePicUrl:', avatarData.profilePicUrl?.substring(0, 40));
     setCachedUrl(cached);
     setBlobUrl(null);
     setLoading(Boolean(cached || avatarData.imageUrl));
@@ -170,13 +173,13 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
         urlsToTry.push(avatarData.profilePicUrl);
       }
 
-      console.debug(`[ContactAvatar:${avatarData.contactId}] Iniciando carregamento | URLs:`, urlsToTry);
+      console.log(`[ContactAvatar:${avatarData.contactId}] Iniciando carregamento | URLs:`, urlsToTry);
 
       for (const url of urlsToTry) {
         try {
-          console.debug(`[ContactAvatar:${avatarData.contactId}] Tentando: ${url?.substring(0, 60)}...`);
+          console.log(`[ContactAvatar:${avatarData.contactId}] Tentando: ${url?.substring(0, 60)}...`);
           const result = await fetchBlob(url);
-          console.debug(`[ContactAvatar:${avatarData.contactId}] Sucesso: ${result.direct ? 'URL externa' : 'Blob criado'}`);
+          console.log(`[ContactAvatar:${avatarData.contactId}] Sucesso: ${result.direct ? 'URL externa' : 'Blob criado'}`);
           if (isMounted) {
             setBlobUrl(result.blobUrl);
             setLoading(false);
@@ -187,13 +190,13 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
           }
           return;
         } catch (err) {
-          console.warn(`[ContactAvatar:${avatarData.contactId}] Falha em URL: ${err?.message}`);
+          console.log(`[ContactAvatar:${avatarData.contactId}] Falha em URL: ${err?.message}`);
           // Tenta próxima URL
         }
       }
 
       // Todas as URLs falharam — mostrar iniciais
-      console.warn(`[ContactAvatar:${avatarData.contactId}] Todas URLs falharam — mostrando iniciais`);
+      console.log(`[ContactAvatar:${avatarData.contactId}] Todas URLs falharam — mostrando iniciais`);
       if (isMounted) {
         setImageError(true);
         setLoading(false);
@@ -242,8 +245,8 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
 
   // Log de diagnóstico na renderização
   const shouldShowInitials = imageError || !imageUrl || loading;
-  if (shouldShowInitials && avatarData.contactId) {
-    console.debug(`[ContactAvatar:${avatarData.contactId}] Render: ${imageError ? 'ERROR' : !imageUrl ? 'NO_URL' : 'LOADING'} | imageError=${imageError} | hasUrl=${!!imageUrl} | loading=${loading}`);
+  if (avatarData.contactId) {
+    console.log(`[ContactAvatar:${avatarData.contactId}] Render: ${shouldShowInitials ? (imageError ? 'ERROR' : !imageUrl ? 'NO_URL' : 'LOADING') : 'IMAGE'} | imageError=${imageError} | hasUrl=${!!imageUrl} | loading=${loading} | blobUrl=${!!blobUrl} | cachedUrl=${!!cachedUrl}`);
   }
 
   // Se houve erro, está carregando ou não tem imagem, usa avatar colorido com iniciais
