@@ -101,11 +101,17 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
       return;
     }
 
-    // Se for URL externa (WhatsApp CDN, Facebook, etc), usar diretamente sem carregar blob
-    if (imageUrl.includes('whatsapp.net') || imageUrl.includes('whatsapp.com') ||
-        imageUrl.includes('fbcdn.net') || imageUrl.includes('instagram.com') ||
-        imageUrl.includes('pps.') || imageUrl.includes('mmg.') ||
-        imageUrl.includes('amazonaws.com')) {
+    // Para URLs locais/backend, tenta carregar como blob com fallback para profilePicUrl
+    let isMounted = true;
+
+    const isExternalUrl = (url) =>
+      url.includes('whatsapp.net') || url.includes('whatsapp.com') ||
+      url.includes('fbcdn.net') || url.includes('instagram.com') ||
+      url.includes('pps.') || url.includes('mmg.') ||
+      url.includes('amazonaws.com');
+
+    // Se imageUrl já é externa, usar direto (fast path)
+    if (isExternalUrl(imageUrl)) {
       setBlobUrl(imageUrl);
       setLoading(false);
       if (avatarData.contactId) {
@@ -114,43 +120,55 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
       return;
     }
 
-    // Para URLs locais, tenta carregar como blob
-    let isMounted = true;
-    
+    const fetchBlob = async (url) => {
+      if (isExternalUrl(url)) {
+        // URL externa: usar diretamente, sem fetch (evita CORS)
+        return { blobUrl: url, direct: true };
+      }
+      const isAbsoluteUrl = /^https?:\/\//i.test(url);
+      let blob;
+      if (isAbsoluteUrl) {
+        const response = await fetch(url, { credentials: 'include' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        blob = await response.blob();
+      } else {
+        const res = await api.get(url, { responseType: 'blob' });
+        blob = res.data;
+        if (blob instanceof ArrayBuffer) {
+          blob = new Blob([blob], { type: 'image/jpeg' });
+        }
+      }
+      if (!blob || blob.size === 0) throw new Error('Blob vazio');
+      return { blobUrl: window.URL.createObjectURL(blob), direct: false };
+    };
+
     const loadAvatar = async () => {
-      try {
-        const isAbsoluteUrl = /^https?:\/\//i.test(imageUrl);
-        let blob;
+      // Lista de URLs a tentar em ordem: urlPicture (local) → profilePicUrl (CDN)
+      const urlsToTry = [imageUrl];
+      if (avatarData.profilePicUrl && avatarData.profilePicUrl !== imageUrl) {
+        urlsToTry.push(avatarData.profilePicUrl);
+      }
 
-        if (isAbsoluteUrl) {
-          const response = await fetch(imageUrl, { credentials: 'include' });
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          // fetch().blob() já retorna Blob — usar diretamente, sem new Blob([blob])
-          blob = await response.blob();
-        } else {
-          // axios com responseType='blob' já retorna Blob — usar diretamente
-          const res = await api.get(imageUrl, { responseType: 'blob' });
-          blob = res.data;
-          // Se por algum motivo retornou ArrayBuffer, converter
-          if (blob instanceof ArrayBuffer) {
-            blob = new Blob([blob], { type: 'image/jpeg' });
+      for (const url of urlsToTry) {
+        try {
+          const result = await fetchBlob(url);
+          if (isMounted) {
+            setBlobUrl(result.blobUrl);
+            setLoading(false);
+            if (avatarData.contactId) {
+              avatarCache.set(avatarData.contactId, avatarData.urlPicture, avatarData.profilePicUrl, result.blobUrl);
+            }
           }
+          return;
+        } catch (err) {
+          // Tenta próxima URL
         }
+      }
 
-        if (isMounted) {
-          const objectUrl = window.URL.createObjectURL(blob);
-          setBlobUrl(objectUrl);
-          setLoading(false);
-          if (avatarData.contactId) {
-            avatarCache.set(avatarData.contactId, avatarData.urlPicture, avatarData.profilePicUrl, objectUrl);
-          }
-        }
-      } catch (err) {
-        if (isMounted) {
-          // Fallback: usar URL direta mesmo em caso de erro
-          setBlobUrl(imageUrl);
-          setLoading(false);
-        }
+      // Todas as URLs falharam — mostrar iniciais
+      if (isMounted) {
+        setImageError(true);
+        setLoading(false);
       }
     };
 
