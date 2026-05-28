@@ -169,13 +169,14 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
     }
 
     const resolvedWhatsappId = contact.whatsappId || whatsappId;
-    // Logs detalhados removidos para reduzir ruído
+    logger.debug(`[RefreshAvatar] contactId=${contact.id} | uuid=${contactUuid} | desiredExists=${desiredExists} | profilePicUrl=${newProfileUrl?.substring(0, 50)}...`);
 
     if (contact.channels?.includes("whatsapp") && resolvedWhatsappId) {
       try {
         // Timeout curto: avatar é não-crítico, não vale bloquear 30s
         const wbot = await getWbotOrRecover(resolvedWhatsappId, 5000);
         if (!wbot) {
+          logger.warn(`[RefreshAvatar] contactId=${contact.id} - Sessão WhatsApp indisponível (whatsappId=${resolvedWhatsappId})`);
           // Throttle mesmo quando sessão indisponível — evita re-tentativa a cada mensagem
           lastAvatarRefreshMap.set(key, now);
           return contact;
@@ -185,14 +186,18 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
           : contact.isGroup
             ? `${contact.number}@g.us`
             : `${contact.number}@s.whatsapp.net`;
-        
+
+        logger.debug(`[RefreshAvatar] contactId=${contact.id} - Buscando profilePictureUrl para jid=${jid}`);
+
         // PROTEÇÃO: Timeout para prevenir travamento do websocket durante HTTP request
         newProfileUrl = await Promise.race([
           wbot.profilePictureUrl(jid, "image"),
-          new Promise<string>((_, reject) => 
+          new Promise<string>((_, reject) =>
             setTimeout(() => reject(new Error('Timeout ao buscar foto de perfil')), 5000)
           )
         ]);
+
+        logger.debug(`[RefreshAvatar] contactId=${contact.id} - profilePictureUrl retornado: ${newProfileUrl?.substring(0, 60)}...`);
 
         // Atualiza também o nome do grupo se permitido
         if (contact.isGroup && allowGroupMetadata) {
@@ -201,7 +206,7 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
             // PROTEÇÃO: Timeout para prevenir travamento do websocket
             const groupMeta = await Promise.race([
               wbot.groupMetadata(jid),
-              new Promise<any>((_, reject) => 
+              new Promise<any>((_, reject) =>
                 setTimeout(() => reject(new Error('Timeout ao buscar metadados do grupo')), 5000)
               )
             ]);

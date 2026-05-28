@@ -99,6 +99,8 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
     // Determina a URL da imagem
     let imageUrl = cachedUrl || avatarData.imageUrl;
 
+    console.log(`[ContactAvatar:${avatarData.contactId}] loadImage | imageUrl=${imageUrl?.substring(0, 80)}... | cachedUrl=${cachedUrl?.substring(0, 80)}...`);
+
     if (!imageUrl || avatarIdentity === "no-contact") {
       setBlobUrl(null);
       setLoading(false);
@@ -106,6 +108,7 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
     }
 
     if (imageUrl.startsWith('blob:') || imageUrl.startsWith('data:')) {
+      console.log(`[ContactAvatar:${avatarData.contactId}] Já é blob/data, usando direto`);
       setBlobUrl(imageUrl);
       setLoading(false);
       return;
@@ -129,8 +132,11 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
       }
     };
 
+    console.log(`[ContactAvatar:${avatarData.contactId}] isExternalUrl=${isExternalUrl(imageUrl)} | isSameOrigin=${isSameOrigin(imageUrl)}`);
+
     // Fast path: URLs externas (CDN WhatsApp/Instagram) → usar direto
     if (isExternalUrl(imageUrl)) {
+      console.log(`[ContactAvatar:${avatarData.contactId}] URL externa detectada, usando direto (sem blob)`);
       setBlobUrl(imageUrl);
       setLoading(false);
       if (avatarData.contactId) {
@@ -142,6 +148,7 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
     // Fast path: URLs absolutas do próprio backend (mesmo domínio) → usar direto
     // Evita criação desnecessária de blobs que são revogados pelo navegador
     if (isSameOrigin(imageUrl)) {
+      console.log(`[ContactAvatar:${avatarData.contactId}] URL mesmo domínio, usando direto (sem blob)`);
       setBlobUrl(imageUrl);
       setLoading(false);
       if (avatarData.contactId) {
