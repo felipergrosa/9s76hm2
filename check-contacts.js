@@ -11,7 +11,7 @@ const sequelize = new Sequelize(process.env.DB_NAME, process.env.DB_USER, proces
 
 async function check() {
   const [results] = await sequelize.query(`
-    SELECT id, name, number, "canonicalNumber", "remoteJid", "lidJid"
+    SELECT id, name, number, "urlPicture", "profilePicUrl", "pictureUpdated", uuid
     FROM "Contacts"
     WHERE name IN ('Elisinha Rosa', 'Maiza Brucieri Rosa', 'Leonardo', 'Nicole', 'Fernanda Rosa', 'Kelly', 'Heloisa', 'Allan Rosa')
     LIMIT 20
@@ -19,7 +19,7 @@ async function check() {
   
   console.log('Contatos encontrados:');
   results.forEach(c => {
-    console.log(JSON.stringify(c, null, 2));
+    console.log(`ID: ${c.id} | Nome: ${c.name} | urlPicture: ${c.urlPicture?.substring(0, 80) || 'NULL'} | profilePicUrl: ${c.profilePicUrl?.substring(0, 80) || 'NULL'} | pictureUpdated: ${c.pictureUpdated} | uuid: ${c.uuid}`);
   });
   
   await sequelize.close();

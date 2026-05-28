@@ -83,10 +83,8 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
     // IMPORTANTE: URLs blob: são revogadas automaticamente pelo navegador após reload/desmontagem
     // Não devem ser reutilizadas do cache — apenas URLs externas permanentes (CDN)
     if (cached?.startsWith('blob:')) {
-      console.log(`[ContactAvatar:${avatarData.contactId}] Cache ignorado (blob revogado): ${cached.substring(0, 50)}...`);
       cached = null;
     }
-    console.log(`[ContactAvatar:${avatarData.contactId}] Cache check:`, cached ? `HIT ${cached.substring(0, 50)}...` : 'MISS', '| urlPicture:', avatarData.urlPicture?.substring(0, 40), '| profilePicUrl:', avatarData.profilePicUrl?.substring(0, 40));
     setCachedUrl(cached);
     setBlobUrl(null);
     setLoading(Boolean(cached || avatarData.imageUrl));
@@ -190,13 +188,10 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
         urlsToTry.push(avatarData.profilePicUrl);
       }
 
-      console.log(`[ContactAvatar:${avatarData.contactId}] Iniciando carregamento | URLs:`, urlsToTry);
 
       for (const url of urlsToTry) {
         try {
-          console.log(`[ContactAvatar:${avatarData.contactId}] Tentando: ${url?.substring(0, 60)}...`);
           const result = await fetchBlob(url);
-          console.log(`[ContactAvatar:${avatarData.contactId}] Sucesso: ${result.direct ? 'URL direta' : 'Blob criado'}`);
           if (isMounted) {
             setBlobUrl(result.blobUrl);
             setLoading(false);
@@ -207,11 +202,9 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
           }
           return;
         } catch (err) {
-          console.log(`[ContactAvatar:${avatarData.contactId}] Falha em URL: ${err?.message}`);
         }
       }
 
-      console.log(`[ContactAvatar:${avatarData.contactId}] Todas URLs falharam — mostrando iniciais`);
       if (isMounted) {
         setImageError(true);
         setLoading(false);
@@ -239,7 +232,6 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
   const handleImageError = useCallback((e) => {
     // Se for URL externa (WhatsApp/Instagram) com erro, marcar como erro
     // para mostrar avatar com iniciais ao invés de imagem quebrada
-    console.warn(`[ContactAvatar:${avatarData.contactId}] onError disparado no <img> | src: ${e?.target?.src?.substring(0, 60)}...`);
     setImageError(true);
   }, [avatarData.contactId]);
 
@@ -258,11 +250,7 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
   const contactName = avatarData.contactName;
   const contactNumber = avatarData.contactNumber;
 
-  // Log de diagnóstico na renderização
   const shouldShowInitials = imageError || !imageUrl || loading;
-  if (avatarData.contactId) {
-    console.log(`[ContactAvatar:${avatarData.contactId}] Render: ${shouldShowInitials ? (imageError ? 'ERROR' : !imageUrl ? 'NO_URL' : 'LOADING') : 'IMAGE'} | imageError=${imageError} | hasUrl=${!!imageUrl} | loading=${loading} | blobUrl=${!!blobUrl} | cachedUrl=${!!cachedUrl}`);
-  }
 
   // Se houve erro, está carregando ou não tem imagem, usa avatar colorido com iniciais
   if (shouldShowInitials) {

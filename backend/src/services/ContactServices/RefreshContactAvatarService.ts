@@ -169,15 +169,13 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
     }
 
     const resolvedWhatsappId = contact.whatsappId || whatsappId;
-    logger.debug(`[RefreshAvatar] contactId=${contact.id} | uuid=${contactUuid} | desiredExists=${desiredExists} | profilePicUrl=${newProfileUrl?.substring(0, 50)}...`);
 
     if (contact.channels?.includes("whatsapp") && resolvedWhatsappId) {
       try {
         // Timeout curto: avatar é não-crítico, não vale bloquear 30s
         const wbot = await getWbotOrRecover(resolvedWhatsappId, 5000);
         if (!wbot) {
-          logger.warn(`[RefreshAvatar] contactId=${contact.id} - Sessão WhatsApp indisponível (whatsappId=${resolvedWhatsappId})`);
-          // Throttle mesmo quando sessão indisponível — evita re-tentativa a cada mensagem
+            // Throttle mesmo quando sessão indisponível — evita re-tentativa a cada mensagem
           lastAvatarRefreshMap.set(key, now);
           return contact;
         }
@@ -187,7 +185,6 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
             ? `${contact.number}@g.us`
             : `${contact.number}@s.whatsapp.net`;
 
-        logger.debug(`[RefreshAvatar] contactId=${contact.id} - Buscando profilePictureUrl para jid=${jid}`);
 
         // PROTEÇÃO: Timeout para prevenir travamento do websocket durante HTTP request
         newProfileUrl = await Promise.race([
@@ -197,7 +194,6 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
           )
         ]);
 
-        logger.debug(`[RefreshAvatar] contactId=${contact.id} - profilePictureUrl retornado: ${newProfileUrl?.substring(0, 60)}...`);
 
         // Atualiza também o nome do grupo se permitido
         if (contact.isGroup && allowGroupMetadata) {
@@ -277,7 +273,6 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
                 /\.(jpe?g|png|gif|webp|bmp)$/i.test(nomeNovo);
 
               if (isHash) {
-                logger.warn({ nomeNovo, contactId: contact.id }, "[RefreshAvatar] Nome novo rejeitado por parecer hash");
               } else {
                 await contact.update({ name: nomeNovo });
                 await contact.reload();
@@ -305,7 +300,6 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
     if (isPlaceholderUrl) {
       // Se é placeholder, não faz download e não atualiza a URL no banco
       shouldRedownload = false;
-      logger.debug(`[RefreshAvatar] contactId=${contact.id} - URL é placeholder, ignorando atualização`);
     } else if (newProfileUrl === fallbackUrl && desiredExists) {
       // Caso específico: fallback com arquivo existente
       shouldRedownload = false;
@@ -368,9 +362,7 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
           await contact.update({ profilePicUrl: newProfileUrl, urlPicture: relativePathForDb, pictureUpdated: true });
           await contact.reload();
           avatarUpdated = true;
-          logger.debug(`[RefreshAvatar] contactId=${contact.id} - Avatar atualizado com sucesso`);
         } else {
-          logger.warn(`[RefreshAvatar] contactId=${contact.id} - Tentativa de salvar placeholder bloqueada`);
         }
       } else {
         // silencioso
@@ -413,7 +405,6 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
       };
 
       io.of(`/workspace-${companyId}`).emit(`company-${companyId}-contact`, payload);
-      logger.debug(`[RefreshAvatar] Socket emitido para contactId=${contact.id} (nameUpdated=${nameUpdated}, avatarUpdated=${avatarUpdated})`);
     }
     
     // marca o último refresh

@@ -159,6 +159,11 @@ const ShowTicketService = async (
     throw new AppError("ERR_NO_TICKET_FOUND", 404);
   }
 
+  // Log para diagnóstico de avatar
+  if (ticket.contact) {
+    console.log(`[ShowTicket] ticketId=${ticket.id} | contactId=${ticket.contactId} | urlPicture=${ticket.contact.urlPicture?.substring(0, 80) || 'NULL'} | profilePicUrl=${ticket.contact.profilePicUrl?.substring(0, 80) || 'NULL'}`);
+  }
+
   // Atualiza/baixa avatar automaticamente ao abrir o ticket (no máximo 1x a cada 24h por contato)
   // OTIMIZAÇÃO: Executar de forma ASSÍNCRONA para não bloquear abertura do ticket
   try {
