@@ -1,10 +1,12 @@
 const NodePolyfillPlugin = require("node-polyfill-webpack-plugin");
 
 const getRemoveConsolePlugin = () => {
-  if (process.env.NODE_ENV !== "production") return [];
+  // TEMPORÁRIO: Desabilitado para diagnóstico de badges
+  // if (process.env.NODE_ENV !== "production") return [];
   try {
     require.resolve("babel-plugin-transform-remove-console");
-    return [["transform-remove-console", { exclude: ["error", "warn"] }]];
+    return []; // Desabilitado temporariamente
+    // return [["transform-remove-console", { exclude: ["error", "warn"] }]];
   } catch {
     return [];
   }
