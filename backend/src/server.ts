@@ -175,11 +175,16 @@ const server = app.listen(port, async () => {
   await clearSessionLocks();
 
   // Limpar avatares placeholder/corrompidos no banco (background, não bloqueante)
-  setImmediate(() => {
-    cleanCorruptedAvatars().catch(err => {
-      logger.error(`[Startup] Erro na limpeza de avatares: ${err?.message || err}`);
+  const avatarCleanupEnabled = String(process.env.AVATAR_CLEANUP_ON_STARTUP || "true").toLowerCase() === "true";
+  if (avatarCleanupEnabled) {
+    setImmediate(() => {
+      cleanCorruptedAvatars().catch(err => {
+        logger.error(`[Startup] Erro na limpeza de avatares: ${err?.message || err}`);
+      });
     });
-  });
+  } else {
+    logger.info("[Startup] Limpeza de avatares desabilitada via AVATAR_CLEANUP_ON_STARTUP");
+  }
 
   const companies = await Company.findAll({
     where: { status: true },
