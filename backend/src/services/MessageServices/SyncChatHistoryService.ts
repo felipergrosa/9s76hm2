@@ -86,6 +86,11 @@ const SyncChatHistoryService = async ({
 
   logger.info(`[SyncChatHistory] Iniciando sync para ticket=${ticketId}, jid=${jid}, jidAlt=${jidAlt}, messageCount=${messageCount}`);
 
+  // DESABILITADO: fetchMessageHistory causa corrupção do websocket (xml-not-well-formed)
+  // quando múltiplas chamadas concorrentes ocorrem. Mensagens continuam chegando via messages.upsert.
+  logger.warn(`[SyncChatHistory] DESABILITADO - fetchMessageHistory não executado para ticket=${ticketId}. Mensagens chegam via events.`);
+  return { synced: 0, skipped: true, reason: "fetchMessageHistory desabilitado para evitar xml-not-well-formed" };
+
   // Adquirir lock para evitar múltiplas chamadas concorrentes (usa whatsappId)
   const releaseLock = await acquireFetchLock(ticket.whatsappId, 'SyncChatHistory');
 

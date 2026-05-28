@@ -13,6 +13,7 @@ import * as path from "path";
 import { Op } from "sequelize";
 import Contact from "../../models/Contact";
 import logger from "../../utils/logger";
+import BulkRefreshContactAvatarsService from "../ContactServices/BulkRefreshContactAvatarsService";
 
 const MIN_AVATAR_SIZE = 100; // bytes
 const MAX_CONTACTS = 5000;   // limite de segurança por execução
@@ -63,6 +64,8 @@ export const cleanCorruptedAvatars = async (): Promise<void> => {
   const startAt = Date.now();
   let cleaned = 0;
   let checked = 0;
+  const cleanedContactIds: number[] = [];
+  const cleanedByCompany = new Map<number, number[]>();
 
   try {
     // Buscar contatos que possivelmente tenham placeholder ou arquivo local
@@ -141,6 +144,10 @@ export const cleanCorruptedAvatars = async (): Promise<void> => {
 
         await contact.update(updateData);
         cleaned++;
+        cleanedContactIds.push(contact.id);
+        const existing = cleanedByCompany.get(contact.companyId) || [];
+        existing.push(contact.id);
+        cleanedByCompany.set(contact.companyId, existing);
       }
     }
 
@@ -148,6 +155,26 @@ export const cleanCorruptedAvatars = async (): Promise<void> => {
     logger.info(
       `[CleanAvatars] Verificados: ${checked} | Limpos: ${cleaned} | Tempo: ${duration}ms`
     );
+
+    // Após limpar, tentar re-baixar avatares dos contatos limpos (background)
+    if (cleanedContactIds.length > 0) {
+      const MAX_REFRESH_PER_STARTUP = 200; // Limite para não sobrecarregar o startup
+      logger.info(`[CleanAvatars] Iniciando refresh de avatares para ${cleanedContactIds.length} contatos limpos (limit=${MAX_REFRESH_PER_STARTUP})`);
+
+      for (const [companyId, ids] of cleanedByCompany) {
+        const limitedIds = ids.slice(0, MAX_REFRESH_PER_STARTUP);
+        try {
+          await BulkRefreshContactAvatarsService({
+            companyId,
+            contactIds: limitedIds,
+            limit: MAX_REFRESH_PER_STARTUP
+          });
+          logger.info(`[CleanAvatars] Refresh concluído para companyId=${companyId} | ${limitedIds.length} contatos`);
+        } catch (refreshErr) {
+          logger.error(`[CleanAvatars] Erro no refresh para companyId=${companyId}: ${(refreshErr as any)?.message || refreshErr}`);
+        }
+      }
+    }
   } catch (err) {
     logger.error(`[CleanAvatars] Erro ao executar limpeza: ${(err as any)?.message || err}`);
   }

@@ -44,7 +44,6 @@ import { checkOrphanedSessionsCron } from "./cron/checkOrphanedSessionsCron";
 import { sessionWindowRenewalCron } from "./cron/sessionWindowRenewalCron";
 import { clearSessionLocks } from "./libs/wbotMutex";
 import { bullQueueMonitor } from "./jobs/BullQueueMonitor";
-import { cleanCorruptedAvatars } from "./services/maintenance/CleanCorruptedAvatarsService";
 // EVENT-TRIGGER SYSTEM DESATIVADO - Conflito com sessões WhatsApp
 // import { initModelHooks, initEventTriggerCallbacks, initRecurringJobs } from "./queue/ModelHooks";
 
@@ -173,18 +172,6 @@ const server = app.listen(port, async () => {
   // Limpar locks de sessão antigos no startup
   // Isso evita que o servidor ache que há "outra instância" rodando após um restart
   await clearSessionLocks();
-
-  // Limpar avatares placeholder/corrompidos no banco (background, não bloqueante)
-  const avatarCleanupEnabled = String(process.env.AVATAR_CLEANUP_ON_STARTUP || "true").toLowerCase() === "true";
-  if (avatarCleanupEnabled) {
-    setImmediate(() => {
-      cleanCorruptedAvatars().catch(err => {
-        logger.error(`[Startup] Erro na limpeza de avatares: ${err?.message || err}`);
-      });
-    });
-  } else {
-    logger.info("[Startup] Limpeza de avatares desabilitada via AVATAR_CLEANUP_ON_STARTUP");
-  }
 
   const companies = await Company.findAll({
     where: { status: true },
