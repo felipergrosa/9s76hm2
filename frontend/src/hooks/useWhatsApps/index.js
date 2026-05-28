@@ -87,17 +87,22 @@ const useWhatsApps = () => {
       const companyId = user.companyId;
 //    const socket = socketManager.GetSocket();
 
+      console.log(`[useWhatsApps] Configurando listeners para companyId=${companyId}, socket=${socket ? 'connected' : 'null'}`);
+
       const onCompanyWhatsapp = (data) => {
+        console.log(`[useWhatsApps] onCompanyWhatsapp received:`, data);
         if (data.action === "update") {
+          console.log(`[useWhatsApps] Dispatching UPDATE_WHATSAPPS with:`, data.whatsapp);
           dispatch({ type: "UPDATE_WHATSAPPS", payload: data.whatsapp });
         }
         if (data.action === "delete") {
+          console.log(`[useWhatsApps] Dispatching DELETE_WHATSAPPS with:`, data.whatsappId);
           dispatch({ type: "DELETE_WHATSAPPS", payload: data.whatsappId });
         }
       }
 
       const onCompanyWhatsappSession = (data) => {
-        console.log(`[useWhatsApps] onCompanyWhatsappSession:`, data);
+        console.log(`[useWhatsApps] onCompanyWhatsappSession received:`, data);
         if (data.action === "update") {
           console.log(`[useWhatsApps] Dispatching UPDATE_SESSION with:`, data.session);
           dispatch({ type: "UPDATE_SESSION", payload: data.session });
@@ -107,7 +112,10 @@ const useWhatsApps = () => {
       socket.on(`company-${companyId}-whatsapp`, onCompanyWhatsapp);
       socket.on(`company-${companyId}-whatsappSession`, onCompanyWhatsappSession);
 
+      console.log(`[useWhatsApps] Listeners registrados: company-${companyId}-whatsapp, company-${companyId}-whatsappSession`);
+
       return () => {
+        console.log(`[useWhatsApps] Removendo listeners para companyId=${companyId}`);
         socket.off(`company-${companyId}-whatsapp`, onCompanyWhatsapp);
         socket.off(`company-${companyId}-whatsappSession`, onCompanyWhatsappSession);
       };
