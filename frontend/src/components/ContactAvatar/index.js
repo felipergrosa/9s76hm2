@@ -66,8 +66,6 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
   const avatarIdentity = getContactAvatarIdentity(contact);
   const avatarData = useMemo(() => getContactAvatarData(contact), [avatarIdentity]);
 
-  // Log inicial do componente
-  console.error(`[ContactAvatar:MOUNT] contactId=${avatarData.contactId} | urlPicture=${avatarData.urlPicture ? 'YES' : 'NO'} | profilePicUrl=${avatarData.profilePicUrl ? 'YES' : 'NO'} | imageUrl=${avatarData.imageUrl ? 'YES' : 'NO'}`);
 
   // Verificar cache ao montar ou quando contato muda
   useEffect(() => {
@@ -99,8 +97,6 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
     // Determina a URL da imagem
     let imageUrl = cachedUrl || avatarData.imageUrl;
 
-    console.error(`[ContactAvatar:${avatarData.contactId}] loadImage | imageUrl=${imageUrl?.substring(0, 80)}... | cachedUrl=${cachedUrl?.substring(0, 80)}...`);
-
     if (!imageUrl || avatarIdentity === "no-contact") {
       setBlobUrl(null);
       setLoading(false);
@@ -108,7 +104,6 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
     }
 
     if (imageUrl.startsWith('blob:') || imageUrl.startsWith('data:')) {
-      console.error(`[ContactAvatar:${avatarData.contactId}] Já é blob/data, usando direto`);
       setBlobUrl(imageUrl);
       setLoading(false);
       return;
@@ -120,7 +115,8 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
       url.includes('whatsapp.net') || url.includes('whatsapp.com') ||
       url.includes('fbcdn.net') || url.includes('instagram.com') ||
       url.includes('pps.') || url.includes('mmg.') ||
-      url.includes('amazonaws.com');
+      url.includes('amazonaws.com') ||
+      url.includes('chatsapi.nobreluminarias.com.br');
 
     // Helper: verifica se URL é do mesmo domínio (não precisa de blob)
     const isSameOrigin = (url) => {
@@ -132,11 +128,8 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
       }
     };
 
-    console.error(`[ContactAvatar:${avatarData.contactId}] isExternalUrl=${isExternalUrl(imageUrl)} | isSameOrigin=${isSameOrigin(imageUrl)}`);
-
     // Fast path: URLs externas (CDN WhatsApp/Instagram) → usar direto
     if (isExternalUrl(imageUrl)) {
-      console.error(`[ContactAvatar:${avatarData.contactId}] URL externa detectada, usando direto (sem blob)`);
       setBlobUrl(imageUrl);
       setLoading(false);
       if (avatarData.contactId) {
@@ -148,7 +141,6 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
     // Fast path: URLs absolutas do próprio backend (mesmo domínio) → usar direto
     // Evita criação desnecessária de blobs que são revogados pelo navegador
     if (isSameOrigin(imageUrl)) {
-      console.error(`[ContactAvatar:${avatarData.contactId}] URL mesmo domínio, usando direto (sem blob)`);
       setBlobUrl(imageUrl);
       setLoading(false);
       if (avatarData.contactId) {
