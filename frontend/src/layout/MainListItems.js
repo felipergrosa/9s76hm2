@@ -246,6 +246,7 @@ const reducer = (state, action) => {
 };
 
 const MainListItems = ({ collapsed, drawerClose }) => {
+  console.log("=== TESTE DE LOG - MainListItems renderizado ===");
   const theme = useTheme();
   const classes = useStyles();
   const { colorMode } = useContext(ColorModeContext);
