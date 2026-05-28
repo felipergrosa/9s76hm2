@@ -60,7 +60,33 @@ const downloadProfileImage = async (profilePicUrl: string, folder: string, filen
         Referer: "https://web.whatsapp.com/"
       }
     });
-    fs.writeFileSync(join(folder, filename), response.data);
+
+    // VALIDAÇÃO CRÍTICA: garantir que o conteúdo baixado é realmente uma imagem
+    const contentType = response.headers['content-type'] || '';
+    const isImage = contentType.startsWith('image/');
+    if (!isImage) {
+      logger.warn(`[downloadProfileImage] URL retornou Content-Type inválido: ${contentType} | URL: ${profilePicUrl.substring(0, 60)}...`);
+      return null;
+    }
+
+    const data = response.data;
+    // Validar tamanho mínimo: avatar deve ter pelo menos 100 bytes
+    if (!data || data.length < 100) {
+      logger.warn(`[downloadProfileImage] Arquivo muito pequeno (${data?.length || 0} bytes) — provavelmente corrompido`);
+      return null;
+    }
+
+    const filePath = join(folder, filename);
+    fs.writeFileSync(filePath, data);
+
+    // Verificar se arquivo foi salvo corretamente
+    const stats = fs.statSync(filePath);
+    if (stats.size < 100) {
+      logger.warn(`[downloadProfileImage] Arquivo salvo com tamanho inválido: ${stats.size} bytes`);
+      fs.unlinkSync(filePath);
+      return null;
+    }
+
     return filename;
   } catch (error) {
     logger.warn("Falha ao baixar imagem de perfil", error);

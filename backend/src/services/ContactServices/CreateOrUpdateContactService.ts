@@ -114,8 +114,27 @@ const downloadProfileImage = async ({
       responseType: 'arraybuffer'
     });
 
+    // VALIDAÇÃO: garantir que é uma imagem real
+    const contentType = response.headers['content-type'] || '';
+    if (!contentType.startsWith('image/')) {
+      console.warn(`[downloadProfileImage] URL retornou Content-Type inválido: ${contentType}`);
+      return null;
+    }
+    if (!response.data || response.data.length < 100) {
+      console.warn(`[downloadProfileImage] Arquivo muito pequeno (${response.data?.length || 0} bytes)`);
+      return null;
+    }
+
     filename = `${new Date().getTime()}.jpeg`;
-    fs.writeFileSync(join(folder, filename), response.data);
+    const filePath = join(folder, filename);
+    fs.writeFileSync(filePath, response.data);
+
+    // Verificar se arquivo foi salvo corretamente
+    const stats = fs.statSync(filePath);
+    if (stats.size < 100) {
+      fs.unlinkSync(filePath);
+      return null;
+    }
 
   } catch (error) {
     console.error("Erro ao baixar profile image:", error?.message);

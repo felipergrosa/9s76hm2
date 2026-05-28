@@ -111,7 +111,6 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
       return;
     }
 
-    // Para URLs locais/backend, tenta carregar como blob com fallback para profilePicUrl
     let isMounted = true;
 
     const isExternalUrl = (url) =>
@@ -120,7 +119,17 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
       url.includes('pps.') || url.includes('mmg.') ||
       url.includes('amazonaws.com');
 
-    // Se imageUrl já é externa, usar direto (fast path)
+    // Helper: verifica se URL é do mesmo domínio (não precisa de blob)
+    const isSameOrigin = (url) => {
+      try {
+        const u = new URL(url, window.location.href);
+        return u.origin === window.location.origin;
+      } catch (e) {
+        return false;
+      }
+    };
+
+    // Fast path: URLs externas (CDN WhatsApp/Instagram) → usar direto
     if (isExternalUrl(imageUrl)) {
       setBlobUrl(imageUrl);
       setLoading(false);
@@ -130,9 +139,20 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
       return;
     }
 
+    // Fast path: URLs absolutas do próprio backend (mesmo domínio) → usar direto
+    // Evita criação desnecessária de blobs que são revogados pelo navegador
+    if (isSameOrigin(imageUrl)) {
+      setBlobUrl(imageUrl);
+      setLoading(false);
+      if (avatarData.contactId) {
+        avatarCache.set(avatarData.contactId, avatarData.urlPicture, avatarData.profilePicUrl, imageUrl);
+      }
+      return;
+    }
+
+    // Fetch blob apenas para URLs relativas ou cross-origin que precisam de auth
     const fetchBlob = async (url) => {
-      if (isExternalUrl(url)) {
-        // URL externa: usar diretamente, sem fetch (evita CORS)
+      if (isExternalUrl(url) || isSameOrigin(url)) {
         return { blobUrl: url, direct: true };
       }
       const isAbsoluteUrl = /^https?:\/\//i.test(url);
@@ -152,13 +172,12 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
         }
       }
       if (!blob || blob.size === 0) throw new Error('Blob vazio');
-      // Validação: deve ser imagem
+      // Validação rigorosa: deve ser imagem
       const isImage = contentType?.startsWith('image/') || blob.type?.startsWith('image/');
       if (!isImage) {
         console.warn(`[ContactAvatar] URL não retornou imagem: ${url.substring(0, 50)}... | content-type: ${contentType} | blob.type: ${blob.type} | size: ${blob.size}`);
         throw new Error(`Não é imagem: ${contentType || blob.type}`);
       }
-      // Se blob.type está vazio/mas o contentType indica imagem, forçar tipo correto
       const finalType = blob.type || contentType || 'image/jpeg';
       if (blob.type !== finalType && finalType.startsWith('image/')) {
         blob = new Blob([blob], { type: finalType });
@@ -167,7 +186,6 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
     };
 
     const loadAvatar = async () => {
-      // Lista de URLs a tentar em ordem: urlPicture (local) → profilePicUrl (CDN)
       const urlsToTry = [imageUrl];
       if (avatarData.profilePicUrl && avatarData.profilePicUrl !== imageUrl) {
         urlsToTry.push(avatarData.profilePicUrl);
@@ -179,11 +197,11 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
         try {
           console.log(`[ContactAvatar:${avatarData.contactId}] Tentando: ${url?.substring(0, 60)}...`);
           const result = await fetchBlob(url);
-          console.log(`[ContactAvatar:${avatarData.contactId}] Sucesso: ${result.direct ? 'URL externa' : 'Blob criado'}`);
+          console.log(`[ContactAvatar:${avatarData.contactId}] Sucesso: ${result.direct ? 'URL direta' : 'Blob criado'}`);
           if (isMounted) {
             setBlobUrl(result.blobUrl);
             setLoading(false);
-            // Cache: apenas URLs externas (CDN) ou data URLs — NUNCA blobs revogáveis
+            // Cache: apenas URLs externas (CDN) ou diretas do backend — NUNCA blobs
             if (avatarData.contactId && (result.direct || result.blobUrl.startsWith('data:'))) {
               avatarCache.set(avatarData.contactId, avatarData.urlPicture, avatarData.profilePicUrl, result.blobUrl);
             }
@@ -191,11 +209,9 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
           return;
         } catch (err) {
           console.log(`[ContactAvatar:${avatarData.contactId}] Falha em URL: ${err?.message}`);
-          // Tenta próxima URL
         }
       }
 
-      // Todas as URLs falharam — mostrar iniciais
       console.log(`[ContactAvatar:${avatarData.contactId}] Todas URLs falharam — mostrando iniciais`);
       if (isMounted) {
         setImageError(true);
