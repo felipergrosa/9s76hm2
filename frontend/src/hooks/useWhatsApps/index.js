@@ -97,7 +97,9 @@ const useWhatsApps = () => {
       }
 
       const onCompanyWhatsappSession = (data) => {
+        console.log(`[useWhatsApps] onCompanyWhatsappSession:`, data);
         if (data.action === "update") {
+          console.log(`[useWhatsApps] Dispatching UPDATE_SESSION with:`, data.session);
           dispatch({ type: "UPDATE_SESSION", payload: data.session });
         }
       }

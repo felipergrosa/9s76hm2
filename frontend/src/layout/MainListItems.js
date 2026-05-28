@@ -409,6 +409,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
         }
       }
     }
+    console.log(`[MainListItems] chats=${chats.length} | unreadsCount=${unreadsCount} | invisible=${unreadsCount === 0}`);
     if (unreadsCount > 0) {
       setInvisible(false);
     } else {
@@ -428,6 +429,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
             whats.status === "OPENING"
           );
         });
+        console.log(`[MainListItems] whatsApps=${whatsApps.length} | offline=${offlineWhats.length} | connectionWarning=${offlineWhats.length > 0}`);
         if (offlineWhats.length > 0) {
           setConnectionWarning(true);
         } else {
