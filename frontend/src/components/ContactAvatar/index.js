@@ -250,7 +250,8 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
   const contactName = avatarData.contactName;
   const contactNumber = avatarData.contactNumber;
 
-  const shouldShowInitials = imageError || !imageUrl || loading;
+  const isPlaceholder = imageUrl && imageUrl.includes('nopicture.png');
+  const shouldShowInitials = imageError || !imageUrl || loading || isPlaceholder;
 
   // Se houve erro, está carregando ou não tem imagem, usa avatar colorido com iniciais
   if (shouldShowInitials) {

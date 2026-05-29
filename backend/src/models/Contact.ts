@@ -83,7 +83,17 @@ class Contact extends Model<Contact> {
 
   @Default("")
   @Column
-  profilePicUrl: string;
+  get profilePicUrl(): string {
+    const val = this.getDataValue("profilePicUrl" as any) as string;
+    if (val && (val === "nopicture.png" || val.includes("nopicture"))) {
+      return "";
+    }
+    return val || "";
+  }
+
+  set profilePicUrl(val: string) {
+    this.setDataValue("profilePicUrl" as any, val);
+  }
 
   @Column(DataType.TEXT)
   profilePicUrlHD: string;

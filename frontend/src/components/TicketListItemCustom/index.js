@@ -1036,5 +1036,15 @@ export default React.memo(TicketListItemCustom, (prevProps, nextProps) => {
            prevProps.ticket.presence === nextProps.ticket.presence &&
            prevProps.ticket.userId === nextProps.ticket.userId &&
            prevProps.ticket.queueId === nextProps.ticket.queueId &&
-           prevProps.ticket.isGroup === nextProps.ticket.isGroup;
+           prevProps.ticket.isGroup === nextProps.ticket.isGroup &&
+           prevProps.ticket.lastMessage === nextProps.ticket.lastMessage &&
+           prevProps.ticket.contact?.name === nextProps.ticket.contact?.name &&
+           prevProps.ticket.contact?.urlPicture === nextProps.ticket.contact?.urlPicture &&
+           prevProps.ticket.contact?.profilePicUrl === nextProps.ticket.contact?.profilePicUrl &&
+           prevProps.ticket.whatsapp?.color === nextProps.ticket.whatsapp?.color &&
+           prevProps.ticket.queue?.color === nextProps.ticket.queue?.color &&
+           prevProps.ticket.user?.color === nextProps.ticket.user?.color &&
+           prevProps.ticket.user?.name === nextProps.ticket.user?.name &&
+           prevProps.ticket.tags === nextProps.ticket.tags &&
+           prevProps.ticket.contact?.tags === nextProps.ticket.contact?.tags;
 });

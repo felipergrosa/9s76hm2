@@ -167,9 +167,13 @@ const ContactDrawer = ({ open, handleDrawerClose, contact, ticket, loading, acti
     }, [activeTabParams, open]);
 
     // URL da imagem do avatar para visualização ampliada
-    const avatarImageUrl = contact?.contact
+    let avatarImageUrl = contact?.contact
         ? (contact.contact.profilePicUrl || contact.contact.urlPicture)
         : (contact?.urlPicture || contact?.profilePicUrl);
+
+    if (avatarImageUrl && (avatarImageUrl.includes("nopicture") || avatarImageUrl.includes("nopicture.png"))) {
+        avatarImageUrl = null;
+    }
 
     // Helper de moeda robusto: aceita "1.234,56", "1234.56", "R$ 1.234,56", etc.
     const formatCurrencyBRL = (val, fallback = null) => {
