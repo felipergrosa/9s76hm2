@@ -110,7 +110,6 @@ export const StartWhatsAppSessionUnified = async (
           }
 
           // Emitir evento via Socket.IO
-          logger.info(`[StartSession] Emitindo company-${companyId}-whatsappSession (status=${status})`);
           io.of(`/workspace-${companyId}`)
             .emit(`company-${companyId}-whatsappSession`, {
               action: "update",
@@ -133,7 +132,6 @@ export const StartWhatsAppSessionUnified = async (
         logger.info(`[StartSession] Official API conectada: ${adapter.getPhoneNumber()}`);
 
         // Emitir evento de conexão
-        logger.info(`[StartSession] Emitindo company-${companyId}-whatsappSession (CONNECTED)`);
         io.of(`/workspace-${companyId}`)
           .emit(`company-${companyId}-whatsappSession`, {
             action: "update",

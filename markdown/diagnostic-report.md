@@ -1,8 +1,9 @@
 # Relatório de Diagnóstico e Correções: Sockets e Avatares
 
-Este documento detalha o diagnóstico e a correção implementada para os dois problemas pontuais no Whaticket:
+Este documento detalha o diagnóstico e a correção implementada para os problemas pontuais no Whaticket:
 1. Sockets conectados que não atualizavam badges ou cores no frontend.
-2. Avatares que não apareciam no frontend (erros 404).
+2. Avatares que não apareciam no frontend — bug crítico de `__dirname` no getter `urlPicture`.
+3. Erros de CORS e "Network Error" no frontend ao tentar carregar avatares do CDN do WhatsApp.
 
 ---
 

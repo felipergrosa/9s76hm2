@@ -398,9 +398,11 @@ class Contact extends Model<Contact> {
 
       // VERIFICAÇÃO FÍSICA: se for arquivo local e não existir no disco, retorna null
       // para forçar o frontend a exibir iniciais/fallback em vez de erro 404
+      // ATENÇÃO: __dirname em runtime = dist/models (2 níveis abaixo de backend/)
+      // dist/models -> dist -> backend/public (2 níveis, não 3!)
       const fs = require("fs");
       const path = require("path");
-      const publicFolder = path.resolve(__dirname, "..", "..", "..", "public");
+      const publicFolder = path.resolve(__dirname, "..", "..", "public");
       const absolutePathFs = path.resolve(publicFolder, `company${this.companyId}`, relative);
 
       if (!fs.existsSync(absolutePathFs)) {

@@ -34,7 +34,6 @@ api.interceptors.response.use(
 		const shouldRetry = !error.response && error.code !== 'ECONNABORTED';
 		if (shouldRetry) {
 			config.__isRetry = true;
-			console.log(`[api] Tentando retry para ${config.url}...`);
 			return api(config);
 		}
 		
