@@ -193,6 +193,43 @@ export const initIO = (httpServer: Server): SocketIO => {
     }
   });
 
+  // Middleware de autenticação JWT também para namespaces dinâmicos (Socket.io v3+)
+  workspaces.use((socket, next) => {
+    try {
+      const token = socket.handshake.query.token as string;
+      const origin = socket.handshake.headers.origin;
+
+      if (!token) {
+        logger.warn(`[SOCKET AUTH WORKSPACE] Conexão sem token - origin=${origin}`);
+        if (isSocketAuthPermissive) {
+          logger.warn("[SOCKET AUTH WORKSPACE] SOCKET_AUTH_PERMISSIVE=true - permitindo conexão sem token");
+          return next();
+        }
+        return next(new SocketCompatibleAppError("Token de autenticação obrigatório", 401));
+      }
+
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || "dev-only-do-not-use-in-production");
+        const validatedPayload = validateJWTPayload(decoded);
+        socket.data.user = validatedPayload;
+        return next();
+      } catch (err) {
+        logger.warn(`[SOCKET AUTH WORKSPACE] Token inválido - origin=${origin} erro=${err.message}`);
+        if (isSocketAuthPermissive) {
+          logger.warn("[SOCKET AUTH WORKSPACE] SOCKET_AUTH_PERMISSIVE=true - permitindo token inválido");
+          return next();
+        }
+        return next(new SocketCompatibleAppError("Token inválido ou expirado", 401));
+      }
+    } catch (e) {
+      logger.error(`[SOCKET AUTH WORKSPACE] Erro inesperado no middleware: ${e.message}`);
+      if (isSocketAuthPermissive) {
+        return next();
+      }
+      return next(new SocketCompatibleAppError("Falha na autenticação do socket", 401));
+    }
+  });
+
   workspaces.on("connection", (socket) => {
     const clientIp = socket.handshake.address;
 

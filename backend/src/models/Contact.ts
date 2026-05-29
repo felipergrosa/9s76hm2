@@ -395,6 +395,18 @@ class Contact extends Model<Contact> {
 
       // Se já vier com subpastas, considerar relativo à raiz da company
       const relative = file.includes('/') ? file : `contacts/${file}`;
+
+      // VERIFICAÇÃO FÍSICA: se for arquivo local e não existir no disco, retorna null
+      // para forçar o frontend a exibir iniciais/fallback em vez de erro 404
+      const fs = require("fs");
+      const path = require("path");
+      const publicFolder = path.resolve(__dirname, "..", "..", "..", "public");
+      const absolutePathFs = path.resolve(publicFolder, `company${this.companyId}`, relative);
+
+      if (!fs.existsSync(absolutePathFs)) {
+        return null;
+      }
+
       // Monta origem preferindo sempre o backend (que serve /public)
       const be = (process.env.BACKEND_URL || '').trim();
       const fe = (process.env.FRONTEND_URL || '').trim();
