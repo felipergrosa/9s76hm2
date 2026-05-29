@@ -47,35 +47,35 @@ sequenceDiagram
 
 ---
 
-## 2. Problema dos Avatares (Erros 404 / CORS)
+## 2. Problema dos Avatares e Erros de Rede (404 / CORS / Axios Network Error)
 
 ### Diagnóstico
 Os avatares dos contatos podem falhar ao baixar devido a falhas na sessão do WhatsApp, rate limit da API, ou exclusão da pasta física (por exemplo, após migrações).
 
-O banco de dados continua com o caminho antigo da imagem (como `contact1450/1716940000000.jpeg` ou `contacts/uuid/avatar/avatar.jpg`). O getter virtual `urlPicture` no model `Contact` retornava a URL completa gerada, mesmo se o arquivo físico de imagem correspondente **não existisse no disco** do servidor.
-
-Isso fazia o navegador tentar carregar a URL e receber erro **404 Not Found**. E o frontend exibia o ícone de imagem quebrada em vez de mostrar a inicial do contato colorida.
+1. **Erro de Existência Física (Backend)**: O banco de dados continua com o caminho antigo da imagem local. O getter virtual `urlPicture` no model `Contact` retornava a URL completa gerada, mesmo se o arquivo de imagem correspondente **não existisse no disco** do servidor, resultando em erro **404 Not Found** e imagem quebrada no frontend.
+2. **Erros de CORS e Rede no Frontend**: Se o contato possuísse apenas a URL externa do WhatsApp CDN (`https://pps.whatsapp.net/...`), o frontend, especificamente nos componentes [ContactDrawer/index.js](file:///c:/Users/feliperosa/whaticket/frontend/src/components/ContactDrawer/index.js) e [ContactDrawer/ModalImage.js](file:///c:/Users/feliperosa/whaticket/frontend/src/components/ContactDrawer/ModalImage.js), executava requisições Axios (`api.get`) para a URL externa ao tentar exibir o avatar ampliado. Como o CDN do WhatsApp não libera CORS para origens externas arbitrárias, o Axios falhava com "Network Error". O interceptor global do Axios interceptava e disparava tentativas de retry infinito no console, finalizando com o popup vermelho `toastError("Error: Network Error")` na tela do usuário.
 
 ### Correção Realizada
-Modificamos o getter `urlPicture` no model [Contact.ts](file:///c:/Users/feliperosa/whaticket/backend/src/models/Contact.ts) para fazer uma **verificação de existência física** no disco do servidor (`fs.existsSync`).
-Se o arquivo local não for encontrado no servidor, o getter retorna `null`. O frontend, recebendo `null`, renderiza nativamente as iniciais coloridas do contato como fallback seguro, resolvendo o layout quebrado imediatamente.
+1. **Verificação no Backend**: Modificamos o getter `urlPicture` no model [Contact.ts](file:///c:/Users/feliperosa/whaticket/backend/src/models/Contact.ts) para fazer uma **verificação de existência física** no disco do servidor (`fs.existsSync`). Se o arquivo local não existir, retorna `null`, permitindo ao frontend renderizar iniciais coloridas de fallback imediatamente.
+2. **Blindagem do Frontend (Drawer e Modal)**: Atualizamos o carregamento de imagens no [ContactDrawer/index.js](file:///c:/Users/feliperosa/whaticket/frontend/src/components/ContactDrawer/index.js) e [ContactDrawer/ModalImage.js](file:///c:/Users/feliperosa/whaticket/frontend/src/components/ContactDrawer/ModalImage.js) para detectar URLs externas de CDNs e renderizá-las diretamente (sem realizar requisição Axios) e usando fallback silencioso de erro sem disparar popups desagradáveis.
+3. **Interceptor Global do Axios**: Blindamos o interceptor global em [api.js](file:///c:/Users/feliperosa/whaticket/frontend/src/services/api.js) para que ele descarte tentativas de retry em URLs de rede que apontem para endereços externos ao backend principal (`REACT_APP_BACKEND_URL`).
 
-### Mapa de Fluxo do Avatar (getter urlPicture)
+### Mapa de Fluxo do Carregamento de Avatar (Frontend)
 ```mermaid
 flowchart TD
-    A[Frontend renderiza Avatar] --> B{Possui urlPicture salvo no BD?}
-    B -- Não --> C[Retorna null] --> D[Exibe Inicial Colorida do Contato]
-    B -- Sim --> E{É uma URL absoluta externa?}
-    E -- Sim --> F[Corrige sintaxe e retorna URL]
-    E -- Não --> G[Caminho Relativo Local]
-    G --> H[Verifica existência física do arquivo via fs.existsSync]
-    H -- Arquivo NÃO existe --> I[Retorna null] --> D
-    H -- Arquivo EXISTE --> J[Retorna URL apontando para /public] --> K[Renderiza Imagem do Avatar]
+    A[Abertura do Drawer/Modal do Avatar] --> B{URL é externa / WhatsApp CDN?}
+    B -- Sim --> C[Define URL diretamente para src da img] --> D[Exibe imagem na UI]
+    B -- Não --> E{URL é absoluta?}
+    E -- Sim --> F[Faz fetch nativo com credenciais] --> H[Gera Blob URL e exibe imagem]
+    E -- Não (Relativa Backend) --> G[Faz api.get via Axios] --> H
+    F -- Falha no Fetch --> I[Fallback silencioso: usa URL bruta] --> D
+    G -- Falha no Axios --> I
 ```
 
 ---
 
 ## 3. Verificação do Build e Rollback
 
-* **Build TS**: Confirmar se o backend compila normalmente (`npm run build`).
-* **Mecanismo de Rollback**: Se houver qualquer comportamento estranho no Socket.IO, as configurações originais do `socket.ts` podem ser restauradas.
+* **Build TS**: Confirmar se o backend compila normalmente (`npm run build` no backend).
+* **Verificação do Frontend**: Garantir que as alterações em JS comum no frontend não criaram nenhum erro de carregamento e estão isoladas.
+* **Mecanismo de Rollback**: Se houver qualquer comportamento estranho no Socket.IO ou na exibição do avatar, os estados originais dos arquivos podem ser restaurados pelo controle de versão.

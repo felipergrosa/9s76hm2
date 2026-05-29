@@ -213,15 +213,38 @@ const ContactDrawer = ({ open, handleDrawerClose, contact, ticket, loading, acti
     // Carrega a imagem grande ao abrir o modal
     useEffect(() => {
         let revokeUrl = null;
+        const isExternalUrl = (url) => {
+            if (!url) return false;
+            return url.includes('whatsapp.net') || url.includes('whatsapp.com') ||
+                   url.includes('fbcdn.net') || url.includes('instagram.com') ||
+                   url.includes('pps.') || url.includes('mmg.') ||
+                   url.includes('amazonaws.com');
+        };
         const fetchImage = async () => {
             try {
                 if (!avatarImageUrl) return;
-                const { data, headers } = await api.get(avatarImageUrl, { responseType: "blob" });
-                const url = window.URL.createObjectURL(new Blob([data], { type: headers["content-type"] }));
+                if (isExternalUrl(avatarImageUrl)) {
+                    setAvatarLargeUrl(avatarImageUrl);
+                    return;
+                }
+                const isAbsoluteUrl = /^https?:\/\//i.test(avatarImageUrl);
+                let data, contentType;
+                if (isAbsoluteUrl) {
+                    const response = await fetch(avatarImageUrl, { credentials: 'include' });
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    data = await response.blob();
+                    contentType = response.headers.get('content-type') || 'image/jpeg';
+                } else {
+                    const res = await api.get(avatarImageUrl, { responseType: "blob" });
+                    data = res.data;
+                    contentType = res.headers["content-type"] || 'image/jpeg';
+                }
+                const url = window.URL.createObjectURL(new Blob([data], { type: contentType }));
                 setAvatarLargeUrl(url);
                 revokeUrl = url;
             } catch (err) {
-                toastError(err);
+                console.error('[ContactDrawer] Erro ao carregar avatar grande:', err);
+                setAvatarLargeUrl(avatarImageUrl);
             }
         };
         if (avatarModalOpen) {

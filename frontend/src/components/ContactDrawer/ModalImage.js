@@ -22,15 +22,42 @@ const ModalImageContatc = ({ imageUrl }) => {
 
   useEffect(() => {
     if (!imageUrl) return;
+    const isExternalUrl = (url) => {
+      if (!url) return false;
+      return url.includes('whatsapp.net') || url.includes('whatsapp.com') ||
+             url.includes('fbcdn.net') || url.includes('instagram.com') ||
+             url.includes('pps.') || url.includes('mmg.') ||
+             url.includes('amazonaws.com');
+    };
     const fetchImage = async () => {
-      const { data, headers } = await api.get(imageUrl, {
-        responseType: "blob",
-      });
-      const url = window.URL.createObjectURL(
-        new Blob([data], { type: headers["content-type"] })
-      );
-      setBlobUrl(url);
-      setFetching(false);
+      try {
+        if (isExternalUrl(imageUrl)) {
+          setBlobUrl(imageUrl);
+          setFetching(false);
+          return;
+        }
+        const isAbsoluteUrl = /^https?:\/\//i.test(imageUrl);
+        let data, contentType;
+        if (isAbsoluteUrl) {
+          const response = await fetch(imageUrl, { credentials: 'include' });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          data = await response.blob();
+          contentType = response.headers.get('content-type') || 'image/jpeg';
+        } else {
+          const res = await api.get(imageUrl, { responseType: "blob" });
+          data = res.data;
+          contentType = res.headers["content-type"] || 'image/jpeg';
+        }
+        const url = window.URL.createObjectURL(
+          new Blob([data], { type: contentType })
+        );
+        setBlobUrl(url);
+        setFetching(false);
+      } catch (error) {
+        console.error('[ModalImageContact] Erro ao carregar imagem:', error);
+        setBlobUrl(imageUrl);
+        setFetching(false);
+      }
     };
     fetchImage();
   }, [imageUrl]);

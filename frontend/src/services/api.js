@@ -22,6 +22,13 @@ api.interceptors.response.use(
 		if (!config || config.__isRetry) {
 			return Promise.reject(error);
 		}
+
+		// Ignorar retry se a URL for externa (não pertence ao backend principal)
+		const isExternal = config.url && /^https?:\/\//i.test(config.url) && 
+			(!process.env.REACT_APP_BACKEND_URL || !config.url.startsWith(process.env.REACT_APP_BACKEND_URL));
+		if (isExternal) {
+			return Promise.reject(error);
+		}
 		
 		// Retry apenas para erros de rede (não para 4xx/5xx)
 		const shouldRetry = !error.response && error.code !== 'ECONNABORTED';
