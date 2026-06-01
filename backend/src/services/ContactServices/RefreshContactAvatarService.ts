@@ -160,11 +160,27 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
     let avatarUpdated = false;
 
     // Early-exit se atualizado há menos de 24h
-    // PROTEÇÃO: Ignorar throttle se o arquivo desejado NÃO existir (força download inicial ou recuperação)
+    // PROTEÇÃO: Ignorar throttle se o arquivo desejado NÃO existir ou se o nome/avatar forem genéricos/nulos
     const key = `${companyId}:${contact.id}`;
     const now = Date.now();
     const last = lastAvatarRefreshMap.get(key) || 0;
-    if (now - last <= refreshIntervalMs && desiredExists) {
+
+    const currentName = (contact.name || "").trim();
+    const nameDigitsOnly = currentName.replace(/\D/g, "");
+    const numberDigitsOnly = (contact.number || "").replace(/\D/g, "");
+    const hasBadName = !currentName || 
+                       currentName.trim() === "" ||
+                       nameDigitsOnly === numberDigitsOnly ||
+                       currentName === contact.number ||
+                       currentName.startsWith("Contato ") ||
+                       currentName === "[Mensagem Template]" ||
+                       currentName.startsWith("[Mensagem");
+
+    const hasAvatarFile = desiredExists;
+    const hasAvatarInDb = !!contact.getDataValue("urlPicture");
+    const shouldSkipThrottle = !hasAvatarFile || !hasAvatarInDb || hasBadName;
+
+    if (now - last <= refreshIntervalMs && !shouldSkipThrottle) {
       return contact;
     }
 

@@ -419,6 +419,24 @@ const CreateOrUpdateContactService = async ({
         contact.number = number;
         contact.canonicalNumber = number;
       }
+
+      // Garantir que channels contenha os canais fornecidos ou "whatsapp"
+      let newChannels = contact.channels || [];
+      let channelsChanged = false;
+      if (channels && Array.isArray(channels)) {
+        for (const channel of channels) {
+          if (!newChannels.includes(channel)) {
+            newChannels = [...newChannels, channel];
+            channelsChanged = true;
+          }
+        }
+      } else if (!newChannels.includes("whatsapp")) {
+        newChannels = [...newChannels, "whatsapp"];
+        channelsChanged = true;
+      }
+      if (channelsChanged) {
+        contact.channels = newChannels;
+      }
       // Atualiza os novos campos se eles forem fornecidos
       contact.cpfCnpj = sanitizedCpfCnpj === undefined ? contact.cpfCnpj : sanitizedCpfCnpj;
       contact.representativeCode = representativeCode || contact.representativeCode;

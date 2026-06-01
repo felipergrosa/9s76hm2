@@ -253,6 +253,32 @@ export async function resolveMessageContact(
       }
     }
 
+    // Garantir que channels contenha "whatsapp" e whatsappId esteja preenchido
+    let channelsUpdated = false;
+    let newChannels = existingContact.channels || [];
+    if (!newChannels.includes("whatsapp")) {
+      newChannels = [...newChannels, "whatsapp"];
+      channelsUpdated = true;
+    }
+
+    const shouldUpdateWhatsappId = (existingContact.whatsappId === null || existingContact.whatsappId === undefined) && wbot.id;
+
+    if (channelsUpdated || shouldUpdateWhatsappId) {
+      try {
+        await existingContact.update({
+          channels: newChannels,
+          whatsappId: shouldUpdateWhatsappId ? wbot.id : existingContact.whatsappId
+        });
+        logger.info({
+          contactId: existingContact.id,
+          channels: newChannels,
+          whatsappId: wbot.id
+        }, "[resolveMessageContact] Canais e/ou whatsappId do contato atualizados para whatsapp");
+      } catch (err: any) {
+        logger.warn({ err: err?.message }, "[resolveMessageContact] Falha ao atualizar canais/whatsappId do contato");
+      }
+    }
+
     // Refresh Avatar (async throttle)
     RefreshContactAvatarService({
       contactId: existingContact.id,
