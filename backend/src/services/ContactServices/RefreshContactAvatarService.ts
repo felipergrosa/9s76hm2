@@ -381,13 +381,26 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
         } else {
         }
       } else {
-        // silencioso
+        // Se falhou o download físico, mas temos uma nova URL da CDN fresca,
+        // atualizar pelo menos o campo profilePicUrl no banco de dados
+        // para que o frontend consiga carregar a imagem diretamente do navegador.
+        if (newProfileUrl && newProfileUrl !== contact.profilePicUrl && !newProfileUrl.includes('/nopicture.png') && newProfileUrl !== fallbackUrl) {
+          try {
+            await contact.update({ profilePicUrl: newProfileUrl, pictureUpdated: true });
+            await contact.reload();
+            avatarUpdated = true;
+          } catch (e) {
+            // silencioso
+          }
+        }
+
         // Tentar adotar avatar legado se houver
         if (!fs.existsSync(desiredPath) && tryAdoptLegacyAvatar()) {
           const relativePathForDb = path.posix.join(relativeAvatarDirDb, desiredFilename);
           try {
             await contact.update({ urlPicture: relativePathForDb, pictureUpdated: true });
             await contact.reload();
+            avatarUpdated = true;
           } catch (e) {
             // silencioso
           }
