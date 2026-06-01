@@ -1567,6 +1567,10 @@ const downloadMedia = async (msg: proto.IWebMessageInfo, isImported: Date = null
     filename = `${new Date().getTime()}_${filename}`;
   }
 
+  if (!buffer) {
+    return null;
+  }
+
   const media = {
     data: buffer,
     mimetype: mineType.mimetype,
