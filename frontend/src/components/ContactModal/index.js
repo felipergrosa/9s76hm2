@@ -1409,29 +1409,20 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 			</Dialog>
 			{/* Modal do Avatar */}
 			<Dialog open={avatarOpen} onClose={() => setAvatarOpen(false)} maxWidth="md">
-				<DialogContent style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-					{(() => {
-						const avatarImageUrl = contact?.profilePicUrl || contact?.urlPicture;
-						const [imgError, setImgError] = React.useState(false);
-						
-						if (imgError || !avatarImageUrl) {
-							return (
-								<div style={{ textAlign: 'center', padding: 40 }}>
-									<ContactAvatar contact={contact} style={{ width: 270, height: 270, borderRadius: 10 }} />
-									<p style={{ marginTop: 16, color: '#666' }}>Imagem não disponível</p>
-								</div>
-							);
-						}
-						
-						return (
-							<img 
-								src={avatarImageUrl} 
-								alt="Avatar" 
-								style={{ maxWidth: '90vw', maxHeight: '80vh', borderRadius: 8 }}
-								onError={() => setImgError(true)}
-							/>
-						);
-					})()}
+				<DialogContent style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+					<ContactAvatar 
+						contact={contact} 
+						variant="rounded"
+						style={{ 
+							width: '100%', 
+							height: 'auto', 
+							maxWidth: '90vw', 
+							maxHeight: '80vh', 
+							minWidth: 270,
+							minHeight: 270,
+							borderRadius: 8 
+						}} 
+					/>
 				</DialogContent>
 			</Dialog>
 		</div>

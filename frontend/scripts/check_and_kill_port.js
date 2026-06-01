@@ -1,4 +1,5 @@
 const { exec } = require("child_process");
+require("dotenv").config();
 
 const port = Number(process.env.PORT || 3000);
 

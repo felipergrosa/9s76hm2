@@ -359,9 +359,8 @@ class Contact extends Model<Contact> {
       
       // CRÍTICO: Corrigir URLs duplicadas/corrompidas no banco
       // Ex: "https://dominio.comhttps//dominio.com/..." ou "dominio.comhttps//..."
-      // Extrair apenas o caminho relativo se detectar duplicação
-      if (file.includes('http') && (file.includes('/public/company') || file.includes('/contacts/'))) {
-        // Extrair o caminho relativo a partir de /contacts/ ou após /public/companyX/
+      // Ou também lidar com URLs antigas (ex: localhost:8080) quando a porta/domínio mudou.
+      if (file.includes('/public/company') || file.includes('/contacts/')) {
         const contactsMatch = file.match(/\/contacts\/([^?]+)/);
         if (contactsMatch) {
           file = `contacts/${contactsMatch[1]}`;
@@ -373,34 +372,18 @@ class Contact extends Model<Contact> {
         }
       }
       
-      // CRÍTICO: Detectar URLs absolutas (mesmo mal formatadas) para evitar concatenação dupla
-      // Ex: trata 'https://...', 'http://...' e erros comuns como 'https//...'
-      const backendUrl = (process.env.BACKEND_URL || '').replace(/:\d+$/, '');
-      const frontendUrl = (process.env.FRONTEND_URL || '').replace(/:\d+$/, '');
-      
+      // CRÍTICO: Se ainda for uma URL absoluta (não conseguimos extrair acima), retornar as is.
+      // Caso contrário, vai reconstruir com o BACKEND_URL atual.
       const isAbsoluteUrl = file.startsWith('http://') || 
                             file.startsWith('https://') || 
-                            file.startsWith('https//') ||
-                            (backendUrl && file.includes(backendUrl)) ||
-                            (frontendUrl && file.includes(frontendUrl));
+                            file.startsWith('https//');
       
       if (isAbsoluteUrl) {
-        // Corrigir typo comum 'https//' -> 'https://'
         let correctedUrl = file;
         if (correctedUrl.startsWith('https//')) {
           correctedUrl = correctedUrl.replace('https//', 'https://');
         }
-        // Se ainda tiver duplicação, extrair caminho relativo
-        if (correctedUrl.match(/https?:\/\/.*https?:\/\//)) {
-          const lastMatch = correctedUrl.match(/\/contacts\/([^?]+)/);
-          if (lastMatch) {
-            file = `contacts/${lastMatch[1]}`;
-          } else {
-            return correctedUrl; // Retornar como está se não conseguir extrair
-          }
-        } else {
-          return correctedUrl;
-        }
+        return correctedUrl;
       }
 
       // Se já vier com subpastas, considerar relativo à raiz da company
