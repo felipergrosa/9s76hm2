@@ -178,7 +178,25 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
 
     const hasAvatarFile = desiredExists;
     const hasAvatarInDb = !!contact.getDataValue("urlPicture");
-    const shouldSkipThrottle = !hasAvatarFile || !hasAvatarInDb || hasBadName;
+
+    // CORREÇÃO: verificar se o arquivo salvo no banco REALMENTE existe no disco.
+    // O getter urlPicture já retorna null quando o arquivo não existe, mas o throttle
+    // verifica hasAvatarInDb pelo valor bruto do banco — que pode estar desatualizado.
+    const rawUrlPictureDb = contact.getDataValue("urlPicture") as string | null;
+    const hasRealFileOnDisk = rawUrlPictureDb
+      ? (() => {
+          try {
+            const fsCheck = require("fs");
+            const pathCheck = require("path");
+            const absoluteCheck = pathCheck.resolve(publicFolder, `company${companyId}`, rawUrlPictureDb);
+            return fsCheck.existsSync(absoluteCheck);
+          } catch {
+            return false;
+          }
+        })()
+      : false;
+
+    const shouldSkipThrottle = !hasAvatarFile || !hasAvatarInDb || !hasRealFileOnDisk || hasBadName;
 
     if (now - last <= refreshIntervalMs && !shouldSkipThrottle) {
       return contact;
@@ -299,7 +317,10 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
         }
       } catch (e) {
         Sentry.captureException(e);
-        newProfileUrl = `${process.env.FRONTEND_URL}/nopicture.png`;
+        // CORREÇÃO: NÃO atribuir nopicture.png — manter a URL anterior do contato.
+        // Atribuir placeholder corromperia profilePicUrl no banco em casos de timeout/erro de rede.
+        logger.warn(`[RefreshContactAvatar] Erro ao buscar profilePicture para ${contact.remoteJid || contact.number}: ${(e as any)?.message || e}`);
+        // newProfileUrl permanece como contact.profilePicUrl (valor carregado no início)
       }
     } else if (contact.profilePicUrl) {
       // Para outros canais (facebook/instagram), se já houver uma URL e não houver arquivo local, baixa.
