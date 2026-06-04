@@ -188,13 +188,13 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
         urlsToTry.push(avatarData.profilePicUrl);
       }
 
-      console.log(`[ContactAvatar] Carregando avatar para contato ${avatarData.contactId} (${avatarData.contactName || 'Sem Nome'}). URLs a tentar:`, urlsToTry);
+      console.warn(`[ContactAvatar] Carregando avatar para contato ${avatarData.contactId} (${avatarData.contactName || 'Sem Nome'}). URLs a tentar:`, urlsToTry);
 
       for (const url of urlsToTry) {
         try {
           const result = await fetchBlob(url);
           if (isMounted) {
-            console.log(`[ContactAvatar] Sucesso ao obter avatar para ${avatarData.contactId}. blobUrl: ${result.blobUrl}, direct: ${result.direct}`);
+            console.warn(`[ContactAvatar] Sucesso ao obter avatar para ${avatarData.contactId}. blobUrl: ${result.blobUrl}, direct: ${result.direct}`);
             setBlobUrl(result.blobUrl);
             setLoading(false);
             // Cache: apenas URLs externas (CDN) ou diretas do backend — NUNCA blobs
