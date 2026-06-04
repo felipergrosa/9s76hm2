@@ -247,11 +247,11 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
           logger.debug(`[RefreshContactAvatar] Usando imgUrl do store Baileys para ${jid}: ${newProfileUrl.substring(0, 60)}...`);
         } else {
           // Fallback: chamar API do WhatsApp (pode timeout para alguns contatos)
-          // Timeout aumentado para 10s — alguns contatos legítimos demoram mais
+          // Timeout reduzido para 5s — se não responder nesse tempo, provavelmente está com privacidade restrita
           newProfileUrl = await Promise.race([
             wbot.profilePictureUrl(jid, "preview"),
             new Promise<string>((_, reject) =>
-              setTimeout(() => reject(new Error('Timeout ao buscar foto de perfil')), 10000)
+              setTimeout(() => reject(new Error('Timeout ao buscar foto de perfil')), 5000)
             )
           ]);
         }
