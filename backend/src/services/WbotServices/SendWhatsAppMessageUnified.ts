@@ -90,11 +90,12 @@ const SendWhatsAppMessageUnified = async ({
       const isNumberName = currentName === "" || currentName.replace(/\D/g, "") === String(contactNumber.number);
       if (isNumberName) {
         try {
-          await RefreshContactAvatarService({
+          const { contactAvatarQueue } = require("../../queues");
+          contactAvatarQueue.add("RefreshAvatar", {
             contactId: ticket.contactId,
             companyId: ticket.companyId,
             whatsappId: ticket.whatsappId
-          });
+          }, { removeOnComplete: true, removeOnFail: true });
         } catch (e) {
           // Não bloquear envio se falhar
         }

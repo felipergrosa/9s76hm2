@@ -363,20 +363,13 @@ const ensureParticipantContact = async (
     }
 
     try {
-      profilePicUrl = await Promise.race([
-        wbot.profilePictureUrl(participantJid, "preview"),
-        new Promise<string>((_, reject) =>
-          setTimeout(() => reject(new Error('Timeout')), 10000)
-        )
-      ]);
-    } catch (e) {
-      try {
-        const storeContact = (wbot as any).store?.contacts?.[participantJid];
-        if (storeContact?.imgUrl && storeContact.imgUrl !== "changed" && storeContact.imgUrl.startsWith("http")) {
-          profilePicUrl = storeContact.imgUrl;
-        }
-      } catch (storeErr) { }
-    }
+      const storeContact = (wbot as any).store?.contacts?.[participantJid];
+      if (storeContact?.imgUrl && storeContact.imgUrl !== "changed" && storeContact.imgUrl.startsWith("http")) {
+        profilePicUrl = storeContact.imgUrl;
+      }
+    } catch (storeErr) { }
+    // Remoção do fetch bloqueante do Baileys aqui.
+    // O RefreshContactAvatarService no background cuidará disso.
 
     if (!resolvedNumber && !resolvedName && rawNumber.length >= 10 && rawNumber.length <= 13) {
       resolvedNumber = rawNumber;
@@ -2095,25 +2088,13 @@ const verifyContact = async (
 
   // Buscar profilePicture: verificar store do Baileys PRIMEIRO (evita chamada HTTP com timeout)
   if (!isGroup && normalizedJid.includes("@s.whatsapp.net")) {
-    try {
-      // PRIORIDADE 1: Store do Baileys (sincronizado na sessão, sem HTTP extra)
-      const storeContacts = (wbot as any).store?.contacts;
-      const storeContact = storeContacts?.[normalizedJid] || storeContacts?.[msgContact.id];
-      if (storeContact?.imgUrl && typeof storeContact.imgUrl === "string") {
-        profilePicUrl = storeContact.imgUrl;
-      } else {
-        // PRIORIDADE 2: Chamada HTTP ao WhatsApp (pode timeout para contatos com privacidade)
-        const pic = await Promise.race([
-          wbot.profilePictureUrl(normalizedJid, "preview"),
-          new Promise<string>((_, reject) =>
-            setTimeout(() => reject(new Error('Timeout')), 10000)
-          )
-        ]);
-        if (pic) profilePicUrl = pic;
-      }
-    } catch (e) {
-      // Privacidade, indisponível ou timeout — profilePicUrl permanece vazio
-      // O RefreshContactAvatarService tentará novamente ao abrir o ticket
+    // Removido o fetch bloqueante de profilePictureUrl aqui.
+    // A responsabilidade foi passada para a Fila Background (contactAvatarQueue)
+    
+    const baileysStore = (wbot as any).store?.contacts;
+    const baileysContactData = baileysStore?.[normalizedJid] || baileysStore?.[msgContact.id];
+    if (baileysContactData?.imgUrl && typeof baileysContactData.imgUrl === "string") {
+      profilePicUrl = baileysContactData.imgUrl;
     }
   }
 
@@ -4061,50 +4042,30 @@ const verifyQueue = async (
 
 
         if (ticketTraking.chatbotAt !== null) {
-          dataLimite.setMinutes(
-            ticketTraking.chatbotAt.getMinutes() + Number(timeUseBotQueues)
-          );
+          dataLimite.setMinutes(ticketTraking.chatbotAt.getMinutes() + (Number(timeUseBotQueues)));
 
-          if (
-            ticketTraking.chatbotAt !== null &&
-            Agora < dataLimite &&
-            timeUseBotQueues !== "0" &&
-            ticket.amountUsedBotQueues !== 0
-          ) {
-            return;
+          if (ticketTraking.chatbotAt !== null && Agora < dataLimite && timeUseBotQueues !== "0" && ticket.amountUsedBotQueues !== 0) {
+            return
           }
         }
         await ticketTraking.update({
           chatbotAt: null
-        });
+        })
       }
 
-      // if (wbot.waitForSocketOpen()) {
-      //   console.log("AGUARDANDO")
-      //   console.log(wbot.waitForSocketOpen())
-      // }
-
       wbot.presenceSubscribe(contact.remoteJid);
+
 
       let options = "";
 
       wbot.sendPresenceUpdate("composing", contact.remoteJid);
 
       console.log("============= queue menu =============")
-      const sectionsRows = [];
 
-      queues.forEach((queue, index) => {
-        sectionsRows.push({
-          title: `${queue.name}`,//queue.name,
-          description: `_`,
-          rowId: `${index + 1}`
-        });
-      });
-
-      sectionsRows.push({
-        title: "Voltar Menu Inicial",
-        rowId: "#"
-      });
+      const body = formatBody(
+        `\u200e${greetingMessage}\n\n${options}`,
+        ticket
+      );
 
       await CreateLogTicketService({
         ticketId: ticket.id,
@@ -4112,114 +4073,247 @@ const verifyQueue = async (
       });
 
       await delay(1000);
-      const body = formatBody(
-        `\u200e${greetingMessage}\n\n${options}`,
-        ticket
-      );
 
       await wbot.sendPresenceUpdate('paused', contact.remoteJid)
 
       if (ticket.whatsapp.greetingMediaAttachment !== null) {
 
-        const filePath = path.resolve(
-          "public",
-          `company${companyId}`,
-          ticket.whatsapp.greetingMediaAttachment
-        );
+
+        const filePath = path.resolve("public", `company${companyId}`, ticket.whatsapp.greetingMediaAttachment);
 
         const fileExists = fs.existsSync(filePath);
         // console.log(fileExists);
         if (fileExists) {
-          const messagePath = ticket.whatsapp.greetingMediaAttachment;
-          const optionsMsg = await getMessageOptions(
-            messagePath,
-            filePath,
-            String(companyId),
-            body
-          );
-
           const debouncedSentgreetingMediaAttachment = debounce(
             async () => {
+              try {
+                const whatsapp = await Whatsapp.findOne({ where: { id: ticket.whatsappId } });
+                if (!whatsapp || !whatsapp.number) {
+                  console.error('Número de WhatsApp não encontrado para o ticket:', ticket.whatsappId);
+                  throw new Error('Número de WhatsApp não encontrado');
+                }
+                const botNumber = whatsapp.number;
 
-              let sentMessage = await wbot.sendMessage(`${ticket.contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"}`, { ...optionsMsg });
+                const buttons = [];
 
-              await verifyMediaMessage(sentMessage, ticket, contact, ticketTraking, false, false, wbot);
+                queues.forEach((queue, index) => {
+                  buttons.push({
+                    name: 'quick_reply',
+                    buttonParamsJson: JSON.stringify({
+                      display_text: queue.name,
+                      id: `${index + 1}`
+                    }),
+                  });
+                });
 
+                buttons.push({
+                  name: 'quick_reply',
+                  buttonParamsJson: JSON.stringify({
+                    display_text: "Encerrar atendimento",
+                    id: "Sair"
+                  }),
+                });
+
+                // Verifica se há uma mídia para enviar
+                if (ticket.whatsapp.greetingMediaAttachment) {
+                  const filePath = path.resolve("public", `company${companyId}`, ticket.whatsapp.greetingMediaAttachment);
+                  const fileExists = fs.existsSync(filePath);
+
+                  if (fileExists) {
+                    // Carrega a imagem local
+                    const imageMessageContent = await generateWAMessageContent(
+                      { image: { url: filePath } }, // Caminho da imagem local
+                      { upload: wbot.waUploadToServer! }
+                    );
+                    const imageMessage = imageMessageContent.imageMessage;
+
+                    // Mensagem interativa com mídia
+                    const interactiveMsg = {
+                      viewOnceMessage: {
+                        message: {
+                          interactiveMessage: {
+                            body: {
+                              text: `\u200e${greetingMessage}`,
+                            },
+                            header: {
+                              imageMessage,  // Anexa a imagem
+                              hasMediaAttachment: true
+                            },
+                            nativeFlowMessage: {
+                              buttons: buttons,
+                              messageParamsJson: JSON.stringify({
+                                from: 'apiv2',
+                                templateId: '4194019344155670',
+                              }),
+                            },
+                          },
+                        },
+                      },
+                    };
+
+                    const jid = `${contact.number}@${ticket.isGroup ? 'g.us' : 's.whatsapp.net'}`;
+                    const newMsg = generateWAMessageFromContent(jid, interactiveMsg, { userJid: botNumber });
+                    await wbot.relayMessage(jid, newMsg.message!, { messageId: newMsg.key.id });
+
+                    if (newMsg) {
+                      await wbot.upsertMessage(newMsg, 'notify');
+                    }
+                  }
+                }
+              } catch (error) {
+                console.error('Erro ao enviar ou fazer upsert da mensagem:', error);
+              }
             },
             1000,
             ticket.id
           );
           debouncedSentgreetingMediaAttachment();
         } else {
-          const debouncedSentMessage = debounce(
+          const debouncedSentButton = debounce(
             async () => {
-              const sections = [
-                {
-                  title: 'Lista de Botões',
-                  rows: sectionsRows
+              try {
+                const whatsapp = await Whatsapp.findOne({ where: { id: ticket.whatsappId } });
+                if (!whatsapp || !whatsapp.number) {
+                  console.error('Número de WhatsApp não encontrado para o ticket:', ticket.whatsappId);
+                  throw new Error('Número de WhatsApp não encontrado');
                 }
-              ];
+                const botNumber = whatsapp.number;
 
-              const listMessage = {
-                title: "Lista\n",
-                text: formatBody(`\u200e${greetingMessage}\n`),
-                buttonText: "Clique aqui",
-                //footer: "_",
-                sections
-              };
+                const buttons = [];
 
-              const sendMsg = await wbot.sendMessage(
-                `${contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"}`,
-                listMessage
-              );
+                queues.forEach((queue, index) => {
+                  buttons.push({
+                    name: 'quick_reply',
+                    buttonParamsJson: JSON.stringify({
+                      display_text: queue.name,
+                      id: `${index + 1}`
+                    }),
+                  });
+                });
 
-              await verifyMessage(sendMsg, ticket, contact, ticketTraking, undefined, false, false, wbot);
+                buttons.push({
+                  name: 'quick_reply',
+                  buttonParamsJson: JSON.stringify({
+                    display_text: "Encerrar atendimento",
+                    id: "Sair"
+                  }),
+                });
+
+                const interactiveMsg = {
+                  viewOnceMessage: {
+                    message: {
+                      interactiveMessage: {
+                        body: {
+                          text: `\u200e${greetingMessage}`,
+                        },
+                        nativeFlowMessage: {
+                          buttons: buttons,
+                          messageParamsJson: JSON.stringify({
+                            from: 'apiv2',
+                            templateId: '4194019344155670',
+                          }),
+                        },
+                      },
+                    },
+                  },
+                };
+
+                const jid = `${contact.number}@${ticket.isGroup ? 'g.us' : 's.whatsapp.net'}`;
+                const newMsg = generateWAMessageFromContent(jid, interactiveMsg, { userJid: botNumber });
+                await wbot.relayMessage(jid, newMsg.message!, { messageId: newMsg.key.id });
+
+                if (newMsg) {
+                  await wbot.upsertMessage(newMsg, 'notify');
+                }
+              } catch (error) {
+                console.error('Erro ao enviar ou fazer upsert da mensagem:', error);
+              }
             },
             1000,
             ticket.id
           );
-          debouncedSentMessage();
+
+          debouncedSentButton();
         }
+
 
         await UpdateTicketService({
           ticketData: {
-            // amountUsedBotQueues: ticket.amountUsedBotQueues + 1
           },
           ticketId: ticket.id,
           companyId
         });
 
-        return;
+        return
       } else {
 
-        const debouncedSentMessage = debounce(
+
+        const debouncedSentButton = debounce(
           async () => {
-            const sections = [
-              {
-                title: 'Lista de Botões',
-                rows: sectionsRows
+            try {
+              const whatsapp = await Whatsapp.findOne({ where: { id: ticket.whatsappId } });
+              if (!whatsapp || !whatsapp.number) {
+                console.error('Número de WhatsApp não encontrado para o ticket:', ticket.whatsappId);
+                throw new Error('Número de WhatsApp não encontrado');
               }
-            ];
+              const botNumber = whatsapp.number;
 
-            const listMessage = {
-              title: "Lista\n",
-              text: formatBody(`\u200e${greetingMessage}\n`),
-              buttonText: "Clique aqui",
-              //footer: "_",
-              sections
-            };
+              const buttons = [];
 
-            const sendMsg = await wbot.sendMessage(
-              `${contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"}`,
-              listMessage
-            );
+              queues.forEach((queue, index) => {
+                buttons.push({
+                  name: 'quick_reply',
+                  buttonParamsJson: JSON.stringify({
+                    display_text: queue.name,
+                    id: `${index + 1}`
+                  }),
+                });
+              });
 
-            await verifyMessage(sendMsg, ticket, contact, ticketTraking, undefined, false, false, wbot);
+              buttons.push({
+                name: 'quick_reply',
+                buttonParamsJson: JSON.stringify({
+                  display_text: "Encerrar atendimento",
+                  id: "Sair"
+                }),
+              });
+
+              const interactiveMsg = {
+                viewOnceMessage: {
+                  message: {
+                    interactiveMessage: {
+                      body: {
+                        text: `\u200e${greetingMessage}`,
+                      },
+                      nativeFlowMessage: {
+                        buttons: buttons,
+                        messageParamsJson: JSON.stringify({
+                          from: 'apiv2',
+                          templateId: '4194019344155670',
+                        }),
+                      },
+                    },
+                  },
+                },
+              };
+
+              const jid = `${contact.number}@${ticket.isGroup ? 'g.us' : 's.whatsapp.net'}`;
+              const newMsg = generateWAMessageFromContent(jid, interactiveMsg, { userJid: botNumber });
+              await wbot.relayMessage(jid, newMsg.message!, { messageId: newMsg.key.id });
+
+              if (newMsg) {
+                await wbot.upsertMessage(newMsg, 'notify');
+              }
+            } catch (error) {
+              console.error('Erro ao enviar ou fazer upsert da mensagem:', error);
+            }
           },
           1000,
           ticket.id
         );
 
+
+
         await UpdateTicketService({
           ticketData: {
 
@@ -4227,8 +4321,7 @@ const verifyQueue = async (
           ticketId: ticket.id,
           companyId
         });
-
-        debouncedSentMessage();
+        debouncedSentButton();
       }
     }
   };
@@ -7352,41 +7445,14 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
       }
 
       // Processar contatos normais (não-LID) - independente de ter avatar ou não
-      //
-      // INSIGHT CRÍTICO: contact.imgUrl no evento Baileys contacts.upsert JÁ É a URL
-      // da foto de perfil (CDN do WhatsApp) — não apenas um indicador de mudança.
-      // Usar essa URL diretamente evita chamada HTTP extra que pode timeout/rate-limit.
-      //
-      // Só fazemos chamada a profilePictureUrl() como fallback quando:
-      //   (a) o evento não trouxe imgUrl E
-      //   (b) o contato não tem avatar local no banco
+      // Removido o fetch bloqueante de fallback
+      // O AvatarQueue vai resolver se precisar  (b) o contato não tem avatar local no banco
       let newUrl: string | null = null;
       try {
         if (contact.imgUrl) {
           // Caminho feliz: Baileys já forneceu a URL no evento — usar diretamente
           newUrl = contact.imgUrl;
           logger.debug(`[contacts.upsert] Usando imgUrl do evento para ${contact.id}: ${newUrl.substring(0, 60)}...`);
-        } else {
-          // Sem URL no evento: verificar se contato já tem avatar local no banco
-          const existingContactForAvatar = await Contact.findOne({
-            where: { remoteJid: contact.id, companyId },
-            attributes: ["id", "urlPicture"]
-          });
-          const hasLocalAvatar = !!(existingContactForAvatar?.getDataValue("urlPicture"));
-
-          if (!hasLocalAvatar) {
-            // Contato sem avatar local: chamar API como fallback
-            logger.debug(`[contacts.upsert] Sem imgUrl no evento e sem avatar local — tentando profilePictureUrl para ${contact.id}`);
-            newUrl = await Promise.race([
-              wbot!.profilePictureUrl(contact.id!, "preview"),
-              new Promise<string>((_, reject) =>
-                setTimeout(() => reject(new Error("Timeout profilePictureUrl contacts.upsert")), 10000)
-              )
-            ]).catch((err) => {
-              logger.debug(`[contacts.upsert] profilePictureUrl falhou para ${contact.id}: ${err?.message}`);
-              return null;
-            });
-          }
         }
       } catch {
         // silencioso
@@ -7452,7 +7518,9 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
       
       const isGroup = isGroupId || isGroupByPattern;
       
-      // NÃO processar grupos no evento contacts.update - grupos são tratados em groups.update
+      // Removido o bloqueio para profilePicUrl de grupos (feito em background depois se necessário)
+      // Se não é grupo nem indivíduo claro, verificar padrão
+      // Grupos são tratados em groups.update
       if (isGroup) {
         console.log(`[contacts.update] Ignorando grupo ${contactId} - tratado em groups.update`);
         return;

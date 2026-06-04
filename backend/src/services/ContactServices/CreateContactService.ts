@@ -417,8 +417,11 @@ const CreateContactService = async ({
 
   // Chama o serviço centralizado para atualizar nome/avatar com proteção
   try {
-    const RefreshContactAvatarService = (await import("./RefreshContactAvatarService")).default;
-    await RefreshContactAvatarService({ contactId: contact.id, companyId });
+    const { contactAvatarQueue } = require("../../queues");
+    contactAvatarQueue.add("RefreshAvatar", {
+      contactId: contact.id,
+      companyId
+    }, { removeOnComplete: true, removeOnFail: true });
   } catch (err) {
     logger.warn("Falha ao atualizar avatar/nome centralizado", err);
   }

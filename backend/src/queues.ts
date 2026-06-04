@@ -308,6 +308,7 @@ export const campaignQueue = new BullQueue("CampaignQueue", connection);
 export const queueMonitor = new BullQueue("QueueMonitor", connection);
 export const validateWhatsappContactsQueue = new BullQueue("ValidateWhatsappContacts", connection);
 export const sessionWindowRenewalQueue = new BullQueue(`${process.env.DB_NAME}-SessionWindowRenewal`, connection);
+export const contactAvatarQueue = new BullQueue("ContactAvatarQueue", connection);
 
 // Fila para mensagens Baileys (concurrency=1 - protege WebSocket único)
 export const baileysMessageQueue = new BullQueue("BaileysMessageQueue", connection, {
@@ -3250,6 +3251,20 @@ export async function startQueueProcess() {
   logger.info("Iniciando filas de chat ao vivo (sem rate limiter)");
   baileysChatQueue.process("SendMessage", 1, handleSendMessage);
   officialChatQueue.process("SendMessage", 10, handleSendMessage);
+
+  // Fila de Background para Avatares (Concurrency 5)
+  contactAvatarQueue.process("RefreshAvatar", 5, async (job) => {
+    try {
+      const RefreshContactAvatarService = (await import("./services/ContactServices/RefreshContactAvatarService")).default;
+      await RefreshContactAvatarService({
+        contactId: job.data.contactId,
+        companyId: job.data.companyId,
+        whatsappId: job.data.whatsappId
+      });
+    } catch (e) {
+      logger.error(`[AvatarQueue] Erro ao buscar avatar no background: ${e}`);
+    }
+  });
 
   scheduleMonitor.process("Verify", 1, handleVerifySchedules);
 

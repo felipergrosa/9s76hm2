@@ -50,7 +50,12 @@ const SendWhatsAppMessage = async ({
     const isNumberName = currentName === "" || currentName.replace(/\D/g, "") === String(contact.number);
     if (isNumberName) {
       try {
-        await RefreshContactAvatarService({ contactId: contact.id, companyId: (contact as any).companyId, whatsappId });
+        const { contactAvatarQueue } = require("../../queues");
+        contactAvatarQueue.add("RefreshAvatar", {
+          contactId: contact.id,
+          companyId: (contact as any).companyId,
+          whatsappId
+        }, { removeOnComplete: true, removeOnFail: true });
         await (contact as any).reload?.();
       } catch (e) {
         // não bloquear envio se falhar

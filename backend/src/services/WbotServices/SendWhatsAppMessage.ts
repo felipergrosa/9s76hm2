@@ -121,7 +121,12 @@ const SendWhatsAppMessage = async ({
     const isNumberName = currentName === "" || currentName.replace(/\D/g, "") === String(contactNumber.number);
     if (isNumberName) {
       try {
-        await RefreshContactAvatarService({ contactId: ticket.contactId, companyId: ticket.companyId, whatsappId: ticket.whatsappId });
+        const { contactAvatarQueue } = require("../../queues");
+        contactAvatarQueue.add("RefreshAvatar", {
+          contactId: ticket.contactId,
+          companyId: ticket.companyId,
+          whatsappId: ticket.whatsappId
+        }, { removeOnComplete: true, removeOnFail: true });
       } catch (e) {
         // não bloquear envio se falhar
       }
