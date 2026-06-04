@@ -364,7 +364,7 @@ const ensureParticipantContact = async (
 
     try {
       profilePicUrl = await Promise.race([
-        wbot.profilePictureUrl(participantJid, "image"),
+        wbot.profilePictureUrl(participantJid, "preview"),
         new Promise<string>((_, reject) =>
           setTimeout(() => reject(new Error('Timeout')), 3000)
         )
@@ -2104,7 +2104,7 @@ const verifyContact = async (
       } else {
         // PRIORIDADE 2: Chamada HTTP ao WhatsApp (pode timeout para contatos com privacidade)
         const pic = await Promise.race([
-          wbot.profilePictureUrl(normalizedJid, "image"),
+          wbot.profilePictureUrl(normalizedJid, "preview"),
           new Promise<string>((_, reject) =>
             setTimeout(() => reject(new Error('Timeout')), 8000)
           )
@@ -7378,7 +7378,7 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
             // Contato sem avatar local: chamar API como fallback
             logger.debug(`[contacts.upsert] Sem imgUrl no evento e sem avatar local — tentando profilePictureUrl para ${contact.id}`);
             newUrl = await Promise.race([
-              wbot!.profilePictureUrl(contact.id!, "image"),
+              wbot!.profilePictureUrl(contact.id!, "preview"),
               new Promise<string>((_, reject) =>
                 setTimeout(() => reject(new Error("Timeout profilePictureUrl contacts.upsert")), 8000)
               )
@@ -7485,7 +7485,7 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
       try {
         // PROTEÇÃO: Timeout para prevenir travamento do websocket
         profilePicUrl = await Promise.race([
-          wbot.profilePictureUrl(group.id, "image"),
+          wbot.profilePictureUrl(group.id, "preview"),
           new Promise<string>((_, reject) => 
             setTimeout(() => reject(new Error('Timeout')), 5000)
           )

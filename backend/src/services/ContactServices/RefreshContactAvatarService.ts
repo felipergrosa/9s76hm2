@@ -249,7 +249,7 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
           // Fallback: chamar API do WhatsApp (pode timeout para alguns contatos)
           // Timeout aumentado para 10s — alguns contatos legítimos demoram mais
           newProfileUrl = await Promise.race([
-            wbot.profilePictureUrl(jid, "image"),
+            wbot.profilePictureUrl(jid, "preview"),
             new Promise<string>((_, reject) =>
               setTimeout(() => reject(new Error('Timeout ao buscar foto de perfil')), 10000)
             )
