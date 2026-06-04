@@ -375,9 +375,17 @@ export class TurboWrapper implements Partial<WASocket> {
     // Preferir Baileys para profile pictures
     if (this.baileysSocket && this.isBaileysHealthy()) {
       try {
-        return await this.baileysSocket.profilePictureUrl(jid, type);
+        // Usa Promise.race interno para detectar se o Baileys travou (hanging)
+        // Se travar, cai no catch e aciona o fallback do orchestrator
+        const url = await Promise.race([
+          this.baileysSocket.profilePictureUrl(jid, type),
+          new Promise<string>((_, reject) => 
+            setTimeout(() => reject(new Error("Timeout Baileys")), 4000)
+          )
+        ]);
+        return url;
       } catch (error: any) {
-        logger.warn(`[TurboWrapper] Baileys falhou no profilePictureUrl: ${error.message}`);
+        logger.warn(`[TurboWrapper] Baileys falhou no profilePictureUrl (acionando fallback): ${error.message}`);
       }
     }
 

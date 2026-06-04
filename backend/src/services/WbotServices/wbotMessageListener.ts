@@ -366,7 +366,7 @@ const ensureParticipantContact = async (
       profilePicUrl = await Promise.race([
         wbot.profilePictureUrl(participantJid, "preview"),
         new Promise<string>((_, reject) =>
-          setTimeout(() => reject(new Error('Timeout')), 3000)
+          setTimeout(() => reject(new Error('Timeout')), 10000)
         )
       ]);
     } catch (e) {
@@ -2106,7 +2106,7 @@ const verifyContact = async (
         const pic = await Promise.race([
           wbot.profilePictureUrl(normalizedJid, "preview"),
           new Promise<string>((_, reject) =>
-            setTimeout(() => reject(new Error('Timeout')), 8000)
+            setTimeout(() => reject(new Error('Timeout')), 10000)
           )
         ]);
         if (pic) profilePicUrl = pic;
@@ -7380,7 +7380,7 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
             newUrl = await Promise.race([
               wbot!.profilePictureUrl(contact.id!, "preview"),
               new Promise<string>((_, reject) =>
-                setTimeout(() => reject(new Error("Timeout profilePictureUrl contacts.upsert")), 8000)
+                setTimeout(() => reject(new Error("Timeout profilePictureUrl contacts.upsert")), 10000)
               )
             ]).catch((err) => {
               logger.debug(`[contacts.upsert] profilePictureUrl falhou para ${contact.id}: ${err?.message}`);
@@ -7487,7 +7487,7 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
         profilePicUrl = await Promise.race([
           wbot.profilePictureUrl(group.id, "preview"),
           new Promise<string>((_, reject) => 
-            setTimeout(() => reject(new Error('Timeout')), 5000)
+            setTimeout(() => reject(new Error('Timeout')), 10000)
           )
         ]);
       } catch (e) {
