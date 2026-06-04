@@ -41,13 +41,13 @@ function monitorMemory() {
   }
 
   // Crítico: > 98%
-  if (usage > 98) {
-    console.error(`[MEMORY] 🚨 CRÍTICO: ${usage}% | Heap: ${heapUsedMB}/${heapTotalMB}MB | RSS: ${rssMB}MB`);
+  if (usageReal > 98) {
+    console.error(`[MEMORY] 🚨 CRÍTICO: ${usageReal}% | Heap: ${heapUsedMB}/${MAX_MEMORY_MB}MB | RSS: ${rssMB}MB`);
     // GC de emergência mesmo fora do intervalo
     if (global.gc) global.gc();
   }
   
-  return { heapUsedMB, heapTotalMB, usage };
+  return { heapUsedMB, heapTotalMB, usage: usageReal };
 }
 
 // Executar monitoramento a cada 60 segundos
