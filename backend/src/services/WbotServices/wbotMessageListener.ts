@@ -92,6 +92,16 @@ const acquireJidLock = async (jid: string): Promise<() => void> => {
   return releaseLock!;
 };
 
+// CLEANUP PREVENTIVO: jidLocks deve ser sempre esvaziado pelo release,
+// mas em casos de crash/exception pode vazar. Limpar locks órfãos a cada 5 min.
+setInterval(() => {
+  // jidLocks não tem timestamp — se tiver mais de 500 entradas, algo errado
+  if (jidLocks.size > 500) {
+    logger.warn(`[jidLocks] Detectado ${jidLocks.size} locks ativos — possível vazamento, limpando`);
+    jidLocks.clear();
+  }
+}, 5 * 60 * 1000).unref();
+
 /**
  * Executa uma função com lock por JID
  */
@@ -219,6 +229,23 @@ const GROUP_METADATA_CACHE_TTL_MS = 5 * 60 * 1000;
 const GROUP_METADATA_RATE_LIMIT_BACKOFF_MS = 30 * 1000;
 const groupMetadataCache = new Map<string, GroupMetadataCacheEntry>();
 const groupMetadataBackoffUntil = new Map<string, number>();
+
+// CLEANUP AUTOMÁTICO: remover entradas de backoff expiradas a cada hora
+// Cada grupo/JID gera uma entrada; com muitos grupos acumula indefinidamente
+setInterval(() => {
+  const now = Date.now();
+  let removed = 0;
+  for (const [k, v] of groupMetadataBackoffUntil.entries()) {
+    if (v < now) { groupMetadataBackoffUntil.delete(k); removed++; }
+  }
+  // groupMetadataCache: remover entradas expiradas
+  for (const [k, entry] of groupMetadataCache.entries()) {
+    if ((entry as any).expiresAt < now) { groupMetadataCache.delete(k); removed++; }
+  }
+  if (removed > 0) {
+    logger.debug(`[wbotMessageListener] Cleanup: ${removed} entradas expiradas de groupMetadataCache/backoff removidas`);
+  }
+}, 60 * 60 * 1000).unref();
 
 const getFallbackGroupName = (remoteJid: string): string => {
   if (!remoteJid) return "Grupo";

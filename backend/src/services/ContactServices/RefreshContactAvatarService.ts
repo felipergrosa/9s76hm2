@@ -98,6 +98,23 @@ const AVATAR_BASENAME = "avatar.jpg";
 
 // Throttle interno: 1x por 24h por contato (escopo do processo)
 const lastAvatarRefreshMap = new Map<string, number>();
+const AVATAR_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24h
+
+// CLEANUP AUTOMÁTICO: remover entradas expiradas a cada 6h para evitar leak de memória
+// Com milhares de contatos, o Map cresceria indefinidamente sem isso
+setInterval(() => {
+  const cutoff = Date.now() - AVATAR_REFRESH_INTERVAL_MS;
+  let removed = 0;
+  for (const [key, ts] of lastAvatarRefreshMap.entries()) {
+    if (ts < cutoff) {
+      lastAvatarRefreshMap.delete(key);
+      removed++;
+    }
+  }
+  if (removed > 0) {
+    logger.debug(`[RefreshContactAvatar] Cleanup: removidas ${removed} entradas expiradas do throttle Map (restam ${lastAvatarRefreshMap.size})`);
+  }
+}, 6 * 60 * 60 * 1000).unref(); // .unref() = não impede o processo de encerrar
 
 const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }: Request): Promise<Contact | null> => {
   try {

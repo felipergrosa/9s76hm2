@@ -19,6 +19,19 @@ import GetUserPersonalTagContactIds from "../../helpers/GetUserPersonalTagContac
 const lastAvatarCheck = new Map<string, number>();
 const lastTicketHistorySync = new Map<string, number>();
 
+// CLEANUP AUTOMÁTICO: evitar crescimento ilimitado dos Maps com milhares de tickets/contatos
+setInterval(() => {
+  const now = Date.now();
+  const avatarCutoff = now - 24 * 60 * 60 * 1000;  // 24h
+  const syncCutoff   = now - 60 * 1000;             // 60s (bem mais que o TTL de 30s)
+  let removed = 0;
+  for (const [k, v] of lastAvatarCheck.entries())      { if (v < avatarCutoff) { lastAvatarCheck.delete(k); removed++; } }
+  for (const [k, v] of lastTicketHistorySync.entries()) { if (v < syncCutoff)  { lastTicketHistorySync.delete(k); removed++; } }
+  if (removed > 0) {
+    logger.debug(`[ShowTicketService] Cleanup: ${removed} entradas expiradas removidas dos Maps (avatar=${lastAvatarCheck.size}, sync=${lastTicketHistorySync.size})`);
+  }
+}, 2 * 60 * 60 * 1000).unref();
+
 const ShowTicketService = async (
   id: string | number,
   companyId: number
