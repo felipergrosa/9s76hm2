@@ -188,11 +188,13 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
         urlsToTry.push(avatarData.profilePicUrl);
       }
 
+      console.log(`[ContactAvatar] Carregando avatar para contato ${avatarData.contactId} (${avatarData.contactName || 'Sem Nome'}). URLs a tentar:`, urlsToTry);
 
       for (const url of urlsToTry) {
         try {
           const result = await fetchBlob(url);
           if (isMounted) {
+            console.log(`[ContactAvatar] Sucesso ao obter avatar para ${avatarData.contactId}. blobUrl: ${result.blobUrl}, direct: ${result.direct}`);
             setBlobUrl(result.blobUrl);
             setLoading(false);
             // Cache: apenas URLs externas (CDN) ou diretas do backend — NUNCA blobs
@@ -202,10 +204,12 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
           }
           return;
         } catch (err) {
+          console.warn(`[ContactAvatar] Falha ao obter blob da URL: ${url}`, err);
         }
       }
 
       if (isMounted) {
+        console.warn(`[ContactAvatar] Todas as tentativas falharam para o contato ${avatarData.contactId}. Ativando iniciais.`);
         setImageError(true);
         setLoading(false);
       }
@@ -232,8 +236,9 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
   const handleImageError = useCallback((e) => {
     // Se for URL externa (WhatsApp/Instagram) com erro, marcar como erro
     // para mostrar avatar com iniciais ao invés de imagem quebrada
+    console.error(`[ContactAvatar] Erro ao renderizar imagem do avatar para o contato ${avatarData.contactId || 'sem ID'}. URL com falha:`, imageUrl || avatarData.imageUrl);
     setImageError(true);
-  }, [avatarData.contactId]);
+  }, [avatarData.contactId, imageUrl, avatarData.imageUrl]);
 
   // Se não tem contato, usa fallback
   if (!contact) {
