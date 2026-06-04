@@ -14,16 +14,21 @@ function monitorMemory() {
   const heapTotalMB = Math.round(used.heapTotal / 1024 / 1024);
   const rssMB = Math.round(used.rss / 1024 / 1024);
   
-  const usage = Math.round((heapUsedMB / heapTotalMB) * 100);
+  const MAX_MEMORY_MB = 4096; // Limite definido no package.json (--max-old-space-size=4096)
   
-  // Logar apenas se uso estiver ALTO (> 90%)
-  if (usage > 90) {
-    console.warn(`[MEMORY] ⚠️ USO ALTO: ${heapUsedMB}MB / ${heapTotalMB}MB (${usage}%) | RSS: ${rssMB}MB`);
+  // A porcentagem real de uso contra o limite máximo, não contra o heap alocado atual (que começa pequeno)
+  const usageReal = Math.round((heapUsedMB / MAX_MEMORY_MB) * 100);
+  // Porcentagem do heap atual apenas para debug
+  const usageHeap = Math.round((heapUsedMB / heapTotalMB) * 100);
+  
+  // Logar apenas se uso real estiver ALTO (> 60% de 4GB = ~2.4GB)
+  if (usageReal > 60) {
+    console.warn(`[MEMORY] ⚠️ USO ALTO: ${heapUsedMB}MB / ${MAX_MEMORY_MB}MB (${usageReal}%) | RSS: ${rssMB}MB`);
   }
   
-  // Forçar GC proativamente quando > 93% — antes de atingir limite crítico
+  // Forçar GC proativamente quando > 70% do máximo (aprox 2.8GB)
   gcCounter++;
-  if (global.gc && usage > 93 && gcCounter >= GC_FORCE_INTERVAL) {
+  if (global.gc && usageReal > 70 && gcCounter >= GC_FORCE_INTERVAL) {
     global.gc();
     gcCounter = 0;
     const afterGC = process.memoryUsage();
