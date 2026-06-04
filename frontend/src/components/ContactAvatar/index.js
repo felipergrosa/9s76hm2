@@ -233,6 +233,10 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
   //
   // Solução: Backend atualiza em background + Socket.IO notifica frontend
 
+  // Determina a URL da imagem e dados do contato
+  // Prioridade: blobUrl (carregado com auth) > cachedUrl > URL original
+  const imageUrl = blobUrl || cachedUrl || avatarData.imageUrl;
+
   const handleImageError = useCallback((e) => {
     // Se for URL externa (WhatsApp/Instagram) com erro, marcar como erro
     // para mostrar avatar com iniciais ao invés de imagem quebrada
@@ -249,9 +253,6 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
     );
   }
 
-  // Determina a URL da imagem e dados do contato
-  // Prioridade: blobUrl (carregado com auth) > cachedUrl > URL original
-  const imageUrl = blobUrl || cachedUrl || avatarData.imageUrl;
   const contactName = avatarData.contactName;
   const contactNumber = avatarData.contactNumber;
 
