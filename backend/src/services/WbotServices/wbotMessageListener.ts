@@ -2066,19 +2066,27 @@ const verifyContact = async (
     }
   }
 
-  // Buscar profilePicture do Baileys para contatos com JID real
-  // PROTEÇÃO: Timeout para prevenir travamento do websocket
+  // Buscar profilePicture: verificar store do Baileys PRIMEIRO (evita chamada HTTP com timeout)
   if (!isGroup && normalizedJid.includes("@s.whatsapp.net")) {
     try {
-      const pic = await Promise.race([
-        wbot.profilePictureUrl(normalizedJid, "image"),
-        new Promise<string>((_, reject) => 
-          setTimeout(() => reject(new Error('Timeout')), 5000)
-        )
-      ]);
-      if (pic) profilePicUrl = pic;
+      // PRIORIDADE 1: Store do Baileys (sincronizado na sessão, sem HTTP extra)
+      const storeContacts = (wbot as any).store?.contacts;
+      const storeContact = storeContacts?.[normalizedJid] || storeContacts?.[msgContact.id];
+      if (storeContact?.imgUrl && typeof storeContact.imgUrl === "string") {
+        profilePicUrl = storeContact.imgUrl;
+      } else {
+        // PRIORIDADE 2: Chamada HTTP ao WhatsApp (pode timeout para contatos com privacidade)
+        const pic = await Promise.race([
+          wbot.profilePictureUrl(normalizedJid, "image"),
+          new Promise<string>((_, reject) =>
+            setTimeout(() => reject(new Error('Timeout')), 8000)
+          )
+        ]);
+        if (pic) profilePicUrl = pic;
+      }
     } catch (e) {
       // Privacidade, indisponível ou timeout — profilePicUrl permanece vazio
+      // O RefreshContactAvatarService tentará novamente ao abrir o ticket
     }
   }
 
@@ -7317,28 +7325,41 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
       }
 
       // Processar contatos normais (não-LID) - independente de ter avatar ou não
-      // A condição imgUrl !== undefined foi removida para garantir atualização de nome sempre
       //
-      // CORREÇÃO: buscar avatar também quando contato não tem urlPicture local no banco.
-      // O campo imgUrl do evento Baileys só aparece quando a foto MUDOU — não quando existe.
-      // Isso causa omissão de avatar em contatos que sincronizaram sem alteração de foto.
+      // INSIGHT CRÍTICO: contact.imgUrl no evento Baileys contacts.upsert JÁ É a URL
+      // da foto de perfil (CDN do WhatsApp) — não apenas um indicador de mudança.
+      // Usar essa URL diretamente evita chamada HTTP extra que pode timeout/rate-limit.
+      //
+      // Só fazemos chamada a profilePictureUrl() como fallback quando:
+      //   (a) o evento não trouxe imgUrl E
+      //   (b) o contato não tem avatar local no banco
       let newUrl: string | null = null;
       try {
-        // Verificar se contato já tem avatar local para evitar chamada desnecessária à API
-        const existingContactForAvatar = await Contact.findOne({
-          where: { remoteJid: contact.id, companyId },
-          attributes: ["id", "urlPicture"]
-        });
-        const hasLocalAvatar = !!(existingContactForAvatar?.getDataValue("urlPicture"));
+        if (contact.imgUrl) {
+          // Caminho feliz: Baileys já forneceu a URL no evento — usar diretamente
+          newUrl = contact.imgUrl;
+          logger.debug(`[contacts.upsert] Usando imgUrl do evento para ${contact.id}: ${newUrl.substring(0, 60)}...`);
+        } else {
+          // Sem URL no evento: verificar se contato já tem avatar local no banco
+          const existingContactForAvatar = await Contact.findOne({
+            where: { remoteJid: contact.id, companyId },
+            attributes: ["id", "urlPicture"]
+          });
+          const hasLocalAvatar = !!(existingContactForAvatar?.getDataValue("urlPicture"));
 
-        if (contact.imgUrl || !hasLocalAvatar) {
-          // Buscar: (a) foto mudou OU (b) contato ainda não tem avatar local
-          newUrl = await Promise.race([
-            wbot!.profilePictureUrl(contact.id!, "image"),
-            new Promise<string>((_, reject) =>
-              setTimeout(() => reject(new Error("Timeout profilePictureUrl contacts.upsert")), 5000)
-            )
-          ]).catch(() => null);
+          if (!hasLocalAvatar) {
+            // Contato sem avatar local: chamar API como fallback
+            logger.debug(`[contacts.upsert] Sem imgUrl no evento e sem avatar local — tentando profilePictureUrl para ${contact.id}`);
+            newUrl = await Promise.race([
+              wbot!.profilePictureUrl(contact.id!, "image"),
+              new Promise<string>((_, reject) =>
+                setTimeout(() => reject(new Error("Timeout profilePictureUrl contacts.upsert")), 8000)
+              )
+            ]).catch((err) => {
+              logger.debug(`[contacts.upsert] profilePictureUrl falhou para ${contact.id}: ${err?.message}`);
+              return null;
+            });
+          }
         }
       } catch {
         // silencioso

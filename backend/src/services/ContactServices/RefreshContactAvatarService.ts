@@ -220,13 +220,24 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
             : `${contact.number}@s.whatsapp.net`;
 
 
-        // PROTEÇÃO: Timeout para prevenir travamento do websocket durante HTTP request
-        newProfileUrl = await Promise.race([
-          wbot.profilePictureUrl(jid, "image"),
-          new Promise<string>((_, reject) =>
-            setTimeout(() => reject(new Error('Timeout ao buscar foto de perfil')), 5000)
-          )
-        ]);
+        // OTIMIZAÇÃO: Verificar store do Baileys ANTES de fazer chamada HTTP.
+        // O wbot.store.contacts[jid].imgUrl contém a URL sincronizada pela sessão ativa.
+        // Usar essa URL diretamente evita timeouts e rate limiting da API WhatsApp.
+        const baileysStore = (wbot as any).store?.contacts;
+        const baileysContactData = baileysStore?.[jid] || baileysStore?.[contact.remoteJid];
+        if (baileysContactData?.imgUrl && typeof baileysContactData.imgUrl === "string") {
+          newProfileUrl = baileysContactData.imgUrl;
+          logger.debug(`[RefreshContactAvatar] Usando imgUrl do store Baileys para ${jid}: ${newProfileUrl.substring(0, 60)}...`);
+        } else {
+          // Fallback: chamar API do WhatsApp (pode timeout para alguns contatos)
+          // Timeout aumentado para 10s — alguns contatos legítimos demoram mais
+          newProfileUrl = await Promise.race([
+            wbot.profilePictureUrl(jid, "image"),
+            new Promise<string>((_, reject) =>
+              setTimeout(() => reject(new Error('Timeout ao buscar foto de perfil')), 10000)
+            )
+          ]);
+        }
 
 
         // Atualiza também o nome do grupo se permitido
