@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import RefreshContactAvatarRealtimeService from "../services/ContactServices/RefreshContactAvatarRealtimeService";
 import GetDefaultWhatsApp from "../helpers/GetDefaultWhatsApp";
 import logger from "../utils/logger";
+import Contact from "../models/Contact";
 
 /**
  * Controller para atualização em tempo real da foto de perfil de um contato
@@ -15,9 +16,18 @@ export const refreshContactAvatar = async (req: Request, res: Response): Promise
   logger.info(`[refreshContactAvatar] Solicitação para atualizar avatar: contactId=${contactId}, jid=${jid}`);
 
   try {
+    const contact = contactId
+      ? await Contact.findOne({
+          where: { id: Number(contactId), companyId },
+          attributes: ["id", "whatsappId"]
+        })
+      : null;
+
     // Buscar WhatsApp padrão da empresa
     const defaultWhatsapp = await GetDefaultWhatsApp(null, companyId);
-    if (!defaultWhatsapp) {
+    const whatsappId = contact?.whatsappId || defaultWhatsapp?.id;
+
+    if (!whatsappId) {
       return res.status(400).json({
         success: false,
         message: "Nenhuma conexão WhatsApp encontrada"
@@ -28,7 +38,7 @@ export const refreshContactAvatar = async (req: Request, res: Response): Promise
       contactId: contactId ? Number(contactId) : undefined,
       jid: jid ? String(jid) : undefined,
       companyId,
-      whatsappId: defaultWhatsapp.id
+      whatsappId
     });
 
     if (result.success) {

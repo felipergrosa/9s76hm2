@@ -96,6 +96,142 @@ const downloadProfileImage = async (profilePicUrl: string, folder: string, filen
 
 const AVATAR_BASENAME = "avatar.jpg";
 
+const isUsableAvatarUrl = (url: unknown): url is string => {
+  if (typeof url !== "string") return false;
+
+  const normalized = url.trim();
+  if (!normalized || normalized === "changed") return false;
+  if (normalized.includes("/nopicture.png") || normalized.includes("nopicture.png")) return false;
+
+  return /^https?:\/\//i.test(normalized);
+};
+
+const isWhatsappChannel = (channels: unknown): boolean => {
+  if (!Array.isArray(channels)) return false;
+
+  return channels.some(channel =>
+    String(channel || "").toLowerCase().includes("whatsapp")
+  );
+};
+
+const uniqueValues = (values: Array<string | null | undefined>): string[] => {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const value of values) {
+    const normalized = String(value || "").trim();
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    result.push(normalized);
+  }
+
+  return result;
+};
+
+const buildAvatarJidCandidates = (contact: Contact): string[] => {
+  const rawNumber = String(contact.number || "").replace(/\D/g, "");
+  const canonicalNumber = String((contact as any).canonicalNumber || "").replace(/\D/g, "");
+  const remoteJid = String(contact.remoteJid || "").trim();
+  const lidJid = String((contact as any).lidJid || "").trim();
+
+  if (contact.isGroup) {
+    return uniqueValues([
+      remoteJid.includes("@") ? remoteJid : null,
+      rawNumber ? `${rawNumber}@g.us` : null,
+      contact.number?.includes("@g.us") ? contact.number : null
+    ]);
+  }
+
+  return uniqueValues([
+    remoteJid.includes("@") ? remoteJid : null,
+    lidJid.includes("@") ? lidJid : null,
+    rawNumber ? `${rawNumber}@s.whatsapp.net` : null,
+    canonicalNumber ? `${canonicalNumber}@s.whatsapp.net` : null
+  ]);
+};
+
+const getStoreAvatarUrl = (wbot: any, contact: Contact, candidateJids: string[]): string | null => {
+  const storeContacts = wbot?.store?.contacts;
+  if (!storeContacts) return null;
+
+  for (const jid of candidateJids) {
+    const storeContact = storeContacts[jid];
+    if (isUsableAvatarUrl(storeContact?.imgUrl)) {
+      return storeContact.imgUrl;
+    }
+  }
+
+  const numberCandidates = new Set(
+    [
+      contact.number,
+      (contact as any).canonicalNumber,
+      ...candidateJids
+    ]
+      .map(value => String(value || "").replace(/\D/g, ""))
+      .filter(value => value.length >= 10 && value.length <= 13)
+  );
+
+  if (numberCandidates.size === 0) return null;
+
+  for (const [jid, storeContact] of Object.entries<any>(storeContacts)) {
+    const storeDigits = String(storeContact?.id || jid || "").replace(/\D/g, "");
+    if (numberCandidates.has(storeDigits) && isUsableAvatarUrl(storeContact?.imgUrl)) {
+      return storeContact.imgUrl;
+    }
+  }
+
+  return null;
+};
+
+const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> => {
+  let timeout: NodeJS.Timeout | null = null;
+
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error(message)), timeoutMs);
+      })
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+};
+
+const fetchProfilePictureUrl = async (
+  wbot: any,
+  candidateJids: string[],
+  timeoutMs: number
+): Promise<string | null> => {
+  let lastError: any = null;
+  const profileTypes: Array<"image" | "preview"> = ["image", "preview"];
+
+  for (const jid of candidateJids) {
+    for (const profileType of profileTypes) {
+      try {
+        const url = await withTimeout(
+          wbot.profilePictureUrl(jid, profileType),
+          timeoutMs,
+          `Timeout ao buscar foto de perfil (${jid}, ${profileType})`
+        );
+
+        if (isUsableAvatarUrl(url)) {
+          return url;
+        }
+      } catch (err: any) {
+        lastError = err;
+        logger.debug(`[RefreshContactAvatar] Falha profilePictureUrl para ${jid}/${profileType}: ${err?.message || err}`);
+      }
+    }
+  }
+
+  if (lastError) {
+    throw lastError;
+  }
+
+  return null;
+};
+
 // Throttle interno: 1x por 24h por contato (escopo do processo)
 const lastAvatarRefreshMap = new Map<string, number>();
 const AVATAR_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24h
@@ -128,6 +264,8 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
         "isGroup",
         "channels",
         "remoteJid",
+        "lidJid",
+        "canonicalNumber",
         "whatsappId",
         "profilePicUrl",
         "urlPicture",
@@ -221,7 +359,7 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
 
     const resolvedWhatsappId = contact.whatsappId || whatsappId;
 
-    if (contact.channels?.includes("whatsapp") && resolvedWhatsappId) {
+    if (isWhatsappChannel(contact.channels) && resolvedWhatsappId) {
       try {
         // Timeout curto: avatar é não-crítico, não vale bloquear 30s
         const wbot = await getWbotOrRecover(resolvedWhatsappId, 5000);
@@ -230,30 +368,25 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
           lastAvatarRefreshMap.set(key, now);
           return contact;
         }
-        const jid = contact.remoteJid
-          ? contact.remoteJid
-          : contact.isGroup
-            ? `${contact.number}@g.us`
-            : `${contact.number}@s.whatsapp.net`;
+        const candidateJids = buildAvatarJidCandidates(contact);
+        const jid = candidateJids[0] || (contact.isGroup ? `${contact.number}@g.us` : `${contact.number}@s.whatsapp.net`);
 
 
         // OTIMIZAÇÃO: Verificar store do Baileys ANTES de fazer chamada HTTP.
         // O wbot.store.contacts[jid].imgUrl contém a URL sincronizada pela sessão ativa.
         // Usar essa URL diretamente evita timeouts e rate limiting da API WhatsApp.
-        const baileysStore = (wbot as any).store?.contacts;
-        const baileysContactData = baileysStore?.[jid] || baileysStore?.[contact.remoteJid];
-        if (baileysContactData?.imgUrl && typeof baileysContactData.imgUrl === "string") {
-          newProfileUrl = baileysContactData.imgUrl;
+        const storeAvatarUrl = getStoreAvatarUrl(wbot, contact, candidateJids);
+        if (storeAvatarUrl) {
+          newProfileUrl = storeAvatarUrl;
           logger.debug(`[RefreshContactAvatar] Usando imgUrl do store Baileys para ${jid}: ${newProfileUrl.substring(0, 60)}...`);
         } else {
           // Fallback: chamar API do WhatsApp (pode timeout para alguns contatos)
-          // Timeout reduzido para 5s — se não responder nesse tempo, provavelmente está com privacidade restrita
-          newProfileUrl = await Promise.race([
-            wbot.profilePictureUrl(jid, "preview"),
-            new Promise<string>((_, reject) =>
-              setTimeout(() => reject(new Error('Timeout ao buscar foto de perfil')), 5000)
-            )
-          ]);
+          // Timeout configurável: alguns perfis demoram mais que 5s na primeira consulta.
+          const profileFetchTimeoutMs = numberFromEnv(process.env.AVATAR_PROFILE_FETCH_TIMEOUT_MS, 15000);
+          const fetchedProfileUrl = await fetchProfilePictureUrl(wbot, candidateJids, profileFetchTimeoutMs);
+          if (fetchedProfileUrl) {
+            newProfileUrl = fetchedProfileUrl;
+          }
         }
 
 

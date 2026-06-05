@@ -22,6 +22,50 @@ interface RefreshContactAvatarResponse {
   message?: string;
 }
 
+const numberFromEnv = (value: string | undefined, fallback: number): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const isUsableAvatarUrl = (url: unknown): url is string => {
+  if (typeof url !== "string") return false;
+
+  const normalized = url.trim();
+  if (!normalized || normalized === "changed") return false;
+  if (normalized.includes("nopicture.png")) return false;
+
+  return /^https?:\/\//i.test(normalized);
+};
+
+const uniqueValues = (values: Array<string | null | undefined>): string[] => {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const value of values) {
+    const normalized = String(value || "").trim();
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    result.push(normalized);
+  }
+
+  return result;
+};
+
+const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> => {
+  let timeout: NodeJS.Timeout | null = null;
+
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error(message)), timeoutMs);
+      })
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+};
+
 export const RefreshContactAvatarService = async ({
   contactId,
   jid,
@@ -36,7 +80,7 @@ export const RefreshContactAvatarService = async ({
     if (contactId) {
       contact = await Contact.findOne({
         where: { id: contactId, companyId },
-        attributes: ["id", "name", "number", "profilePicUrl", "remoteJid", "lidJid", "isGroup"]
+        attributes: ["id", "name", "number", "profilePicUrl", "remoteJid", "lidJid", "isGroup", "canonicalNumber"]
       });
     }
 
@@ -55,7 +99,7 @@ export const RefreshContactAvatarService = async ({
               { number: jid.replace(/\D/g, "") }
             ]
           },
-          attributes: ["id", "name", "number", "profilePicUrl", "remoteJid", "lidJid", "isGroup"]
+          attributes: ["id", "name", "number", "profilePicUrl", "remoteJid", "lidJid", "isGroup", "canonicalNumber"]
         });
       }
     }
@@ -65,17 +109,19 @@ export const RefreshContactAvatarService = async ({
     }
 
     // Se temos contato mas não temos JID, construir a partir dos dados
-    if (contact && !targetJid) {
-      if (contact.remoteJid && contact.remoteJid.includes("@s.whatsapp.net")) {
-        targetJid = contact.remoteJid;
-      } else if (contact.lidJid && contact.lidJid.includes("@lid")) {
-        targetJid = contact.lidJid;
-      } else if (contact.number) {
-        targetJid = `${contact.number}@s.whatsapp.net`;
-      }
+    const targetJids = uniqueValues([
+      targetJid,
+      contact?.remoteJid?.includes("@") ? contact.remoteJid : null,
+      contact?.lidJid?.includes("@") ? contact.lidJid : null,
+      contact?.number ? `${String(contact.number).replace(/\D/g, "")}@s.whatsapp.net` : null,
+      (contact as any)?.canonicalNumber ? `${String((contact as any).canonicalNumber).replace(/\D/g, "")}@s.whatsapp.net` : null
+    ]);
+
+    if (contact && !targetJid && targetJids.length > 0) {
+      targetJid = targetJids[0];
     }
 
-    if (!targetJid) {
+    if (targetJids.length === 0) {
       return { success: false, updated: false, message: "Não foi possível determinar o JID do contato" };
     }
 
@@ -89,12 +135,41 @@ export const RefreshContactAvatarService = async ({
     // PROTEÇÃO: Timeout para prevenir travamento do websocket durante HTTP request
     let profilePicUrl: string | null = null;
     try {
-      profilePicUrl = await Promise.race([
-        wbot.profilePictureUrl(targetJid, "image"),
-        new Promise<string>((_, reject) => 
-          setTimeout(() => reject(new Error('Timeout ao buscar foto de perfil')), 5000)
-        )
-      ]);
+      const storeContacts = (wbot as any)?.store?.contacts;
+
+      for (const candidateJid of targetJids) {
+        const storeContact = storeContacts?.[candidateJid];
+        if (isUsableAvatarUrl(storeContact?.imgUrl)) {
+          profilePicUrl = storeContact.imgUrl;
+          break;
+        }
+      }
+
+      const timeoutMs = numberFromEnv(process.env.AVATAR_PROFILE_FETCH_TIMEOUT_MS, 15000);
+
+      if (!profilePicUrl) {
+        for (const candidateJid of targetJids) {
+          for (const profileType of ["image", "preview"] as const) {
+            try {
+              const fetchedUrl = await withTimeout(
+                wbot.profilePictureUrl(candidateJid, profileType),
+                timeoutMs,
+                `Timeout ao buscar foto de perfil (${candidateJid}, ${profileType})`
+              );
+
+              if (isUsableAvatarUrl(fetchedUrl)) {
+                profilePicUrl = fetchedUrl;
+                break;
+              }
+            } catch (err: any) {
+              logger.debug(`[RefreshAvatar] Erro ao buscar foto de ${candidateJid}/${profileType}: ${err?.message}`);
+            }
+          }
+
+          if (profilePicUrl) break;
+        }
+      }
+
       logger.info(`[RefreshAvatar] Foto obtida para ${targetJid}: ${profilePicUrl ? "OK" : "N/A"}`);
     } catch (err: any) {
       // Erro comum quando o contato tem privacidade ativada ou timeout
