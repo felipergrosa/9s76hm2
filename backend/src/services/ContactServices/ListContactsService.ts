@@ -550,6 +550,7 @@ const ListContactsService = async ({
       "email",
       "isGroup",
       "urlPicture",
+      "profilePicUrl",
       "active",
       "companyId",
       "channels",
