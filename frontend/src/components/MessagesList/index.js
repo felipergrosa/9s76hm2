@@ -28,7 +28,7 @@ import {
 
 import MarkdownWrapper from "../MarkdownWrapper";
 import VcardPreview from "../VcardPreview";
-import ContactAvatar from "../ContactAvatar";
+import LazyContactAvatar from "../LazyContactAvatar";
 import LocationPreview from "../LocationPreview";
 import ModalImageCors from "../ModalImageCors";
 import MediaModal from "../MediaModal";
@@ -2886,18 +2886,6 @@ const MessagesList = ({
         { [isLeft ? classes.messageLeftAudio : classes.messageRightAudio]: message.mediaType === "audio" }
       );
       
-      // DEBUG: Verificar dados
-      console.log('[MessagesList] Message:', {
-        id: message.id,
-        fromMe: message.fromMe,
-        ticketStatus: message.ticket?.status,
-        mediaType: message.mediaType,
-        isCampaign: message.isCampaign,
-        isCampaignMessage,
-        isTemplateMessage,
-        bubbleClass: bubbleClassName
-      });
-
       // Verifica se a mensagem está selecionada
       const isMessageSelected = !readOnly && showSelectMessageCheckbox && selectedMessages.some((m) => m.id === message.id);
 
@@ -2920,7 +2908,7 @@ const MessagesList = ({
             )}
 
             {isGroup && !message.fromMe && (
-              <ContactAvatar
+              <LazyContactAvatar
                 contact={getAvatarContactForMessage(message)}
                 enableRealtimeFetch={false}
                 className={classes.messageAvatar}
@@ -3008,15 +2996,7 @@ const MessagesList = ({
                     )
                   }
                 )}>
-                  {(() => {
-                    console.log('[MessagesList] Verificando quotedMsg:', {
-                      messageId: message.id,
-                      hasQuotedMsg: !!message.quotedMsg,
-                      quotedMsgId: message.quotedMsgId,
-                      body: message.body?.substring(0, 30)
-                    });
-                    return message.quotedMsg && renderQuotedMessage(message);
-                  })()}
+                  {message.quotedMsg && renderQuotedMessage(message)}
                   {(() => {
                     const bodyTrim = renderableBodyTrim;
 

@@ -33,7 +33,7 @@ import useContactLists from "../../hooks/useContactLists";
 import usePermissions from "../../hooks/usePermissions";
 import { Chip, Typography, Tooltip, Popover, Button } from "@material-ui/core";
 import IconButton from "@material-ui/core/IconButton";
-import ContactAvatar from "../../components/ContactAvatar";
+import LazyContactAvatar from "../../components/LazyContactAvatar";
 import { Search, List as ListIcon, Upload as UploadIcon, Filter as FilterIcon, Plus as PlusIcon, Edit, Trash2, CheckCircle, Ban, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Eraser as EraserIcon } from "lucide-react";
 import LoadingOverlay from "../../components/LoadingOverlay";
 
@@ -915,7 +915,7 @@ const ContactListItems = () => {
                               <td className="px-3 py-3 font-medium text-gray-900 whitespace-nowrap dark:text-white flex items-center gap-2 max-w-[260px] overflow-hidden text-ellipsis">
                                 <Tooltip {...CustomTooltipProps} title={contact.name}>
                                   <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center font-bold text-gray-600 dark:text-gray-300 flex-shrink-0 overflow-hidden">
-                                    <ContactAvatar
+                                    <LazyContactAvatar
                                       contact={contact.contact || contact}
                                       className="w-8 h-8 rounded-full object-cover"
                                     />
@@ -1098,7 +1098,7 @@ const ContactListItems = () => {
                     return (
                       <div key={contact.id} className={`shadow rounded-lg p-3 flex items-center gap-3 w-full max-w-[375px] mx-auto ${isUnlinked ? 'bg-red-50 dark:bg-red-900/20 border-l-4 border-l-red-500' : 'bg-white dark:bg-gray-800'}`}>
                         <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center font-bold text-gray-600 dark:text-gray-300 overflow-hidden flex-shrink-0">
-                          <ContactAvatar
+                          <LazyContactAvatar
                             contact={contact.contact || contact}
                             className="w-8 h-8 rounded-full object-cover"
                           />

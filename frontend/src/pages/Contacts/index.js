@@ -39,7 +39,6 @@ import {
 import { Facebook, Instagram, WhatsApp, ImportExport, Backup, ContactPhone } from "@material-ui/icons";
 import { Tooltip, Menu, MenuItem } from "@material-ui/core";
 import api from "../../services/api";
-import ContactAvatar from "../../components/ContactAvatar";
 import ContactRow from "../../components/ContactRow";
 import ContactCard from "../../components/ContactCard";
 import LazyContactAvatar from "../../components/LazyContactAvatar";
