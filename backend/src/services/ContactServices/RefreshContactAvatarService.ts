@@ -283,7 +283,7 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
 
     const refreshIntervalHours = numberFromEnv(process.env.AVATAR_REFRESH_INTERVAL_HOURS, 24);
     const refreshIntervalMs = Math.max(1, refreshIntervalHours) * 60 * 60 * 1000;
-    const downloadLocalEnabled = boolFromEnv(process.env.AVATAR_DOWNLOAD_LOCAL_ENABLED, false);
+    const downloadLocalEnabled = boolFromEnv(process.env.AVATAR_DOWNLOAD_LOCAL_ENABLED, true);
     
     const isNameNumeric = (contact.name || "").replace(/\D/g, "") === contact.number;
     const allowNameLookup = boolFromEnv(process.env.AVATAR_USE_NAME_LOOKUP, isNameNumeric);

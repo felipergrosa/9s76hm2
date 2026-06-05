@@ -1,207 +1,167 @@
 import React, { useState, useEffect, memo, useCallback, useMemo } from "react";
 import { Avatar } from "@material-ui/core";
 import { getBackendUrl } from "../../config";
-import avatarCache from "../../utils/avatarCache";
 
-const PLACEHOLDER_AVATAR_RE = /nopicture\.png/i;
+/**
+ * ContactAvatar - Componente de avatar simplificado e confiável.
+ *
+ * Estratégia (inspirada no WhatsApp Web):
+ * - O BACKEND baixa a imagem do CDN do WhatsApp e salva localmente.
+ * - O backend retorna `urlPicture` como URL permanente do próprio servidor.
+ * - O frontend apenas renderiza `<img src=urlPicture>`, sem fetch/blob/CORS.
+ * - Se urlPicture falhar, tenta profilePicUrl (CDN direto) como fallback.
+ * - Se tudo falhar, mostra iniciais coloridas.
+ */
+
+const PLACEHOLDER_RE = /nopicture\.png/i;
 
 const getBackendBaseUrl = () => {
-  const backendUrl = getBackendUrl();
-
-  if (!backendUrl || backendUrl === "undefined" || backendUrl === "null") {
-    return "";
-  }
-
-  return String(backendUrl).replace(/\/+$/, "");
+  const url = getBackendUrl();
+  if (!url || url === "undefined" || url === "null") return "";
+  return String(url).replace(/\/+$/, "");
 };
 
-const isPlaceholderAvatar = (url) => PLACEHOLDER_AVATAR_RE.test(String(url || ""));
-
+/**
+ * Normaliza uma URL de avatar para ser utilizável pelo navegador.
+ * Converte caminhos relativos do banco em URLs absolutas do backend.
+ */
 export const normalizeAvatarUrl = (url, companyId) => {
   if (!url || typeof url !== "string") return "";
 
-  let cleanUrl = url.trim().replace(/\\/g, "/");
-  if (!cleanUrl || isPlaceholderAvatar(cleanUrl)) return "";
+  let clean = url.trim().replace(/\\/g, "/");
+  if (!clean || PLACEHOLDER_RE.test(clean)) return "";
 
-  cleanUrl = cleanUrl
+  // Corrige protocolo mal formatado
+  clean = clean
     .replace(/^https\/\//i, "https://")
     .replace(/^http\/\//i, "http://");
 
-  if (/^(blob|data):/i.test(cleanUrl)) return cleanUrl;
+  // Blob e data URLs: usar direto
+  if (/^(blob|data):/i.test(clean)) return clean;
 
-  const backendBaseUrl = getBackendBaseUrl();
-  const withoutLeadingSlash = cleanUrl.replace(/^\/+/, "");
+  // URL absoluta: usar direto
+  if (/^https?:\/\//i.test(clean)) return clean;
 
-  if (backendBaseUrl) {
-    if (cleanUrl.startsWith("/public/") || cleanUrl.startsWith("public/")) {
-      return `${backendBaseUrl}/${withoutLeadingSlash}`;
-    }
+  // Caminho relativo: construir URL absoluta do backend
+  const backend = getBackendBaseUrl();
+  if (!backend) return clean;
 
-    if (/^company\d+\//i.test(withoutLeadingSlash)) {
-      return `${backendBaseUrl}/public/${withoutLeadingSlash}`;
-    }
+  const withoutSlash = clean.replace(/^\/+/, "");
 
-    if (companyId && withoutLeadingSlash.startsWith("contacts/")) {
-      return `${backendBaseUrl}/public/company${companyId}/${withoutLeadingSlash}`;
-    }
+  // public/company1/contacts/... → backend/public/company1/...
+  if (withoutSlash.startsWith("public/")) {
+    return `${backend}/${withoutSlash}`;
   }
 
-  if (cleanUrl.startsWith("//") && typeof window !== "undefined") {
-    return `${window.location.protocol}${cleanUrl}`;
+  // company1/contacts/... → backend/public/company1/...
+  if (/^company\d+\//i.test(withoutSlash)) {
+    return `${backend}/public/${withoutSlash}`;
   }
 
-  if (/^https?:\/\//i.test(cleanUrl)) {
-    if (backendBaseUrl) {
-      try {
-        const parsedUrl = new URL(cleanUrl);
-        const backendUrl = new URL(backendBaseUrl);
-
-        if (parsedUrl.pathname.startsWith("/public/") && parsedUrl.origin !== backendUrl.origin) {
-          return `${backendBaseUrl}${parsedUrl.pathname}${parsedUrl.search}`;
-        }
-      } catch (err) {
-        return cleanUrl;
-      }
-    }
-
-    return cleanUrl;
+  // contacts/uuid/avatar/avatar.jpg → backend/public/company{id}/contacts/...
+  if (companyId && (withoutSlash.startsWith("contacts/") || withoutSlash.startsWith("groups/"))) {
+    return `${backend}/public/company${companyId}/${withoutSlash}`;
   }
 
-  return cleanUrl;
+  return clean;
 };
 
+/**
+ * Extrai dados relevantes do avatar a partir de um objeto de contato.
+ * Suporta tanto `contact` direto quanto `ticket.contact` (nested).
+ */
 export const getContactAvatarData = (contact) => {
-  const nestedContact = contact?.contact || {};
-  const contactId = nestedContact.id || contact?.id;
-  const companyId = nestedContact.companyId || contact?.companyId;
-  const urlPicture = normalizeAvatarUrl(nestedContact.urlPicture || contact?.urlPicture, companyId);
-  const profilePicUrl = normalizeAvatarUrl(nestedContact.profilePicUrl || contact?.profilePicUrl, companyId);
+  const nested = contact?.contact || {};
+  const id = nested.id || contact?.id;
+  const companyId = nested.companyId || contact?.companyId;
+  const urlPicture = normalizeAvatarUrl(nested.urlPicture || contact?.urlPicture, companyId);
+  const profilePicUrl = normalizeAvatarUrl(nested.profilePicUrl || contact?.profilePicUrl, companyId);
 
   return {
-    contactId,
+    contactId: id,
     companyId,
     urlPicture,
     profilePicUrl,
-    contactName: nestedContact.name || contact?.name,
-    contactNumber: nestedContact.number || contact?.number
+    contactName: nested.name || contact?.name,
+    contactNumber: nested.number || contact?.number,
   };
 };
 
-const getContactAvatarIdentity = (contact) => {
+/** Gera chave de identidade para comparação de memo */
+const getAvatarIdentity = (contact) => {
   if (!contact) return "no-contact";
-
   const { contactId, urlPicture, profilePicUrl } = getContactAvatarData(contact);
-
-  return `${contactId || "no-id"}:${urlPicture || "no-url-picture"}:${profilePicUrl || "no-profile-pic"}`;
+  return `${contactId || ""}:${urlPicture || ""}:${profilePicUrl || ""}`;
 };
 
+/** Retorna lista de URLs candidatas para o avatar. */
 export const getContactAvatarUrls = (contact) => {
   const { urlPicture, profilePicUrl } = getContactAvatarData(contact);
-  return uniqueUrls([profilePicUrl, urlPicture]);
+  return [urlPicture, profilePicUrl].filter((u, i, a) => u && a.indexOf(u) === i);
 };
 
+/** Extrai iniciais do nome (até 2 caracteres). */
 const getInitials = (name, number) => {
   if (name && typeof name === "string" && name.trim()) {
-    const parts = name.trim().split(" ").filter(part => part.length > 0);
-
-    if (parts.length >= 2) {
-      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-    }
-
-    if (parts.length === 1) {
-      return parts[0].slice(0, 2).toUpperCase();
-    }
+    const parts = name.trim().split(" ").filter((p) => p.length > 0);
+    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   }
-
   const num = String(number || "").replace(/\D/g, "");
   return num.slice(-2) || "??";
 };
 
+/** Gera cor de fundo determinística baseada no nome/número. */
 const getAvatarColor = (seed) => {
   const colors = [
     "#1976d2", "#388e3c", "#d32f2f", "#7b1fa2", "#1565c0",
     "#00796b", "#c2185b", "#512da8", "#0097a7", "#689f38",
-    "#e64a19", "#5d4037", "#455a64", "#f57c00", "#303f9f"
+    "#e64a19", "#5d4037", "#455a64", "#f57c00", "#303f9f",
   ];
   let hash = 0;
   const str = String(seed || "");
-
   for (let i = 0; i < str.length; i += 1) {
     hash = str.charCodeAt(i) + ((hash << 5) - hash);
   }
-
   return colors[Math.abs(hash) % colors.length];
 };
 
-const uniqueUrls = (urls) => {
-  const seen = new Set();
+const ContactAvatar = memo(({ contact, onError, ...props }) => {
+  const [urlIndex, setUrlIndex] = useState(0);
+  const [failed, setFailed] = useState(false);
 
-  return urls.filter(url => {
-    if (!url || seen.has(url)) return false;
-    seen.add(url);
-    return true;
-  });
-};
+  const identity = getAvatarIdentity(contact);
+  const data = useMemo(() => getContactAvatarData(contact), [identity]);
 
-const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, onError, ...props }) => {
-  const [imageError, setImageError] = useState(false);
-  const [cachedUrl, setCachedUrl] = useState(null);
-  const [activeUrlIndex, setActiveUrlIndex] = useState(0);
-  const avatarIdentity = getContactAvatarIdentity(contact);
-  const avatarData = useMemo(() => getContactAvatarData(contact), [avatarIdentity]);
+  // URLs candidatas: prioridade para urlPicture (local/permanente), fallback para profilePicUrl (CDN)
+  const urls = useMemo(
+    () => [data.urlPicture, data.profilePicUrl].filter((u, i, a) => u && a.indexOf(u) === i),
+    [data.urlPicture, data.profilePicUrl]
+  );
 
+  // Reset quando o contato muda
   useEffect(() => {
-    setImageError(false);
-    setActiveUrlIndex(0);
+    setUrlIndex(0);
+    setFailed(false);
+  }, [identity]);
 
-    if (avatarIdentity === "no-contact") {
-      setCachedUrl(null);
-      return;
+  const currentUrl = urls[urlIndex] || null;
+
+  const handleError = useCallback(() => {
+    const next = urlIndex + 1;
+    if (next < urls.length) {
+      setUrlIndex(next);
+    } else {
+      setFailed(true);
+      if (typeof onError === "function") onError();
     }
+  }, [urlIndex, urls.length, onError]);
 
-    const cached = avatarCache.get(
-      avatarData.contactId,
-      avatarData.urlPicture,
-      avatarData.profilePicUrl
-    );
+  // Dados de fallback
+  const initials = getInitials(data.contactName, data.contactNumber);
+  const bgColor = getAvatarColor(data.contactName || data.contactNumber);
 
-    setCachedUrl(cached && !cached.startsWith("blob:") ? cached : null);
-  }, [avatarIdentity, avatarData]);
-
-  const avatarUrls = useMemo(() => uniqueUrls([
-    avatarData.profilePicUrl,
-    avatarData.urlPicture,
-    cachedUrl
-  ]), [cachedUrl, avatarData]);
-
-  const imageUrl = avatarUrls[activeUrlIndex] || null;
-
-  const handleImageLoad = useCallback(() => {
-    if (!avatarData.contactId || !imageUrl) return;
-
-    avatarCache.set(
-      avatarData.contactId,
-      avatarData.urlPicture,
-      avatarData.profilePicUrl,
-      imageUrl
-    );
-  }, [avatarData, imageUrl]);
-
-  const handleImageError = useCallback((event) => {
-    const nextUrlIndex = activeUrlIndex + 1;
-
-    if (nextUrlIndex < avatarUrls.length) {
-      setActiveUrlIndex(nextUrlIndex);
-      return;
-    }
-
-    setImageError(true);
-
-    if (typeof onError === "function") {
-      onError(event);
-    }
-  }, [activeUrlIndex, avatarUrls.length, onError]);
-
+  // Sem contato
   if (!contact) {
     return (
       <Avatar {...props} style={{ backgroundColor: "#9e9e9e", ...props.style }}>
@@ -210,14 +170,8 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, onError, ...
     );
   }
 
-  const contactName = avatarData.contactName;
-  const contactNumber = avatarData.contactNumber;
-  const initials = getInitials(contactName, contactNumber);
-  const shouldShowInitials = imageError || !imageUrl;
-
-  if (shouldShowInitials) {
-    const bgColor = getAvatarColor(contactName || contactNumber);
-
+  // Sem URL válida ou falha em todas → iniciais coloridas
+  if (failed || !currentUrl) {
     return (
       <Avatar
         {...props}
@@ -226,7 +180,7 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, onError, ...
           color: "#fff",
           fontWeight: 600,
           fontSize: props.style?.width ? Math.floor(props.style.width * 0.4) : 14,
-          ...props.style
+          ...props.style,
         }}
       >
         {initials}
@@ -234,14 +188,19 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, onError, ...
     );
   }
 
+  // Renderiza a imagem
   return (
     <Avatar
       {...props}
-      src={imageUrl}
-      onLoad={handleImageLoad}
-      onError={handleImageError}
-      alt={contactName || "Avatar"}
-      imgProps={{ loading: "lazy", referrerPolicy: "no-referrer", ...(props.imgProps || {}) }}
+      src={currentUrl}
+      onError={handleError}
+      alt={data.contactName || "Avatar"}
+      imgProps={{
+        loading: "lazy",
+        referrerPolicy: "no-referrer",
+        crossOrigin: "anonymous",
+        ...(props.imgProps || {}),
+      }}
     >
       {initials}
     </Avatar>
