@@ -6,6 +6,7 @@
 class AvatarCache {
   constructor() {
     this.cache = new Map();
+    this.pending = new Map();
     this.TTL = 60 * 60 * 1000; // 1 hora em memória
   }
 
@@ -45,6 +46,59 @@ class AvatarCache {
     }
 
     return entry.url;
+  }
+
+  /**
+   * Pré-carrega uma URL de avatar uma única vez.
+   * Útil para aquecer o cache do navegador antes da seção renderizar.
+   */
+  prime(url) {
+    if (!url || typeof url !== "string") {
+      return Promise.resolve(null);
+    }
+
+    const cleanUrl = url.trim();
+    if (!cleanUrl || /^(blob|data):/i.test(cleanUrl)) {
+      return Promise.resolve(cleanUrl || null);
+    }
+
+    if (this.cache.has(`prime:${cleanUrl}`)) {
+      return Promise.resolve(cleanUrl);
+    }
+
+    if (this.pending.has(cleanUrl)) {
+      return this.pending.get(cleanUrl);
+    }
+
+    if (typeof window === "undefined" || typeof Image === "undefined") {
+      return Promise.resolve(cleanUrl);
+    }
+
+    const promise = new Promise((resolve) => {
+      const img = new Image();
+      img.referrerPolicy = "no-referrer";
+      img.onload = () => {
+        this.cache.set(`prime:${cleanUrl}`, {
+          url: cleanUrl,
+          timestamp: Date.now()
+        });
+        this.pending.delete(cleanUrl);
+        resolve(cleanUrl);
+      };
+      img.onerror = () => {
+        this.pending.delete(cleanUrl);
+        resolve(null);
+      };
+      img.src = cleanUrl;
+    });
+
+    this.pending.set(cleanUrl, promise);
+    return promise;
+  }
+
+  primeMany(urls = []) {
+    const unique = [...new Set((Array.isArray(urls) ? urls : []).filter(Boolean))];
+    return Promise.all(unique.map((url) => this.prime(url)));
   }
 
   /**

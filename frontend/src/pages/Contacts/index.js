@@ -41,7 +41,6 @@ import { Tooltip, Menu, MenuItem } from "@material-ui/core";
 import api from "../../services/api";
 import ContactRow from "../../components/ContactRow";
 import ContactCard from "../../components/ContactCard";
-import LazyContactAvatar from "../../components/LazyContactAvatar";
 // Removida virtualização mobile para manter um único scroll externo
 import TableRowSkeleton from "../../components/TableRowSkeleton";
 import ContactModal from "../../components/ContactModal";
@@ -68,6 +67,7 @@ import { TicketsContext } from "../../context/Tickets/TicketsContext";
 import BulkEditContactsModal from "../../components/BulkEditContactsModal";
 import DuplicateContactsModal from "../../components/DuplicateContactsModal";
 import usePermissions from "../../hooks/usePermissions";
+import useAvatarPrefetch from "../../hooks/useAvatarPrefetch";
 
 const CustomTooltipProps = {
     arrow: true,
@@ -635,6 +635,8 @@ const Contacts = () => {
     const sortedContacts = useMemo(() => {
         return contacts.filter(c => !c.isGroup);
     }, [contacts]);
+
+    useAvatarPrefetch(sortedContacts);
 
     // Agora usando o handleEditContact do hook useContactHandlers
 

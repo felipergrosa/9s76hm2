@@ -22,6 +22,7 @@ import ContactModal from "../../components/ContactModal";
 import ConfirmationModal from "../../components/ConfirmationModal";
 import AddFilteredContactsModal from "../../components/AddFilteredContactsModal";
 import AddManualContactsModal from "../../components/AddManualContactsModal";
+import useAvatarPrefetch from "../../hooks/useAvatarPrefetch";
 
 import { i18n } from "../../translate/i18n";
 
@@ -441,6 +442,8 @@ const ContactListItems = () => {
       return Array.isArray(contacts) ? contacts : [];
     }
   }, [contacts]);
+
+  useAvatarPrefetch(sortedContacts);
 
   // Paginação fixa (sem infinite scroll), espelhando /contatos
   // Quando "todos" está selecionado, não há paginação

@@ -17,7 +17,7 @@ const getBackendBaseUrl = () => {
 
 const isPlaceholderAvatar = (url) => PLACEHOLDER_AVATAR_RE.test(String(url || ""));
 
-const normalizeAvatarUrl = (url, companyId) => {
+export const normalizeAvatarUrl = (url, companyId) => {
   if (!url || typeof url !== "string") return "";
 
   let cleanUrl = url.trim().replace(/\\/g, "/");
@@ -70,7 +70,7 @@ const normalizeAvatarUrl = (url, companyId) => {
   return cleanUrl;
 };
 
-const getContactAvatarData = (contact) => {
+export const getContactAvatarData = (contact) => {
   const nestedContact = contact?.contact || {};
   const contactId = nestedContact.id || contact?.id;
   const companyId = nestedContact.companyId || contact?.companyId;
@@ -93,6 +93,11 @@ const getContactAvatarIdentity = (contact) => {
   const { contactId, urlPicture, profilePicUrl } = getContactAvatarData(contact);
 
   return `${contactId || "no-id"}:${urlPicture || "no-url-picture"}:${profilePicUrl || "no-profile-pic"}`;
+};
+
+export const getContactAvatarUrls = (contact) => {
+  const { urlPicture, profilePicUrl } = getContactAvatarData(contact);
+  return uniqueUrls([profilePicUrl, urlPicture]);
 };
 
 const getInitials = (name, number) => {
