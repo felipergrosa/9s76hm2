@@ -164,9 +164,9 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, onError, ...
   }, [avatarIdentity, avatarData]);
 
   const avatarUrls = useMemo(() => uniqueUrls([
-    cachedUrl,
+    avatarData.profilePicUrl,
     avatarData.urlPicture,
-    avatarData.profilePicUrl
+    cachedUrl
   ]), [cachedUrl, avatarData]);
 
   const imageUrl = avatarUrls[activeUrlIndex] || null;
@@ -236,7 +236,7 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, onError, ...
       onLoad={handleImageLoad}
       onError={handleImageError}
       alt={contactName || "Avatar"}
-      imgProps={{ loading: "lazy", ...(props.imgProps || {}) }}
+      imgProps={{ loading: "lazy", referrerPolicy: "no-referrer", ...(props.imgProps || {}) }}
     >
       {initials}
     </Avatar>

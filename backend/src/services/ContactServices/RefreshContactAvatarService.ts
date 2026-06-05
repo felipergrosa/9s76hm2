@@ -269,6 +269,7 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
         "whatsappId",
         "profilePicUrl",
         "urlPicture",
+        "pictureUpdated",
         "uuid"
       ]
     });
@@ -282,6 +283,7 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
 
     const refreshIntervalHours = numberFromEnv(process.env.AVATAR_REFRESH_INTERVAL_HOURS, 24);
     const refreshIntervalMs = Math.max(1, refreshIntervalHours) * 60 * 60 * 1000;
+    const downloadLocalEnabled = boolFromEnv(process.env.AVATAR_DOWNLOAD_LOCAL_ENABLED, false);
     
     const isNameNumeric = (contact.name || "").replace(/\D/g, "") === contact.number;
     const allowNameLookup = boolFromEnv(process.env.AVATAR_USE_NAME_LOOKUP, isNameNumeric);
@@ -351,11 +353,18 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
         })()
       : false;
 
-    const shouldSkipThrottle = !hasAvatarFile || !hasAvatarInDb || !hasRealFileOnDisk || hasBadName;
+    const hasUsableRemoteAvatar = isUsableAvatarUrl(contact.profilePicUrl);
+    const shouldSkipThrottle = downloadLocalEnabled
+      ? !hasAvatarFile || !hasAvatarInDb || !hasRealFileOnDisk || hasBadName
+      : !hasUsableRemoteAvatar || hasBadName;
 
     if (now - last <= refreshIntervalMs && !shouldSkipThrottle) {
       return contact;
     }
+
+    // Evita várias chamadas simultâneas para o mesmo contato quando o ticket/lista dispara
+    // múltiplos refreshes ao mesmo tempo. Avatar é não-crítico; retry virá no próximo ciclo.
+    lastAvatarRefreshMap.set(key, now);
 
     const resolvedWhatsappId = contact.whatsappId || whatsappId;
 
@@ -488,12 +497,23 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
       newProfileUrl = contact.profilePicUrl;
     }
 
-    // Considerar arquivo legado salvo com outro nome: se não existe o arquivo desejado, vamos baixar
-    let shouldRedownload = !desiredExists || newProfileUrl !== contact.profilePicUrl;
-
     // Nunca salvar placeholder como avatar real
     const fallbackUrl = `${process.env.FRONTEND_URL}/nopicture.png`;
     const isPlaceholderUrl = !newProfileUrl || newProfileUrl === fallbackUrl || newProfileUrl.includes('/nopicture.png');
+
+    // Padrão novo: usar a URL assinada do WhatsApp diretamente no frontend.
+    // Isso evita timeouts e I/O para baixar avatar local em listas grandes.
+    if (!downloadLocalEnabled && newProfileUrl && !isPlaceholderUrl) {
+      const shouldUpdateRemoteUrl = newProfileUrl !== contact.profilePicUrl || contact.pictureUpdated === false;
+      if (shouldUpdateRemoteUrl) {
+        await contact.update({ profilePicUrl: newProfileUrl, pictureUpdated: true });
+        await contact.reload();
+        avatarUpdated = true;
+      }
+    }
+
+    // Considerar arquivo legado salvo com outro nome apenas quando o download local estiver habilitado.
+    let shouldRedownload = downloadLocalEnabled && (!desiredExists || newProfileUrl !== contact.profilePicUrl);
     
     if (isPlaceholderUrl) {
       // Se é placeholder, não faz download e não atualiza a URL no banco
