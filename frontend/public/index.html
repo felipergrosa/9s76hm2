@@ -3,6 +3,23 @@
 
 <head>
 	<meta charset="utf-8">
+	<script>
+		// Anti-flash: aplica o tema (claro/escuro) antes da splash screen ser pintada,
+		// usando a mesma fonte de verdade do App.js (localStorage.preferredTheme, com
+		// fallback para prefers-color-scheme), para evitar o "flash" de fundo claro
+		// para quem usa o modo escuro.
+		(function () {
+			try {
+				var theme = window.localStorage.getItem("preferredTheme");
+				if (!theme) {
+					theme = (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
+				}
+				if (theme === "dark") {
+					document.documentElement.classList.add("theme-dark-init");
+				}
+			} catch (e) {}
+		})();
+	</script>
 	<title>Whaticket</title>
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -70,6 +87,27 @@
 			font-family: 'Inter', sans-serif;
 			margin-top: 1rem;
 			font-weight: 500;
+		}
+
+		html.theme-dark-init #splash-screen {
+			background: #303030;
+		}
+
+		html.theme-dark-init .loading-spinner {
+			border-color: #555;
+			border-top-color: transparent;
+		}
+
+		html.theme-dark-init .progress-bar {
+			background-color: #424242;
+		}
+
+		html.theme-dark-init .progress {
+			background-color: #ccc;
+		}
+
+		html.theme-dark-init .loading-text {
+			color: #e0e0e0;
 		}
 	</style>
 	<script>

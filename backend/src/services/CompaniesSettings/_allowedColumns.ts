@@ -33,7 +33,8 @@ export const ALLOWED_COMPANY_SETTINGS_COLUMNS = new Set<string>([
   "showNotificationPending",
   "openaiApiKey",
   "openaiModel",
-  "autoCaptureGroupContacts"
+  "autoCaptureGroupContacts",
+  "externalFormWebhookToken"
 ]);
 
 export const isAllowedCompanySettingColumn = (column: string): boolean => {

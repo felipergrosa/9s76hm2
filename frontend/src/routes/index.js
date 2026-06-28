@@ -7,6 +7,7 @@ import { TicketsContextProvider } from "../context/Tickets/TicketsContext";
 import { WhatsAppsProvider } from "../context/WhatsApp/WhatsAppsContext";
 import Route from "./Route";
 import PrivateRoute from "./PrivateRoute";
+import CommandPaletteActions from "../components/CommandPalette";
 
 // Componente de loading para lazy loading
 const PageLoader = () => (
@@ -48,6 +49,7 @@ const Connections = lazy(() => import("../pages/Connections"));
 const SettingsCustom = lazy(() => import("../pages/SettingsCustom"));
 const Financeiro = lazy(() => import("../pages/Financeiro"));
 const Users = lazy(() => import("../pages/Users"));
+const Roles = lazy(() => import("../pages/Roles"));
 const ContactImportPage = lazy(() => import("../pages/Contacts/import"));
 const ChatMoments = lazy(() => import("../pages/Moments"));
 const Queues = lazy(() => import("../pages/Queues"));
@@ -73,6 +75,9 @@ const CampaignDetailedReport = lazy(() => import("../pages/CampaignDetailedRepor
 const CampaignsPhrase = lazy(() => import("../pages/CampaignsPhrase"));
 const ContactLists = lazy(() => import("../pages/ContactLists"));
 const ContactListItems = lazy(() => import("../pages/ContactListItems"));
+const EmailCampaigns = lazy(() => import("../pages/EmailCampaigns"));
+const DripSequences = lazy(() => import("../pages/DripSequences"));
+const LeadsImport = lazy(() => import("../pages/LeadsImport"));
 
 // FlowBuilder (pesado - sempre lazy)
 const FlowBuilder = lazy(() => import("../pages/FlowBuilder"));
@@ -133,6 +138,7 @@ const Routes = () => {
               <Route exact path="/forgot-password" component={ForgotPassword} />
               <Route exact path="/reset-password" component={ResetPassword} />
               <WhatsAppsProvider>
+                <CommandPaletteActions>
                 <LoggedInLayout>
                 <Route exact path="/financeiro" component={Financeiro} isPrivate />
 
@@ -174,6 +180,8 @@ const Routes = () => {
                 <Route exact path="/helps/instagram" component={InstagramTutorial} isPrivate />
                 <Route exact path="/helps/webchat" component={WebChatTutorial} isPrivate />
                 <Route exact path="/users" component={Users} isPrivate />
+                <PrivateRoute exact path="/roles" component={Roles} permission="roles.view" />
+                <PrivateRoute exact path="/leads-import" component={LeadsImport} permission="contacts.import" />
                 <Route exact path="/messages-api" component={MessagesAPI} isPrivate />
                 <Route exact path="/settings" component={SettingsCustom} isPrivate />
                 <Route exact path="/queues" component={Queues} isPrivate />
@@ -216,9 +224,12 @@ const Routes = () => {
                     <Route exact path="/campaignsNew/:campaignId" component={CampaignsNew} isPrivate />
                     <Route exact path="/campaign/:campaignId/detailed-report" component={CampaignDetailedReport} isPrivate />
                     <Route exact path="/campaigns-config" component={CampaignsConfig} isPrivate />
+                    <PrivateRoute exact path="/email-campaigns" component={EmailCampaigns} permission="email-campaigns.view" />
+                    <PrivateRoute exact path="/drip-sequences" component={DripSequences} permission="drip-sequences.view" />
                   </>
                 )}
               </LoggedInLayout>
+                </CommandPaletteActions>
             </WhatsAppsProvider>
             </Switch>
           </Suspense>

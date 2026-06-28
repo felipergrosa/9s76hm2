@@ -7,6 +7,7 @@ interface Request {
   searchParam?: string;
   action?: string;
   entity?: string;
+  entityId?: string | number;
   userId?: number;
   startDate?: string;
   endDate?: string;
@@ -24,6 +25,7 @@ const ListAuditLogsService = async ({
   searchParam = "",
   action,
   entity,
+  entityId,
   userId,
   startDate,
   endDate,
@@ -44,6 +46,11 @@ const ListAuditLogsService = async ({
   // Filtro por entidade
   if (entity && entity !== "Todos") {
     whereCondition.entity = entity;
+  }
+
+  // Filtro por código da entidade (ex: timeline de um contato/ticket específico)
+  if (entityId) {
+    whereCondition.entityId = String(entityId);
   }
 
   // Filtro por usuário

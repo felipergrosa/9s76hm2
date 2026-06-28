@@ -22,6 +22,7 @@ import withStyles from "@material-ui/core/styles/withStyles";
 import { Grid, FormControl, InputLabel, MenuItem, Select, Checkbox, ListItemText, Chip } from "@material-ui/core";
 import { Autocomplete } from "@material-ui/lab";
 import ContactAvatar from "../ContactAvatar";
+import EntityTimeline from "../EntityTimeline";
 
 import { i18n } from "../../translate/i18n";
 
@@ -1364,6 +1365,14 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 										</>
 									)}
 								</FieldArray>
+
+								{contactId && (
+									<EntityTimeline
+										entity="Contato"
+										entityId={contactId}
+										title="Histórico do Contato"
+									/>
+								)}
 							</DialogContent>
 							<DialogActions>
 								<Button

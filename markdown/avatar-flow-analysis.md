@@ -140,6 +140,19 @@ flowchart LR
 
 ---
 
+## 7. Rodada de Correções — 2026-06 (captura + exibição)
+
+| # | Descrição | Status | Arquivo |
+|---|---|---|---|
+| F1 | `crossOrigin: "anonymous"` no `<img>` forçava modo CORS, bloqueando o fallback CDN do WhatsApp (sem `Access-Control-Allow-Origin`) e anulando o cache do prefetch (no-cors). Removido. | ✅ Aplicado | `frontend/.../ContactAvatar/index.js` |
+| F2 | `GetProfilePicUrl` tentava apenas `{number}@s.whatsapp.net` (falha em contatos LID). Agora usa a estratégia compartilhada multi-JID + store-first. | ✅ Aplicado | `GetProfilePicUrl.ts`, `utils/avatarResolver.ts` |
+| F3 | Estratégia de resolução de avatar (JIDs, store, fetch com timeout) duplicada em dois serviços. Extraída para `utils/avatarResolver.ts` e reaproveitada. | ✅ Aplicado | `utils/avatarResolver.ts`, `RefreshContactAvatarService.ts` |
+| F4 | Getter `urlPicture` fazia `fs.existsSync` síncrono por contato em listas. Adicionado cache de existência com TTL curto e invalidação em escrita/remoção de avatar. | ✅ Aplicado | `utils/fileExistsCache.ts`, `Contact.ts`, `RefreshContactAvatarService.ts` |
+
+> **Nota sobre URLs CDN (`pps.whatsapp.net`) expiradas (Ponto 3/B):** o caminho durável continua sendo o arquivo local. Quando o download local falha, os logs `[downloadProfileImage]` indicam o motivo (Content-Type inválido, 403, tamanho < 100 bytes). Investigar esses logs é o próximo passo para o caso residual de avatares que só têm URL CDN.
+
+---
+
 ## 5. Ações Pendentes (Próximas)
 
 ### Ação A — Cron para contatos sem avatar

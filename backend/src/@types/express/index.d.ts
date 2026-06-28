@@ -11,6 +11,7 @@ declare global {
         username?: string;
       };
       files?: any;
+      rawBody?: Buffer;
     }
   }
 }

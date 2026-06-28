@@ -1,4 +1,7 @@
 import User from "../models/User";
+import UserRole from "../models/UserRole";
+import Role from "../models/Role";
+import { withCache, serviceCache } from "../utils/serviceCache";
 
 /**
  * Lista completa de permissões disponíveis no sistema
@@ -74,7 +77,15 @@ export const AVAILABLE_PERMISSIONS = {
     "contact-lists.create",
     "contact-lists.edit",
     "contact-lists.delete",
-    "campaigns-config.view"
+    "campaigns-config.view",
+    "email-campaigns.view",
+    "email-campaigns.create",
+    "email-campaigns.edit",
+    "email-campaigns.delete",
+    "drip-sequences.view",
+    "drip-sequences.create",
+    "drip-sequences.edit",
+    "drip-sequences.delete"
   ],
 
   // FLOWBUILDER
@@ -137,7 +148,11 @@ export const AVAILABLE_PERMISSIONS = {
     "settings.view",
     "settings.edit",
     "ai-settings.view",
-    "ai-settings.edit"
+    "ai-settings.edit",
+    "roles.view",
+    "roles.create",
+    "roles.edit",
+    "roles.delete"
   ],
 
   // SUPER ADMIN
@@ -323,6 +338,135 @@ export const hasAnyPermission = (user: User | null | undefined, permissions: str
 };
 
 /**
+ * ===== Item 11 do plano: Camada de Role (RBAC) =====
+ *
+ * As permissões de Role são UNIDAS (nunca substituem) com as permissões já
+ * calculadas por getUserPermissions() acima (perfil/flags antigas/ACL pontual
+ * via UserGroupPermission). super/admin já têm acesso total e não dependem
+ * de Role para isso.
+ *
+ * Importante: getUserPermissions()/hasPermission() (síncronas, usadas em
+ * dezenas de pontos do código como ActionExecutor) NÃO são alteradas — para
+ * não arriscar quebrar nada que já depende delas. As funções abaixo são
+ * aditivas/novas e hoje só são usadas no gate real de autorização das rotas
+ * (middleware/checkPermission.ts) e na serialização do usuário para o
+ * frontend (SerializeUser.ts).
+ */
+
+const ROLE_PERMISSIONS_CACHE_TTL = 60000; // 1 minuto, mesmo padrão usado em ListTicketsService
+
+const getRolePermissionsCacheKey = (userId: number, companyId: number): string =>
+  `rolePermissions:${userId}:${companyId}`;
+
+export const getRolePermissionsForUser = async (
+  userId: number,
+  companyId: number
+): Promise<string[]> => {
+  return withCache(
+    getRolePermissionsCacheKey(userId, companyId),
+    async () => {
+      const userRoles = await UserRole.findAll({
+        where: { userId, companyId },
+        include: [{ model: Role, as: "role" }]
+      });
+
+      const permissionsSet = new Set<string>();
+      userRoles.forEach(userRole => {
+        const role = (userRole as any).role as Role | undefined;
+        if (role && Array.isArray(role.permissions)) {
+          role.permissions.forEach(p => permissionsSet.add(p));
+        }
+      });
+
+      return Array.from(permissionsSet);
+    },
+    ROLE_PERMISSIONS_CACHE_TTL
+  );
+};
+
+/**
+ * Invalida o cache de permissões de Role de um usuário. Chamar após
+ * atribuir/remover Roles de um usuário ou editar as permissões de uma Role.
+ */
+export const invalidateRolePermissionsCache = (userId: number, companyId: number): void => {
+  serviceCache.invalidate(getRolePermissionsCacheKey(userId, companyId));
+};
+
+/**
+ * Versão assíncrona de getUserPermissions(), que une as permissões já
+ * calculadas com as permissões vindas de Roles atribuídas ao usuário.
+ */
+export const getUserPermissionsAsync = async (user: User): Promise<string[]> => {
+  const basePermissions = getUserPermissions(user);
+
+  // super/admin já têm acesso total — não precisa consultar Roles
+  if (user.super === true || user.profile === "admin") {
+    return basePermissions;
+  }
+
+  try {
+    const rolePermissions = await getRolePermissionsForUser(user.id, user.companyId);
+    if (rolePermissions.length === 0) return basePermissions;
+    return Array.from(new Set([...basePermissions, ...rolePermissions]));
+  } catch {
+    // Falha ao buscar Roles não deve bloquear o usuário das permissões que já tinha
+    return basePermissions;
+  }
+};
+
+/**
+ * Versão assíncrona de hasPermission(), considerando também Roles.
+ */
+export const hasPermissionAsync = async (
+  user: any | null | undefined,
+  permission: string
+): Promise<boolean> => {
+  if (!user) return false;
+
+  if (user.super === true) return true;
+
+  const userPermissions = await getUserPermissionsAsync(user as User);
+
+  if (userPermissions.includes(permission)) return true;
+
+  return userPermissions.some(p => {
+    if (p.endsWith(".*")) {
+      const prefix = p.slice(0, -2);
+      return permission.startsWith(prefix + ".");
+    }
+    return false;
+  });
+};
+
+/**
+ * Versão assíncrona de hasAllPermissions(), considerando também Roles.
+ */
+export const hasAllPermissionsAsync = async (
+  user: User | null | undefined,
+  permissions: string[]
+): Promise<boolean> => {
+  if (!user) return false;
+  for (const permission of permissions) {
+    if (!(await hasPermissionAsync(user, permission))) return false;
+  }
+  return true;
+};
+
+/**
+ * Versão assíncrona de hasAnyPermission(), considerando também Roles.
+ */
+export const hasAnyPermissionAsync = async (
+  user: User | null | undefined,
+  permissions: string[]
+): Promise<boolean> => {
+  if (!user) return false;
+  for (const permission of permissions) {
+    if (await hasPermissionAsync(user, permission)) return true;
+  }
+  return false;
+};
+
+/**
  * Retorna lista de todas as permissões disponíveis (flat)
  */
 export const getAllAvailablePermissions = (): string[] => {
@@ -485,6 +629,14 @@ const formatPermissionLabel = (key: string): string => {
     "campaigns.create": "Criar Campanhas",
     "campaigns.edit": "Editar Campanhas",
     "campaigns.delete": "Deletar Campanhas",
+    "email-campaigns.view": "Ver Campanhas de E-mail",
+    "email-campaigns.create": "Criar Campanhas de E-mail",
+    "email-campaigns.edit": "Editar Campanhas de E-mail",
+    "email-campaigns.delete": "Deletar Campanhas de E-mail",
+    "drip-sequences.view": "Ver Sequências de Drip",
+    "drip-sequences.create": "Criar Sequências de Drip",
+    "drip-sequences.edit": "Editar Sequências de Drip",
+    "drip-sequences.delete": "Deletar Sequências de Drip",
     "users.view": "Ver Usuários",
     "users.create": "Criar Usuários",
     "users.edit": "Editar Usuários",
@@ -524,6 +676,10 @@ const formatPermissionLabel = (key: string): string => {
     "settings.edit": "Editar Configurações",
     "ai-settings.view": "Ver Config. IA",
     "ai-settings.edit": "Editar Config. IA",
+    "roles.view": "Ver Perfis de Acesso (Roles)",
+    "roles.create": "Criar Perfis de Acesso (Roles)",
+    "roles.edit": "Editar Perfis de Acesso (Roles)",
+    "roles.delete": "Deletar Perfis de Acesso (Roles)",
     "contact-lists.view": "Ver Listas de Contatos",
     "contact-lists.create": "Criar Listas de Contatos",
     "contact-lists.edit": "Editar Listas de Contatos",
@@ -566,6 +722,14 @@ const getPermissionDescription = (key: string): string => {
     "tickets.bulk-edit-close": "Fechar múltiplos tickets de uma vez",
     "tickets.bulk-edit-notes": "Adicionar nota interna em múltiplos tickets",
     "campaigns.create": "Criar e configurar novas campanhas",
+    "email-campaigns.view": "Visualizar campanhas de e-mail",
+    "email-campaigns.create": "Criar e configurar novas campanhas de e-mail",
+    "email-campaigns.edit": "Editar campanhas de e-mail existentes",
+    "email-campaigns.delete": "Deletar campanhas de e-mail",
+    "drip-sequences.view": "Visualizar sequências automáticas de mensagens (drip)",
+    "drip-sequences.create": "Criar sequências automáticas de mensagens disparadas por tag",
+    "drip-sequences.edit": "Editar sequências de drip existentes",
+    "drip-sequences.delete": "Deletar sequências de drip",
     "users.edit": "Editar informações e permissões de outros usuários",
     "users.edit-own": "Permitir que o usuário edite seu próprio perfil (nome, avatar, cor, etc)",
     "connections.edit": "Adicionar, editar e remover conexões WhatsApp",
@@ -611,6 +775,10 @@ const getPermissionDescription = (key: string): string => {
     "announcements.delete": "Deletar informativos",
     "settings.view": "Visualizar configurações do sistema",
     "settings.edit": "Editar configurações do sistema",
+    "roles.view": "Visualizar perfis de acesso (Roles) e suas permissões",
+    "roles.create": "Criar novos perfis de acesso (Roles)",
+    "roles.edit": "Editar perfis de acesso (Roles) existentes e atribuir a usuários",
+    "roles.delete": "Deletar perfis de acesso (Roles)",
     "integrations.view": "Visualizar integrações (n8n, Typebot, DialogFlow, etc)",
     "files.view": "Acessar base de conhecimento / arquivos RAG"
   };

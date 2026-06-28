@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh api *)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:twenty.com)",
+      "WebFetch(domain:docs.twenty.com)",
+      "Bash(cd /tmp/oauth-hub-zdg && find . -maxdepth 3 -not -path \"*/node_modules/*\" -not -path \"*/.git/*\" | sort)",
+      "Read(//tmp/**)",
+      "WebSearch",
+      "WebFetch(domain:developers.chatwoot.com)",
+      "WebFetch(domain:docs.rocket.chat)",
+      "WebFetch(domain:www.rocket.chat)",
+      "WebFetch(domain:docs.n8n.io)",
+      "WebFetch(domain:deepwiki.com)",
+      "WebFetch(domain:botpress.com)",
+      "WebFetch(domain:wasenderapi.com)"
+    ]
+  }
+}

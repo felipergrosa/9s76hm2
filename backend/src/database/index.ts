@@ -25,6 +25,11 @@ import Campaign from "../models/Campaign";
 import CampaignSetting from "../models/CampaignSetting";
 import Baileys from "../models/Baileys";
 import CampaignShipping from "../models/CampaignShipping";
+import EmailCampaign from "../models/EmailCampaign";
+import EmailShipping from "../models/EmailShipping";
+import DripSequence from "../models/DripSequence";
+import DripSequenceStep from "../models/DripSequenceStep";
+import DripSequenceEnrollment from "../models/DripSequenceEnrollment";
 import Announcement from "../models/Announcement";
 import Chat from "../models/Chat";
 import ChatUser from "../models/ChatUser";
@@ -69,6 +74,12 @@ import AITestResult from "../models/AITestResult";
 import AIPromptVersion from "../models/AIPromptVersion";
 import LidMapping from "../models/LidMapping";
 import UserGroupPermission from "../models/UserGroupPermission";
+import FlowExecutionLog from "../models/FlowExecutionLog";
+import AuditLog from "../models/AuditLog";
+import Skill from "../models/Skill";
+import Role from "../models/Role";
+import UserRole from "../models/UserRole";
+import TicketFunnelState from "../models/TicketFunnelState";
 
 
 // eslint-disable-next-line
@@ -176,6 +187,11 @@ const models = [
   CampaignSetting,
   Baileys,
   CampaignShipping,
+  EmailCampaign,
+  EmailShipping,
+  DripSequence,
+  DripSequenceStep,
+  DripSequenceEnrollment,
   Announcement,
   Chat,
   ChatUser,
@@ -218,7 +234,13 @@ const models = [
   AITestResult,
   AIPromptVersion,
   LidMapping,
-  UserGroupPermission
+  UserGroupPermission,
+  FlowExecutionLog,
+  AuditLog,
+  Skill,
+  Role,
+  UserRole,
+  TicketFunnelState
 ];
 
 sequelize.addModels(models);

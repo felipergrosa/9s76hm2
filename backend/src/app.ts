@@ -133,7 +133,14 @@ app.use(helmet({
 }));
 
 app.use(compression()); // Compressão HTTP
-app.use(bodyParser.json({ limit: '5mb' })); // Aumentar o limite de carga para 5 MB
+app.use(bodyParser.json({
+  limit: '5mb', // Aumentar o limite de carga para 5 MB
+  // Guarda o corpo bruto da requisição para permitir validação de assinatura HMAC
+  // dos webhooks da Meta (X-Hub-Signature-256), que precisa do payload exato recebido.
+  verify: (req: Request & { rawBody?: Buffer }, _res, buf) => {
+    req.rawBody = buf;
+  }
+}));
 app.use(bodyParser.urlencoded({ limit: '5mb', extended: true }));
 app.use(cookieParser());
 app.use(express.json());

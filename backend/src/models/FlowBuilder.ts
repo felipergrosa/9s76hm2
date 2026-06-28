@@ -33,6 +33,12 @@ export class FlowBuilderModel extends Model<FlowBuilderModel> {
   @Column(DataType.JSON)
   flow: {} | null;
 
+  @Column({ defaultValue: "published" })
+  status: string; // "draft" | "published" — item 9 do plano
+
+  @Column({ defaultValue: 1 })
+  version: number;
+
   @CreatedAt
   createdAt: Date;
 

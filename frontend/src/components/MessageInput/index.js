@@ -388,8 +388,9 @@ const useStyles = makeStyles((theme) => ({
   },
   spellContextMenu: {
     position: 'fixed',
-    backgroundColor: '#fff',
-    border: '1px solid #ccc',
+    backgroundColor: theme.mode === 'light' ? '#fff' : '#2a2a2a',
+    color: theme.mode === 'light' ? '#111' : '#e9edef',
+    border: theme.mode === 'light' ? '1px solid #ccc' : '1px solid #444',
     borderRadius: 4,
     boxShadow: '0 2px 10px rgba(0,0,0,0.2)',
     zIndex: 9999,
@@ -405,7 +406,7 @@ const useStyles = makeStyles((theme) => ({
       cursor: 'pointer',
       fontSize: 14,
       '&:hover': {
-        backgroundColor: '#f0f0f0',
+        backgroundColor: theme.mode === 'light' ? '#f0f0f0' : '#3a3a3a',
       },
     },
     '& li.suggestion': {
@@ -413,7 +414,7 @@ const useStyles = makeStyles((theme) => ({
       fontWeight: 500,
     },
     '& li.divider': {
-      borderTop: '1px solid #eee',
+      borderTop: theme.mode === 'light' ? '1px solid #eee' : '1px solid #444',
       padding: 0,
       margin: '4px 0',
     },

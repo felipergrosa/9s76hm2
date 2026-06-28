@@ -30,5 +30,8 @@
     ],
   },
   "include": ["src/**/*","src/@types/**/*"],
-  "exclude": ["node_modules", "public"]
+  "exclude": ["node_modules", "public"],
+  "ts-node": {
+    "files": true
+  }
 }

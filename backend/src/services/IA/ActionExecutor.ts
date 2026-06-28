@@ -90,6 +90,8 @@ export class ActionExecutor {
                     return await this.atualizarContato(context);
                 case "verificar_cadastro_completo":
                     return await this.verificarCadastroCompleto(context);
+                case "salvar_memoria_contato":
+                    return await this.salvarMemoriaContato(context);
                 // Funções SDR
                 case "calcular_score_lead":
                     return await this.calcularScoreLead(context);
@@ -1165,6 +1167,39 @@ export class ActionExecutor {
         } catch (error: any) {
             logger.error("[ActionExecutor] Erro ao atualizar contato:", error);
             return `❌ Erro ao atualizar dados: ${error.message}`;
+        }
+    }
+
+    /**
+     * Salva/atualiza o resumo de memória do contato (item 10 do plano), para
+     * que fique disponível em qualquer ticket futuro deste mesmo contato.
+     */
+    private static async salvarMemoriaContato(ctx: ActionContext): Promise<string> {
+        const { memoria } = ctx.arguments;
+
+        if (!memoria || String(memoria).trim() === "") {
+            return "❌ Memória vazia — nada para salvar.";
+        }
+
+        try {
+            const Contact = (await import("../../models/Contact")).default;
+
+            const contact = await Contact.findByPk(ctx.contact.id);
+            if (!contact) {
+                return "❌ Contato não encontrado";
+            }
+
+            const MAX_LENGTH = 2000;
+            const trimmedMemory = String(memoria).trim().substring(0, MAX_LENGTH);
+
+            await contact.update({ aiMemory: trimmedMemory } as any);
+
+            logger.info(`[ActionExecutor] Memória do contato ${ctx.contact.id} atualizada`);
+
+            return "✅ Memória salva com sucesso.";
+        } catch (error: any) {
+            logger.error("[ActionExecutor] Erro ao salvar memória do contato:", error);
+            return `❌ Erro ao salvar memória: ${error.message}`;
         }
     }
 

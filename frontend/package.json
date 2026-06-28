@@ -48,6 +48,7 @@
     "i18next-browser-languagedetector": "^6.0.1",
     "icons": "^1.0.0",
     "jssip": "^3.10",
+    "kbar": "^0.1.0-beta.48",
     "lucide-react": "^0.475.0",
     "markdown-to-jsx": "^7.1.0",
     "material-ui-color": "^1.2.0",

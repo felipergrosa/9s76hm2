@@ -19,6 +19,7 @@ interface body {
     nodes : node
     idFlow: number
     connections: any
+    status?: "draft" | "published" // item 9 do plano: versionamento opcional
 }
 
 
@@ -33,12 +34,27 @@ const FlowUpdateDataService = async ({
 }: Request): Promise<String> => {
   try {
 
-    const flow = await FlowBuilderModel.update({ 
+    const updatePayload: any = {
         flow: {
             nodes: bodyData.nodes,
             connections: bodyData.connections
-        } 
-    },{
+        }
+    };
+
+    // Botão "Salvar" original não envia status — comportamento 1:1 preservado.
+    // "Salvar como rascunho"/"Publicar" (novos, opcionais) enviam status explícito.
+    if (bodyData.status === "draft" || bodyData.status === "published") {
+        updatePayload.status = bodyData.status;
+
+        if (bodyData.status === "published") {
+            const current = await FlowBuilderModel.findOne({
+                where: { id: bodyData.idFlow, company_id: companyId }
+            });
+            updatePayload.version = (current?.version || 1) + 1;
+        }
+    }
+
+    const flow = await FlowBuilderModel.update(updatePayload, {
       where: {id: bodyData.idFlow, company_id: companyId}
     });
 

@@ -2,7 +2,7 @@ import Queue from "../models/Queue";
 import Company from "../models/Company";
 import User from "../models/User";
 import jwt from "jsonwebtoken";
-import { getUserPermissions } from "./PermissionAdapter";
+import { getUserPermissionsAsync } from "./PermissionAdapter";
 
 interface SerializedUser {
   id: number;
@@ -72,7 +72,7 @@ export const SerializeUser = async (user: User): Promise<SerializedUser> => {
     allowedContactTags: user.allowedContactTags,
     managedUserIds: (user as any).managedUserIds || [],
     supervisorViewMode: (user as any).supervisorViewMode || "include",
-    permissions: getUserPermissions(user),
+    permissions: await getUserPermissionsAsync(user),
     color: (user as any).color
   };
 };

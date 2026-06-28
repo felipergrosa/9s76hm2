@@ -1,6 +1,6 @@
 import AppError from "../../errors/AppError";
 import Contact from "../../models/Contact";
-import ContactCustomField from "../../models/ContactCustomField";
+import ContactCustomField, { validateCustomFieldTypedValue } from "../../models/ContactCustomField";
 import ContactTag from "../../models/ContactTag";
 import { Op } from "sequelize";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
@@ -11,6 +11,8 @@ interface ExtraInfo {
   id?: number;
   name: string;
   value: string;
+  type?: string;
+  options?: string[] | null;
 }
 
 interface Wallet {
@@ -227,6 +229,9 @@ const UpdateContactService = async ({
   if (extraInfo) {
     await Promise.all(
       extraInfo.map(async (info: any) => {
+        // upsert() não dispara hooks de instância no Sequelize v5 (Postgres) —
+        // valida explicitamente aqui antes de gravar.
+        validateCustomFieldTypedValue(info);
         await ContactCustomField.upsert({ ...info, contactId: contact.id });
       })
     );

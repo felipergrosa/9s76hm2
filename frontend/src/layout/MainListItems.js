@@ -51,6 +51,8 @@ import {
   Workflow as ShapeLine,
   Webhook as Webhook,
   Bot as SmartToy,
+  ShieldCheck as RolesIcon,
+  UserPlus as LeadsImportIcon,
 } from "lucide-react";
 
 import { WhatsAppsContext } from "../context/WhatsApp/WhatsAppsContext";
@@ -590,6 +592,17 @@ const MainListItems = ({ collapsed, drawerClose }) => {
         />
       )}
 
+      {/* 1.1 PERFIS DE ACESSO (ROLES) */}
+      {hasPermission("roles.view") && (
+        <ListItemLink
+          to="/roles"
+          primary="Perfis de Acesso"
+          icon={<RolesIcon />}
+          viewMode={viewMode}
+          tooltip={collapsed}
+        />
+      )}
+
       {/* 2. CONEXÕES */}
       {hasPermission("connections.view") && (
         <ListItemLink
@@ -673,6 +686,15 @@ const MainListItems = ({ collapsed, drawerClose }) => {
                 viewMode={viewMode}
                 tooltip={collapsed}
               />
+              {hasPermission("contacts.import") && (
+                <ListItemLink
+                  to="/leads-import"
+                  primary="Importar Leads"
+                  icon={<LeadsImportIcon />}
+                  viewMode={viewMode}
+                  tooltip={collapsed}
+                />
+              )}
               <ListItemLink
                 to="/campaigns-config"
                 primary={i18n.t("campaigns.subMenus.settings")}
@@ -680,6 +702,24 @@ const MainListItems = ({ collapsed, drawerClose }) => {
                 viewMode={viewMode}
                 tooltip={collapsed}
               />
+              {hasPermission("email-campaigns.view") && (
+                <ListItemLink
+                  to="/email-campaigns"
+                  primary="Campanhas de E-mail"
+                  icon={<EventAvailableIcon />}
+                  viewMode={viewMode}
+                  tooltip={collapsed}
+                />
+              )}
+              {hasPermission("drip-sequences.view") && (
+                <ListItemLink
+                  to="/drip-sequences"
+                  primary="Sequências de Drip"
+                  icon={<EventAvailableIcon />}
+                  viewMode={viewMode}
+                  tooltip={collapsed}
+                />
+              )}
             </List>
           </Collapse>
         </>

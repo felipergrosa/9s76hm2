@@ -1295,6 +1295,18 @@ ${stage?.systemPrompt || ""}
                                                                 />
                                                             </Grid>
 
+                                                            <Grid item xs={12} sm={6}>
+                                                                <TextField
+                                                                    fullWidth
+                                                                    label="Identificador da Etapa (stageKey)"
+                                                                    name={`funnelStages[${index}].stageKey`}
+                                                                    value={stage.stageKey || ""}
+                                                                    onChange={handleChange}
+                                                                    placeholder="Ex: descoberta, negociacao, fechamento"
+                                                                    helperText="Usado como alvo das transições de avanço abaixo. Opcional, mas recomendado se usar transições."
+                                                                />
+                                                            </Grid>
+
                                                             <Grid item xs={12}>
                                                                 <TextField
                                                                     fullWidth
@@ -1362,11 +1374,67 @@ ${stage?.systemPrompt || ""}
                                                                         <MenuItem value="buscar_produto_detalhado">🔍 Buscar Produto Detalhado</MenuItem>
                                                                         <MenuItem value="transferir_para_vendedor_responsavel">👤 Transferir para Vendedor Responsável</MenuItem>
                                                                         <MenuItem value="transferir_para_atendente">🙋 Transferir para Atendente</MenuItem>
+                                                                        <MenuItem value="salvar_memoria_contato">🧠 Salvar Memória do Contato</MenuItem>
                                                                     </Select>
                                                                     <Typography variant="caption" color="textSecondary" style={{ marginTop: 4 }}>
                                                                         Deixe vazio para permitir todas as funções. Selecione funções específicas para restringir o que a IA pode fazer nesta etapa.
                                                                     </Typography>
                                                                 </FormControl>
+                                                            </Grid>
+
+                                                            <Grid item xs={12}>
+                                                                <Typography variant="subtitle2" style={{ marginTop: 8, marginBottom: 4 }}>
+                                                                    Transições de Avanço
+                                                                </Typography>
+                                                                <Typography variant="caption" color="textSecondary" style={{ marginBottom: 8, display: 'block' }}>
+                                                                    Quando o cliente mencionar uma das palavras-chave abaixo, o atendimento avança automaticamente para a etapa de destino.
+                                                                </Typography>
+                                                                {(stage.transitions || []).map((transition, tIndex) => (
+                                                                    <Box key={tIndex} display="flex" gap={1} alignItems="center" mb={1}>
+                                                                        <TextField
+                                                                            size="small"
+                                                                            label="Palavra-chave"
+                                                                            value={transition.value || ""}
+                                                                            onChange={(e) => setFieldValue(`funnelStages[${index}].transitions[${tIndex}].value`, e.target.value)}
+                                                                            style={{ flex: 1 }}
+                                                                        />
+                                                                        <FormControl size="small" style={{ flex: 1 }}>
+                                                                            <InputLabel>Etapa de destino</InputLabel>
+                                                                            <Select
+                                                                                value={transition.targetStageKey || ""}
+                                                                                onChange={(e) => setFieldValue(`funnelStages[${index}].transitions[${tIndex}].targetStageKey`, e.target.value)}
+                                                                            >
+                                                                                {values.funnelStages
+                                                                                    .filter((s) => s.stageKey)
+                                                                                    .map((s) => (
+                                                                                        <MenuItem key={s.stageKey} value={s.stageKey}>
+                                                                                            {s.name} ({s.stageKey})
+                                                                                        </MenuItem>
+                                                                                    ))}
+                                                                            </Select>
+                                                                        </FormControl>
+                                                                        <IconButton
+                                                                            size="small"
+                                                                            onClick={() => {
+                                                                                const newTransitions = [...(stage.transitions || [])];
+                                                                                newTransitions.splice(tIndex, 1);
+                                                                                setFieldValue(`funnelStages[${index}].transitions`, newTransitions);
+                                                                            }}
+                                                                        >
+                                                                            <DeleteIcon fontSize="small" />
+                                                                        </IconButton>
+                                                                    </Box>
+                                                                ))}
+                                                                <Button
+                                                                    size="small"
+                                                                    startIcon={<AddIcon />}
+                                                                    onClick={() => {
+                                                                        const newTransitions = [...(stage.transitions || []), { type: "keyword", value: "", targetStageKey: "" }];
+                                                                        setFieldValue(`funnelStages[${index}].transitions`, newTransitions);
+                                                                    }}
+                                                                >
+                                                                    Adicionar transição
+                                                                </Button>
                                                             </Grid>
                                                         </Grid>
                                                     </Box>
@@ -1383,7 +1451,9 @@ ${stage?.systemPrompt || ""}
                                                             tone: "",
                                                             objective: "",
                                                             systemPrompt: "",
-                                                            enabledFunctions: []
+                                                            enabledFunctions: [],
+                                                            stageKey: "",
+                                                            transitions: []
                                                         })
                                                     }
                                                 >

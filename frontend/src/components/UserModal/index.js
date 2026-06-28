@@ -183,6 +183,8 @@ const UserModal = ({ open, onClose, userId }) => {
   const [profileUrl, setProfileUrl] = useState(null)
   const [tab, setTab] = useState("general");
   const [avatar, setAvatar] = useState(null);
+  const [roleOptions, setRoleOptions] = useState([]);
+  const [selectedRoleIds, setSelectedRoleIds] = useState([]);
   const startWorkRef = useRef();
   const endWorkRef = useRef();
 
@@ -232,6 +234,41 @@ const UserModal = ({ open, onClose, userId }) => {
     fetchUser();
   }, [userId, open]);
 
+  // Item 11 do plano (RBAC): carrega Roles disponíveis e as atribuídas a este usuário.
+  // Só busca se o usuário logado tiver permissão — evita erro 403 desnecessário no console.
+  useEffect(() => {
+    if (!open || !hasPermission("roles.view")) return;
+
+    const fetchRoles = async () => {
+      try {
+        const { data } = await api.get("/roles");
+        setRoleOptions(Array.isArray(data) ? data : []);
+      } catch (err) {
+        if (err?.response?.status !== 403) {
+          console.error("[UserModal] Erro ao buscar roles:", err);
+        }
+      }
+    };
+    fetchRoles();
+
+    if (userId) {
+      const fetchUserRoles = async () => {
+        try {
+          const { data } = await api.get(`/users/${userId}/roles`);
+          setSelectedRoleIds(Array.isArray(data) ? data.map(r => r.id) : []);
+        } catch (err) {
+          if (err?.response?.status !== 403) {
+            console.error("[UserModal] Erro ao buscar roles do usuário:", err);
+          }
+        }
+      };
+      fetchUserRoles();
+    } else {
+      setSelectedRoleIds([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, open]);
+
   const handleClose = () => {
     onClose();
     setUser(initialState);
@@ -269,6 +306,8 @@ const UserModal = ({ open, onClose, userId }) => {
     };
 
     try {
+      let savedUserId = userId;
+
       if (userId) {
         const { data } = await api.put(`/users/${userId}`, userData);
 
@@ -278,10 +317,24 @@ const UserModal = ({ open, onClose, userId }) => {
         }
       } else {
         const { data } = await api.post("/users", userData);
+        savedUserId = data.id;
 
         // Novo usuário, sempre faz upload se avatar existir
         if (avatar) {
           await uploadAvatar(data);
+        }
+      }
+
+      // Item 11 do plano (RBAC): salva os Perfis de Acesso atribuídos, se o
+      // usuário logado tiver permissão para isso (caso contrário, não envia
+      // nada e a atribuição existente permanece intacta).
+      if (savedUserId && hasPermission("roles.edit")) {
+        try {
+          await api.put(`/users/${savedUserId}/roles`, { roleIds: selectedRoleIds });
+        } catch (err) {
+          if (err?.response?.status !== 403) {
+            toastError(err);
+          }
         }
       }
 
@@ -650,6 +703,46 @@ const UserModal = ({ open, onClose, userId }) => {
                               />
                             </Grid>
                           </Grid>
+
+                          {/* Item 11 do plano (RBAC): Perfis de Acesso (Roles) -
+                              somam permissões extras às já definidas acima, sem substituir nada. */}
+                          {hasPermission("roles.view") && (
+                            <>
+                              <Divider style={{ marginTop: 16, marginBottom: 16 }} />
+                              <Typography variant="subtitle2" style={{ marginBottom: 8 }}>
+                                Perfis de Acesso (Roles)
+                              </Typography>
+                              <Typography variant="caption" color="textSecondary" style={{ marginBottom: 12, display: 'block' }}>
+                                Perfis concedem permissões adicionais, somando-se às selecionadas acima.
+                              </Typography>
+                              <Autocomplete
+                                multiple
+                                options={roleOptions}
+                                getOptionLabel={(option) => option?.name || ''}
+                                value={roleOptions.filter(r => selectedRoleIds.includes(r.id))}
+                                onChange={(e, newValue) => setSelectedRoleIds((newValue || []).map(r => r.id))}
+                                disabled={!hasPermission("roles.edit")}
+                                renderTags={(value, getTagProps) =>
+                                  value.map((option, index) => (
+                                    <Chip
+                                      {...getTagProps({ index })}
+                                      key={option.id}
+                                      label={option.name}
+                                      size="small"
+                                    />
+                                  ))
+                                }
+                                renderInput={(params) => (
+                                  <TextField
+                                    {...params}
+                                    variant="outlined"
+                                    margin="dense"
+                                    placeholder="Selecione perfis de acesso"
+                                  />
+                                )}
+                              />
+                            </>
+                          )}
 
                           {/* Seção de Grupos Permitidos - aparece quando allowGroup está habilitado */}
                           {values.allowGroup && userId && (

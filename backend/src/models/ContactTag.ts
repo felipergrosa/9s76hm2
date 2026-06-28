@@ -5,7 +5,8 @@ import {
   UpdatedAt,
   Model,
   ForeignKey,
-  BelongsTo
+  BelongsTo,
+  AfterCreate
 } from "sequelize-typescript";
 import Tag from "./Tag";
 import Contact from "./Contact";
@@ -41,6 +42,26 @@ class ContactTag extends Model<ContactTag> {
 
   @UpdatedAt
   updatedAt: Date;
+
+  // Hook para inscrever o contato em sequências de drip vinculadas a esta tag
+  @AfterCreate
+  static async enrollInDripSequencesAfterCreate(contactTag: ContactTag) {
+    // Executa de forma assíncrona sem bloquear quem criou a tag
+    setImmediate(async () => {
+      try {
+        const EnrollContactInDripSequencesService = (
+          await import("../services/DripSequenceService/EnrollContactInDripSequencesService")
+        ).default;
+        await EnrollContactInDripSequencesService({
+          companyId: contactTag.companyId,
+          contactId: contactTag.contactId,
+          tagId: contactTag.tagId
+        });
+      } catch (err) {
+        console.error(`[Hook] Erro ao inscrever contato ${contactTag.contactId} em drip sequences:`, err);
+      }
+    });
+  }
 }
 
 export default ContactTag;

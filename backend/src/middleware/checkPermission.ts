@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import AppError from "../errors/AppError";
-import { hasPermission, hasAnyPermission, hasAllPermissions } from "../helpers/PermissionAdapter";
+import { hasPermissionAsync, hasAnyPermissionAsync, hasAllPermissionsAsync } from "../helpers/PermissionAdapter";
 import User from "../models/User";
 
 interface RequestWithUser extends Request {
@@ -57,8 +57,8 @@ export const checkPermission = (permission: string) => {
         throw new AppError("ERR_USER_NOT_FOUND", 404);
       }
 
-      // Verifica permissão
-      if (hasPermission(user, permission)) {
+      // Verifica permissão (inclui Roles atribuídas via item 11 do plano)
+      if (await hasPermissionAsync(user, permission)) {
         return next();
       }
 
@@ -86,7 +86,7 @@ export const checkAnyPermission = (permissions: string[]) => {
         throw new AppError("ERR_USER_NOT_FOUND", 404);
       }
 
-      if (hasAnyPermission(user, permissions)) {
+      if (await hasAnyPermissionAsync(user, permissions)) {
         return next();
       }
 
@@ -114,7 +114,7 @@ export const checkAllPermissions = (permissions: string[]) => {
         throw new AppError("ERR_USER_NOT_FOUND", 404);
       }
 
-      if (hasAllPermissions(user, permissions)) {
+      if (await hasAllPermissionsAsync(user, permissions)) {
         return next();
       }
 

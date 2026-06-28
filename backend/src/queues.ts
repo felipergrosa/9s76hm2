@@ -57,6 +57,8 @@ import GetTemplateDefinition from "./services/MetaServices/GetTemplateDefinition
 import MapTemplateParameters from "./services/MetaServices/MapTemplateParameters";
 import CreateMessageService from "./services/MessageServices/CreateMessageService";
 import { buildOfficialPreviewData } from "./utils/officialMessagePreview";
+import { setupEmailCampaignProcessors, scheduleEmailCampaignVerification } from "./queues/EmailCampaignQueue";
+import { setupDripSequenceProcessors, scheduleDripSequenceVerification } from "./queues/DripSequenceQueue";
 
 const connection = process.env.REDIS_URI || "";
 const limiterMax = process.env.REDIS_OPT_LIMITER_MAX || 1;
@@ -3336,4 +3338,12 @@ export async function startQueueProcess() {
       removeOnComplete: true
     }
   );
+
+  // Canal de e-mail (fila própria, não interfere no disparo de WhatsApp acima)
+  setupEmailCampaignProcessors();
+  await scheduleEmailCampaignVerification();
+
+  // Drip sequences (fila própria, não interfere nas filas acima)
+  setupDripSequenceProcessors();
+  await scheduleDripSequenceVerification();
 }

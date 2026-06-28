@@ -134,6 +134,11 @@ import {
 
     @Column
     autoCaptureGroupContacts: string; // "enabled" ou "disabled" - controla captura automática de contatos de grupos
+
+    // Token compartilhado para o webhook de formulário externo (ex: bloco "Webhook" do Typebot)
+    // POST /webhooks/external-form/:token — null/vazio desabilita o endpoint para a empresa
+    @Column
+    externalFormWebhookToken: string;
   }
   
   export default CompaniesSettings;

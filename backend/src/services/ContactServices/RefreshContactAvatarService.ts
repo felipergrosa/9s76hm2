@@ -12,6 +12,13 @@ import { getWbotOrRecover } from "../../libs/wbot";
 import axios from "axios";
 import { buildContactAvatarPath, buildGroupAvatarPath, sanitizeFileName } from "../../utils/publicPath";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
+import {
+  isUsableAvatarUrl,
+  buildAvatarJidCandidates,
+  getStoreAvatarUrl,
+  fetchProfilePictureUrl
+} from "../../utils/avatarResolver";
+import { invalidateExistsCache } from "../../utils/fileExistsCache";
 
 interface Request {
   contactId: number | string;
@@ -78,12 +85,15 @@ const downloadProfileImage = async (profilePicUrl: string, folder: string, filen
 
     const filePath = join(folder, filename);
     fs.writeFileSync(filePath, data);
+    // Invalida cache de existência: o getter urlPicture deve enxergar o novo arquivo já.
+    invalidateExistsCache(filePath);
 
     // Verificar se arquivo foi salvo corretamente
     const stats = fs.statSync(filePath);
     if (stats.size < 100) {
       logger.warn(`[downloadProfileImage] Arquivo salvo com tamanho inválido: ${stats.size} bytes`);
       fs.unlinkSync(filePath);
+      invalidateExistsCache(filePath);
       return null;
     }
 
@@ -96,140 +106,12 @@ const downloadProfileImage = async (profilePicUrl: string, folder: string, filen
 
 const AVATAR_BASENAME = "avatar.jpg";
 
-const isUsableAvatarUrl = (url: unknown): url is string => {
-  if (typeof url !== "string") return false;
-
-  const normalized = url.trim();
-  if (!normalized || normalized === "changed") return false;
-  if (normalized.includes("/nopicture.png") || normalized.includes("nopicture.png")) return false;
-
-  return /^https?:\/\//i.test(normalized);
-};
-
 const isWhatsappChannel = (channels: unknown): boolean => {
   if (!Array.isArray(channels)) return false;
 
   return channels.some(channel =>
     String(channel || "").toLowerCase().includes("whatsapp")
   );
-};
-
-const uniqueValues = (values: Array<string | null | undefined>): string[] => {
-  const seen = new Set<string>();
-  const result: string[] = [];
-
-  for (const value of values) {
-    const normalized = String(value || "").trim();
-    if (!normalized || seen.has(normalized)) continue;
-    seen.add(normalized);
-    result.push(normalized);
-  }
-
-  return result;
-};
-
-const buildAvatarJidCandidates = (contact: Contact): string[] => {
-  const rawNumber = String(contact.number || "").replace(/\D/g, "");
-  const canonicalNumber = String((contact as any).canonicalNumber || "").replace(/\D/g, "");
-  const remoteJid = String(contact.remoteJid || "").trim();
-  const lidJid = String((contact as any).lidJid || "").trim();
-
-  if (contact.isGroup) {
-    return uniqueValues([
-      remoteJid.includes("@") ? remoteJid : null,
-      rawNumber ? `${rawNumber}@g.us` : null,
-      contact.number?.includes("@g.us") ? contact.number : null
-    ]);
-  }
-
-  return uniqueValues([
-    remoteJid.includes("@") ? remoteJid : null,
-    lidJid.includes("@") ? lidJid : null,
-    rawNumber ? `${rawNumber}@s.whatsapp.net` : null,
-    canonicalNumber ? `${canonicalNumber}@s.whatsapp.net` : null
-  ]);
-};
-
-const getStoreAvatarUrl = (wbot: any, contact: Contact, candidateJids: string[]): string | null => {
-  const storeContacts = wbot?.store?.contacts;
-  if (!storeContacts) return null;
-
-  for (const jid of candidateJids) {
-    const storeContact = storeContacts[jid];
-    if (isUsableAvatarUrl(storeContact?.imgUrl)) {
-      return storeContact.imgUrl;
-    }
-  }
-
-  const numberCandidates = new Set(
-    [
-      contact.number,
-      (contact as any).canonicalNumber,
-      ...candidateJids
-    ]
-      .map(value => String(value || "").replace(/\D/g, ""))
-      .filter(value => value.length >= 10 && value.length <= 13)
-  );
-
-  if (numberCandidates.size === 0) return null;
-
-  for (const [jid, storeContact] of Object.entries<any>(storeContacts)) {
-    const storeDigits = String(storeContact?.id || jid || "").replace(/\D/g, "");
-    if (numberCandidates.has(storeDigits) && isUsableAvatarUrl(storeContact?.imgUrl)) {
-      return storeContact.imgUrl;
-    }
-  }
-
-  return null;
-};
-
-const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> => {
-  let timeout: NodeJS.Timeout | null = null;
-
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<T>((_, reject) => {
-        timeout = setTimeout(() => reject(new Error(message)), timeoutMs);
-      })
-    ]);
-  } finally {
-    if (timeout) clearTimeout(timeout);
-  }
-};
-
-const fetchProfilePictureUrl = async (
-  wbot: any,
-  candidateJids: string[],
-  timeoutMs: number
-): Promise<string | null> => {
-  let lastError: any = null;
-  const profileTypes: Array<"image" | "preview"> = ["image", "preview"];
-
-  for (const jid of candidateJids) {
-    for (const profileType of profileTypes) {
-      try {
-        const url = await withTimeout(
-          wbot.profilePictureUrl(jid, profileType),
-          timeoutMs,
-          `Timeout ao buscar foto de perfil (${jid}, ${profileType})`
-        );
-
-        if (isUsableAvatarUrl(url)) {
-          return url;
-        }
-      } catch (err: any) {
-        lastError = err;
-        logger.debug(`[RefreshContactAvatar] Falha profilePictureUrl para ${jid}/${profileType}: ${err?.message || err}`);
-      }
-    }
-  }
-
-  if (lastError) {
-    throw lastError;
-  }
-
-  return null;
 };
 
 // Throttle interno: 1x por 24h por contato (escopo do processo)
@@ -528,6 +410,7 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
     if (desiredExists && shouldRedownload) {
       try {
         fs.unlinkSync(desiredPath);
+        invalidateExistsCache(desiredPath);
       } catch (e) {
         // silencioso
       }
@@ -564,6 +447,7 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
                 continue;
               }
             }
+            invalidateExistsCache(desiredPath);
             return true;
           }
         }

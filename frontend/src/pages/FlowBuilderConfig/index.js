@@ -179,6 +179,7 @@ export const FlowBuilderConfig = () => {
   const [modalAddOpenAI, setModalAddOpenAI] = useState(null);
   const [modalAddQuestion, setModalAddQuestion] = useState(null);
   const [importModal, setImportModal] = useState(false);
+  const [flowStatus, setFlowStatus] = useState("published"); // item 9 do plano: draft/published
 
   const connectionLineStyle = { stroke: "#2b2b2b", strokeWidth: "6px" };
 
@@ -447,6 +448,7 @@ export const FlowBuilderConfig = () => {
             const variables = filterVariables.map(variable => variable.data.typebotIntegration.answerKey)
             localStorage.setItem('variables', JSON.stringify(variables))
           }
+          setFlowStatus(data.flow.status || "published");
           setLoading(false);
         } catch (err) {
           toastError(err);
@@ -530,15 +532,26 @@ export const FlowBuilderConfig = () => {
   );
 
 
-  const saveFlow = async () => {
+  const saveFlow = async (status) => {
+    const payload = {
+      idFlow: id,
+      nodes: nodes,
+      connections: edges,
+    };
+    if (status === "draft" || status === "published") {
+      payload.status = status;
+    }
     await api
-      .post("/flowbuilder/flow", {
-        idFlow: id,
-        nodes: nodes,
-        connections: edges,
-      })
+      .post("/flowbuilder/flow", payload)
       .then((res) => {
-        toast.success("Fluxo salvo com sucesso");
+        if (status === "draft" || status === "published") {
+          setFlowStatus(status);
+          toast.success(
+            status === "draft" ? "Salvo como rascunho" : "Fluxo publicado com sucesso"
+          );
+        } else {
+          toast.success("Fluxo salvo com sucesso");
+        }
       });
   };
 
@@ -864,7 +877,24 @@ export const FlowBuilderConfig = () => {
       <FlowImportModal open={importModal} onClose={() => setImportModal(false)} />
 
       <MainHeader>
-        <Title>Desenhe seu fluxo</Title>
+        <Box display="flex" alignItems="center" gap={1}>
+          <Title>Desenhe seu fluxo</Title>
+          {id && (
+            <Box
+              component="span"
+              sx={{
+                fontSize: 12,
+                fontWeight: 600,
+                padding: "2px 8px",
+                borderRadius: 8,
+                backgroundColor: flowStatus === "draft" ? "#fff3cd" : "#d4edda",
+                color: flowStatus === "draft" ? "#856404" : "#155724",
+              }}
+            >
+              {flowStatus === "draft" ? "Rascunho" : "Publicado"}
+            </Box>
+          )}
+        </Box>
         <MainHeaderButtonsWrapper>
           <Button
             variant="contained"
@@ -885,10 +915,26 @@ export const FlowBuilderConfig = () => {
             Exportar
           </Button>
           <Button
+            variant="outlined"
+            color="primary"
+            sx={{ textTransform: "none", mr: 1 }}
+            onClick={() => saveFlow("draft")}
+          >
+            Salvar como rascunho
+          </Button>
+          <Button
+            variant="contained"
+            color="primary"
+            sx={{ textTransform: "none", mr: 1 }}
+            onClick={() => saveFlow("published")}
+          >
+            Publicar
+          </Button>
+          <Button
             variant="contained"
             color="primary"
             sx={{ textTransform: "none" }}
-            onClick={saveFlow}
+            onClick={() => saveFlow()}
           >
             Salvar
           </Button>

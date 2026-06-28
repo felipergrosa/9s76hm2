@@ -24,6 +24,7 @@ import Queue from "../models/Queue";
 import Chatbot from "../models/Chatbot";
 import AIAgent from "../models/AIAgent";
 import GetUserPersonalTagContactIds from "../helpers/GetUserPersonalTagContactIds";
+import { createAuditLogFromRequest, AuditActions, AuditEntities } from "../helpers/AuditLogger";
 
 type IndexQuery = {
   searchParam: string;
@@ -311,6 +312,9 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
 
   // Evento Socket.IO já emitido pelo CreateTicketService via ticketEventBus.publishTicketCreated
 
+  // Log de auditoria (item 7 do plano: timeline por ticket)
+  await createAuditLogFromRequest(req, AuditActions.CREATE, AuditEntities.TICKET, ticket.id);
+
   return res.status(200).json(ticket);
 };
 
@@ -490,6 +494,18 @@ export const update = async (
     return result;
   });
 
+  // Log de auditoria (item 7 do plano: timeline por ticket)
+  const updateAction = ticketData.status === "closed"
+    ? AuditActions.TICKET_CLOSE
+    : ticketData.userId !== undefined || ticketData.queueId !== undefined
+      ? AuditActions.TICKET_TRANSFER
+      : AuditActions.UPDATE;
+  await createAuditLogFromRequest(req, updateAction, AuditEntities.TICKET, ticketId, {
+    status: ticketData.status,
+    userId: ticketData.userId,
+    queueId: ticketData.queueId
+  });
+
   return res.status(200).json(ticket);
 };
 
@@ -512,6 +528,9 @@ export const remove = async (
       ticketId: +ticketId,
       oldStatus: ticket.status
     });
+
+  // Log de auditoria (item 7 do plano: timeline por ticket)
+  await createAuditLogFromRequest(req, AuditActions.DELETE, AuditEntities.TICKET, ticketId);
 
   return res.status(200).json({ message: "ticket deleted" });
 };

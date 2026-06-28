@@ -202,6 +202,20 @@ export const BOT_AVAILABLE_FUNCTIONS: BotFunction[] = [
             properties: {}
         }
     },
+    {
+        name: "salvar_memoria_contato",
+        description: "Salva ou atualiza um resumo do que é importante lembrar sobre este cliente para futuros atendimentos (preferências, combinados, contexto relevante). Use quando o cliente disser algo que valha a pena lembrar em um próximo contato (ex: 'prefiro ser atendido pela manhã', 'já comprou X antes', 'está esperando retorno sobre Y'). IMPORTANTE: passe o texto COMPLETO e atualizado da memória — ele substitui o que já existia, então inclua também o que já era relevante antes, não apenas a novidade.",
+        parameters: {
+            type: "object",
+            properties: {
+                memoria: {
+                    type: "string",
+                    description: "Texto completo e atualizado do que deve ser lembrado sobre este cliente em futuros atendimentos (resumo curto, poucas frases)."
+                }
+            },
+            required: ["memoria"]
+        }
+    },
     // ========== FUNÇÕES SDR ==========
     {
         name: "calcular_score_lead",

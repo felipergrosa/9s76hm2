@@ -197,8 +197,11 @@ const ContactAvatar = memo(({ contact, onError, ...props }) => {
       alt={data.contactName || "Avatar"}
       imgProps={{
         loading: "lazy",
+        // Sem crossOrigin: o avatar é apenas exibido (nunca lido via canvas).
+        // Em modo CORS o CDN do WhatsApp (pps.whatsapp.net) bloqueia o load por
+        // não enviar Access-Control-Allow-Origin, e o cache do prefetch (no-cors)
+        // não é reaproveitado. referrerPolicy no-referrer evita 403 do CDN.
         referrerPolicy: "no-referrer",
-        crossOrigin: "anonymous",
         ...(props.imgProps || {}),
       }}
     >

@@ -1,7 +1,13 @@
+import { Op } from "sequelize";
 import { Request, Response } from "express";
 import * as Sentry from "@sentry/node";
 import logger from "../utils/logger";
 import ProcessWhatsAppWebhook from "../services/WbotServices/ProcessWhatsAppWebhook";
+import Whatsapp from "../models/Whatsapp";
+import {
+  checkMetaWebhookSignature,
+  WEBHOOK_SIGNATURE_ENFORCE
+} from "../services/WebhookService/CheckMetaWebhookSignature";
 
 /**
  * Controller para receber webhooks da WhatsApp Business API Oficial
@@ -15,7 +21,7 @@ import ProcessWhatsAppWebhook from "../services/WbotServices/ProcessWhatsAppWebh
  * Verificação do webhook pela Meta
  * A Meta envia um GET request para verificar se o endpoint é válido
  */
-export const verifyWebhook = (req: Request, res: Response): Response => {
+export const verifyWebhook = async (req: Request, res: Response): Promise<Response> => {
   try {
     const mode = req.query["hub.mode"];
     const token = req.query["hub.verify_token"];
@@ -29,9 +35,18 @@ export const verifyWebhook = (req: Request, res: Response): Response => {
       return res.status(403).send("Forbidden");
     }
 
-    // Verificar token
-    const expectedToken = process.env.WABA_WEBHOOK_VERIFY_TOKEN || "meu_token_secreto";
-    if (token !== expectedToken) {
+    // Verificar token: aceita o token global (comportamento atual, preservado)
+    // ou o token configurado por conexão WABA (campo já existia, sem uso até aqui).
+    const globalToken = process.env.WABA_WEBHOOK_VERIFY_TOKEN;
+    const isGlobalTokenValid = !!globalToken && token === globalToken;
+
+    const isPerConnectionTokenValid =
+      typeof token === "string" &&
+      !!(await Whatsapp.findOne({
+        where: { wabaWebhookVerifyToken: token }
+      }));
+
+    if (!isGlobalTokenValid && !isPerConnectionTokenValid) {
       logger.warn(`[Webhook] Token inválido recebido`);
       return res.status(403).send("Forbidden");
     }
@@ -39,7 +54,7 @@ export const verifyWebhook = (req: Request, res: Response): Response => {
     // Retornar challenge
     logger.info(`[Webhook] Verificação bem-sucedida, retornando challenge`);
     return res.status(200).send(challenge);
-    
+
   } catch (error: any) {
     Sentry.captureException(error);
     logger.error(`[Webhook] Erro na verificação: ${error.message}`);
@@ -56,6 +71,18 @@ export const processWebhook = async (req: Request, res: Response): Promise<Respo
     const body = req.body;
 
     logger.debug(`[Webhook] Evento recebido: ${JSON.stringify(body).substring(0, 200)}...`);
+
+    const signatureHeader = req.headers["x-hub-signature-256"] as string | undefined;
+    const isSignatureValid = await checkMetaWebhookSignature(
+      req.rawBody,
+      signatureHeader,
+      "WABA"
+    );
+
+    if (!isSignatureValid && WEBHOOK_SIGNATURE_ENFORCE) {
+      logger.warn(`[Webhook] Requisição rejeitada: assinatura HMAC inválida (enforce ativo)`);
+      return res.status(403).send("Forbidden");
+    }
 
     // Validar payload básico
     if (!body.object) {

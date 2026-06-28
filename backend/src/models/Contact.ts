@@ -253,6 +253,12 @@ class Contact extends Model<Contact> {
   fantasyName: string;
 
   @Column({
+    type: DataType.TEXT,
+    allowNull: true
+  })
+  aiMemory: string; // item 10 do plano: resumo mantido pela IA entre tickets deste contato
+
+  @Column({
     type: 'DATEONLY',
     allowNull: true,
     set(value: Date | number) {
@@ -393,12 +399,14 @@ class Contact extends Model<Contact> {
       // para forçar o frontend a exibir iniciais/fallback em vez de erro 404
       // ATENÇÃO: __dirname em runtime = dist/models (2 níveis abaixo de backend/)
       // dist/models -> dist -> backend/public (2 níveis, não 3!)
-      const fs = require("fs");
+      // PERFORMANCE: cache de existência com TTL curto para evitar statSync por
+      // contato em listas grandes (invalidado em escrita/remoção de avatar).
       const path = require("path");
+      const { cachedExistsSync } = require("../utils/fileExistsCache");
       const publicFolder = path.resolve(__dirname, "..", "..", "public");
       const absolutePathFs = path.resolve(publicFolder, `company${this.companyId}`, relative);
 
-      if (!fs.existsSync(absolutePathFs)) {
+      if (!cachedExistsSync(absolutePathFs)) {
         return null;
       }
 

@@ -45,6 +45,7 @@ import { proto } from "@whiskeysockets/baileys";
 import { handleOpenAi } from "../IntegrationsServices/OpenAiService";
 import { IOpenAi } from "../../@types/openai";
 import { emitTicketStatusChange, emitTicketUpdateSimple } from "../../helpers/emitTicketUpdate";
+import FlowExecutionLog from "../../models/FlowExecutionLog";
 
 interface IAddContact {
   companyId: number;
@@ -53,6 +54,34 @@ interface IAddContact {
   email?: string;
   dataMore?: any;
 }
+
+// Item 6 do plano: log de execução do FlowBuilder. Side-effect puro — nunca
+// lança erro, para não alterar o fluxo de controle já existente do loop.
+const safeLogFlowExecution = async (params: {
+  flowBuilderId: number;
+  companyId: number;
+  ticketId?: number | null;
+  nodeId?: string | null;
+  nodeType?: string | null;
+  status: "executed" | "error";
+  errorMessage?: string | null;
+  contextSnapshot?: any;
+}): Promise<void> => {
+  try {
+    await FlowExecutionLog.create({
+      flowBuilderId: params.flowBuilderId,
+      companyId: params.companyId,
+      ticketId: params.ticketId ?? null,
+      nodeId: params.nodeId ?? null,
+      nodeType: params.nodeType ?? null,
+      status: params.status,
+      errorMessage: params.errorMessage ?? null,
+      contextSnapshot: params.contextSnapshot ?? null
+    } as any);
+  } catch (logError) {
+    logger.error(`[FlowExecutionLog] Falha ao gravar log de execução: ${logError}`);
+  }
+};
 
 export const ActionsWebhookService = async (
   whatsappId: number,
@@ -216,7 +245,18 @@ export const ActionsWebhookService = async (
           nodeSelected = otherNode;
         }
       }
-        
+
+      if (nodeSelected) {
+        await safeLogFlowExecution({
+          flowBuilderId: idFlowDb,
+          companyId,
+          ticketId: idTicket ?? (ticket ? ticket.id : null),
+          nodeId: nodeSelected.id,
+          nodeType: nodeSelected.type,
+          status: "executed"
+        });
+      }
+
       if (nodeSelected.type === "message") {
         
         let msg;
@@ -831,6 +871,13 @@ ${optionsMenu}`;
     return "ds";
   } catch (error) {
     logger.error(error);
+    await safeLogFlowExecution({
+      flowBuilderId: idFlowDb,
+      companyId,
+      ticketId: idTicket ?? null,
+      status: "error",
+      errorMessage: error?.message || String(error)
+    });
   }
 };
 

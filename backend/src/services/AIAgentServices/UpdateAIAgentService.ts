@@ -67,6 +67,8 @@ interface Request {
         enabledFunctions?: string[];
         autoAdvanceCondition?: string;
         sentimentThreshold?: number;
+        stageKey?: string;
+        transitions?: { type: "keyword"; value: string; targetStageKey: string }[];
     }>;
 }
 

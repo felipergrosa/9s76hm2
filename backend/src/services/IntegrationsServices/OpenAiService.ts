@@ -26,6 +26,8 @@ import { BOT_AVAILABLE_FUNCTIONS } from "../IA/BotFunctions";
 import ActionExecutor from "../IA/ActionExecutor";
 import ResolveAIAgentForTicketService from "../AIAgentServices/ResolveAIAgentForTicketService";
 import { DEFAULT_SKILLS, generateSkillsPrompt, findApplicableSkills } from "../IA/AISkill";
+import skillCache from "../IA/SkillCacheService";
+import generateCustomSkillsPrompt from "../IA/CustomSkillPrompt";
 
 type Session = WASocket & {
   id?: number;
@@ -275,11 +277,13 @@ const mergeAISettings = (
 const resolveSystemPromptForTicket = async (
   ticket: Ticket,
   contact: Contact,
-  openAiSettings: IOpenAi
+  openAiSettings: IOpenAi,
+  messageText?: string
 ): Promise<{ prompt: string; usingAgent: boolean; agentName?: string }> => {
   try {
     // PRIORITY 1: Try to use AI Agent configuration
-    const agentConfig = await ResolveAIAgentForTicketService({ ticket });
+    // messageText: permite ao Resolve avaliar avanço de etapa do funil (item 12 do plano)
+    const agentConfig = await ResolveAIAgentForTicketService({ ticket, messageText });
 
     if (agentConfig && agentConfig.systemPrompt) {
       console.log(`[AI] Using AI Agent "${agentConfig.agent.name}" for ticket ${ticket.id}`);
@@ -307,6 +311,14 @@ const resolveSystemPromptForTicket = async (
 
       const crmBlock = crmContextLines.length
         ? `\nDados conhecidos do cliente (CRM, quando disponíveis):\n${crmContextLines.join("\n")}\n`
+        : "";
+
+      // ========== MEMÓRIA DE CONTATO ENTRE TICKETS (item 10 do plano) ==========
+      // Aditivo: se o contato não tiver aiMemory salva ainda, este bloco fica
+      // vazio e o prompt permanece idêntico ao atual.
+      const aiMemory = (contact as any)?.aiMemory || "";
+      const memoryBlock = aiMemory
+        ? `\nMemória de atendimentos anteriores deste cliente (salva pela IA em tickets passados):\n${aiMemory}\n`
         : "";
 
       // ========== VERIFICAR HORÁRIO DE FUNCIONAMENTO ==========
@@ -442,12 +454,26 @@ IMPORTANTE:
 `;
       }
 
+      // ========== SKILLS PERSONALIZADAS (Skill.ts, item 9.5 do plano) ==========
+      // Aditivo ao bloco fixo (DEFAULT_SKILLS) abaixo: só aparece algo aqui se a
+      // empresa/agente tiver Skills cadastradas com status "active". Sem isso,
+      // customSkillsBlock fica "" e o prompt permanece idêntico ao atual.
+      let customSkillsBlock = "";
+      try {
+        const dbSkills = await skillCache.getSkills(ticket.companyId, agentConfig.agent.id);
+        const activeSkills = dbSkills.filter(s => s.status === "active" && s.enabled);
+        customSkillsBlock = generateCustomSkillsPrompt(activeSkills);
+      } catch (skillError) {
+        console.error("[AI][Skills] Erro ao buscar skills personalizadas (Skill.ts):", skillError);
+      }
+
       const agentPrompt = `Instruções do Sistema:
   - Seu nome é ${agentConfig.agent.name}. Se perguntarem quem você é ou qual seu nome, responda: "Meu nome é ${agentConfig.agent.name}".
   - Use o nome ${clientName} nas respostas para que o cliente se sinta mais próximo e acolhido, sem exagerar nem repetir o nome em todas as frases.
   - Tom de comunicação: ${agentConfig.tone || "Profissional"}
   - Etapa do atendimento: ${agentConfig.currentStage.name} - ${agentConfig.currentStage.objective || ""}
   ${crmBlock}
+  ${memoryBlock}
   ${sdrBlock}
   
   🚨 REGRA OBRIGATÓRIA - ENVIO DE ARQUIVOS:
@@ -468,12 +494,18 @@ IMPORTANTE:
   - SEMPRE execute a função quando cliente pedir arquivo
   - Se a função retornar erro, informe o erro específico ao cliente
   - Sua PRIORIDADE MÁXIMA é executar funções, não falar sobre elas
-  
+
+  🧠 MEMÓRIA ENTRE ATENDIMENTOS:
+  - Quando o cliente disser algo que valha lembrar em um próximo atendimento (preferências, combinados, contexto importante), use a função salvar_memoria_contato.
+  - Ao chamar essa função, envie o texto COMPLETO e atualizado da memória (incluindo o que já era relevante antes, não só a novidade).
+  - Isso é opcional e não deve interromper o atendimento normal — só use quando fizer sentido.
+
   ${businessHoursBlock}
   ${leadQualificationBlock}
   
   // ========== BLOCO DE SKILLS ==========
   ${generateSkillsPrompt(DEFAULT_SKILLS)}
+  ${customSkillsBlock}
   
   Prompt Específico do Agente:
   ${agentConfig.systemPrompt}
@@ -923,7 +955,7 @@ export const handleOpenAi = async (
   });
 
   // Resolve system prompt (uses AI Agent if configured, otherwise legacy prompt)
-  let promptSystem = (await resolveSystemPromptForTicket(ticket, contact, openAiSettings)).prompt;
+  let promptSystem = (await resolveSystemPromptForTicket(ticket, contact, openAiSettings, bodyMessage)).prompt;
 
   try {
     const ragCfg = await resolveRAGConfigForTicket(ticket);

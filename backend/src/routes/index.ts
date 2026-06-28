@@ -70,6 +70,11 @@ import debugRoutes from "./debugRoutes";
 import promptRoutes from "./promptRoutes";
 import skillRoutes from "./skillRoutes";
 import featureFlagRoutes from "./featureFlagRoutes";
+import emailCampaignRoutes from "./emailCampaignRoutes";
+import dripSequenceRoutes from "./dripSequenceRoutes";
+import externalFormWebhookRoutes from "./externalFormWebhookRoutes";
+import roleRoutes from "./roleRoutes";
+import leadRoutes from "./leadRoutes";
 import { getLinkPreviewData, detectAndPreview } from "../controllers/LinkPreviewController";
 
 const routes = Router();
@@ -152,6 +157,11 @@ routes.use(debugRoutes);
 routes.use(promptRoutes);
 routes.use(skillRoutes);
 routes.use(featureFlagRoutes);
+routes.use(emailCampaignRoutes);
+routes.use(dripSequenceRoutes);
+routes.use(externalFormWebhookRoutes);
+routes.use(roleRoutes);
+routes.use(leadRoutes);
 
 // Link Preview routes
 routes.post("/link-preview", isAuth, getLinkPreviewData);

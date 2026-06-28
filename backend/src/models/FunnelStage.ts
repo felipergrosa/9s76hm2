@@ -12,6 +12,15 @@ import {
 } from "sequelize-typescript";
 import AIAgent from "./AIAgent";
 
+// item 12 do plano: transição tipada de etapa do funil. v1 só suporta
+// "keyword" (match simples na mensagem do usuário) — sentimento/intenção
+// ficam para uma evolução futura, já que não há infra de scoring hoje.
+export interface IFunnelTransition {
+    type: "keyword";
+    value: string;
+    targetStageKey: string;
+}
+
 @Table({ tableName: "FunnelStages" })
 class FunnelStage extends Model<FunnelStage> {
     @PrimaryKey
@@ -46,6 +55,12 @@ class FunnelStage extends Model<FunnelStage> {
 
     @Column({ type: DataType.FLOAT, allowNull: true })
     sentimentThreshold: number;
+
+    @Column({ type: DataType.STRING, allowNull: true })
+    stageKey: string; // item 12 do plano: identificador estável da etapa, usado como alvo de transitions
+
+    @Column({ type: DataType.JSON, defaultValue: [] })
+    transitions: IFunnelTransition[]; // item 12 do plano: regras tipadas de avanço de etapa
 
     @BelongsTo(() => AIAgent)
     agent: AIAgent;

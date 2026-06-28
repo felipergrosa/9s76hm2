@@ -83,7 +83,7 @@ import ListContactImportLogsService from "../services/ContactServices/ListContac
 import ShowContactImportLogService from "../services/ContactServices/ShowContactImportLogService";
 import GetImportJobStatusService from "../services/ContactServices/GetImportJobStatusService";
 import { v4 as uuidv4 } from "uuid";
-import { createAuditLog, AuditActions, AuditEntities } from "../helpers/AuditLogger";
+import { createAuditLog, createAuditLogFromRequest, AuditActions, AuditEntities } from "../helpers/AuditLogger";
 import { hasPermission } from "../helpers/PermissionAdapter";
 import ListGroupsService from "../services/ContactServices/ListGroupsService";
 import User from "../models/User";
@@ -979,6 +979,9 @@ export const store = async (req: AuthenticatedRequest, res: Response): Promise<R
     }
   );
 
+  // Log de auditoria (item 7 do plano: timeline por contato)
+  await createAuditLogFromRequest(req, AuditActions.CREATE, AuditEntities.CONTACT, contact.id);
+
   return res.status(200).json(contact);
 };
 
@@ -1203,6 +1206,9 @@ export const update = async (
     }
   );
 
+  // Log de auditoria (item 7 do plano: timeline por contato)
+  await createAuditLogFromRequest(req, AuditActions.UPDATE, AuditEntities.CONTACT, contact.id);
+
   return res.status(200).json(contact);
 };
 
@@ -1227,6 +1233,9 @@ export const remove = async (
       contactId
     }
   );
+
+  // Log de auditoria (item 7 do plano: timeline por contato)
+  await createAuditLogFromRequest(req, AuditActions.DELETE, AuditEntities.CONTACT, contactId);
 
   return res.status(200).json({ message: "Contact deleted" });
 };

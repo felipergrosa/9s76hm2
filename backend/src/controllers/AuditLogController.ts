@@ -5,6 +5,7 @@ interface IndexQuery {
   searchParam?: string;
   action?: string;
   entity?: string;
+  entityId?: string;
   userId?: string;
   startDate?: string;
   endDate?: string;
@@ -20,6 +21,7 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
     searchParam,
     action,
     entity,
+    entityId,
     userId,
     startDate,
     endDate,
@@ -31,6 +33,7 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
     searchParam,
     action,
     entity,
+    entityId,
     userId: userId ? Number(userId) : undefined,
     startDate,
     endDate,

@@ -38,6 +38,7 @@ import api from "../../services/api";
 import { toast } from "react-toastify";
 import { TagsKanbanContainer } from "../TagsKanbanContainer";
 import SharedMediaPanel from "../SharedMediaPanel";
+import EntityTimeline from "../EntityTimeline";
 
 const drawerWidth = 320;
 
@@ -143,6 +144,13 @@ const useStyles = makeStyles(theme => ({
     contactExtraInfo: {
         marginTop: 4,
         padding: 6,
+    },
+    mediaPanelHeader: {
+        padding: "12px 16px",
+        fontSize: 14,
+        fontWeight: 500,
+        color: theme.palette.type === "dark" ? "#4fd1a5" : "#008069",
+        backgroundColor: theme.palette.tabHeaderBackground,
     },
 }));
 
@@ -622,17 +630,8 @@ const ContactDrawer = ({ open, handleDrawerClose, contact, ticket, loading, acti
                         <TagsKanbanContainer ticket={ticket} className={classes.contactTags} />
                         
                         {/* Mídia, links e docs - Estilo WhatsApp Web */}
-                        <Paper square variant="outlined" style={{ marginTop: 8, backgroundColor: "#fff" }}>
-                            <Typography 
-                                className={classes.sectionTitle}
-                                style={{ 
-                                    padding: "12px 16px", 
-                                    fontSize: 14, 
-                                    fontWeight: 500, 
-                                    color: "#008069",
-                                    backgroundColor: "#f0f2f5"
-                                }}
-                            >
+                        <Paper square variant="outlined" style={{ marginTop: 8 }}>
+                            <Typography className={classes.mediaPanelHeader}>
                                 Mídia, links e docs
                             </Typography>
                             <div style={{ height: 320 }}>
@@ -674,6 +673,20 @@ const ContactDrawer = ({ open, handleDrawerClose, contact, ticket, loading, acti
                                         </Paper>
                                     ))}
                                 </div>
+                                {contact?.id && (
+                                    <EntityTimeline
+                                        entity="Contato"
+                                        entityId={contact.id}
+                                        title="Histórico do Contato"
+                                    />
+                                )}
+                                {ticket?.id && (
+                                    <EntityTimeline
+                                        entity="Atendimento"
+                                        entityId={ticket.id}
+                                        title="Histórico do Atendimento"
+                                    />
+                                )}
                             </Collapse>
                         </Paper>
                     </div>
