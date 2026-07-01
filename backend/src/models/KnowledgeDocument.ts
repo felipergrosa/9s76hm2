@@ -47,6 +47,10 @@ export default class KnowledgeDocument extends Model<KnowledgeDocument> {
   @Column(DataType.TEXT)
   metadata?: string; // JSON string
 
+  // general | product | rules
+  @Column({ type: DataType.STRING(50), defaultValue: "general" })
+  category: string;
+
   @CreatedAt
   @Column(DataType.DATE(6))
   createdAt!: Date;

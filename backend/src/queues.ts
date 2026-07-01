@@ -311,6 +311,7 @@ export const queueMonitor = new BullQueue("QueueMonitor", connection);
 export const validateWhatsappContactsQueue = new BullQueue("ValidateWhatsappContacts", connection);
 export const sessionWindowRenewalQueue = new BullQueue(`${process.env.DB_NAME}-SessionWindowRenewal`, connection);
 export const contactAvatarQueue = new BullQueue("ContactAvatarQueue", connection);
+export const leadScraperQueue = new BullQueue("LeadScraperQueue", connection);
 
 // Fila para mensagens Baileys (concurrency=1 - protege WebSocket único)
 export const baileysMessageQueue = new BullQueue("BaileysMessageQueue", connection, {
@@ -3301,6 +3302,11 @@ export async function startQueueProcess() {
   sessionWindowRenewalQueue.process(1, async (job) => {
     const renewalJob = await import("./jobs/SessionWindowRenewalJob");
     return renewalJob.default.handle(job);
+  });
+
+  leadScraperQueue.process("RunJob", 1, async (job) => {
+    const { runScraperJob } = await import("./services/LeadScraper/LeadScraperJobService");
+    return runScraperJob(job.data.jobId);
   });
 
   scheduleMonitor.add(

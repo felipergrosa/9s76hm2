@@ -174,3 +174,7 @@ backups/
 
 # Docker build cache
 .docker-cache/
+
+# Scraper files
+scraper/
+

@@ -75,6 +75,10 @@ import dripSequenceRoutes from "./dripSequenceRoutes";
 import externalFormWebhookRoutes from "./externalFormWebhookRoutes";
 import roleRoutes from "./roleRoutes";
 import leadRoutes from "./leadRoutes";
+import leadScraperRoutes from "./leadScraperRoutes";
+import customFieldConfigRoutes from "./customFieldConfigRoutes";
+import dealRoutes from "./dealRoutes";
+import metaOAuthRoutes from "./metaOAuthRoutes";
 import { getLinkPreviewData, detectAndPreview } from "../controllers/LinkPreviewController";
 
 const routes = Router();
@@ -162,6 +166,10 @@ routes.use(dripSequenceRoutes);
 routes.use(externalFormWebhookRoutes);
 routes.use(roleRoutes);
 routes.use(leadRoutes);
+routes.use(leadScraperRoutes);
+routes.use(customFieldConfigRoutes);
+routes.use(dealRoutes);
+routes.use(metaOAuthRoutes);
 
 // Link Preview routes
 routes.post("/link-preview", isAuth, getLinkPreviewData);

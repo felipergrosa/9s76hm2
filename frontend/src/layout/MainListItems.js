@@ -53,6 +53,10 @@ import {
   Bot as SmartToy,
   ShieldCheck as RolesIcon,
   UserPlus as LeadsImportIcon,
+  ScanSearch as LeadScraperIcon,
+  BookOpen as KnowledgeBaseIcon,
+  Briefcase as DealsIcon,
+  Sliders as CustomFieldsIcon,
 } from "lucide-react";
 
 import { WhatsAppsContext } from "../context/WhatsApp/WhatsAppsContext";
@@ -534,6 +538,15 @@ const MainListItems = ({ collapsed, drawerClose }) => {
         />
       )}
 
+      {/* NEGÓCIOS / DEALS */}
+      <ListItemLink
+        to="/deals"
+        primary="Negócios"
+        icon={<DealsIcon />}
+        viewMode={viewMode}
+        tooltip={collapsed}
+      />
+
       {/* 8. RESPOSTAS RÁPIDAS */}
       {hasPermission("quick-messages.view") && (
         <ListItemLink
@@ -602,6 +615,15 @@ const MainListItems = ({ collapsed, drawerClose }) => {
           tooltip={collapsed}
         />
       )}
+
+      {/* CAMPOS CUSTOMIZADOS (ADMIN) */}
+      <ListItemLink
+        to="/admin-custom-fields"
+        primary="Campos Customizados"
+        icon={<CustomFieldsIcon />}
+        viewMode={viewMode}
+        tooltip={collapsed}
+      />
 
       {/* 2. CONEXÕES */}
       {hasPermission("connections.view") && (
@@ -691,6 +713,15 @@ const MainListItems = ({ collapsed, drawerClose }) => {
                   to="/leads-import"
                   primary="Importar Leads"
                   icon={<LeadsImportIcon />}
+                  viewMode={viewMode}
+                  tooltip={collapsed}
+                />
+              )}
+              {hasPermission("contacts.import") && (
+                <ListItemLink
+                  to="/lead-scraper"
+                  primary="Captador de Leads"
+                  icon={<LeadScraperIcon />}
                   viewMode={viewMode}
                   tooltip={collapsed}
                 />
@@ -808,6 +839,13 @@ const MainListItems = ({ collapsed, drawerClose }) => {
                   tooltip={collapsed}
                 />
               )}
+              <ListItemLink
+                to="/knowledge-base"
+                primary="Base de Conhecimento IA"
+                icon={<KnowledgeBaseIcon />}
+                viewMode={viewMode}
+                tooltip={collapsed}
+              />
             </List>
           </Collapse>
         </>

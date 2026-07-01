@@ -78,6 +78,10 @@ const ContactListItems = lazy(() => import("../pages/ContactListItems"));
 const EmailCampaigns = lazy(() => import("../pages/EmailCampaigns"));
 const DripSequences = lazy(() => import("../pages/DripSequences"));
 const LeadsImport = lazy(() => import("../pages/LeadsImport"));
+const LeadScraper = lazy(() => import("../pages/LeadScraper"));
+const KnowledgeBase = lazy(() => import("../pages/KnowledgeBase"));
+const AdminCustomFields = lazy(() => import("../pages/AdminCustomFields"));
+const Deals = lazy(() => import("../pages/Deals"));
 
 // FlowBuilder (pesado - sempre lazy)
 const FlowBuilder = lazy(() => import("../pages/FlowBuilder"));
@@ -182,6 +186,10 @@ const Routes = () => {
                 <Route exact path="/users" component={Users} isPrivate />
                 <PrivateRoute exact path="/roles" component={Roles} permission="roles.view" />
                 <PrivateRoute exact path="/leads-import" component={LeadsImport} permission="contacts.import" />
+                <PrivateRoute exact path="/lead-scraper" component={LeadScraper} permission="contacts.import" />
+                <Route exact path="/knowledge-base" component={KnowledgeBase} isPrivate />
+                <Route exact path="/admin-custom-fields" component={AdminCustomFields} isPrivate />
+                <Route exact path="/deals" component={Deals} isPrivate />
                 <Route exact path="/messages-api" component={MessagesAPI} isPrivate />
                 <Route exact path="/settings" component={SettingsCustom} isPrivate />
                 <Route exact path="/queues" component={Queues} isPrivate />

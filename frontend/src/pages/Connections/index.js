@@ -260,6 +260,20 @@ const Connections = () => {
   }, []);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const metaSuccess = params.get("meta_success");
+    const metaError = params.get("meta_error");
+    if (metaSuccess) {
+      toast.success(`${metaSuccess} conexão(ões) Meta criada(s) com sucesso!`);
+      history.replace("/connections");
+    } else if (metaError) {
+      toast.error(`Erro OAuth Meta: ${decodeURIComponent(metaError)}`);
+      history.replace("/connections");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
     socket.on(`importMessages-${user.companyId}`, (data) => {
       if (data.action === "refresh") {
         setStatusImport([]);

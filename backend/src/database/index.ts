@@ -80,6 +80,10 @@ import Skill from "../models/Skill";
 import Role from "../models/Role";
 import UserRole from "../models/UserRole";
 import TicketFunnelState from "../models/TicketFunnelState";
+import LeadScraperJob from "../models/LeadScraperJob";
+import CustomFieldConfig from "../models/CustomFieldConfig";
+import DealStage from "../models/DealStage";
+import Deal from "../models/Deal";
 
 
 // eslint-disable-next-line
@@ -240,7 +244,11 @@ const models = [
   Skill,
   Role,
   UserRole,
-  TicketFunnelState
+  TicketFunnelState,
+  LeadScraperJob,
+  CustomFieldConfig,
+  DealStage,
+  Deal
 ];
 
 sequelize.addModels(models);

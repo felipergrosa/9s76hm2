@@ -2,11 +2,11 @@ import { Request, Response } from "express";
 import logger from "../utils/logger";
 import Whatsapp from "../models/Whatsapp";
 import { handleMessage } from "../services/FacebookServices/facebookMessageListener";
+import { extractCommentFromWebhook, replyCommentWithDM } from "../services/FacebookServices/CommentToDMService";
 import {
   checkMetaWebhookSignature,
   WEBHOOK_SIGNATURE_ENFORCE
 } from "../services/WebhookService/CheckMetaWebhookSignature";
-// import { handleMessage } from "../services/FacebookServices/facebookMessageListener";
 
 export const index = async (req: Request, res: Response): Promise<Response> => {
   const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
@@ -64,16 +64,19 @@ export const webHook = async (
 
       body.entry?.forEach(async (entry: any) => {
         const getTokenPage = await Whatsapp.findOne({
-          where: {
-            facebookPageUserId: entry.id,
-            channel
-          }
+          where: { facebookPageUserId: entry.id, channel }
         });
 
         if (getTokenPage) {
           entry.messaging?.forEach((data: any) => {
             handleMessage(getTokenPage, data, channel, getTokenPage.companyId);
           });
+
+          // Comment-to-DM: reply privately to Facebook/Instagram comments
+          const comment = extractCommentFromWebhook({ entry: [entry] });
+          if (comment) {
+            replyCommentWithDM(getTokenPage, comment).catch(() => {});
+          }
         }
       });
 

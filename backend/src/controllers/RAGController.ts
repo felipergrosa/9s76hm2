@@ -13,7 +13,7 @@ import uploadConfig from "../config/upload";
 export const indexText = async (req: Request, res: Response) => {
   try {
     const { companyId } = req.user;
-    const { title, text, tags, chunkSize, overlap, collection, ragCollection } = req.body || {};
+    const { title, text, tags, chunkSize, overlap, collection, ragCollection, category } = req.body || {};
     const tagsArr = Array.isArray(tags)
       ? tags
       : (typeof tags === 'string' ? tags.split(',').map((t: string) => t.trim()).filter(Boolean) : []);
@@ -22,7 +22,7 @@ export const indexText = async (req: Request, res: Response) => {
     if (coll) {
       tagsArr.push(`collection:${coll}`);
     }
-    const result = await indexTextDocument({ companyId, title, text, tags: tagsArr, chunkSize, overlap });
+    const result = await indexTextDocument({ companyId, title, text, tags: tagsArr, chunkSize, overlap, category: category || "general" });
     return res.status(200).json(result);
   } catch (error: any) {
     return res.status(500).json({ error: error?.message || 'Erro ao indexar documento' });
@@ -47,7 +47,10 @@ export const search = async (req: Request, res: Response) => {
 export const listDocuments = async (req: Request, res: Response) => {
   try {
     const { companyId } = req.user;
-    const docs = await KnowledgeDocument.findAll({ where: { companyId }, order: [["updatedAt", "DESC"]] });
+    const { category } = req.query as any;
+    const where: any = { companyId };
+    if (category) where.category = String(category);
+    const docs = await KnowledgeDocument.findAll({ where, order: [["updatedAt", "DESC"]] });
     return res.status(200).json({ documents: docs });
   } catch (error: any) {
     return res.status(500).json({ error: error?.message || 'Erro ao listar documentos' });

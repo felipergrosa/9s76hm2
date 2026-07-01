@@ -21,6 +21,7 @@ export interface IndexTextParams {
   chunkSize?: number;
   overlap?: number;
   metadata?: Record<string, any>;
+  category?: string;
 }
 
 export interface IndexResult {
@@ -29,7 +30,7 @@ export interface IndexResult {
 }
 
 export const indexTextDocument = async (params: IndexTextParams): Promise<IndexResult> => {
-  const { companyId, title, text, tags = [], source, mimeType, chunkSize, overlap, metadata } = params;
+  const { companyId, title, text, tags = [], source, mimeType, chunkSize, overlap, metadata, category } = params;
   if (!text || !title) throw new Error("title e text são obrigatórios");
 
   const chunks = splitIntoChunks(text, { chunkSize, overlap });
@@ -50,6 +51,7 @@ export const indexTextDocument = async (params: IndexTextParams): Promise<IndexR
       size: text.length,
       tags: JSON.stringify(tags),
       metadata: metadata ? JSON.stringify(metadata) : undefined,
+      category: category || "general",
       createdAt: now,
       updatedAt: now,
     } as any, { transaction });
