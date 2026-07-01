@@ -100,5 +100,5 @@ ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 
 EXPOSE 8080
 
-# Executa o servidor compilado (sem nodemon em produção)
-CMD ["node", "dist/server.js"]
+# Executa migrations automaticamente e inicia o servidor
+CMD ["sh", "./scripts/auto-migrate.sh"]

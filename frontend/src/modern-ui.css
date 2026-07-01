@@ -4,11 +4,28 @@
     font-family: 'Plus Jakarta Sans', sans-serif !important;
     --bg: #f8fafc;
     --card: #ffffff;
+    --card-elevated: #f1f5f9;
     --border: #e2e8f0;
     --text: #1e293b;
     --text-muted: #64748b;
-    --sidebar-bg: #ffffff;
-    --sidebar-bg: rgba(255, 255, 255, 0.8);
+    --sidebar-bg: rgba(255, 255, 255, 0.85);
+    --input-bg: #ffffff;
+    --scrollbar-thumb: rgba(0, 0, 0, 0.15);
+    --shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+}
+
+/* ── DARK MODE ─────────────────────────────────────────────────────────────── */
+.modern-ui.dark {
+    --bg: #0f172a;
+    --card: #1e293b;
+    --card-elevated: #253347;
+    --border: #334155;
+    --text: #f1f5f9;
+    --text-muted: #94a3b8;
+    --sidebar-bg: rgba(15, 23, 42, 0.92);
+    --input-bg: #1e293b;
+    --scrollbar-thumb: rgba(255, 255, 255, 0.12);
+    --shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.35);
 }
 
 /* Typography Global Reset - Força herança em todo o projeto */
@@ -28,6 +45,12 @@
         radial-gradient(at 0% 0%, var(--primary-bg-fade) 0px, transparent 50%),
         radial-gradient(at 100% 0%, var(--primary-bg-fade) 0px, transparent 50%) !important;
 }
+.modern-ui.dark #root>div>div {
+    background-color: var(--bg) !important;
+    background-image:
+        radial-gradient(at 0% 0%, rgba(var(--primary-color-rgb, 6,81,131), 0.08) 0px, transparent 50%),
+        radial-gradient(at 100% 0%, rgba(var(--primary-color-rgb, 6,81,131), 0.08) 0px, transparent 50%) !important;
+}
 
 /* Glassmorphism Cards */
 .modern-ui .glass-card,
@@ -37,7 +60,7 @@
     backdrop-filter: blur(12px) saturate(180%) !important;
     -webkit-backdrop-filter: blur(12px) saturate(180%) !important;
    /*border: 1px solid var(--border) !important;*/
-    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07) !important;
+    box-shadow: var(--shadow) !important;
 }
 
 /* Override de borda para cards de node do construtor de fluxo */
@@ -215,11 +238,14 @@
 
 /* Header Modernization */
 .modern-ui .MuiAppBar-root {
-    background: linear-gradient(to left, color-mix(in srgb, var(--primary-color) 20%, transparent), rgba(255, 255, 255, 0.1)) !important;
+    background: linear-gradient(to left, color-mix(in srgb, var(--primary-color) 20%, transparent), transparent) !important;
     backdrop-filter: blur(10px) !important;
     border-bottom: 1px solid var(--border) !important;
     box-shadow: none !important;
     border-radius: 0 !important;
+}
+.modern-ui.dark .MuiAppBar-root {
+    background: linear-gradient(to left, color-mix(in srgb, var(--primary-color) 25%, transparent), rgba(0,0,0,0.3)) !important;
 }
 
 /* Header Icons - Cores e Hover */
@@ -323,8 +349,29 @@
 }
 
 .modern-ui *::-webkit-scrollbar-thumb {
-    background: rgba(0, 0, 0, 0.1) !important;
+    background: var(--scrollbar-thumb) !important;
     border-radius: 10px !important;
+}
+
+/* Inputs */
+.modern-ui .MuiInputBase-root,
+.modern-ui .MuiOutlinedInput-root {
+    background-color: var(--input-bg) !important;
+    color: var(--text) !important;
+}
+.modern-ui .MuiOutlinedInput-notchedOutline {
+    border-color: var(--border) !important;
+}
+.modern-ui .MuiInputLabel-root {
+    color: var(--text-muted) !important;
+}
+.modern-ui .MuiMenuItem-root {
+    color: var(--text) !important;
+}
+.modern-ui .MuiMenu-paper,
+.modern-ui .MuiPopover-paper {
+    background: var(--card) !important;
+    border: 1px solid var(--border) !important;
 }
 
 /* Scrollbar - Sidebar Invisível */
@@ -561,16 +608,16 @@ border: none !important;
 .modern-ui .tabs-header,
 .modern-ui .tickets-wrapper .MuiPaper-elevation0 {
     border-radius: 8px !important;
-    border: 1px solid #aaa !important;
-    background: #ffffff !important; /* Forçar fundo branco pedido no print 3 */
+    border: 1px solid var(--border) !important;
+    background: var(--card) !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
     box-shadow: none !important;
 }
 
-/* ChatAssistantPanel - Manter estilo original (fundo branco + box-shadow) */
+/* ChatAssistantPanel */
 .modern-ui .MuiPaper-elevation6[class*="makeStyles-root"] {
-background: #ffffff !important;
+background: var(--card) !important;
 backdrop-filter: none !important;
 -webkit-backdrop-filter: none !important;
 border: none !important;
@@ -578,45 +625,40 @@ border-radius: 12px !important;
 box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18) !important;
 }
 
-/* Emoji Picker - Fundo branco sem efeito glass */
+/* Emoji Picker */
 .modern-ui .emoji-mart,
 .modern-ui .emoji-picker-react {
-    background: #ffffff !important;
+    background: var(--card) !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
-    border: 1px solid rgba(0, 0, 0, 0.08) !important;
+    border: 1px solid var(--border) !important;
     border-radius: 12px !important;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
 }
 
-/* Emoji Picker - Search bar clara */
 .modern-ui .emoji-mart-search input,
 .modern-ui .emoji-picker-react input {
-    background: #f5f5f5 !important;
-    border: 1px solid #e0e0e0 !important;
-    color: #333 !important;
+    background: var(--bg) !important;
+    border: 1px solid var(--border) !important;
+    color: var(--text) !important;
     border-radius: 12px !important;
 }
 
-/* Emoji Picker - Category headers claros */
 .modern-ui .emoji-mart-category-label,
 .modern-ui .emoji-mart-category .emoji-mart-category-label span {
-    background: #f5f5f5 !important;
-    color: #333 !important;
-    border-radius: 12px !important;
+    background: var(--bg) !important;
+    color: var(--text-muted) !important;
+    border-radius: 4px !important;
 }
 
-/* Emoji Picker - Anchors/tabs claros */
 .modern-ui .emoji-mart-anchors,
 .modern-ui .emoji-mart-bar {
-    background: #fafafa !important;
-    border-bottom: 1px solid #e0e0e0 !important;
+    background: var(--card-elevated) !important;
+    border-bottom: 1px solid var(--border) !important;
     border-radius: 12px !important;
 }
 
-/* Moments Page - Reset Total para Layout Clássico (Valores Exatos) */
-
-/* Container Principal - Reset */
+/* Moments Page */
 .modern-ui [class*="MomentsPage"] [class*="mainPaper"],
 .modern-ui [class*="MomentsPage"] .MuiPaper-root {
     background: transparent !important;
@@ -637,8 +679,8 @@ box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18) !important;
     max-width: 350px !important;
     flex: 0 0 350px !important;
 
-    background-color: #f5f5f5 !important;
-    border: 1px solid rgba(0, 0, 0, 0.12) !important;
+    background-color: var(--card-elevated) !important;
+    border: 1px solid var(--border) !important;
     border-radius: 4px !important;
     /* theme.shape.borderRadius padrão */
     box-shadow: none !important;
@@ -653,8 +695,8 @@ box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18) !important;
 
 /* Headers das Colunas */
 .modern-ui [class*="MomentsUser"] [class*="columnHeader"] {
-    background-color: #ffffff !important;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
+    background-color: var(--card) !important;
+    border-bottom: 1px solid var(--border) !important;
     border-radius: 4px 4px 0 0 !important;
     /* Acompanha o radius da coluna */
     padding: 16px !important;
@@ -679,7 +721,7 @@ box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18) !important;
 
 /* Cards de Tickets */
 .modern-ui [class*="MomentsUser"] [class*="ticketCard"] {
-    background-color: #ffffff !important;
+    background-color: var(--card) !important;
     border: 1px solid transparent !important;
     border-radius: 8px !important;
     /* Definido explicitamente no componente original */
@@ -709,15 +751,15 @@ box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18) !important;
 
 
 
-/* Kanban Page - Manter layout padrão */
+/* Kanban Page */
 .modern-ui [class*="KanbanPage"] .MuiPaper-root,
 .modern-ui [class*="KanbanPage"] .MuiCard-root,
 .modern-ui [class*="react-trello"] .MuiPaper-root,
 .modern-ui [class*="react-trello"] .MuiCard-root {
-    background: #fff !important;
+    background: var(--card) !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
-    border: 1px solid rgba(0, 0, 0, 0.12) !important;
+    border: 1px solid var(--border) !important;
     border-radius: 8px !important;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
 }
@@ -769,7 +811,7 @@ box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18) !important;
 .modern-ui .ticket-options-box,
 .modern-ui .serach-input-wrapper,
 .modern-ui .tabs-header {
-    border: 1px solid #aaa !important;
+    border: 1px solid var(--border) !important;
     border-radius: 8px !important;
-    background-color: #ffffff !important;
+    background-color: var(--card) !important;
 }

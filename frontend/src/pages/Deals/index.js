@@ -15,9 +15,10 @@ import {
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { toast } from "react-toastify";
 import api from "../../services/api";
+import MainContainer from "../../components/MainContainer";
 
 const useStyles = makeStyles(theme => ({
-  root: { display: "flex", flexDirection: "column", height: "calc(100vh - 64px)", overflow: "hidden" },
+  root: { display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" },
 
   header: {
     display: "flex", justifyContent: "space-between", alignItems: "center",
@@ -284,6 +285,7 @@ export default function Deals() {
   };
 
   return (
+    <MainContainer>
     <Box className={classes.root}>
       {/* ── Header ── */}
       <Box className={classes.header}>
@@ -527,5 +529,6 @@ export default function Deals() {
         </DialogActions>
       </Dialog>
     </Box>
+    </MainContainer>
   );
 }

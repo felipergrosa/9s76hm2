@@ -402,6 +402,13 @@ const App = () => {
     const primaryColor = mode === "light" ? primaryColorLight : primaryColorDark;
     root.style.setProperty("--primaryColor", primaryColor);
 
+    // Sincroniza classe dark com o modo atual (usada pelo modern-ui.css e Tailwind)
+    if (mode === "dark") {
+      root.classList.add("dark");
+    } else {
+      root.classList.remove("dark");
+    }
+
     if (viewMode === "modern") {
       root.classList.add("modern-ui");
       // Injeta variáveis CSS para o tema moderno

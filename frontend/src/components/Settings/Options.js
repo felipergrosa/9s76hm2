@@ -474,6 +474,15 @@ export default function Options(props) {
     <>
       <Grid spacing={3} container>
 
+        {/* ── SEÇÃO: ATENDIMENTO GERAL ── */}
+        <Grid xs={12} item>
+          <div style={{ borderBottom: "2px solid var(--primaryColor, #065183)", paddingBottom: 6, marginBottom: 4 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "1.2px", textTransform: "uppercase", color: "var(--primaryColor, #065183)" }}>
+              Atendimento Geral
+            </span>
+          </div>
+        </Grid>
+
         {/* CRIAÇÃO DE COMPANY/USERS */}
         {isSuper() ?
           <Grid xs={12} sm={6} md={4} item>
@@ -549,6 +558,15 @@ export default function Options(props) {
               {loadingScheduleType && i18n.t("settings.settings.options.updating")}
             </FormHelperText>
           </FormControl>
+        </Grid>
+
+        {/* ── SEÇÃO: FLUXO DE MENSAGENS ── */}
+        <Grid xs={12} item>
+          <div style={{ borderBottom: "2px solid var(--primaryColor, #065183)", paddingBottom: 6, marginTop: 12, marginBottom: 4 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "1.2px", textTransform: "uppercase", color: "var(--primaryColor, #065183)" }}>
+              Fluxo de Mensagens
+            </span>
+          </div>
         </Grid>
 
         {/* ENVIAR SAUDAÇÃO AO ACEITAR O TICKET */}
@@ -629,6 +647,15 @@ export default function Options(props) {
           </FormControl>
         </Grid>
 
+        {/* ── SEÇÃO: BOT & CANAL ── */}
+        <Grid xs={12} item>
+          <div style={{ borderBottom: "2px solid var(--primaryColor, #065183)", paddingBottom: 6, marginTop: 12, marginBottom: 4 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "1.2px", textTransform: "uppercase", color: "var(--primaryColor, #065183)" }}>
+              Bot & Canal
+            </span>
+          </div>
+        </Grid>
+
         {/* TIPO DO BOT */}
         <Grid xs={12} sm={6} md={4} item>
           <FormControl className={classes.selectContainer}>
@@ -700,6 +727,15 @@ export default function Options(props) {
               {loadingSendSignMessage && i18n.t("settings.settings.options.updating")}
             </FormHelperText>
           </FormControl>
+        </Grid>
+
+        {/* ── SEÇÃO: FILA DE ATENDIMENTO ── */}
+        <Grid xs={12} item>
+          <div style={{ borderBottom: "2px solid var(--primaryColor, #065183)", paddingBottom: 6, marginTop: 12, marginBottom: 4 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "1.2px", textTransform: "uppercase", color: "var(--primaryColor, #065183)" }}>
+              Fila de Atendimento
+            </span>
+          </div>
         </Grid>
 
         {/* ENVIAR SAUDAÇÃO QUANDO HOUVER SOMENTE 1 FILA */}
@@ -803,6 +839,15 @@ export default function Options(props) {
               {loadingAcceptAudioMessageContact && i18n.t("settings.settings.options.updating")}
             </FormHelperText>
           </FormControl>
+        </Grid>
+
+        {/* ── SEÇÃO: CONFORMIDADE & NOTIFICAÇÕES ── */}
+        <Grid xs={12} item>
+          <div style={{ borderBottom: "2px solid var(--primaryColor, #065183)", paddingBottom: 6, marginTop: 12, marginBottom: 4 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "1.2px", textTransform: "uppercase", color: "var(--primaryColor, #065183)" }}>
+              Conformidade & Notificações
+            </span>
+          </div>
         </Grid>
 
         <Grid xs={12} sm={6} md={4} item>

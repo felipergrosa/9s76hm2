@@ -13,6 +13,7 @@ import {
 } from "@material-ui/icons";
 import { toast } from "react-toastify";
 import api from "../../services/api";
+import MainContainer from "../../components/MainContainer";
 
 const TYPE_META = {
   text:    { label: "Texto",   bg: "#e3f2fd", color: "#1565c0" },
@@ -23,7 +24,7 @@ const TYPE_META = {
 };
 
 const useStyles = makeStyles(theme => ({
-  root: { padding: theme.spacing(3), maxWidth: 960, margin: "0 auto" },
+  root: { padding: theme.spacing(3) },
 
   hero: {
     background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
@@ -176,6 +177,7 @@ export default function AdminCustomFields() {
   const setField = (key, val) => setForm(f => ({ ...f, [key]: val }));
 
   return (
+    <MainContainer useWindowScroll>
     <Box className={classes.root}>
       {/* ── Hero ── */}
       <Box className={classes.hero}>
@@ -349,5 +351,6 @@ export default function AdminCustomFields() {
         </DialogActions>
       </Dialog>
     </Box>
+    </MainContainer>
   );
 }

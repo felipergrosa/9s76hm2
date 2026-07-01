@@ -17,6 +17,7 @@ import {
 } from "@material-ui/icons";
 import { toast } from "react-toastify";
 import api from "../../services/api";
+import MainContainer from "../../components/MainContainer";
 
 const STATUS = {
   done:    { label: "Concluído", bg: "#e8f5e9", color: "#2e7d32" },
@@ -31,7 +32,7 @@ const STATES = [
 ];
 
 const useStyles = makeStyles(theme => ({
-  root: { padding: theme.spacing(3), maxWidth: 1200, margin: "0 auto" },
+  root: { padding: theme.spacing(3) },
 
   hero: {
     background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
@@ -249,6 +250,7 @@ export default function LeadScraper() {
   const isRunning = activeJob?.status === "running" || activeJob?.status === "pending";
 
   return (
+    <MainContainer useWindowScroll>
     <Box className={classes.root}>
       {/* ── Hero ── */}
       <Box className={classes.hero}>
@@ -556,5 +558,6 @@ export default function LeadScraper() {
         </Paper>
       )}
     </Box>
+    </MainContainer>
   );
 }
