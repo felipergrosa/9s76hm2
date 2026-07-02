@@ -5,7 +5,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node ./scripts/copy-migrations.js",
     "start": "nodemon --expose-gc --max-old-space-size=4096 dist/server.js",
     "start:prod": "node --expose-gc --max-old-space-size=4096 dist/server.js",
     "start:prod:migrate": "sh ./scripts/auto-migrate.sh && node --expose-gc --max-old-space-size=4096 dist/server.js",
