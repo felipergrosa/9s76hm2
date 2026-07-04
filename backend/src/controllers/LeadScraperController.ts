@@ -1,8 +1,7 @@
 import { Request, Response } from "express";
 import LeadScraperJob from "../models/LeadScraperJob";
-import { createScraperJob } from "../services/LeadScraper/LeadScraperJobService";
+import { createScraperJob, runScraperJob } from "../services/LeadScraper/LeadScraperJobService";
 import ImportLeadsService from "../services/ContactServices/ImportLeadsService";
-import { leadScraperQueue } from "../queues";
 
 export const startJob = async (req: Request, res: Response): Promise<Response> => {
   try {
@@ -10,7 +9,8 @@ export const startJob = async (req: Request, res: Response): Promise<Response> =
     const { source, filters } = req.body;
     if (!source || !filters) return res.status(400).json({ error: "source e filters são obrigatórios" });
     const job = await createScraperJob(companyId, source, filters);
-    await leadScraperQueue.add("RunJob", { jobId: job.id }, { removeOnComplete: 50 });
+    // Fire-and-forget: run in background without blocking HTTP response
+    setImmediate(() => runScraperJob(job.id));
     return res.status(201).json(job);
   } catch (err: any) {
     return res.status(500).json({ error: err.message || "Erro ao iniciar job" });
@@ -58,7 +58,7 @@ export const importJobResults = async (req: Request, res: Response): Promise<Res
     const leads = selected.map((r: any) => ({
       name: r.nomeFantasia || r.name || "",
       razaoSocial: r.razaoSocial || "",
-      number: (r.phone || "").replace(/\D/g, ""),
+      number: (r.phone || r.instagramPhone || "").replace(/\D/g, ""),
       email: r.email || "",
       cnpj: r.cnpj || "",
       website: r.website || "",
@@ -66,7 +66,10 @@ export const importJobResults = async (req: Request, res: Response): Promise<Res
       cidade: r.municipio || "",
       uf: r.uf || "",
       porte: r.porte || "",
-      cnae: r.cnaeDescricao || ""
+      cnae: r.cnaeDescricao || "",
+      instagram: r.instagram || "",
+      twitter: r.twitter || "",
+      linkedin: r.linkedin || "",
     }));
 
     const result = await ImportLeadsService({ companyId, leads, contactListName, tagName });

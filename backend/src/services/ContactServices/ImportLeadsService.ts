@@ -26,6 +26,9 @@ export interface LeadInput {
   endereco?: string;
   website?: string;
   googleMapsUrl?: string;
+  instagram?: string;
+  twitter?: string;
+  linkedin?: string;
 }
 
 interface Request {
@@ -85,6 +88,9 @@ async function upsertTypedCustomFields(contactId: number, lead: LeadInput) {
   if (lead.website) entries.push({ name: "Website", value: lead.website, type: "text" });
   if (lead.googleMapsUrl) entries.push({ name: "Google Maps", value: lead.googleMapsUrl, type: "text" });
   if (lead.endereco) entries.push({ name: "Endereço", value: lead.endereco, type: "text" });
+  if (lead.instagram) entries.push({ name: "Instagram", value: `https://instagram.com/${lead.instagram}`, type: "text" });
+  if (lead.twitter) entries.push({ name: "Twitter/X", value: `https://x.com/${lead.twitter}`, type: "text" });
+  if (lead.linkedin) entries.push({ name: "LinkedIn", value: `https://linkedin.com/company/${lead.linkedin}`, type: "text" });
 
   for (const entry of entries) {
     const [field] = await ContactCustomField.findOrCreate({

@@ -21,15 +21,34 @@ export interface ScraperResult {
   porte?: string;
   municipio?: string;
   uf?: string;
+  // social enrichment
+  instagram?: string;
+  twitter?: string;
+  linkedin?: string;
+  instagramPhone?: string;
   imported?: boolean;
 }
 
 export interface ScraperFilters {
+  // google_maps
   keyword?: string;
   city?: string;
   state?: string;
-  maxResults?: number;
+  // cnpj (enrich)
   cnpjs?: string[];
+  // cnpj_search (discovery)
+  cnae?: string;
+  situacao?: string;
+  uf?: string;
+  municipio?: string;
+  identificadorMatrizFilial?: "1" | "2";
+  dataAberturaInicio?: string;
+  dataAberturaFim?: string;
+  temTelefone?: boolean;
+  temEmail?: boolean;
+  maxResults?: number;
+  // ig_followers
+  igTargetHandle?: string;
 }
 
 @Table
@@ -44,8 +63,8 @@ class LeadScraperJob extends Model<LeadScraperJob> {
   @BelongsTo(() => Company)
   company: Company;
 
-  @Column({ type: DataType.ENUM("google_maps", "cnpj"), allowNull: false })
-  source: "google_maps" | "cnpj";
+  @Column({ type: DataType.STRING, allowNull: false })
+  source: "google_maps" | "cnpj" | "cnpj_search" | "ig_followers";
 
   @Column({ type: DataType.ENUM("pending", "running", "done", "error"), defaultValue: "pending" })
   status: "pending" | "running" | "done" | "error";

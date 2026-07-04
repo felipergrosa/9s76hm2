@@ -3,7 +3,8 @@ import {
   Box, Paper, Typography, Tabs, Tab, TextField, Button, Slider,
   Select, MenuItem, FormControl, InputLabel, LinearProgress,
   Table, TableHead, TableRow, TableCell, TableBody, Checkbox,
-  Chip, IconButton, Tooltip, CircularProgress, Divider, Grid
+  Chip, IconButton, Tooltip, CircularProgress, Divider, Grid,
+  FormControlLabel, Collapse,
 } from "@material-ui/core";
 import { makeStyles } from "@material-ui/core/styles";
 import {
@@ -14,17 +15,29 @@ import {
   BusinessOutlined as CnpjIcon,
   FiberManualRecord as DotIcon,
   PersonAdd as LeadIcon,
+  FilterList as FilterIcon,
+  PeopleOutlined as FollowersIcon,
+  HelpOutline as HelpIcon,
 } from "@material-ui/icons";
 import { toast } from "react-toastify";
 import api from "../../services/api";
 import MainContainer from "../../components/MainContainer";
+import InstagramSessionModal from "../../components/InstagramSessionModal";
 
 const STATUS = {
-  done:    { label: "Concluído", bg: "#e8f5e9", color: "#2e7d32" },
+  done:    { label: "Concluído",  bg: "#e8f5e9", color: "#2e7d32" },
   running: { label: "Executando", bg: "#e3f2fd", color: "#1565c0" },
-  error:   { label: "Erro",      bg: "#fce4ec", color: "#c62828" },
-  pending: { label: "Aguardando",bg: "#f5f5f5", color: "#757575" },
+  error:   { label: "Erro",       bg: "#fce4ec", color: "#c62828" },
+  pending: { label: "Aguardando", bg: "#f5f5f5", color: "#757575" },
 };
+
+const SOCIAL_LINKS = {
+  instagram: h => `https://instagram.com/${h}`,
+  twitter:   h => `https://x.com/${h}`,
+  linkedin:  h => `https://linkedin.com/company/${h}`,
+};
+const SOCIAL_COLORS = { instagram: "#e1306c", twitter: "#000", linkedin: "#0a66c2" };
+const SOCIAL_LABELS = { instagram: "IG", twitter: "X", linkedin: "LI" };
 
 const STATES = [
   "AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT",
@@ -110,6 +123,64 @@ const useStyles = makeStyles(theme => ({
     color: theme.palette.primary.main,
     borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 600,
   },
+
+  modeToggle: {
+    display: "flex", gap: 0, marginTop: 16, marginBottom: 4,
+    borderRadius: 8, overflow: "hidden",
+    border: `1px solid ${theme.palette.divider}`,
+    width: "fit-content",
+  },
+  modeBtn: {
+    textTransform: "none", fontWeight: 500, fontSize: 13,
+    borderRadius: 0, padding: "5px 16px",
+    border: "none",
+    "&:hover": { background: theme.palette.action.hover },
+  },
+  modeBtnActive: {
+    background: theme.palette.primary.main,
+    color: "#fff",
+    "&:hover": { background: theme.palette.primary.dark },
+  },
+
+  searchGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: theme.spacing(1.5), marginTop: 16 },
+  fullRow: { gridColumn: "1 / -1" },
+  checkRow: {
+    gridColumn: "1 / -1",
+    display: "flex", flexWrap: "wrap", gap: theme.spacing(1), alignItems: "center",
+  },
+
+  infoNote: {
+    background: theme.palette.type === "dark" ? "#1a2a1a" : "#f0fdf4",
+    border: `1px solid ${theme.palette.type === "dark" ? "#2d4a2d" : "#bbf7d0"}`,
+    borderRadius: 8, padding: "8px 12px",
+    fontSize: 12, color: theme.palette.type === "dark" ? "#86efac" : "#166534",
+    gridColumn: "1 / -1", lineHeight: 1.5,
+  },
+  helpToggle: {
+    display: "flex", alignItems: "center", gap: 4,
+    cursor: "pointer", userSelect: "none",
+    color: theme.palette.text.secondary,
+    fontSize: 12,
+    marginTop: 14,
+    width: "fit-content",
+    "&:hover": { color: theme.palette.primary.main },
+  },
+  helpBox: {
+    background: theme.palette.type === "dark" ? "#1a2233" : "#f0f7ff",
+    border: `1px solid ${theme.palette.type === "dark" ? "#2d3f5a" : "#bfdbfe"}`,
+    borderRadius: 10, padding: "14px 16px",
+    marginTop: 12,
+    fontSize: 13,
+    color: theme.palette.type === "dark" ? "#93c5fd" : "#1e3a5f",
+    lineHeight: 1.7,
+    "& ol": { margin: "6px 0 0 0", paddingLeft: 20 },
+    "& li": { marginBottom: 4 },
+    "& strong": { color: theme.palette.type === "dark" ? "#bfdbfe" : "#1d4ed8" },
+    "& code": {
+      background: theme.palette.type === "dark" ? "#0f1e33" : "#dbeafe",
+      borderRadius: 4, padding: "1px 5px", fontFamily: "monospace", fontSize: 12,
+    },
+  },
 }));
 
 function timeAgo(d) {
@@ -141,12 +212,15 @@ function TabPanel({ children, value, index }) {
 export default function LeadScraper() {
   const classes = useStyles();
   const [tab, setTab] = useState(0);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [jobs, setJobs] = useState([]);
   const [activeJob, setActiveJob] = useState(null);
   const [loading, setLoading] = useState(false);
   const [selectedIndices, setSelectedIndices] = useState([]);
   const [contactListName, setContactListName] = useState("");
   const [tagName, setTagName] = useState("");
+  const [igSession, setIgSession] = useState(null); // { username, status } or null
+  const [igModalOpen, setIgModalOpen] = useState(false);
   const pollRef = useRef(null);
 
   const [keyword, setKeyword] = useState("");
@@ -155,6 +229,23 @@ export default function LeadScraper() {
   const [maxResults, setMaxResults] = useState(50);
   const [cnpjText, setCnpjText] = useState("");
 
+  // ig_followers state
+  const [igTargetHandle, setIgTargetHandle] = useState("");
+  const [igMaxFollowers, setIgMaxFollowers] = useState(500);
+
+  // CNPJ discovery mode
+  const [cnpjMode, setCnpjMode] = useState("enrich"); // "enrich" | "search"
+  const [srCnae, setSrCnae] = useState("");
+  const [srSituacao, setSrSituacao] = useState("ATIVA");
+  const [srUf, setSrUf] = useState("");
+  const [srMunicipio, setSrMunicipio] = useState("");
+  const [srMatrizFilial, setSrMatrizFilial] = useState("");
+  const [srDateFrom, setSrDateFrom] = useState("");
+  const [srDateTo, setSrDateTo] = useState("");
+  const [srTemTelefone, setSrTemTelefone] = useState(false);
+  const [srTemEmail, setSrTemEmail] = useState(false);
+  const [srMaxResults, setSrMaxResults] = useState(200);
+
   const loadJobs = useCallback(async () => {
     try {
       const { data } = await api.get("/lead-scraper/jobs");
@@ -162,7 +253,14 @@ export default function LeadScraper() {
     } catch {}
   }, []);
 
-  useEffect(() => { loadJobs(); }, [loadJobs]);
+  const loadIgStatus = useCallback(async () => {
+    try {
+      const { data } = await api.get("/instagram-session/status");
+      setIgSession(data.status === "none" ? null : data);
+    } catch {}
+  }, []);
+
+  useEffect(() => { loadJobs(); loadIgStatus(); }, [loadJobs, loadIgStatus]);
 
   const startPoll = useCallback((jobId) => {
     if (pollRef.current) clearInterval(pollRef.current);
@@ -213,6 +311,59 @@ export default function LeadScraper() {
     finally { setLoading(false); }
   };
 
+  const startFollowersJob = async () => {
+    if (!igTargetHandle.trim()) { toast.warning("Informe o @ da conta alvo."); return; }
+    if (!igSession || igSession.status !== "active") {
+      toast.warning("Conecte uma conta Instagram primeiro (botão 📸 no topo).");
+      return;
+    }
+    setLoading(true);
+    try {
+      const { data } = await api.post("/lead-scraper/jobs", {
+        source: "ig_followers",
+        filters: { igTargetHandle: igTargetHandle.replace(/^@/, ""), maxResults: igMaxFollowers },
+      });
+      setActiveJob(data);
+      setSelectedIndices([]);
+      toast.success(`Buscando seguidores de @${igTargetHandle}…`);
+      startPoll(data.id);
+      loadJobs();
+    } catch (err) {
+      toast.error(err?.response?.data?.error || "Erro ao iniciar busca.");
+    } finally { setLoading(false); }
+  };
+
+  const startCnpjSearchJob = async () => {
+    if (!srCnae.trim() && !srMunicipio.trim() && !srUf) {
+      toast.warning("Informe ao menos um filtro: CNAE, UF ou Município.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const filters = {
+        cnae: srCnae.trim() || undefined,
+        situacao: srSituacao || undefined,
+        uf: srUf || undefined,
+        municipio: srMunicipio.trim() || undefined,
+        identificadorMatrizFilial: srMatrizFilial || undefined,
+        dataAberturaInicio: srDateFrom || undefined,
+        dataAberturaFim: srDateTo || undefined,
+        temTelefone: srTemTelefone || undefined,
+        temEmail: srTemEmail || undefined,
+        maxResults: srMaxResults,
+      };
+      const { data } = await api.post("/lead-scraper/jobs", { source: "cnpj_search", filters });
+      setActiveJob(data);
+      setSelectedIndices([]);
+      toast.success("Pesquisa iniciada! Acompanhe o progresso ao lado.");
+      startPoll(data.id);
+      loadJobs();
+    } catch (err) {
+      toast.error(err?.response?.data?.error || "Erro ao iniciar pesquisa.");
+    }
+    finally { setLoading(false); }
+  };
+
   const importSelected = async () => {
     if (!activeJob?.id) return;
     const indices = selectedIndices.length
@@ -255,21 +406,62 @@ export default function LeadScraper() {
       {/* ── Hero ── */}
       <Box className={classes.hero}>
         <LeadIcon className={classes.heroIcon} />
-        <Box>
+        <Box style={{ flex: 1 }}>
           <Typography className={classes.heroTitle}>Captador de Leads</Typography>
           <Typography className={classes.heroSub}>
             Busque empresas via Google Maps ou enriqueça CNPJs pela Receita Federal (BrasilAPI)
           </Typography>
         </Box>
+        {/* Instagram session badge */}
+        <Tooltip title={igSession?.status === "active" ? `Instagram conectado como @${igSession.username}` : "Conectar conta Instagram para capturar telefones e e-mails de perfis business"}>
+          <Button
+            size="small"
+            onClick={() => setIgModalOpen(true)}
+            style={{
+              textTransform: "none",
+              background: igSession?.status === "active" ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.08)",
+              color: "#fff",
+              border: `1px solid ${igSession?.status === "active" ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.2)"}`,
+              borderRadius: 8,
+              padding: "4px 12px",
+              fontSize: 12,
+              whiteSpace: "nowrap",
+              flexShrink: 0,
+            }}
+          >
+            📸 {igSession?.status === "active" ? `@${igSession.username}` : "Conectar Instagram"}
+          </Button>
+        </Tooltip>
       </Box>
+
+      {/* Instagram session expired warning */}
+      {igSession?.status === "expired" && (
+        <Box style={{
+          background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 8,
+          padding: "10px 16px", marginBottom: 16, display: "flex", alignItems: "center", gap: 12,
+        }}>
+          <Typography variant="body2" style={{ color: "#92400e", flex: 1 }}>
+            ⚠ Sessão do Instagram expirou — telefones de bio não serão coletados até reconectar.
+          </Typography>
+          <Button size="small" onClick={() => setIgModalOpen(true)} style={{ textTransform: "none", color: "#92400e", fontWeight: 600 }}>
+            Reconectar
+          </Button>
+        </Box>
+      )}
+
+      <InstagramSessionModal
+        open={igModalOpen}
+        onClose={() => { setIgModalOpen(false); loadIgStatus(); }}
+      />
 
       <Grid container spacing={2}>
         {/* ── Left: form ── */}
         <Grid item xs={12} md={7}>
           <Paper className={classes.paper} elevation={0} variant="outlined">
-            <Tabs value={tab} onChange={(_, v) => setTab(v)} indicatorColor="primary" textColor="primary">
+            <Tabs value={tab} onChange={(_, v) => { setTab(v); setHelpOpen(false); }} indicatorColor="primary" textColor="primary">
               <Tab label={<Box display="flex" alignItems="center" style={{ gap: 6 }}><MapsIcon fontSize="small" /> Google Maps</Box>} />
               <Tab label={<Box display="flex" alignItems="center" style={{ gap: 6 }}><CnpjIcon fontSize="small" /> CNPJ / Receita Federal</Box>} />
+              <Tab label={<Box display="flex" alignItems="center" style={{ gap: 6 }}><FollowersIcon fontSize="small" /> Seguidores IG</Box>} />
             </Tabs>
 
             <TabPanel value={tab} index={0}>
@@ -311,34 +503,286 @@ export default function LeadScraper() {
                   Iniciar Busca no Maps
                 </Button>
               </Box>
+              <Box className={classes.helpToggle} onClick={() => setHelpOpen(o => !o)}>
+                <HelpIcon style={{ fontSize: 15 }} />
+                <span>{helpOpen ? "Ocultar tutorial" : "Como usar esta aba?"}</span>
+              </Box>
+              <Collapse in={helpOpen}>
+                <Box className={classes.helpBox}>
+                  <strong>Como funciona — Busca no Google Maps</strong>
+                  <ol>
+                    <li>Digite a <strong>categoria de negócio</strong> que você quer prospectar. Exemplos: <em>"academias de ginástica"</em>, <em>"clínicas odontológicas"</em>, <em>"distribuidoras de alimentos"</em>.</li>
+                    <li>Informe a <strong>cidade</strong> e selecione o <strong>estado (UF)</strong>. A busca combina os dois para focar geograficamente.</li>
+                    <li>Ajuste o <strong>máximo de resultados</strong> (10 a 200). Mais resultados = mais tempo de processamento.</li>
+                    <li>Clique em <strong>Iniciar Busca no Maps</strong>. O sistema extrai nome, telefone, e-mail, endereço, site e avaliação de cada empresa.</li>
+                    <li>Ao atingir <strong>90% do progresso</strong>, começa o enriquecimento automático de redes sociais (Instagram, X, LinkedIn) para cada lead encontrado.</li>
+                    <li>Para capturar telefones do botão "Contato" do Instagram, conecte uma conta via <strong>📸 Conectar Instagram</strong> no topo da página.</li>
+                    <li>Após o status virar <strong>Concluído</strong>, selecione os leads na tabela e clique em <strong>Importar</strong> para salvá-los na sua lista de contatos.</li>
+                  </ol>
+                  <Box mt={1} style={{ fontSize: 12, opacity: 0.8 }}>
+                    💡 Dica: use palavras em português e sem abreviações. "salão de beleza" funciona melhor que "beauty salon".
+                  </Box>
+                </Box>
+              </Collapse>
             </TabPanel>
 
             <TabPanel value={tab} index={1}>
-              <Box mt={2}>
-                <Typography variant="body2" color="textSecondary" style={{ marginBottom: 10 }}>
-                  Cole CNPJs (um por linha, vírgula ou ponto-e-vírgula).
-                  O sistema consultará a Receita Federal via BrasilAPI.
-                </Typography>
-                <TextField
-                  multiline rows={8} fullWidth variant="outlined"
-                  placeholder={"00.000.000/0001-00\n11.111.111/0001-11"}
-                  value={cnpjText} onChange={e => setCnpjText(e.target.value)}
-                  helperText={
-                    cnpjText
-                      ? `${cnpjText.split(/[\n,;]+/).map(s => s.replace(/\D/g, "")).filter(s => s.length === 14).length} CNPJs válidos detectados`
-                      : "Informe CNPJs para enriquecer com dados da RF"
-                  }
-                />
-              </Box>
-              <Box mt={2}>
+              {/* Mode toggle */}
+              <Box className={classes.modeToggle}>
                 <Button
-                  variant="contained" color="primary"
-                  startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <CnpjIcon />}
-                  onClick={startCnpjJob} disabled={loading}
-                  style={{ textTransform: "none", fontWeight: 600 }}
+                  className={`${classes.modeBtn} ${cnpjMode === "enrich" ? classes.modeBtnActive : ""}`}
+                  onClick={() => setCnpjMode("enrich")}
+                  startIcon={<CnpjIcon fontSize="small" />}
                 >
                   Enriquecer CNPJs
                 </Button>
+                <Button
+                  className={`${classes.modeBtn} ${cnpjMode === "search" ? classes.modeBtnActive : ""}`}
+                  onClick={() => setCnpjMode("search")}
+                  startIcon={<FilterIcon fontSize="small" />}
+                >
+                  Pesquisa Avançada
+                </Button>
+              </Box>
+
+              {cnpjMode === "enrich" && (
+                <Box mt={2}>
+                  <Typography variant="body2" color="textSecondary" style={{ marginBottom: 10 }}>
+                    Cole CNPJs (um por linha, vírgula ou ponto-e-vírgula).
+                    O sistema consultará a Receita Federal via BrasilAPI.
+                  </Typography>
+                  <TextField
+                    multiline rows={6} fullWidth variant="outlined"
+                    placeholder={"00.000.000/0001-00\n11.111.111/0001-11"}
+                    value={cnpjText} onChange={e => setCnpjText(e.target.value)}
+                    helperText={
+                      cnpjText
+                        ? `${cnpjText.split(/[\n,;]+/).map(s => s.replace(/\D/g, "")).filter(s => s.length === 14).length} CNPJs válidos detectados`
+                        : "Informe CNPJs para enriquecer com dados da RF"
+                    }
+                  />
+                  <Box mt={2}>
+                    <Button
+                      variant="contained" color="primary"
+                      startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <CnpjIcon />}
+                      onClick={startCnpjJob} disabled={loading}
+                      style={{ textTransform: "none", fontWeight: 600 }}
+                    >
+                      Enriquecer CNPJs
+                    </Button>
+                  </Box>
+                  <Box className={classes.helpToggle} onClick={() => setHelpOpen(o => !o)}>
+                    <HelpIcon style={{ fontSize: 15 }} />
+                    <span>{helpOpen ? "Ocultar tutorial" : "Como usar esta aba?"}</span>
+                  </Box>
+                  <Collapse in={helpOpen}>
+                    <Box className={classes.helpBox}>
+                      <strong>Como funciona — Enriquecimento de CNPJs</strong>
+                      <ol>
+                        <li>Cole os CNPJs que você já possui no campo de texto — aceita um por linha, separados por vírgula ou ponto-e-vírgula. Formatação com pontos e traços é suportada.</li>
+                        <li>O contador abaixo do campo mostra quantos CNPJs válidos foram detectados (14 dígitos). CNPJs inválidos são ignorados automaticamente.</li>
+                        <li>Clique em <strong>Enriquecer CNPJs</strong>. Cada CNPJ é consultado na <strong>Receita Federal via BrasilAPI</strong> (sem custo, sem cadastro).</li>
+                        <li>Dados obtidos: razão social, nome fantasia, CNAE, situação, porte, telefone, e-mail e endereço completo.</li>
+                        <li>Após os dados da RF, o sistema enriquece automaticamente com <strong>Instagram, X e LinkedIn</strong> de cada empresa.</li>
+                        <li>Selecione os leads na tabela e clique em <strong>Importar</strong> para adicioná-los à sua lista de contatos.</li>
+                      </ol>
+                      <Box mt={1} style={{ fontSize: 12, opacity: 0.8 }}>
+                        💡 Dica: você pode obter listas de CNPJs em portais como <em>brasil.io</em>, <em>dados.gov.br</em> ou exportando de sistemas internos.
+                      </Box>
+                    </Box>
+                  </Collapse>
+                </Box>
+              )}
+
+              {cnpjMode === "search" && (
+                <Box className={classes.searchGrid}>
+                  <Box className={classes.infoNote}>
+                    Pesquisa no dataset completo da Receita Federal via{" "}
+                    <a href="https://brasil.io" target="_blank" rel="noopener noreferrer">brasil.io</a>.
+                    Requer <strong>BRASILIO_TOKEN</strong> no .env (gratuito em brasil.io/auth/tokens/).
+                  </Box>
+
+                  <TextField
+                    label="CNAE (código)" placeholder="ex: 4711301"
+                    value={srCnae} onChange={e => setSrCnae(e.target.value)}
+                    variant="outlined" size="small"
+                    helperText="Código CNAE principal (7 dígitos)"
+                  />
+                  <FormControl variant="outlined" size="small">
+                    <InputLabel>Situação</InputLabel>
+                    <Select value={srSituacao} onChange={e => setSrSituacao(e.target.value)} label="Situação">
+                      <MenuItem value="ATIVA">Ativa</MenuItem>
+                      <MenuItem value="SUSPENSA">Suspensa</MenuItem>
+                      <MenuItem value="INAPTA">Inapta</MenuItem>
+                      <MenuItem value="BAIXADA">Baixada</MenuItem>
+                      <MenuItem value="">Todas</MenuItem>
+                    </Select>
+                  </FormControl>
+
+                  <FormControl variant="outlined" size="small">
+                    <InputLabel>UF</InputLabel>
+                    <Select value={srUf} onChange={e => setSrUf(e.target.value)} label="UF">
+                      <MenuItem value="">Todas</MenuItem>
+                      {STATES.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}
+                    </Select>
+                  </FormControl>
+                  <TextField
+                    label="Município" placeholder="ex: SAO PAULO"
+                    value={srMunicipio} onChange={e => setSrMunicipio(e.target.value)}
+                    variant="outlined" size="small"
+                  />
+
+                  <FormControl variant="outlined" size="small">
+                    <InputLabel>Tipo</InputLabel>
+                    <Select value={srMatrizFilial} onChange={e => setSrMatrizFilial(e.target.value)} label="Tipo">
+                      <MenuItem value="">Todos</MenuItem>
+                      <MenuItem value="1">Apenas Matriz</MenuItem>
+                      <MenuItem value="2">Apenas Filial</MenuItem>
+                    </Select>
+                  </FormControl>
+
+                  <Box /> {/* spacer */}
+
+                  <TextField
+                    label="Abertura a partir de" type="date"
+                    value={srDateFrom} onChange={e => setSrDateFrom(e.target.value)}
+                    variant="outlined" size="small" InputLabelProps={{ shrink: true }}
+                  />
+                  <TextField
+                    label="Abertura até" type="date"
+                    value={srDateTo} onChange={e => setSrDateTo(e.target.value)}
+                    variant="outlined" size="small" InputLabelProps={{ shrink: true }}
+                  />
+
+                  <Box className={classes.checkRow}>
+                    <FormControlLabel
+                      control={<Checkbox size="small" checked={srTemTelefone} onChange={e => setSrTemTelefone(e.target.checked)} />}
+                      label={<Typography variant="body2">Apenas com telefone</Typography>}
+                    />
+                    <FormControlLabel
+                      control={<Checkbox size="small" checked={srTemEmail} onChange={e => setSrTemEmail(e.target.checked)} />}
+                      label={<Typography variant="body2">Apenas com e-mail</Typography>}
+                    />
+                  </Box>
+
+                  <Box className={classes.fullRow}>
+                    <Typography variant="body2" style={{ marginBottom: 6 }}>
+                      Máximo de resultados: <strong>{srMaxResults}</strong>
+                    </Typography>
+                    <Slider
+                      value={srMaxResults} onChange={(_, v) => setSrMaxResults(v)}
+                      min={50} max={1000} step={50}
+                      marks={[{ value: 50, label: "50" }, { value: 500, label: "500" }, { value: 1000, label: "1000" }]}
+                    />
+                  </Box>
+
+                  <Box className={classes.fullRow}>
+                    <Button
+                      variant="contained" color="primary"
+                      startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <SearchIcon />}
+                      onClick={startCnpjSearchJob} disabled={loading}
+                      style={{ textTransform: "none", fontWeight: 600 }}
+                    >
+                      Pesquisar CNPJs
+                    </Button>
+                  </Box>
+
+                  <Box className={`${classes.fullRow}`}>
+                    <Box className={classes.helpToggle} onClick={() => setHelpOpen(o => !o)}>
+                      <HelpIcon style={{ fontSize: 15 }} />
+                      <span>{helpOpen ? "Ocultar tutorial" : "Como usar esta aba?"}</span>
+                    </Box>
+                    <Collapse in={helpOpen}>
+                      <Box className={classes.helpBox}>
+                        <strong>Como funciona — Pesquisa Avançada de CNPJs</strong>
+                        <ol>
+                          <li><strong>Pré-requisito:</strong> obtenha seu token gratuito em <code>brasil.io/auth/tokens/</code> (login com Google ou e-mail) e adicione no arquivo <code>.env</code> do servidor: <code>BRASILIO_TOKEN=seu_token_aqui</code></li>
+                          <li>Informe ao menos um filtro: <strong>CNAE</strong>, <strong>UF</strong> ou <strong>Município</strong>. Combinar filtros reduz o resultado e melhora a qualidade dos leads.</li>
+                          <li><strong>CNAE</strong>: código de 7 dígitos da atividade principal. Ex: <code>4711301</code> = supermercados. Consulte em <code>cnae.ibge.gov.br</code>.</li>
+                          <li><strong>Situação</strong>: use "Ativa" para empresas em funcionamento. "Baixada" e "Inapta" geralmente não são leads qualificados.</li>
+                          <li><strong>Tipo Matriz/Filial</strong>: "Apenas Matriz" evita duplicatas para redes com várias unidades.</li>
+                          <li>Marque <strong>"Apenas com telefone"</strong> ou <strong>"Apenas com e-mail"</strong> para filtrar leads com dados de contato já cadastrados na Receita Federal.</li>
+                          <li>Ajuste o <strong>máximo de resultados</strong> (50–1000). Cada resultado consome uma chamada à API do brasil.io.</li>
+                          <li>Após a coleta, o sistema enriquece automaticamente com <strong>Instagram, X e LinkedIn</strong> de cada empresa.</li>
+                        </ol>
+                        <Box mt={1} style={{ fontSize: 12, opacity: 0.8 }}>
+                          💡 Dica: o brasil.io permite 30.000 req/dia no plano gratuito. Uma pesquisa com 1000 resultados consome ~10 requisições (paginação de 100).
+                        </Box>
+                      </Box>
+                    </Collapse>
+                  </Box>
+                </Box>
+              )}
+            </TabPanel>
+            <TabPanel value={tab} index={2}>
+              <Box mt={2}>
+                {(!igSession || igSession.status !== "active") && (
+                  <Box style={{
+                    background: "#fef3c7", border: "1px solid #fcd34d",
+                    borderRadius: 8, padding: "10px 14px", marginBottom: 16, fontSize: 13,
+                    color: "#92400e",
+                  }}>
+                    ⚠ Conecte uma conta Instagram primeiro — clique em{" "}
+                    <strong style={{ cursor: "pointer", textDecoration: "underline" }} onClick={() => setIgModalOpen(true)}>
+                      📸 Conectar Instagram
+                    </strong>{" "}no topo.
+                  </Box>
+                )}
+                <TextField
+                  label="@ da conta alvo" placeholder="@concorrente ou @associacao"
+                  value={igTargetHandle} onChange={e => setIgTargetHandle(e.target.value)}
+                  variant="outlined" size="small" fullWidth
+                  helperText="Seguidores desta conta serão coletados e enriquecidos com redes sociais e telefone"
+                  style={{ marginBottom: 20 }}
+                />
+                <Typography variant="body2" style={{ marginBottom: 6 }}>
+                  Máximo de seguidores: <strong>{igMaxFollowers.toLocaleString("pt-BR")}</strong>
+                </Typography>
+                <Slider
+                  value={igMaxFollowers} onChange={(_, v) => setIgMaxFollowers(v)}
+                  min={50} max={5000} step={50}
+                  marks={[
+                    { value: 50, label: "50" },
+                    { value: 1000, label: "1k" },
+                    { value: 5000, label: "5k" },
+                  ]}
+                />
+                <Box mt={2} style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                  <Button
+                    variant="contained" color="primary"
+                    startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <FollowersIcon />}
+                    onClick={startFollowersJob}
+                    disabled={loading || !igSession || igSession.status !== "active"}
+                    style={{ textTransform: "none", fontWeight: 600 }}
+                  >
+                    Buscar Seguidores
+                  </Button>
+                  <Typography variant="caption" color="textSecondary">
+                    ~3s entre páginas · contas privadas são ignoradas
+                  </Typography>
+                </Box>
+                <Box className={classes.helpToggle} onClick={() => setHelpOpen(o => !o)}>
+                  <HelpIcon style={{ fontSize: 15 }} />
+                  <span>{helpOpen ? "Ocultar tutorial" : "Como usar esta aba?"}</span>
+                </Box>
+                <Collapse in={helpOpen}>
+                  <Box className={classes.helpBox}>
+                    <strong>Como funciona — Seguidores do Instagram</strong>
+                    <ol>
+                      <li><strong>Pré-requisito:</strong> conecte uma conta Instagram dedicada clicando em <strong>📸 Conectar Instagram</strong> no topo da página. Use uma conta exclusiva para scraping — não a sua pessoal.</li>
+                      <li>Informe o <strong>@ da conta alvo</strong> — pode ser uma associação comercial, concorrente, evento ou nicho de mercado. Ex: <code>@abrasel_sp</code>.</li>
+                      <li>A conta alvo precisa ser <strong>pública</strong>. Contas privadas bloqueiam o acesso à lista de seguidores.</li>
+                      <li>Ajuste o <strong>limite de seguidores</strong> (50 a 5.000). O sistema coleta em páginas de 50 com ~3s de intervalo para evitar bloqueio.</li>
+                      <li>Clique em <strong>Buscar Seguidores</strong>. Para cada seguidor coletado são salvos: username, nome completo e website (se cadastrado no perfil).</li>
+                      <li>Após a coleta, o sistema enriquece automaticamente cada perfil com <strong>Instagram, X, LinkedIn</strong> e tenta extrair o <strong>telefone do botão Contato</strong> (para perfis business).</li>
+                      <li>Contas privadas aparecem na lista mas são puladas no enriquecimento.</li>
+                      <li>Se aparecer o aviso amarelo de <strong>sessão expirada</strong>, reconecte a conta Instagram para retomar o enriquecimento.</li>
+                    </ol>
+                    <Box mt={1} style={{ fontSize: 12, opacity: 0.8 }}>
+                      💡 Dica: use contas com histórico de uso real (pelo menos algumas semanas de idade) para reduzir chances de bloqueio temporário pelo Instagram.
+                    </Box>
+                  </Box>
+                </Collapse>
               </Box>
             </TabPanel>
           </Paper>
@@ -365,7 +809,11 @@ export default function LeadScraper() {
                 const isActive = activeJob?.id === j.id;
                 const jobName = j.source === "google_maps"
                   ? `${j.filters?.keyword || "?"} — ${j.filters?.city || "?"} ${j.filters?.state || ""}`
-                  : `${j.filters?.cnpjs?.length || 0} CNPJs`;
+                  : j.source === "cnpj_search"
+                    ? `RF: ${j.filters?.cnae || ""} ${j.filters?.uf || ""} ${j.filters?.municipio || ""}`.trim()
+                    : j.source === "ig_followers"
+                      ? `📸 Seguidores de @${j.filters?.igTargetHandle || "?"}`
+                      : `${j.filters?.cnpjs?.length || 0} CNPJs`;
                 return (
                   <Box
                     key={j.id}
@@ -407,7 +855,7 @@ export default function LeadScraper() {
               <Typography variant="h6" style={{ fontWeight: 700 }}>Resultados</Typography>
               <Box className={classes.sourceBadge}>
                 {activeJob.source === "google_maps" ? <MapsIcon style={{ fontSize: 12 }} /> : <CnpjIcon style={{ fontSize: 12 }} />}
-                {activeJob.source === "google_maps" ? "Google Maps" : "Receita Federal"}
+                {activeJob.source === "google_maps" ? "Google Maps" : activeJob.source === "cnpj_search" ? "RF Pesquisa Avançada" : "Receita Federal"}
               </Box>
               <Chip
                 label={STATUS[activeJob.status]?.label || activeJob.status}
@@ -427,7 +875,9 @@ export default function LeadScraper() {
           {isRunning && (
             <Box className={classes.progressBox}>
               <Box className={classes.progressLabel}>
-                <Typography variant="caption" color="textSecondary">Buscando…</Typography>
+                <Typography variant="caption" color="textSecondary">
+                  {(activeJob.progress || 0) >= 90 ? "Buscando redes sociais (Instagram, X, LinkedIn)…" : "Buscando leads…"}
+                </Typography>
                 <Typography variant="caption" style={{ fontWeight: 700 }}>{activeJob.progress || 0}%</Typography>
               </Box>
               <LinearProgress
@@ -468,6 +918,7 @@ export default function LeadScraper() {
                       </TableCell>
                       <TableCell className={classes.stickyHead} style={{ fontWeight: 700, fontSize: 11 }}>NOME</TableCell>
                       <TableCell className={classes.stickyHead} style={{ fontWeight: 700, fontSize: 11 }}>TELEFONE</TableCell>
+                      <TableCell className={classes.stickyHead} style={{ fontWeight: 700, fontSize: 11 }}>REDES SOCIAIS</TableCell>
                       <TableCell className={classes.stickyHead} style={{ fontWeight: 700, fontSize: 11 }}>ENDEREÇO</TableCell>
                       <TableCell className={classes.stickyHead} style={{ fontWeight: 700, fontSize: 11 }}>CNPJ</TableCell>
                       <TableCell className={classes.stickyHead} style={{ fontWeight: 700, fontSize: 11 }}>AVALIAÇÃO</TableCell>
@@ -500,6 +951,40 @@ export default function LeadScraper() {
                         </TableCell>
                         <TableCell>
                           <Typography variant="body2" style={{ fontSize: 12 }}>{r.phone || "—"}</Typography>
+                          {r.instagramPhone && r.instagramPhone !== r.phone && (
+                            <Typography variant="caption" style={{ display: "block", color: SOCIAL_COLORS.instagram, fontSize: 11 }}>
+                              📸 {r.instagramPhone}
+                            </Typography>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Box display="flex" style={{ gap: 4, flexWrap: "wrap" }}>
+                            {["instagram","twitter","linkedin"].map(p =>
+                              r[p] ? (
+                                <a
+                                  key={p}
+                                  href={SOCIAL_LINKS[p](r[p])}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{
+                                    background: SOCIAL_COLORS[p],
+                                    color: "#fff",
+                                    borderRadius: 4,
+                                    padding: "2px 6px",
+                                    fontSize: 10,
+                                    fontWeight: 700,
+                                    textDecoration: "none",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  {SOCIAL_LABELS[p]}
+                                </a>
+                              ) : null
+                            )}
+                            {!r.instagram && !r.twitter && !r.linkedin && (
+                              <Typography variant="caption" color="textSecondary">—</Typography>
+                            )}
+                          </Box>
                         </TableCell>
                         <TableCell>
                           <Typography variant="body2" style={{ fontSize: 12 }}>
