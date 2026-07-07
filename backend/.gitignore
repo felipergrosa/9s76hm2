@@ -192,5 +192,4 @@ restore-list-vs-origin.txt
 !*.tsx
 !*.sh
 !*.conf
-!*.env
 !*.md

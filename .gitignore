@@ -162,7 +162,6 @@ docs-privadas/
 !*.tsx
 !*.sh
 !*.conf
-!*.env
 !*.md
 
 backend/private/sessions/
