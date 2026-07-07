@@ -1,4 +1,7 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import Autocomplete from "@material-ui/lab/Autocomplete";
+import CNAES from "../../data/cnaeList";
+import NJS from "../../data/naturezaJuridicaList";
 import {
   Box, Paper, Typography, Tabs, Tab, TextField, Button, Slider,
   Select, MenuItem, FormControl, InputLabel, LinearProgress,
@@ -235,13 +238,12 @@ export default function LeadScraper() {
 
   // CNPJ discovery mode
   const [cnpjMode, setCnpjMode] = useState("enrich"); // "enrich" | "search"
-  const [srCnae, setSrCnae] = useState("");
+  const [srKeyword, setSrKeyword] = useState("");
+  const [srCnae, setSrCnae] = useState(null);   // { code, label } | null
+  const [srNj, setSrNj] = useState(null);        // { code, label } | null — Natureza Jurídica
   const [srSituacao, setSrSituacao] = useState("ATIVA");
   const [srUf, setSrUf] = useState("");
   const [srMunicipio, setSrMunicipio] = useState("");
-  const [srMatrizFilial, setSrMatrizFilial] = useState("");
-  const [srDateFrom, setSrDateFrom] = useState("");
-  const [srDateTo, setSrDateTo] = useState("");
   const [srTemTelefone, setSrTemTelefone] = useState(false);
   const [srTemEmail, setSrTemEmail] = useState(false);
   const [srMaxResults, setSrMaxResults] = useState(200);
@@ -334,20 +336,19 @@ export default function LeadScraper() {
   };
 
   const startCnpjSearchJob = async () => {
-    if (!srCnae.trim() && !srMunicipio.trim() && !srUf) {
-      toast.warning("Informe ao menos um filtro: CNAE, UF ou Município.");
+    if (!srKeyword.trim() && !srUf && !srMunicipio.trim()) {
+      toast.warning("Informe ao menos: palavra-chave no nome, UF ou município.");
       return;
     }
     setLoading(true);
     try {
       const filters = {
-        cnae: srCnae.trim() || undefined,
+        keyword: srKeyword.trim() || undefined,
+        cnae: srCnae?.code || undefined,
+        naturezaJuridica: srNj?.code || undefined,
         situacao: srSituacao || undefined,
         uf: srUf || undefined,
         municipio: srMunicipio.trim() || undefined,
-        identificadorMatrizFilial: srMatrizFilial || undefined,
-        dataAberturaInicio: srDateFrom || undefined,
-        dataAberturaFim: srDateTo || undefined,
         temTelefone: srTemTelefone || undefined,
         temEmail: srTemEmail || undefined,
         maxResults: srMaxResults,
@@ -552,7 +553,7 @@ export default function LeadScraper() {
                     O sistema consultará a Receita Federal via BrasilAPI.
                   </Typography>
                   <TextField
-                    multiline rows={6} fullWidth variant="outlined"
+                    multiline minRows={6} fullWidth variant="outlined"
                     placeholder={"00.000.000/0001-00\n11.111.111/0001-11"}
                     value={cnpjText} onChange={e => setCnpjText(e.target.value)}
                     helperText={
@@ -597,17 +598,55 @@ export default function LeadScraper() {
               {cnpjMode === "search" && (
                 <Box className={classes.searchGrid}>
                   <Box className={classes.infoNote}>
-                    Pesquisa no dataset completo da Receita Federal via{" "}
-                    <a href="https://brasil.io" target="_blank" rel="noopener noreferrer">brasil.io</a>.
-                    Requer <strong>BRASILIO_TOKEN</strong> no .env (gratuito em brasil.io/auth/tokens/).
+                    Busca empresas via <strong>brasil.io + cnpj.ws</strong> (gratuito).
+                    Pesquisa por nome da empresa + UF → enriquece CNAE, telefone, e-mail via cnpj.ws.
+                    Requer <strong>BRASILIO_TOKEN</strong> no .env.
                   </Box>
 
                   <TextField
-                    label="CNAE (código)" placeholder="ex: 4711301"
-                    value={srCnae} onChange={e => setSrCnae(e.target.value)}
+                    label="Palavra-chave no nome da empresa *" placeholder="ex: academia, padaria, farmácia"
+                    value={srKeyword} onChange={e => setSrKeyword(e.target.value)}
                     variant="outlined" size="small"
-                    helperText="Código CNAE principal (7 dígitos)"
+                    helperText="Busca no nome/razão social das empresas (obrigatório se sem UF/município)"
+                    className={classes.fullRow}
                   />
+
+                  {/* CNAE Autocomplete */}
+                  <Autocomplete
+                    options={CNAES}
+                    getOptionLabel={opt => opt.label}
+                    value={srCnae}
+                    onChange={(_, val) => setSrCnae(val)}
+                    filterOptions={(opts, { inputValue }) => {
+                      const q = inputValue.toLowerCase();
+                      return q.length < 2 ? opts.slice(0, 80) : opts.filter(o => o.label.toLowerCase().includes(q)).slice(0, 80);
+                    }}
+                    renderInput={params => (
+                      <TextField {...params} label="CNAE (atividade)" variant="outlined" size="small"
+                        placeholder="Digite código ou descrição..." helperText="Filtra pós-busca pelo CNAE principal" />
+                    )}
+                    noOptionsText="Nenhum CNAE encontrado"
+                    clearOnEscape
+                  />
+
+                  {/* Natureza Jurídica Autocomplete */}
+                  <Autocomplete
+                    options={NJS}
+                    getOptionLabel={opt => opt.label}
+                    value={srNj}
+                    onChange={(_, val) => setSrNj(val)}
+                    filterOptions={(opts, { inputValue }) => {
+                      const q = inputValue.toLowerCase();
+                      return q.length < 2 ? opts : opts.filter(o => o.label.toLowerCase().includes(q));
+                    }}
+                    renderInput={params => (
+                      <TextField {...params} label="Natureza Jurídica" variant="outlined" size="small"
+                        placeholder="Ex: Limitada, SA, Individual..." helperText="Filtra pós-busca pelo tipo jurídico" />
+                    )}
+                    noOptionsText="Nenhuma natureza encontrada"
+                    clearOnEscape
+                  />
+
                   <FormControl variant="outlined" size="small">
                     <InputLabel>Situação</InputLabel>
                     <Select value={srSituacao} onChange={e => setSrSituacao(e.target.value)} label="Situação">
@@ -626,32 +665,12 @@ export default function LeadScraper() {
                       {STATES.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}
                     </Select>
                   </FormControl>
+
                   <TextField
-                    label="Município" placeholder="ex: SAO PAULO"
+                    label="Município (pós-filtro)" placeholder="ex: São Paulo"
                     value={srMunicipio} onChange={e => setSrMunicipio(e.target.value)}
                     variant="outlined" size="small"
-                  />
-
-                  <FormControl variant="outlined" size="small">
-                    <InputLabel>Tipo</InputLabel>
-                    <Select value={srMatrizFilial} onChange={e => setSrMatrizFilial(e.target.value)} label="Tipo">
-                      <MenuItem value="">Todos</MenuItem>
-                      <MenuItem value="1">Apenas Matriz</MenuItem>
-                      <MenuItem value="2">Apenas Filial</MenuItem>
-                    </Select>
-                  </FormControl>
-
-                  <Box /> {/* spacer */}
-
-                  <TextField
-                    label="Abertura a partir de" type="date"
-                    value={srDateFrom} onChange={e => setSrDateFrom(e.target.value)}
-                    variant="outlined" size="small" InputLabelProps={{ shrink: true }}
-                  />
-                  <TextField
-                    label="Abertura até" type="date"
-                    value={srDateTo} onChange={e => setSrDateTo(e.target.value)}
-                    variant="outlined" size="small" InputLabelProps={{ shrink: true }}
+                    helperText="Filtra pela cidade nos dados do cnpj.ws"
                   />
 
                   <Box className={classes.checkRow}>
@@ -668,11 +687,14 @@ export default function LeadScraper() {
                   <Box className={classes.fullRow}>
                     <Typography variant="body2" style={{ marginBottom: 6 }}>
                       Máximo de resultados: <strong>{srMaxResults}</strong>
+                      <span style={{ fontSize: 11, marginLeft: 8, opacity: 0.6 }}>
+                        (~{Math.ceil(srMaxResults * 0.6 / 60)}–{Math.ceil(srMaxResults / 60)} min)
+                      </span>
                     </Typography>
                     <Slider
                       value={srMaxResults} onChange={(_, v) => setSrMaxResults(v)}
-                      min={50} max={1000} step={50}
-                      marks={[{ value: 50, label: "50" }, { value: 500, label: "500" }, { value: 1000, label: "1000" }]}
+                      min={10} max={200} step={10}
+                      marks={[{ value: 10, label: "10" }, { value: 100, label: "100" }, { value: 200, label: "200" }]}
                     />
                   </Box>
 

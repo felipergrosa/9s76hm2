@@ -16,7 +16,9 @@ export interface ScraperResult {
   cnpj?: string;
   razaoSocial?: string;
   nomeFantasia?: string;
+  cnaeId?: string;
   cnaeDescricao?: string;
+  naturezaJuridica?: string;
   situacao?: string;
   porte?: string;
   municipio?: string;
@@ -38,12 +40,10 @@ export interface ScraperFilters {
   cnpjs?: string[];
   // cnpj_search (discovery)
   cnae?: string;
+  naturezaJuridica?: string;
   situacao?: string;
   uf?: string;
   municipio?: string;
-  identificadorMatrizFilial?: "1" | "2";
-  dataAberturaInicio?: string;
-  dataAberturaFim?: string;
   temTelefone?: boolean;
   temEmail?: boolean;
   maxResults?: number;
