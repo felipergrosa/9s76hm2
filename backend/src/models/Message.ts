@@ -8,7 +8,8 @@ import {
   PrimaryKey,
   Default,
   BelongsTo,
-  ForeignKey
+  ForeignKey,
+  BeforeValidate
 } from "sequelize-typescript";
 import Contact from "./Contact";
 import Ticket from "./Ticket";
@@ -215,6 +216,13 @@ class Message extends Model<Message> {
 
   @Column(DataType.JSONB)
   pollData: any; // Dados de enquete (poll)
+
+  @BeforeValidate
+  static checkBody(instance: Message) {
+    if (instance.body === null || instance.body === undefined) {
+      instance.body = "";
+    }
+  }
 }
 
 export default Message;

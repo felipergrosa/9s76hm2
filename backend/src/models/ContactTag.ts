@@ -6,7 +6,8 @@ import {
   Model,
   ForeignKey,
   BelongsTo,
-  AfterCreate
+  AfterCreate,
+  BeforeValidate
 } from "sequelize-typescript";
 import Tag from "./Tag";
 import Contact from "./Contact";
@@ -61,6 +62,28 @@ class ContactTag extends Model<ContactTag> {
         console.error(`[Hook] Erro ao inscrever contato ${contactTag.contactId} em drip sequences:`, err);
       }
     });
+  }
+
+  @BeforeValidate
+  static async checkCompanyId(instance: ContactTag) {
+    if (!instance.companyId) {
+      if (instance.contactId) {
+        const ContactModel = (await import("./Contact")).default;
+        const contact = await ContactModel.findByPk(instance.contactId, { attributes: ["companyId"] });
+        if (contact) {
+          instance.companyId = contact.companyId;
+          return;
+        }
+      }
+      if (instance.tagId) {
+        const TagModel = (await import("./Tag")).default;
+        const tag = await TagModel.findByPk(instance.tagId, { attributes: ["companyId"] });
+        if (tag) {
+          instance.companyId = tag.companyId;
+          return;
+        }
+      }
+    }
   }
 }
 

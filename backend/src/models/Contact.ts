@@ -563,6 +563,39 @@ class Contact extends Model<Contact> {
       }
     });
   }
+
+  @BeforeSave
+  static async avoidLidJidCollision(instance: Contact) {
+    if (instance.lidJid) {
+      const { Op } = require("sequelize");
+      const ContactModel = (await import("./Contact")).default;
+      const whereClause: any = {
+        lidJid: instance.lidJid,
+        companyId: instance.companyId
+      };
+
+      if (instance.id) {
+        whereClause.id = { [Op.ne]: instance.id };
+      }
+
+      const duplicate = await ContactModel.findOne({
+        where: whereClause,
+        attributes: ["id"]
+      });
+
+      if (duplicate) {
+        const logger = require("../utils/logger").default;
+        logger.warn({
+          contactId: instance.id,
+          duplicateId: duplicate.id,
+          lidJid: instance.lidJid,
+          companyId: instance.companyId
+        }, "[ContactModel] Colisão de lidJid evitada. Removendo atribuição para evitar falha no DB.");
+
+        instance.lidJid = instance.previous("lidJid") || null;
+      }
+    }
+  }
 }
 
 export default Contact;
