@@ -781,12 +781,7 @@ const wbotMonitor = async (
               logger.error(`[HealthCheck] Socket ${whatsapp.id} morto (readyState=${ws.readyState}), forçando reconexão`);
               failedPings = 0;
 
-              // MARCAR FLAG DE RECONEXÃO ANTES de disparar (evita race condition)
-              const { reconnectingWhatsapps } = require("../../libs/wbot");
-              if (reconnectingWhatsapps && !reconnectingWhatsapps.get(whatsapp.id)) {
-                reconnectingWhatsapps.set(whatsapp.id, Date.now());
-              }
-
+              // O StartWhatsAppSessionUnified coordena a exclusividade via lock.
               // Disparar reconexão
               removeWbot(whatsapp.id, false);
 
@@ -835,12 +830,7 @@ const wbotMonitor = async (
             logger.error(`[HealthCheck] Socket ${whatsapp.id} não responde a pings, forçando reconexão`);
             failedPings = 0;
 
-            // MARCAR FLAG DE RECONEXÃO ANTES de disparar (evita race condition)
-            const { reconnectingWhatsapps } = require("../../libs/wbot");
-            if (reconnectingWhatsapps && !reconnectingWhatsapps.get(whatsapp.id)) {
-              reconnectingWhatsapps.set(whatsapp.id, Date.now());
-            }
-
+            // O StartWhatsAppSessionUnified coordena a exclusividade via lock.
             // Disparar reconexão
             removeWbot(whatsapp.id, false);
 
@@ -978,7 +968,7 @@ const wbotMonitor = async (
           logger.info(`[AndroidSync] whatsappId=${whatsapp.id} sem atividade há ${Math.round(timeSinceLastActivity/1000)}s, tentando sync`);
 
           // Usar sessão atual do pool
-          const { getWbot, getWbotIsReconnecting, removeWbot, getCircuitBreakerStatus, reconnectingWhatsapps } = require("../../libs/wbot");
+          const { getWbot, getWbotIsReconnecting, removeWbot, getCircuitBreakerStatus } = require("../../libs/wbot");
           const session = getWbot(whatsapp.id);
           if (!session) return;
 
@@ -1018,11 +1008,7 @@ const wbotMonitor = async (
 
               logger.error(`[AndroidSync] STALLED CONNECTION CRÍTICA detectada para whatsappId=${whatsapp.id}. Forçando RECONEXÃO IMEDIATA.`);
 
-              // MARCAR FLAG DE RECONEXÃO ANTES de disparar
-              if (reconnectingWhatsapps && !reconnectingWhatsapps.get(whatsapp.id)) {
-                reconnectingWhatsapps.set(whatsapp.id, Date.now());
-              }
-
+              // O StartWhatsAppSessionUnified coordena a exclusividade via lock.
               // Forçar reconexão via circuit breaker (delay curto para Android)
               removeWbot(whatsapp.id, false);
 

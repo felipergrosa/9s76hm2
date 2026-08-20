@@ -1,13 +1,16 @@
 import logger from "../utils/logger";
+import cacheLayer from "./cache";
+
+const LOCK_TTL_SECONDS = 180;
+const sessionLockOwners = new Map<number | string, string>();
+
+const getOwnerId = (): string => `${process.env.HOSTNAME || "instance"}:${process.pid}`;
 
 /**
- * wbotMutex - VERSÃO SIMPLIFICADA PARA AMBIENTE SINGLE-INSTANCE
- * 
- * Em ambiente de única instância, não é necessário Redis lock.
- * A flag `reconnectingWhatsapps` em wbot.ts já previne reconexões duplicadas.
- * 
- * Se você precisar de multi-instância no futuro, restaure a versão anterior
- * com Redis lock para Leader Election.
+ * wbotMutex - lock distribuído por sessão com fallback local.
+ *
+ * O lock impede que duas instâncias controlem o mesmo WhatsApp
+ * e mantém o write fencing do estado de autenticação funcional.
  */
 
 export const getLockKey = (whatsappId: number | string) => `wbot:mutex:${whatsappId}`;
@@ -20,56 +23,119 @@ export const getCurrentInstanceId = (): string => {
  * Retorna o token de lock atual para uma sessão.
  */
 export const getSessionLockToken = (whatsappId: number | string): string | undefined => {
-    return undefined;
+    return sessionLockOwners.get(whatsappId);
 };
 
 /**
  * Tenta adquirir o lock para controlar a sessão do WhatsApp.
- * VERSÃO SIMPLIFICADA: Sempre retorna true em ambiente single-instance.
+ * Retorna false quando outra instância possui o lock.
  */
 export const acquireWbotLock = async (whatsappId: number | string, caller?: string): Promise<boolean> => {
     const callerInfo = caller ? ` (caller=${caller})` : "";
-    logger.debug(`[WbotMutex] Lock adquirido (single-instance) para whatsappId=${whatsappId}${callerInfo}`);
-    return true;
+    const redis = cacheLayer.getRedisInstance();
+    const ownerId = getOwnerId();
+
+    if (!redis) {
+        logger.warn(`[WbotMutex] Redis indisponível; usando lock local para whatsappId=${whatsappId}${callerInfo}`);
+        sessionLockOwners.set(whatsappId, ownerId);
+        return true;
+    }
+
+    try {
+        const result = await redis.set(getLockKey(whatsappId), ownerId, "NX", "EX", LOCK_TTL_SECONDS);
+        if (result === "OK") {
+            sessionLockOwners.set(whatsappId, ownerId);
+            logger.debug(`[WbotMutex] Lock adquirido para whatsappId=${whatsappId}${callerInfo}`);
+            return true;
+        }
+
+        const currentOwner = await redis.get(getLockKey(whatsappId));
+        if (currentOwner === ownerId) {
+            await redis.expire(getLockKey(whatsappId), LOCK_TTL_SECONDS);
+            sessionLockOwners.set(whatsappId, ownerId);
+            return true;
+        }
+
+        logger.warn(`[WbotMutex] Lock negado para whatsappId=${whatsappId}; sessão pertence a outra instância.`);
+        return false;
+    } catch (error: any) {
+        logger.error(`[WbotMutex] Erro ao adquirir lock para whatsappId=${whatsappId}: ${error?.message}`);
+        return false;
+    }
 };
 
 /**
  * Renova o lock para manter a sessão ativa.
- * VERSÃO SIMPLIFICADA: Sempre retorna true em ambiente single-instance.
+ * Retorna false quando outra instância possui o lock.
  */
 export const renewWbotLock = async (whatsappId: number | string): Promise<boolean> => {
-    return true;
+    const redis = cacheLayer.getRedisInstance();
+    const ownerId = sessionLockOwners.get(whatsappId);
+    if (!redis || !ownerId) return true;
+
+    try {
+        const currentOwner = await redis.get(getLockKey(whatsappId));
+        if (currentOwner !== ownerId) return false;
+        return (await redis.expire(getLockKey(whatsappId), LOCK_TTL_SECONDS)) === 1;
+    } catch (error: any) {
+        logger.error(`[WbotMutex] Erro ao renovar lock para whatsappId=${whatsappId}: ${error?.message}`);
+        return false;
+    }
 };
 
 /**
  * Libera o lock explicitamente (no shutdown ou disconnect).
- * VERSÃO SIMPLIFICADA: No-op em ambiente single-instance.
+ * Libera somente o lock pertencente a esta instância.
  */
 export const releaseWbotLock = async (whatsappId: number | string): Promise<void> => {
-    logger.debug(`[WbotMutex] Lock liberado (single-instance) para whatsappId=${whatsappId}`);
+    const redis = cacheLayer.getRedisInstance();
+    const ownerId = sessionLockOwners.get(whatsappId);
+    sessionLockOwners.delete(whatsappId);
+    if (!redis || !ownerId) return;
+
+    try {
+        const currentOwner = await redis.get(getLockKey(whatsappId));
+        if (currentOwner === ownerId) {
+            await redis.del(getLockKey(whatsappId));
+            logger.debug(`[WbotMutex] Lock liberado para whatsappId=${whatsappId}`);
+        }
+    } catch (error: any) {
+        logger.error(`[WbotMutex] Erro ao liberar lock para whatsappId=${whatsappId}: ${error?.message}`);
+    }
 };
 
 /**
  * Verifica se esta instância ainda é a dona do lock.
- * VERSÃO SIMPLIFICADA: Sempre retorna true em ambiente single-instance.
+ * Retorna false quando outra instância possui o lock.
  */
 export const checkWbotLock = async (whatsappId: number | string): Promise<boolean> => {
-    return true;
+    const redis = cacheLayer.getRedisInstance();
+    const ownerId = sessionLockOwners.get(whatsappId);
+    if (!redis || !ownerId) return true;
+
+    try {
+        return (await redis.get(getLockKey(whatsappId))) === ownerId;
+    } catch (error: any) {
+        logger.error(`[WbotMutex] Erro ao verificar lock para whatsappId=${whatsappId}: ${error?.message}`);
+        return false;
+    }
 };
 
 /**
  * Retorna o dono atual do lock (se houver).
- * VERSÃO SIMPLIFICADA: Sempre retorna a instância atual em ambiente single-instance.
  */
 export const getWbotLockOwner = async (whatsappId: number | string): Promise<string | null> => {
-    return getCurrentInstanceId();
+    const redis = cacheLayer.getRedisInstance();
+    if (!redis) return sessionLockOwners.get(whatsappId) || null;
+    return redis.get(getLockKey(whatsappId));
 };
 
 /**
  * Limpa todos os locks de sessão do WhatsApp.
- * VERSÃO SIMPLIFICADA: No-op em ambiente single-instance.
+ * Libera somente o lock pertencente a esta instância.
  */
 export const clearSessionLocks = async (): Promise<void> => {
-    logger.info(`[WbotMutex] clearSessionLocks (single-instance) - no-op`);
+    sessionLockOwners.clear();
+    logger.info(`[WbotMutex] Estado local de locks limpo no startup; locks remotos expiram por TTL.`);
 };
 

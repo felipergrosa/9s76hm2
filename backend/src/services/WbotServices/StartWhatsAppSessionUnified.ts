@@ -45,9 +45,11 @@ export const StartWhatsAppSessionUnified = async (
       // ===== BAILEYS (não oficial) =====
       logger.info(`[StartSession] Usando Baileys para whatsappId=${whatsapp.id}`);
 
-      // NOTA: Lock simplificado para single-instance - sempre retorna true
-      // A flag reconnectingWhatsapps em wbot.ts previne reconexões duplicadas
-      await acquireWbotLock(whatsapp.id, "StartWhatsAppSessionUnified-Baileys");
+      const hasLock = await acquireWbotLock(whatsapp.id, "StartWhatsAppSessionUnified-Baileys");
+      if (!hasLock) {
+        logger.warn(`[StartSession] Lock negado para whatsappId=${whatsapp.id}; outra instância controla a sessão.`);
+        return;
+      }
 
       await whatsapp.update({ status: "OPENING" });
 
@@ -81,8 +83,11 @@ export const StartWhatsAppSessionUnified = async (
       // ===== WHATSAPP BUSINESS API OFICIAL =====
       logger.info(`[StartSession] Usando Official API para whatsappId=${whatsapp.id}`);
 
-      // NOTA: Lock simplificado para single-instance - sempre retorna true
-      await acquireWbotLock(whatsapp.id, "StartWhatsAppSessionUnified-Official");
+      const hasLock = await acquireWbotLock(whatsapp.id, "StartWhatsAppSessionUnified-Official");
+      if (!hasLock) {
+        logger.warn(`[StartSession] Lock negado para whatsappId=${whatsapp.id}; outra instância controla a sessão.`);
+        return;
+      }
 
       await whatsapp.update({ status: "OPENING" });
 
@@ -149,6 +154,7 @@ export const StartWhatsAppSessionUnified = async (
   } catch (err: any) {
     Sentry.captureException(err);
     logger.error(`[StartSession] Erro ao iniciar sessão: ${err.message}`);
+    await releaseWbotLock(whatsapp.id);
 
     // Atualizar status de erro
     await whatsapp.update({ status: "DISCONNECTED" });

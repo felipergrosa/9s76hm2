@@ -135,7 +135,9 @@ export const clearReconnectingFlag = (whatsappId: number) => {
 
 // Helper para expor IDs das sessões ativas (para checkOrphanedSessionsCron)
 export const getWbotSessionIds = (): number[] => {
-  return sessions.map(s => s.id);
+  return sessions
+    .filter(session => session.connectionState === "open")
+    .map(session => session.id);
 };
 
 // Helper para verificar se sessão já existe (para evitar inicialização duplicada)
@@ -502,7 +504,8 @@ export const removeWbot = async (
         '_androidSyncInterval',
         '_androidKeepaliveInterval',
         '_lidPollInterval',
-        '_activityCheckInterval'
+        '_activityCheckInterval',
+        '_wbotLockRenewInterval'
       ];
 
       for (const intervalKey of intervalsToClear) {
@@ -524,6 +527,9 @@ export const removeWbot = async (
       }
 
       sessions.splice(sessionIndex, 1);
+      if (isLogout) {
+        await releaseWbotLock(whatsappId);
+      }
       logger.info(`[removeWbot] Sessão ${whatsappId} removida do pool (isLogout=${isLogout})`);
     }
   } catch (err) {
@@ -663,6 +669,17 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
         }
 
         wsocket.connectionState = "opening";
+        const lockRenewInterval = setInterval(async () => {
+          const lockIsValid = await renewWbotLock(whatsapp.id);
+          if (!lockIsValid) {
+            logger.error(`[wbot] Lock perdido para whatsappId=${whatsapp.id}; encerrando socket para evitar sessão zumbi.`);
+            try {
+              wsocket.ws.close();
+            } catch { }
+          }
+        }, 60_000);
+        (wsocket as any)._wbotLockRenewInterval = lockRenewInterval;
+
         wsocket.ev.on("connection.update", async (update) => {
           const { connection } = update;
           if (connection === 'close') {
@@ -834,6 +851,16 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
 
                 logger.warn(`[wbot] Conflito de sessão #${conflictCount} para ${name}. Aguardando ${delay / 1000}s antes de tentar reconectar.`);
 
+                // Após conflitos consecutivos, parar o loop automático e exigir ação explícita.
+                if (conflictCount >= 3) {
+                  reconnectingWhatsapps.delete(id);
+                  removeWbot(id, false);
+                  await releaseWbotLock(id);
+                  await whatsapp.update({ status: "DISCONNECTED" });
+                  logger.error(`[wbot] Conflito persistente para ${name}; reconexão automática interrompida.`);
+                  return;
+                }
+
                 // Marcar como "reconectando" para bloquear novas tentativas
                 reconnectingWhatsapps.set(id, Date.now());
                 
@@ -860,12 +887,11 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
 
                 removeWbot(id, false);
 
-                // Agendar reconexão com delay calculado
-                // NOTA: NÃO limpar reconnectingWhatsapps aqui! A flag deve permanecer ativa
-                // até a conexão ser efetivamente restaurada (connection === "open").
-                // Isso evita a janela crítica onde sessão está ausente mas flag indica PARADO.
+                // Agendar reconexão com delay calculado.
+                // A flag é liberada imediatamente antes da tentativa, sob proteção do lock.
                 setTimeout(async () => {
                   try {
+                    reconnectingWhatsapps.delete(id);
                     await StartWhatsAppSession(whatsapp, whatsapp.companyId);
                   } catch (err: any) {
                     logger.error(`[wbot] Erro na reconexão agendada para ${name}: ${err?.message}`);
@@ -1316,8 +1342,15 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                   retries: 0,
                   number: ""
                 });
-                // Sockets aguardando leitura do QR não são sessões conectadas.
-                // O pool deve conter somente sockets autenticados após connection=open.
+                // Manter o socket no pool durante o QR permite que um novo pedido
+                // remova e feche a tentativa anterior. A validação do pool exige open.
+                const sessionIndex = sessions.findIndex(s => s.id === whatsapp.id);
+                if (sessionIndex === -1) {
+                  wsocket.id = whatsapp.id;
+                  wsocket.connectionState = "opening";
+                  sessions.push(wsocket);
+                }
+
                 io?.of(`/workspace-${companyId}`)
                   .emit(`company-${whatsapp.companyId}-whatsappSession`, {
                     action: "update",
