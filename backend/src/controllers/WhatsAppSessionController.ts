@@ -61,6 +61,12 @@ const update = async (req: Request, res: Response): Promise<Response> => {
     await cacheLayer.delFromPattern(`sessions:${whatsappId}:*`);
   }
 
+  // Toda solicitação manual de novo QR deve remover o socket anterior,
+  // inclusive quando ele ficou preso no pool sem conexão real.
+  if (!clearAuth) {
+    await removeWbot(Number(whatsappId), false);
+  }
+
   await whatsapp.update({ session: "" });
 
   if (whatsapp.channel === "whatsapp") {
