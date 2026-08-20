@@ -93,6 +93,7 @@ const loggerBaileys = pino({
 type Session = WASocket & {
   id?: number;
   store?: Store;
+  connectionState?: "opening" | "open" | "closed";
 };
 
 const sessions: Session[] = [];
@@ -144,9 +145,17 @@ export const getWbotSessionExists = (whatsappId: number): boolean => {
 
   const session = sessions[sessionIndex];
   const readyState = (session as any)?.ws?.readyState;
-  if (readyState === 2 || readyState === 3) {
+  const isAuthenticated = Boolean((session as WASocket).user?.id);
+  const isConnected = session.connectionState === "open";
+  if (readyState === 2 || readyState === 3 || !isAuthenticated || !isConnected) {
     sessions.splice(sessionIndex, 1);
-    logger.warn(`[wbot] Removendo sessão encerrada do pool para whatsappId=${whatsappId}`);
+    try {
+      session.ev.removeAllListeners("connection.update");
+      session.ws.close();
+    } catch (error: any) {
+      logger.debug(`[wbot] Falha ao fechar sessão inválida para whatsappId=${whatsappId}: ${error?.message}`);
+    }
+    logger.warn(`[wbot] Removendo sessão não autenticada ou encerrada do pool para whatsappId=${whatsappId}`);
     return false;
   }
 
@@ -653,6 +662,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
           }
         }
 
+        wsocket.connectionState = "opening";
         wsocket.ev.on("connection.update", async (update) => {
           const { connection } = update;
           if (connection === 'close') {
@@ -754,6 +764,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
             // Single-instance: sem verificação de zumbi
 
             if (connection === "close") {
+              wsocket.connectionState = "closed";
               // DISPARO DE EVENTO DESATIVADO - Conflito com sessão WhatsApp
             // EventTrigger.emitSessionDisconnected() causa Bad MAC Error
             // ao acessar sessão simultaneamente com Baileys auto-recovery
@@ -1125,6 +1136,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
             }
 
             if (connection === "open") {
+              wsocket.connectionState = "open";
               // Gerar hash de conexão se qrcode estiver vazio
               const currentQrcode = whatsapp.qrcode;
               const connectionHash = currentQrcode && currentQrcode.trim() !== "" 
@@ -1268,8 +1280,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                     action: "update",
                     session: whatsappUpdate
                   });
-                // O socket foi inserido no pool quando o primeiro QR foi emitido.
-                // Removê-lo aqui evita que novas tentativas sejam tratadas como duplicadas.
+                // Garantir a remoção caso uma versão anterior tenha deixado o socket no pool.
                 await removeWbot(id, false);
                 wsocket.ev.removeAllListeners("connection.update");
                 wsocket.ws.close();
@@ -1305,15 +1316,8 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                   retries: 0,
                   number: ""
                 });
-                const sessionIndex = sessions.findIndex(
-                  s => s.id === whatsapp.id
-                );
-
-                if (sessionIndex === -1) {
-                  wsocket.id = whatsapp.id;
-                  sessions.push(wsocket);
-                }
-
+                // Sockets aguardando leitura do QR não são sessões conectadas.
+                // O pool deve conter somente sockets autenticados após connection=open.
                 io?.of(`/workspace-${companyId}`)
                   .emit(`company-${whatsapp.companyId}-whatsappSession`, {
                     action: "update",
