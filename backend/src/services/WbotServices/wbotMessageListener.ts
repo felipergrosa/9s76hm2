@@ -5,7 +5,6 @@ import fs from "fs";
 import "multer"; // Importar multer explicitamente para o namespace Express
 import * as Sentry from "@sentry/node";
 import { isNil, isNull } from "lodash";
-import { REDIS_URI_MSG_CONN } from "../../config/redis";
 import axios from "axios";
 import { generatePdfThumbnail } from "../../helpers/PdfThumbnailGenerator";
 import logger, { sanitizeMessageForLog } from "../../utils/logger";
@@ -60,57 +59,28 @@ import { detectUrl, getLinkPreview, LinkPreviewData } from "./LinkPreviewService
 // =============================================================================
 // Mapa de locks por JID para garantir que apenas uma thread por vez
 // possa criar contato para o mesmo JID
-const jidLocks = new Map<string, Promise<void>>();
-
-/**
- * Adquire um lock para um JID específico
- * Retorna uma função para liberar o lock
- */
-const acquireJidLock = async (jid: string): Promise<() => void> => {
-  const normalizedJid = jidNormalizedUser(jid);
-
-  // Aguardar lock existente
-  while (jidLocks.has(normalizedJid)) {
-    try {
-      await jidLocks.get(normalizedJid);
-    } catch (e) {
-      // Ignora erros de locks anteriores
-    }
-  }
-
-  // Criar novo lock
-  let releaseLock: () => void;
-  const lockPromise = new Promise<void>((resolve) => {
-    releaseLock = () => {
-      jidLocks.delete(normalizedJid);
-      resolve();
-    };
-  });
-
-  jidLocks.set(normalizedJid, lockPromise);
-
-  return releaseLock!;
-};
-
-// CLEANUP PREVENTIVO: jidLocks deve ser sempre esvaziado pelo release,
-// mas em casos de crash/exception pode vazar. Limpar locks órfãos a cada 5 min.
-setInterval(() => {
-  // jidLocks não tem timestamp — se tiver mais de 500 entradas, algo errado
-  if (jidLocks.size > 500) {
-    logger.warn(`[jidLocks] Detectado ${jidLocks.size} locks ativos — possível vazamento, limpando`);
-    jidLocks.clear();
-  }
-}, 5 * 60 * 1000).unref();
+type JidLockEntry = { mutex: Mutex; references: number };
+const jidLocks = new Map<string, JidLockEntry>();
 
 /**
  * Executa uma função com lock por JID
  */
 const withJidLock = async <T>(jid: string, fn: () => Promise<T>): Promise<T> => {
-  const release = await acquireJidLock(jid);
+  const normalizedJid = jidNormalizedUser(jid);
+  let entry = jidLocks.get(normalizedJid);
+  if (!entry) {
+    entry = { mutex: new Mutex(), references: 0 };
+    jidLocks.set(normalizedJid, entry);
+  }
+
+  entry.references += 1;
   try {
-    return await fn();
+    return await entry.mutex.runExclusive(fn);
   } finally {
-    release();
+    entry.references -= 1;
+    if (entry.references === 0 && jidLocks.get(normalizedJid) === entry) {
+      jidLocks.delete(normalizedJid);
+    }
   }
 };
 import FindOrCreateATicketTrakingService from "../TicketServices/FindOrCreateATicketTrakingService";
@@ -5956,10 +5926,10 @@ const handleMessage = async (
           false,
           settings
         );
-        console.log(`[wbotMessageListener] FindOrCreateTicketService retornou ticketId=${result.id}, status=${result.status}`);
+        logger.debug(`[wbotMessageListener] FindOrCreateTicketService retornou ticketId=${result.id}, status=${result.status}`);
         return result;
       } catch (err) {
-        console.error(`[wbotMessageListener] Erro em FindOrCreateTicketService:`, err);
+        logger.error(`[wbotMessageListener] Erro em FindOrCreateTicketService: ${err}`);
         throw err;
       }
     });
@@ -6957,23 +6927,23 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
   logger.info(`[wbotMessageListener] Iniciado para whatsappId=${wbot.id}, companyId=${companyId}, userJid=${wbotUserJid}, phoneNumber=${phoneNumber}`);
   
   wbot.ev.on("messages.upsert", async (messageUpsert: ImessageUpsert) => {
-    logger.info(`[messages.upsert] Evento recebido: ${messageUpsert.messages?.length || 0} mensagens, type=${messageUpsert.type}, whatsappId=${wbot.id}`);
+    logger.debug(`[messages.upsert] Evento recebido: ${messageUpsert.messages?.length || 0} mensagens, type=${messageUpsert.type}, whatsappId=${wbot.id}`);
     
     // Filtrar mensagens primeiro (necessário para verificação de líder)
     const messages = messageUpsert.messages
       .filter(filterMessages)
       .map(msg => msg);
 
-    logger.info(`[messages.upsert] Após filtro: ${messages?.length || 0} mensagens válidas`);
+    logger.debug(`[messages.upsert] Após filtro: ${messages?.length || 0} mensagens válidas`);
 
     if (!messages || messages.length === 0) return;
 
-    // Single-instance: sempre processa todas as mensagens
-
-    if (!messages) return;
-
-    // console.log("CIAAAAAAA WBOT " , companyId)
-    messages.forEach(async (message: proto.IWebMessageInfo) => {
+    // Processamento local no dono do socket: evita que uma fila Bull compartilhada
+    // entregue o job a outra réplica sem o respectivo WASocket. O mutex mantém a
+    // ordem por conversa, mas permite paralelismo entre conversas diferentes.
+    messages.forEach((message: proto.IWebMessageInfo) => {
+      const inboundKey = `inbound-${wbot.id}-${message.key.remoteJid || "unknown"}`;
+      void withJidLock(inboundKey, async () => {
       if (
         message?.messageStubParameters?.length &&
         message.messageStubParameters[0].includes("absent")
@@ -6991,7 +6961,7 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
 
       // DEBUG: Log se mensagem já existe
       if (messageExists) {
-        logger.info(`[messages.upsert] Mensagem JÁ EXISTE no banco: wid=${message.key.id}, remoteJid=${message.key.remoteJid}`);
+        logger.debug(`[messages.upsert] Mensagem já existe no banco: wid=${message.key.id}, remoteJid=${message.key.remoteJid}`);
       }
 
       if (!messageExists) {
@@ -6999,8 +6969,7 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
         let body = await getBodyMessage(message);
         const fromMe = message?.key?.fromMe;
         
-        // DEBUG: Log para rastrear mensagens que chegam aqui
-        logger.info(`[messages.upsert] Processando mensagem: wid=${message.key.id}, fromMe=${fromMe}, remoteJid=${message.key.remoteJid}`);
+        logger.debug(`[messages.upsert] Processando mensagem: wid=${message.key.id}, fromMe=${fromMe}, remoteJid=${message.key.remoteJid}`);
         
         if (fromMe) {
           isCampaign = /\u200c/.test(body);
@@ -7017,41 +6986,14 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
         }
 
         if (!isCampaign) {
-          if (REDIS_URI_MSG_CONN !== "") {
-            const queueRemoteJid = (message.key.remoteJid || "unknown").replace(/[^a-zA-Z0-9_-]/g, "_");
-            const queueFromMe = message.key.fromMe ? "1" : "0";
-            const handleMessageJobId = `${wbot.id}-handleMessage-${message.key.id}-${queueRemoteJid}-${queueFromMe}`;
-            //} && (!message.key.fromMe || (message.key.fromMe && !message.key.id.startsWith('BAE')))) {
-            try {
-              const { messageQueue } = await import("../../queues");
-              await messageQueue.add(
-                "handleMessage",
-                { message, wbot: wbot.id, companyId },
-                {
-                  priority: 1,
-                  jobId: handleMessageJobId
-                }
-              );
-            } catch (e: any) {
-              Sentry.captureException(e);
-              logger.error(
-                {
-                  error: e?.message || e,
-                  stack: e?.stack,
-                  companyId,
-                  whatsappId: wbot.id,
-                  wid: message.key.id,
-                  remoteJid: message.key.remoteJid,
-                  fromMe: Boolean(message.key.fromMe)
-                },
-                "[messages.upsert] Falha no enqueue do handleMessage, usando fallback direto"
-              );
-
-              // Fallback de segurança para não perder mensagem em falha de fila.
-              await handleMessage(message, wbot, companyId);
-            }
+          const processingStartedAt = Date.now();
+          await handleMessage(message, wbot, companyId);
+          const processingMs = Date.now() - processingStartedAt;
+          const latencyLog = `[messages.upsert] Processada em ${processingMs}ms: wid=${message.key.id}, remoteJid=${message.key.remoteJid}`;
+          if (processingMs >= 2000) {
+            logger.warn(latencyLog);
           } else {
-            await handleMessage(message, wbot, companyId);
+            logger.debug(latencyLog);
           }
         }
 
@@ -7060,42 +7002,19 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
       }
 
       if (message.key.remoteJid?.endsWith("@g.us")) {
-        if (REDIS_URI_MSG_CONN !== "") {
-          const queueRemoteJid = (message.key.remoteJid || "unknown").replace(/[^a-zA-Z0-9_-]/g, "_");
-          const queueFromMe = message.key.fromMe ? "1" : "0";
-          const ackState = "2";
-          const handleMessageAckJobId = `${wbot.id}-handleMessageAck-${message.key.id}-${queueRemoteJid}-${queueFromMe}-${ackState}`;
-          try {
-            const { messageQueue } = await import("../../queues");
-            await messageQueue.add(
-              "handleMessageAck",
-              { msg: message, chat: 2 },
-              {
-                priority: 1,
-                jobId: handleMessageAckJobId
-              }
-            );
-          } catch (e: any) {
-            Sentry.captureException(e);
-            logger.error(
-              {
-                error: e?.message || e,
-                stack: e?.stack,
-                companyId,
-                whatsappId: wbot.id,
-                wid: message.key.id,
-                remoteJid: message.key.remoteJid,
-                fromMe: Boolean(message.key.fromMe)
-              },
-              "[messages.upsert] Falha no enqueue do handleMessageAck, usando fallback direto"
-            );
-
-            handleMsgAck(message as any, 2);
-          }
-        } else {
-          handleMsgAck(message as any, 2);
-        }
+        await handleMsgAck(message as any, 2);
       }
+      }).catch((error: any) => {
+        Sentry.captureException(error);
+        logger.error({
+          error: error?.message || error,
+          stack: error?.stack,
+          companyId,
+          whatsappId: wbot.id,
+          wid: message.key.id,
+          remoteJid: message.key.remoteJid
+        }, "[messages.upsert] Falha ao processar mensagem recebida");
+      });
     });
 
     // messages.forEach(async (message: proto.IWebMessageInfo) => {
@@ -7158,42 +7077,8 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
         ack = message.update.status;
       }
 
-      if (REDIS_URI_MSG_CONN !== "") {
-        const queueRemoteJid = (message.key.remoteJid || "unknown").replace(/[^a-zA-Z0-9_-]/g, "_");
-        const queueFromMe = message.key.fromMe ? "1" : "0";
-        const ackState = String(ack ?? "unknown");
-        const handleMessageAckJobId = `${wbot.id}-handleMessageAck-${message.key.id}-${queueRemoteJid}-${queueFromMe}-${ackState}`;
-        try {
-          const { messageQueue } = await import("../../queues");
-          await messageQueue.add(
-            "handleMessageAck",
-            { msg: message, chat: ack },
-            {
-              priority: 1,
-              jobId: handleMessageAckJobId
-            }
-          );
-        } catch (e: any) {
-          Sentry.captureException(e);
-          logger.error(
-            {
-              error: e?.message || e,
-              stack: e?.stack,
-              companyId,
-              whatsappId: wbot.id,
-              wid: message.key.id,
-              remoteJid: message.key.remoteJid,
-              fromMe: Boolean(message.key.fromMe),
-              ack
-            },
-            "[messages.update] Falha no enqueue do handleMessageAck, usando fallback direto"
-          );
-
-          handleMsgAck(message as any, ack);
-        }
-      } else {
-        handleMsgAck(message as any, ack);
-      }
+      const ackKey = `ack-${companyId}-${message.key.id || message.key.remoteJid || "unknown"}`;
+      await withJidLock(ackKey, () => handleMsgAck(message as any, ack));
     });
   });
 
@@ -7204,8 +7089,9 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
         // receiptTimestamp = entregue, readTimestamp = lido
         const ack = msg?.receipt?.readTimestamp ? 4 : msg?.receipt?.receiptTimestamp ? 3 : 0;
         if (!ack) return;
-        logger.info(`[message-receipt.update] ACK=${ack} para msgId=${msg?.key?.id}`);
-        await handleMsgAck(msg, ack);
+        logger.debug(`[message-receipt.update] ACK=${ack} para msgId=${msg?.key?.id}`);
+        const ackKey = `ack-${companyId}-${msg?.key?.id || msg?.key?.remoteJid || "unknown"}`;
+        await withJidLock(ackKey, () => handleMsgAck(msg, ack));
       } catch (err) {
         logger.error(`[message-receipt.update] Erro: ${err}`);
       }

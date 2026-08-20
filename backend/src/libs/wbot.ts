@@ -149,9 +149,24 @@ export const getWbotSessionExists = (whatsappId: number): boolean => {
   const readyState = (session as any)?.ws?.readyState;
   const isAuthenticated = Boolean((session as WASocket).user?.id);
   const isConnected = session.connectionState === "open";
+  const isOpening = session.connectionState === "opening" && readyState !== 2 && readyState !== 3;
+
+  if (isOpening) {
+    return true;
+  }
+
   if (readyState === 2 || readyState === 3 || !isAuthenticated || !isConnected) {
     sessions.splice(sessionIndex, 1);
     try {
+      const renewInterval = (session as any)._wbotLockRenewInterval;
+      if (renewInterval) {
+        clearInterval(renewInterval);
+        (session as any)._wbotLockRenewInterval = undefined;
+      }
+      const sessionToken = (session as any)._sessionToken as string | undefined;
+      if (!sessionToken || sessionTokens.get(whatsappId) === sessionToken) {
+        sessionTokens.delete(whatsappId);
+      }
       session.ev.removeAllListeners("connection.update");
       session.ws.close();
     } catch (error: any) {
@@ -521,9 +536,31 @@ export const removeWbot = async (
         }
       }
 
+      const sessionToken = (session as any)._sessionToken as string | undefined;
+      if (!sessionToken || sessionTokens.get(whatsappId) === sessionToken) {
+        sessionTokens.delete(whatsappId);
+      }
+
+      // Invalidar os handlers antes de fechar evita que o próprio teardown
+      // agende uma nova reconexão ou altere o estado da próxima geração.
+      try {
+        session.ev.removeAllListeners("connection.update");
+      } catch { }
+
       if (isLogout) {
-        session.logout();
+        try {
+          await session.logout();
+        } catch (error: any) {
+          logger.debug(`[removeWbot] Logout falhou para whatsappId=${whatsappId}: ${error?.message}`);
+        }
+      }
+
+      // Mesmo sem logout, o transporte antigo precisa ser encerrado. Apenas
+      // removê-lo do array mantém duas conexões Baileys usando as mesmas chaves.
+      try {
         session.ws.close();
+      } catch (error: any) {
+        logger.debug(`[removeWbot] Fechamento do socket falhou para whatsappId=${whatsappId}: ${error?.message}`);
       }
 
       sessions.splice(sessionIndex, 1);
@@ -531,6 +568,9 @@ export const removeWbot = async (
         await releaseWbotLock(whatsappId);
       }
       logger.info(`[removeWbot] Sessão ${whatsappId} removida do pool (isLogout=${isLogout})`);
+    } else if (isLogout) {
+      // Pode existir lock local mesmo quando o socket falhou antes de entrar no pool.
+      await releaseWbotLock(whatsappId);
     }
   } catch (err) {
     logger.error(err);
@@ -668,24 +708,42 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
           }
         }
 
+        // Outra chamada pode ter começado enquanto esta aguardava versão/auth.
+        // Nesse caso, esta geração já nasceu obsoleta e não deve substituir a
+        // mais recente apenas porque terminou a inicialização depois.
+        if (sessionTokens.get(id) !== mySessionToken) {
+          logger.warn(`[wbot] Inicialização obsoleta descartada para whatsappId=${id}`);
+          try {
+            wsocket.ev.removeAllListeners("connection.update");
+            wsocket.ws.close();
+          } catch { }
+          return resolve(null as any);
+        }
+
+        // Registrar também sockets em abertura/QR. Isso bloqueia inicializações
+        // duplicadas e permite que o fluxo manual encerre a tentativa anterior.
+        const existingSessionIndex = sessions.findIndex(session => session.id === id);
+        if (existingSessionIndex !== -1) {
+          await removeWbot(id, false);
+        }
+        wsocket.id = id;
+        wsocket.connectionState = "opening";
+        (wsocket as any)._sessionToken = mySessionToken;
+        sessions.push(wsocket);
+
         wsocket.connectionState = "opening";
         const lockRenewInterval = setInterval(async () => {
           const lockIsValid = await renewWbotLock(whatsapp.id);
           if (!lockIsValid) {
             logger.error(`[wbot] Lock perdido para whatsappId=${whatsapp.id}; encerrando socket para evitar sessão zumbi.`);
+            await removeWbot(whatsapp.id, false);
+            await releaseWbotLock(whatsapp.id);
             try {
-              wsocket.ws.close();
+              await whatsapp.update({ status: "DISCONNECTED" });
             } catch { }
           }
         }, 60_000);
         (wsocket as any)._wbotLockRenewInterval = lockRenewInterval;
-
-        wsocket.ev.on("connection.update", async (update) => {
-          const { connection } = update;
-          if (connection === 'close') {
-            // Heartbeat cleanup managed externally
-          }
-        });
 
         // Handler de messaging-history.set DESABILITADO - syncFullHistory agora é sob demanda
         // O sync automático causava sobrecarga ao reconectar após dias desconectado
@@ -778,7 +836,12 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
               }`
             );
 
-            // Single-instance: sem verificação de zumbi
+            // Eventos de sockets substituídos não podem alterar estado nem
+            // disparar reconexão da geração atual.
+            if (sessionTokens.get(id) !== mySessionToken) {
+              logger.debug(`[wbot] Ignorando connection.update de geração obsoleta para whatsappId=${id}`);
+              return;
+            }
 
             if (connection === "close") {
               wsocket.connectionState = "closed";
@@ -1348,6 +1411,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 if (sessionIndex === -1) {
                   wsocket.id = whatsapp.id;
                   wsocket.connectionState = "opening";
+                  (wsocket as any)._sessionToken = mySessionToken;
                   sessions.push(wsocket);
                 }
 

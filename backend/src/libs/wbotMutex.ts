@@ -1,10 +1,11 @@
 import logger from "../utils/logger";
 import cacheLayer from "./cache";
+import { randomUUID } from "crypto";
 
 const LOCK_TTL_SECONDS = 180;
 const sessionLockOwners = new Map<number | string, string>();
-
-const getOwnerId = (): string => `${process.env.HOSTNAME || "instance"}:${process.pid}`;
+const INSTANCE_OWNER_ID = `${process.env.HOSTNAME || "instance"}:${process.pid}:${randomUUID()}`;
+const hasDistributedRedis = (): boolean => Boolean(process.env.REDIS_URI);
 
 /**
  * wbotMutex - lock distribuído por sessão com fallback local.
@@ -16,7 +17,7 @@ const getOwnerId = (): string => `${process.env.HOSTNAME || "instance"}:${proces
 export const getLockKey = (whatsappId: number | string) => `wbot:mutex:${whatsappId}`;
 
 export const getCurrentInstanceId = (): string => {
-    return process.env.HOSTNAME || `instance-${process.pid}`;
+    return INSTANCE_OWNER_ID;
 };
 
 /**
@@ -33,30 +34,40 @@ export const getSessionLockToken = (whatsappId: number | string): string | undef
 export const acquireWbotLock = async (whatsappId: number | string, caller?: string): Promise<boolean> => {
     const callerInfo = caller ? ` (caller=${caller})` : "";
     const redis = cacheLayer.getRedisInstance();
-    const ownerId = getOwnerId();
+    const ownerId = INSTANCE_OWNER_ID;
 
-    if (!redis) {
-        logger.warn(`[WbotMutex] Redis indisponível; usando lock local para whatsappId=${whatsappId}${callerInfo}`);
+    if (!hasDistributedRedis()) {
+        logger.warn(`[WbotMutex] REDIS_URI não configurado; lock apenas local para whatsappId=${whatsappId}${callerInfo}`);
         sessionLockOwners.set(whatsappId, ownerId);
         return true;
     }
 
     try {
-        const result = await redis.set(getLockKey(whatsappId), ownerId, "NX", "EX", LOCK_TTL_SECONDS);
-        if (result === "OK") {
+        // Aquisição/reentrada atômica: somente o mesmo token pode renovar o lock.
+        const script = `
+          local current = redis.call("get", KEYS[1])
+          if not current or current == ARGV[1] then
+            redis.call("set", KEYS[1], ARGV[1], "EX", ARGV[2])
+            return 1
+          end
+          return 0
+        `;
+        const result = await redis.eval(
+            script,
+            1,
+            getLockKey(whatsappId),
+            ownerId,
+            LOCK_TTL_SECONDS
+        );
+
+        if (result === 1) {
             sessionLockOwners.set(whatsappId, ownerId);
             logger.debug(`[WbotMutex] Lock adquirido para whatsappId=${whatsappId}${callerInfo}`);
             return true;
         }
 
         const currentOwner = await redis.get(getLockKey(whatsappId));
-        if (currentOwner === ownerId) {
-            await redis.expire(getLockKey(whatsappId), LOCK_TTL_SECONDS);
-            sessionLockOwners.set(whatsappId, ownerId);
-            return true;
-        }
-
-        logger.warn(`[WbotMutex] Lock negado para whatsappId=${whatsappId}; sessão pertence a outra instância.`);
+        logger.warn(`[WbotMutex] Lock negado para whatsappId=${whatsappId}; owner=${currentOwner || "desconhecido"}.`);
         return false;
     } catch (error: any) {
         logger.error(`[WbotMutex] Erro ao adquirir lock para whatsappId=${whatsappId}: ${error?.message}`);
@@ -71,12 +82,23 @@ export const acquireWbotLock = async (whatsappId: number | string, caller?: stri
 export const renewWbotLock = async (whatsappId: number | string): Promise<boolean> => {
     const redis = cacheLayer.getRedisInstance();
     const ownerId = sessionLockOwners.get(whatsappId);
-    if (!redis || !ownerId) return true;
+    if (!hasDistributedRedis()) return Boolean(ownerId);
+    if (!ownerId) return false;
 
     try {
-        const currentOwner = await redis.get(getLockKey(whatsappId));
-        if (currentOwner !== ownerId) return false;
-        return (await redis.expire(getLockKey(whatsappId), LOCK_TTL_SECONDS)) === 1;
+        const script = `
+          if redis.call("get", KEYS[1]) == ARGV[1] then
+            return redis.call("expire", KEYS[1], ARGV[2])
+          end
+          return 0
+        `;
+        return (await redis.eval(
+            script,
+            1,
+            getLockKey(whatsappId),
+            ownerId,
+            LOCK_TTL_SECONDS
+        )) === 1;
     } catch (error: any) {
         logger.error(`[WbotMutex] Erro ao renovar lock para whatsappId=${whatsappId}: ${error?.message}`);
         return false;
@@ -91,12 +113,17 @@ export const releaseWbotLock = async (whatsappId: number | string): Promise<void
     const redis = cacheLayer.getRedisInstance();
     const ownerId = sessionLockOwners.get(whatsappId);
     sessionLockOwners.delete(whatsappId);
-    if (!redis || !ownerId) return;
+    if (!hasDistributedRedis() || !ownerId) return;
 
     try {
-        const currentOwner = await redis.get(getLockKey(whatsappId));
-        if (currentOwner === ownerId) {
-            await redis.del(getLockKey(whatsappId));
+        const script = `
+          if redis.call("get", KEYS[1]) == ARGV[1] then
+            return redis.call("del", KEYS[1])
+          end
+          return 0
+        `;
+        const released = await redis.eval(script, 1, getLockKey(whatsappId), ownerId);
+        if (released === 1) {
             logger.debug(`[WbotMutex] Lock liberado para whatsappId=${whatsappId}`);
         }
     } catch (error: any) {
@@ -111,7 +138,8 @@ export const releaseWbotLock = async (whatsappId: number | string): Promise<void
 export const checkWbotLock = async (whatsappId: number | string): Promise<boolean> => {
     const redis = cacheLayer.getRedisInstance();
     const ownerId = sessionLockOwners.get(whatsappId);
-    if (!redis || !ownerId) return true;
+    if (!hasDistributedRedis()) return Boolean(ownerId);
+    if (!ownerId) return false;
 
     try {
         return (await redis.get(getLockKey(whatsappId))) === ownerId;
@@ -126,7 +154,7 @@ export const checkWbotLock = async (whatsappId: number | string): Promise<boolea
  */
 export const getWbotLockOwner = async (whatsappId: number | string): Promise<string | null> => {
     const redis = cacheLayer.getRedisInstance();
-    if (!redis) return sessionLockOwners.get(whatsappId) || null;
+    if (!hasDistributedRedis()) return sessionLockOwners.get(whatsappId) || null;
     return redis.get(getLockKey(whatsappId));
 };
 

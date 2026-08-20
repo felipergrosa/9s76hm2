@@ -41,10 +41,12 @@ export async function emitToCompanyRoom(
   // O frontend filtra pelo UUID do ticket, então mensagens de outros tickets são ignoradas
   const isAppMessageEvent = event.includes("-appMessage");
   if (isAppMessageEvent && !skipFallback) {
-    ns.emit(event, payload);
-    if (debug) logger.info(`[SOCKET EMIT] room=${room} + broadcast ns=/workspace-${companyId} event=${event}`);
+    // Enviar apenas aos sockets fora da sala evita que quem está com o ticket
+    // aberto receba o mesmo evento duas vezes.
+    ns.except(room).emit(event, payload);
+    if (debug) logger.debug(`[SOCKET EMIT] room=${room} + demais sockets ns=/workspace-${companyId} event=${event}`);
   } else if (debug) {
-    logger.info(`[SOCKET EMIT] room=${room} ns=/workspace-${companyId} event=${event}`);
+    logger.debug(`[SOCKET EMIT] room=${room} ns=/workspace-${companyId} event=${event}`);
   }
 }
 

@@ -180,15 +180,15 @@ const CreateMessageService = async ({
       contact: message.ticket.contact
     };
     
-    console.log(`[CreateMessageService] Emitindo mensagem para sala ${roomId}, companyId=${companyId}, msgId=${message.id}, ticketId=${message.ticketId}, imported=${!!messageData?.ticketImported}`);
+    logger.debug(`[CreateMessageService] Emitindo mensagem para sala ${roomId}, companyId=${companyId}, msgId=${message.id}, ticketId=${message.ticketId}, imported=${!!messageData?.ticketImported}`);
     
     // Usa fila persistente se SOCKET_USE_QUEUE=true (mais robusto)
     // Caso contrário, usa emissão direta com retry
     try {
       await emitSocketEvent(companyId, roomId, eventName, payload);
-      console.log(`[CreateMessageService] Emissão sucesso para sala ${roomId}`);
+      logger.debug(`[CreateMessageService] Emissão concluída para sala ${roomId}`);
     } catch (err) {
-      console.error(`[CreateMessageService] Falha na emissão para sala ${roomId}:`, err);
+      logger.error(`[CreateMessageService] Falha na emissão para sala ${roomId}: ${err}`);
     }
   }
 

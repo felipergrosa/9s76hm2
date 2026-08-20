@@ -171,14 +171,7 @@ function createInMemoryRedis() {
       
       // Script de aquisição de lock (wbotMutex)
       if (script.includes('redis.call("set", KEYS[1], ARGV[1], "EX", ARGV[2])') && script.includes("return 1")) {
-        if (!current) {
-          await this.set(key, argv[0], "EX", parseInt(argv[1]));
-          return 1;
-        }
-        // Extrair host do ownerId (formato: host:token)
-        const currentHost = current?.split(":")[0];
-        const myHost = argv[0]?.split(":")[0];
-        if (currentHost === myHost) {
+        if (!current || current === argv[0]) {
           await this.set(key, argv[0], "EX", parseInt(argv[1]));
           return 1;
         }
