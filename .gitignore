@@ -148,6 +148,9 @@ restore-list-vs-origin.txt
 # Documentação privada (correções, guias internos)
 docs-privadas/
 
+# Saída gerada pelo Graphify (grafo, relatório e cache)
+graphify-out/
+
 # Não ignore arquivos importantes do código
 !backend/**/src/**
 !frontend/**/src/**

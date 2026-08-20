@@ -139,7 +139,18 @@ export const getWbotSessionIds = (): number[] => {
 
 // Helper para verificar se sessão já existe (para evitar inicialização duplicada)
 export const getWbotSessionExists = (whatsappId: number): boolean => {
-  return sessions.findIndex(s => s.id === whatsappId) !== -1;
+  const sessionIndex = sessions.findIndex(s => s.id === whatsappId);
+  if (sessionIndex === -1) return false;
+
+  const session = sessions[sessionIndex];
+  const readyState = (session as any)?.ws?.readyState;
+  if (readyState === 2 || readyState === 3) {
+    sessions.splice(sessionIndex, 1);
+    logger.warn(`[wbot] Removendo sessão encerrada do pool para whatsappId=${whatsappId}`);
+    return false;
+  }
+
+  return true;
 };
 
 // Map para contar conflitos consecutivos (para backoff exponencial)
@@ -533,6 +544,8 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
       // Token de geração para garantir que apenas a sessão mais recente neste processo controle a reconexão
       const mySessionToken = crypto.randomUUID();
       sessionTokens.set(whatsapp.id, mySessionToken);
+      // Cada socket inicia seu próprio ciclo de QR. Não reutilizar tentativas antigas.
+      retriesQrCodeMap.delete(whatsapp.id);
 
       (async () => {
         let io: any;
@@ -578,7 +591,6 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
           logger.info(`Baileys pkg vunknown | WA Web v${version.join(".")}, isLatest: ${isLatest}`);
         }
         logger.info(`Starting session ${name}`);
-        let retriesQrCode = 0;
 
         const { state, saveCreds } = await useMultiFileAuthState(whatsapp, () => {
           if (wsocket) {
@@ -754,7 +766,6 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
             */
               
               const errorMsg = lastDisconnect?.error?.message || "";
-              console.log("DESCONECTOU", JSON.stringify(lastDisconnect, null, 2))
 
               logger.info(
                 `Socket  ${name} Connection Update ${connection || ""} ${errorMsg}`
@@ -925,8 +936,9 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
               // IMPORTANTE: NÃO deletar arquivos de sessão! O pareamento é válido.
               // Baileys v7 usa nomes como creds-HASH.json, não creds.json
               if (isRestartRequired) {
-                // SEMPRE limpar flag primeiro para garantir que reconexão possa ocorrer
+                // SEMPRE limpar flag e contador de QR para garantir que a reconexão possa ocorrer
                 reconnectingWhatsapps.delete(id);
+                retriesQrCodeMap.delete(id);
                 
                 logger.info(`[wbot] Restart necessário (515) para ${name}. Reconectando em 3s (preservando sessão)...`);
                 
@@ -1146,6 +1158,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
               // CORREÇÃO: Resetar contadores de conflito ao conectar com sucesso
               conflictCountMap.delete(id);
               reconnectingWhatsapps.delete(id);
+              retriesQrCodeMap.delete(id);
               
               // Resetar Circuit Breaker ao conectar com sucesso
               resetCircuitBreaker(id);
@@ -1255,6 +1268,9 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                     action: "update",
                     session: whatsappUpdate
                   });
+                // O socket foi inserido no pool quando o primeiro QR foi emitido.
+                // Removê-lo aqui evita que novas tentativas sejam tratadas como duplicadas.
+                await removeWbot(id, false);
                 wsocket.ev.removeAllListeners("connection.update");
                 wsocket.ws.close();
                 wsocket = null;
@@ -1280,7 +1296,8 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                     });
                 }
                 
-                retriesQrCodeMap.set(id, (retriesQrCode += 1));
+                const qrAttempt = (retriesQrCodeMap.get(id) || 0) + 1;
+                retriesQrCodeMap.set(id, qrAttempt);
 
                 await whatsapp.update({
                   qrcode: qr,

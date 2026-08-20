@@ -14,8 +14,8 @@ services:
       - redis
     environment:
       NODE_ENV: production
-      # Heap limit 4GB para evitar OOM com múltiplas sessões WhatsApp
-      NODE_OPTIONS: "--max-old-space-size=4096"
+      # Heap limit 1GB (uso real ~268MB, container limit 3GB)
+      NODE_OPTIONS: "--max-old-space-size=1024"
       DB_DIALECT: postgres
       DB_HOST: postgres  # Serviço externo na rede nobreluminarias
       DB_PORT: 5432
