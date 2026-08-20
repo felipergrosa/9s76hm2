@@ -93,7 +93,11 @@ COPY --from=build /app/.git-commit ./.git-commit
 COPY --from=build /app/.build-date ./.build-date
 COPY --from=build /app/scripts ./scripts
 COPY --from=build /app/.sequelizerc ./.sequelizerc
-RUN mkdir -p ./private
+# O contexto pode vir de um checkout Windows com CRLF. Normalize os scripts
+# antes de executá-los no Linux para evitar "set: Illegal option -\r".
+RUN find ./scripts -type f -name '*.sh' -exec sed -i 's/\r$//' {} + && \
+    chmod +x ./scripts/*.sh && \
+    mkdir -p ./private
 
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
