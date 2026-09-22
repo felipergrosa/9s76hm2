@@ -75,12 +75,21 @@ const checkBlocked = (page: any) => {
   }
 };
 
+// Raio (km) → zoom aproximado do Google Maps para a URL geo
+const radiusToZoom = (radiusKm: number): number => {
+  if (radiusKm <= 2) return 16;
+  if (radiusKm <= 5) return 15;
+  if (radiusKm <= 10) return 14;
+  if (radiusKm <= 25) return 13;
+  return 12;
+};
+
 export const scrapeGoogleMaps = async (
   keyword: string,
   city: string,
   maxResults = 50,
   onProgress?: (current: number, total: number) => Promise<void>,
-  opts?: { state?: string }
+  opts?: { state?: string; geo?: { lat: number; lng: number; radiusKm: number } }
 ): Promise<ScraperResult[]> => {
   const browser = await (puppeteer as any).launch({
     headless: true,
@@ -121,8 +130,13 @@ export const scrapeGoogleMaps = async (
     await page.setViewport({ width: 1280, height: 900 });
     await page.setCookie({ name: "CONSENT", value: "YES+cb", domain: ".google.com" });
 
-    const query = encodeURIComponent(`${keyword} ${city}`);
-    await page.goto(`https://www.google.com/maps/search/${query}?hl=pt-BR`, {
+    // Geo mode: ancora a busca nas coordenadas escolhidas no mapa;
+    // sem geo, o texto da cidade direciona a busca como antes.
+    const query = encodeURIComponent(opts?.geo ? keyword : `${keyword} ${city}`);
+    const geoPart = opts?.geo
+      ? `/@${opts.geo.lat},${opts.geo.lng},${radiusToZoom(opts.geo.radiusKm)}z`
+      : "";
+    await page.goto(`https://www.google.com/maps/search/${query}${geoPart}?hl=pt-BR`, {
       waitUntil: "domcontentloaded",
       timeout: 45000
     });

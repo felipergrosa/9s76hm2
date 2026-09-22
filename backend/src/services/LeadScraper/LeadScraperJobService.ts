@@ -82,23 +82,24 @@ export const runScraperJob = async (jobId: number) => {
     await job.update({ status: "running", progress: 0 });
 
     if (job.source === "google_maps") {
-      const { keyword = "", city = "", state = "", maxResults = 50 } = job.filters;
+      const { keyword = "", city = "", state = "", maxResults = 50, lat, lng, radiusKm } = job.filters;
       const cityQuery = state ? `${city} ${state}` : city;
+      // Busca por área no mapa tem precedência sobre cidade/UF
+      const geo = typeof lat === "number" && typeof lng === "number"
+        ? { lat, lng, radiusKm: radiusKm || 5 }
+        : undefined;
 
       // Sidecar gosom/google-maps-scraper quando GMAPS_SCRAPER_URL está configurado
       // e o serviço responde; senão cai para o scraper Puppeteer local.
       const useSidecar = await isSidecarAvailable();
-      const scrape = useSidecar ? scrapeViaSidecar : scrapeGoogleMaps;
-      logger.info(`[LeadScraperJob] jobId=${job.id} google_maps via ${useSidecar ? "sidecar" : "puppeteer"}`);
+      logger.info(`[LeadScraperJob] jobId=${job.id} google_maps via ${useSidecar ? "sidecar" : "puppeteer"}${geo ? ` geo(${lat},${lng},${geo.radiusKm}km)` : ""}`);
 
-      const results = await scrape(
-        keyword,
-        cityQuery,
-        Math.min(maxResults, 200),
-        async (current, total) => {
-          await job.update({ progress: Math.round((current / total) * 90) });
-        }
-      );
+      const onProgress = async (current: number, total: number) => {
+        await job.update({ progress: Math.round((current / total) * 90) });
+      };
+      const results = useSidecar
+        ? await scrapeViaSidecar(keyword, cityQuery, Math.min(maxResults, 200), onProgress, geo)
+        : await scrapeGoogleMaps(keyword, cityQuery, Math.min(maxResults, 200), onProgress, { state, geo });
 
       await job.update({ results, totalFound: results.length, progress: 90 });
       await runSocialEnrichment(job, results);

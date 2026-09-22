@@ -35,6 +35,18 @@ export const startJob = async (req: Request, res: Response): Promise<Response> =
       if (!IG_HANDLE_REGEX.test(handle)) return res.status(400).json({ error: "igTargetHandle inválido" });
       filters.igTargetHandle = handle;
     }
+    // Geo (busca por área no mapa): lat/lng obrigatórios juntos, radiusKm opcional
+    if (filters.lat !== undefined || filters.lng !== undefined) {
+      const lat = Number(filters.lat);
+      const lng = Number(filters.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+        return res.status(400).json({ error: "lat/lng inválidos" });
+      }
+      filters.lat = lat;
+      filters.lng = lng;
+      const r = Number(filters.radiusKm ?? 5);
+      filters.radiusKm = Number.isFinite(r) ? Math.min(Math.max(r, 0.5), 50) : 5;
+    }
 
     // Anti-concorrência: apenas 1 job ativo por empresa
     const active = await LeadScraperJob.findOne({

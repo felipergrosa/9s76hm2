@@ -121,7 +121,8 @@ export const scrapeViaSidecar = async (
   keyword: string,
   cityQuery: string,
   maxResults = 50,
-  onProgress?: (current: number, total: number) => Promise<void>
+  onProgress?: (current: number, total: number) => Promise<void>,
+  geo?: { lat: number; lng: number; radiusKm: number }
 ): Promise<ScraperResult[]> => {
   const baseUrl = getBaseUrl();
   if (!baseUrl) {
@@ -131,7 +132,8 @@ export const scrapeViaSidecar = async (
   // depth ~ profundidade de scroll por keyword; max_time em segundos
   const depth = Math.ceil(maxResults / 10) + 2;
   const maxTime = Math.max(300, maxResults * 6);
-  const query = `${keyword} ${cityQuery}`.trim();
+  // Em geo mode a keyword vai sozinha — lat/lon/radius definem a área
+  const query = geo ? keyword.trim() : `${keyword} ${cityQuery}`.trim();
 
   const { data: created } = await axios.post(
     `${baseUrl}/api/v1/jobs`,
@@ -139,13 +141,14 @@ export const scrapeViaSidecar = async (
       name: `lead-scraper-${Date.now()}`,
       keywords: [query],
       lang: "pt-BR",
-      zoom: 15,
+      zoom: geo ? (geo.radiusKm <= 5 ? 15 : geo.radiusKm <= 15 ? 14 : 13) : 15,
       depth,
       email: true,
       fast_mode: false,
       max_time: maxTime,
-      proxies: []
-      // lat/lon/radius omitidos: a localização já vai embutida na keyword
+      proxies: [],
+      // Área geográfica escolhida no mapa (raio em metros, conforme API do sidecar)
+      ...(geo ? { lat: geo.lat, lon: geo.lng, radius: Math.round(geo.radiusKm * 1000) } : {})
     },
     { timeout: 15000 }
   );

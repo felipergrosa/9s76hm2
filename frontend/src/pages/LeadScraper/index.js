@@ -29,6 +29,7 @@ import { toast } from "react-toastify";
 import api from "../../services/api";
 import MainContainer from "../../components/MainContainer";
 import InstagramSessionModal from "../../components/InstagramSessionModal";
+import LeadMapPicker from "../../components/LeadMapPicker";
 
 const STATUS = {
   done:    { label: "Concluído",  bg: "#e8f5e9", color: "#2e7d32" },
@@ -242,6 +243,13 @@ export default function LeadScraper() {
   const [city, setCity] = useState("");
   const [state, setState] = useState("SP");
   const [maxResults, setMaxResults] = useState(50);
+  // geo: área escolhida direto no mapa (alternativa a cidade/UF)
+  const [mapsMode, setMapsMode] = useState("city"); // "city" | "map"
+  const [geo, setGeo] = useState(null);           // { lat, lng } | null
+  const [radiusKm, setRadiusKm] = useState(5);
+  // listas e tags existentes p/ o Autocomplete da barra de importação
+  const [contactLists, setContactLists] = useState([]);
+  const [existingTags, setExistingTags] = useState([]);
   const [cnpjText, setCnpjText] = useState("");
 
   // ig_followers state
@@ -290,7 +298,19 @@ export default function LeadScraper() {
     } catch {}
   }, []);
 
-  useEffect(() => { loadJobs(); loadIgStatus(); }, [loadJobs, loadIgStatus]);
+  // Listas de contatos e tags existentes p/ autocomplete da importação
+  const loadListsAndTags = useCallback(async () => {
+    try {
+      const { data } = await api.get("/contact-lists/list");
+      setContactLists((Array.isArray(data) ? data : []).map(l => l.name).filter(Boolean));
+    } catch {}
+    try {
+      const { data } = await api.get("/tags/list");
+      setExistingTags((Array.isArray(data) ? data : []).map(t => t.name).filter(Boolean));
+    } catch {}
+  }, []);
+
+  useEffect(() => { loadJobs(); loadIgStatus(); loadListsAndTags(); }, [loadJobs, loadIgStatus, loadListsAndTags]);
 
   const startPoll = useCallback((jobId) => {
     if (pollRef.current) clearInterval(pollRef.current);
@@ -318,12 +338,17 @@ export default function LeadScraper() {
   }, []);
 
   const startMapsJob = async () => {
-    if (!keyword.trim() || !city.trim()) { toast.warning("Preencha a palavra-chave e a cidade."); return; }
+    if (!keyword.trim()) { toast.warning("Preencha a palavra-chave."); return; }
+    if (mapsMode === "city" && !city.trim()) { toast.warning("Preencha a cidade."); return; }
+    if (mapsMode === "map" && !geo) { toast.warning("Clique no mapa para escolher o ponto central da busca."); return; }
     setLoading(true);
     try {
+      const filters = mapsMode === "map"
+        ? { keyword: keyword.trim(), lat: geo.lat, lng: geo.lng, radiusKm, maxResults }
+        : { keyword: keyword.trim(), city: city.trim(), state, maxResults };
       const { data } = await api.post("/lead-scraper/jobs", {
         source: "google_maps",
-        filters: { keyword: keyword.trim(), city: city.trim(), state, maxResults }
+        filters
       });
       setActiveJob(data);
       setSelectedIndices([]);
@@ -575,14 +600,71 @@ export default function LeadScraper() {
                   label="Cidade" placeholder="São Paulo"
                   value={city} onChange={e => setCity(e.target.value)}
                   variant="outlined" size="small" style={{ flex: 1, minWidth: 130 }}
+                  disabled={mapsMode === "map"}
                 />
-                <FormControl variant="outlined" size="small" style={{ minWidth: 80 }}>
+                <FormControl variant="outlined" size="small" style={{ minWidth: 80 }} disabled={mapsMode === "map"}>
                   <InputLabel>UF</InputLabel>
                   <Select value={state} onChange={e => setState(e.target.value)} label="UF">
                     {STATES.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}
                   </Select>
                 </FormControl>
               </Box>
+              {/* Modo de localização: cidade/UF ou área desenhada no mapa */}
+              <Box className={classes.modeToggle} style={{ marginTop: 8 }}>
+                <Button
+                  className={`${classes.modeBtn} ${mapsMode === "city" ? classes.modeBtnActive : ""}`}
+                  onClick={() => setMapsMode("city")}
+                  size="small"
+                >
+                  Por cidade
+                </Button>
+                <Button
+                  className={`${classes.modeBtn} ${mapsMode === "map" ? classes.modeBtnActive : ""}`}
+                  onClick={() => setMapsMode("map")}
+                  size="small"
+                  startIcon={<MapsIcon fontSize="small" />}
+                >
+                  Escolher área no mapa
+                </Button>
+                {mapsMode === "map" && (
+                  <Button
+                    size="small" variant="outlined"
+                    disabled={!city.trim()}
+                    onClick={async () => {
+                      // Geocode gratuito (Nominatim/OSM): centraliza o mapa na cidade digitada
+                      try {
+                        const q = encodeURIComponent(`${city} ${state}, Brasil`);
+                        const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1`);
+                        const [hit] = await r.json();
+                        if (hit) setGeo({ lat: +hit.lat, lng: +hit.lon });
+                        else toast.warning("Cidade não encontrada no mapa — navegue manualmente.");
+                      } catch { toast.error("Falha ao localizar a cidade no mapa."); }
+                    }}
+                  >
+                    Centralizar em {city || "cidade"}
+                  </Button>
+                )}
+              </Box>
+              {mapsMode === "map" && (
+                <Box mt={1.5}>
+                  <LeadMapPicker
+                    center={geo}
+                    radiusKm={radiusKm}
+                    onSelect={(lat, lng) => setGeo({ lat, lng })}
+                  />
+                  <Box className={classes.sliderBox} style={{ marginTop: 8 }}>
+                    <Typography variant="body2" style={{ marginBottom: 6 }}>
+                      Raio de busca: <strong>{radiusKm} km</strong>
+                      {geo ? ` — centro em ${geo.lat.toFixed(4)}, ${geo.lng.toFixed(4)}` : " — clique no mapa para marcar o centro"}
+                    </Typography>
+                    <Slider
+                      value={radiusKm} onChange={(_, v) => setRadiusKm(v)}
+                      min={1} max={50} step={1}
+                      marks={[{ value: 1, label: "1km" }, { value: 25, label: "25km" }, { value: 50, label: "50km" }]}
+                    />
+                  </Box>
+                </Box>
+              )}
               <Box className={classes.sliderBox}>
                 <Typography variant="body2" style={{ marginBottom: 6 }}>
                   Máximo de resultados: <strong>{maxResults}</strong>
@@ -612,7 +694,7 @@ export default function LeadScraper() {
                   <strong>Como funciona — Busca no Google Maps</strong>
                   <ol>
                     <li>Digite a <strong>categoria de negócio</strong> que você quer prospectar. Exemplos: <em>"academias de ginástica"</em>, <em>"clínicas odontológicas"</em>, <em>"distribuidoras de alimentos"</em>.</li>
-                    <li>Informe a <strong>cidade</strong> e selecione o <strong>estado (UF)</strong>. A busca combina os dois para focar geograficamente.</li>
+                    <li>Escolha a localização: <strong>Por cidade</strong> (cidade + UF) ou <strong>Escolher área no mapa</strong> — clique no mapa para marcar o centro e ajuste o raio de 1 a 50 km. Ideal para bairros, polos industriais e regiões metropolitanas.</li>
                     <li>Ajuste o <strong>máximo de resultados</strong> (10 a 200). Mais resultados = mais tempo de processamento.</li>
                     <li>Clique em <strong>Iniciar Busca no Maps</strong>. O sistema extrai nome, telefone, e-mail, endereço, site e avaliação de cada empresa.</li>
                     <li>Ao atingir <strong>90% do progresso</strong>, começa o enriquecimento automático de redes sociais (Instagram, X, LinkedIn) para cada lead encontrado.</li>
@@ -1265,19 +1347,31 @@ export default function LeadScraper() {
               <Divider style={{ margin: "16px 0" }} />
 
               <Box className={classes.importBar}>
-                <TextField
-                  label="Lista de contatos"
-                  size="small" variant="outlined"
-                  value={contactListName} onChange={e => setContactListName(e.target.value)}
-                  placeholder="ex: Leads Google Maps Jun/26"
-                  style={{ minWidth: 220 }}
+                <Autocomplete
+                  freeSolo
+                  options={contactLists}
+                  value={contactListName || null}
+                  onChange={(_, val) => setContactListName(typeof val === "string" ? val : (val || ""))}
+                  onInputChange={(_, val, reason) => { if (reason !== "reset") setContactListName(val || ""); }}
+                  renderInput={params => (
+                    <TextField {...params} label="Lista de contatos" size="small" variant="outlined"
+                      placeholder="escolha ou digite p/ criar" />
+                  )}
+                  noOptionsText="Digite para criar uma nova lista"
+                  style={{ minWidth: 240 }}
                 />
-                <TextField
-                  label="Tag"
-                  size="small" variant="outlined"
-                  value={tagName} onChange={e => setTagName(e.target.value)}
-                  placeholder="ex: google-maps"
-                  style={{ minWidth: 130 }}
+                <Autocomplete
+                  freeSolo
+                  options={existingTags}
+                  value={tagName || null}
+                  onChange={(_, val) => setTagName(typeof val === "string" ? val : (val || ""))}
+                  onInputChange={(_, val, reason) => { if (reason !== "reset") setTagName(val || ""); }}
+                  renderInput={params => (
+                    <TextField {...params} label="Tag" size="small" variant="outlined"
+                      placeholder="escolha ou digite p/ criar" />
+                  )}
+                  noOptionsText="Digite para criar uma nova tag"
+                  style={{ minWidth: 170 }}
                 />
                 <Button
                   variant="contained" color="primary"

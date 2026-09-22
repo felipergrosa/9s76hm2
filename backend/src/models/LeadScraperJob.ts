@@ -40,6 +40,10 @@ export interface ScraperFilters {
   keyword?: string;
   city?: string;
   state?: string;
+  // geo: busca por área no mapa (alternativa a city/state)
+  lat?: number;
+  lng?: number;
+  radiusKm?: number;
   // cnpj (enrich)
   cnpjs?: string[];
   // cnpj_search (discovery)
