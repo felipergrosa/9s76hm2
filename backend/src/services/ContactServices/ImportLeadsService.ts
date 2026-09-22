@@ -43,6 +43,7 @@ interface Request {
   contactListName?: string;
   tagName?: string;
   validateNumber?: boolean;
+  walletUserId?: number;
 }
 
 const PORTE_OPTIONS = ["MEI", "Pequena", "Média", "Grande"];
@@ -175,7 +176,8 @@ const ImportLeadsService = async ({
   file,
   contactListName,
   tagName,
-  validateNumber = false
+  validateNumber = false,
+  walletUserId
 }: Request) => {
   const items: LeadInput[] = leads && leads.length > 0 ? leads : file ? parseLeadsFile(file) : [];
 
@@ -258,7 +260,8 @@ const ImportLeadsService = async ({
         fantasyName: lead.name,
         segment: lead.segmento,
         instagram: sanitizeInstagramHandle(lead.instagram),
-        silentMode: true
+        silentMode: true,
+        userId: walletUserId
       });
 
       contactIds.push(contact.id);

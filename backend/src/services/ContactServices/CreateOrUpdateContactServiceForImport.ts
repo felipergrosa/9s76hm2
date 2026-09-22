@@ -33,6 +33,7 @@ interface Request {
   silentMode?: boolean;
   dtUltCompra?: Date | string | null;
   vlUltCompra?: number | string | null;
+  userId?: number;
 }
 
 const CreateOrUpdateContactServiceForImport = async ({
@@ -59,7 +60,8 @@ const CreateOrUpdateContactServiceForImport = async ({
   contactName, // ✅ Adicionado parâmetro
   silentMode,
   dtUltCompra,
-  vlUltCompra
+  vlUltCompra,
+  userId
 }: Request): Promise<Contact> => {
   const rawString = (rawNumber || "").toString();
   const { canonical } = !isGroup ? safeNormalizePhoneNumber(rawString) : { canonical: null };
@@ -162,6 +164,7 @@ const CreateOrUpdateContactServiceForImport = async ({
     dtUltCompra: parseDate(dtUltCompra),
     vlUltCompra: parseMoney(vlUltCompra)
   };
+  if (userId) (contactData as any).userId = userId;
 
   const io = getIO();
   let contact: Contact | null;
@@ -191,6 +194,11 @@ const CreateOrUpdateContactServiceForImport = async ({
     // Não sobrescrever 'region' se não enviado
     if (typeof contactData.region === 'undefined') {
       delete updatePayload.region;
+    }
+
+    // Carteira: nunca sobrescreve dono já atribuído — só preenche quando o contato ainda não tem um
+    if (contact.userId) {
+      delete updatePayload.userId;
     }
 
     await contact.update({

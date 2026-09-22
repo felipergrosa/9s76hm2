@@ -1,13 +1,40 @@
 import { Request, Response } from "express";
 import { Op } from "sequelize";
 import LeadScraperJob from "../models/LeadScraperJob";
+import User from "../models/User";
 import { createScraperJob, runScraperJob } from "../services/LeadScraper/LeadScraperJobService";
 import ImportLeadsService from "../services/ContactServices/ImportLeadsService";
 import { leadScraperQueue } from "../queues";
+import { isApifyConfigured } from "../services/Instagram/InstagramApifyProvider";
+import { isGmapsApifyConfigured } from "../services/LeadScraper/GoogleMapsApifyProvider";
+import { GMAPS_SIDECAR_ENV, isSidecarAvailable } from "../services/LeadScraper/GmapsSidecarService";
 import logger from "../utils/logger";
 
 const VALID_SOURCES = ["google_maps", "cnpj", "cnpj_search", "ig_followers", "conselho"];
 const IG_HANDLE_REGEX = /^[a-zA-Z0-9._]{1,30}$/;
+
+// Expõe (sem vazar segredos) quais motores/integrações estão configurados no
+// ambiente, para o frontend informar o usuário sobre qual engine será usada
+// e evitar disparar buscas que vão falhar por falta de configuração.
+export const getEngineStatus = async (_req: Request, res: Response): Promise<Response> => {
+  const apify = isApifyConfigured();
+  const gmapsSidecarConfigured = Boolean(process.env[GMAPS_SIDECAR_ENV]?.trim());
+  const gmapsSidecarUp = gmapsSidecarConfigured ? await isSidecarAvailable() : false;
+
+  const gmapsEngine = isGmapsApifyConfigured() ? "apify" : gmapsSidecarUp ? "sidecar" : "puppeteer";
+
+  return res.json({
+    apify: { configured: apify },
+    googleMaps: {
+      engine: gmapsEngine,
+      apifyAvailable: isGmapsApifyConfigured(),
+      sidecarConfigured: gmapsSidecarConfigured,
+      sidecarUp: gmapsSidecarUp
+    },
+    instagramFollowers: { requiresApify: true, available: apify },
+    brasilIo: { configured: Boolean(process.env.BRASILIO_TOKEN?.trim()) }
+  });
+};
 
 export const startJob = async (req: Request, res: Response): Promise<Response> => {
   try {
@@ -150,7 +177,7 @@ export const clearJobs = async (req: Request, res: Response): Promise<Response> 
 export const importJobResults = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { companyId } = req.user;
-    const { indices, contactListName, tagName } = req.body;
+    const { indices, contactListName, tagName, walletUserId } = req.body;
     const job = await LeadScraperJob.findOne({ where: { id: req.params.id, companyId } });
     if (!job) return res.status(404).json({ error: "Job não encontrado" });
     if (job.status !== "done") return res.status(409).json({ error: "job ainda não concluído" });
@@ -167,6 +194,14 @@ export const importJobResults = async (req: Request, res: Response): Promise<Res
     }
     if (tagName !== undefined && (typeof tagName !== "string" || tagName.length > 100)) {
       return res.status(400).json({ error: "tagName inválido (máx. 100 caracteres)" });
+    }
+    let resolvedWalletUserId: number | undefined;
+    if (walletUserId !== undefined && walletUserId !== null && walletUserId !== "") {
+      const n = Number(walletUserId);
+      if (!Number.isInteger(n)) return res.status(400).json({ error: "walletUserId inválido" });
+      const owner = await User.findOne({ where: { id: n, companyId } });
+      if (!owner) return res.status(400).json({ error: "Usuário da carteira não encontrado nesta empresa" });
+      resolvedWalletUserId = n;
     }
 
     const allResults = job.results || [];
@@ -202,7 +237,7 @@ export const importJobResults = async (req: Request, res: Response): Promise<Res
       googleMapsUrl: r.googleMapsUrl || ""
     }));
 
-    const result = await ImportLeadsService({ companyId, leads, contactListName, tagName });
+    const result = await ImportLeadsService({ companyId, leads, contactListName, tagName, walletUserId: resolvedWalletUserId });
 
     // Envia lote p/ ERP via n8n em background (sem bloquear a resposta)
     try {

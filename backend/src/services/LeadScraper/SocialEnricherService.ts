@@ -1,7 +1,6 @@
 import axios from "axios";
 import { ScraperResult } from "../../models/LeadScraperJob";
-import { InstagramBrowserSession } from "../Instagram/InstagramProfileService";
-import { markSessionExpired } from "../Instagram/InstagramAuthService";
+import { isApifyConfigured, enrichProfileViaApify } from "../Instagram/InstagramApifyProvider";
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
 const http = axios.create({
@@ -77,8 +76,7 @@ async function instagramBioPhone(handle: string): Promise<string | null> {
 }
 
 export const enrichLeadSocials = async (
-  result: ScraperResult,
-  igSession?: InstagramBrowserSession
+  result: ScraperResult
 ): Promise<Pick<ScraperResult, "instagram" | "twitter" | "linkedin" | "instagramPhone">> => {
   const out: Partial<ScraperResult> = {};
 
@@ -105,21 +103,17 @@ export const enrichLeadSocials = async (
   }
 
   // 3. Instagram bio → BR phone
-  // Uses Puppeteer session (logged-in, sees business contact button) when available,
-  // falls back to axios meta-description parse otherwise.
+  // Apify instagram-profile-scraper quando configurado (dados de negócio expostos
+  // publicamente, sem sessão pessoal/risco de ban); fallback: parse do meta description via axios.
   if (out.instagram) {
     await delay(600);
-    if (igSession) {
+    if (isApifyConfigured()) {
       try {
-        const info = await igSession.getContactInfo(out.instagram as string);
-        if (info.phone) out.instagramPhone = info.phone;
-        if (info.email && !out.email) (out as any).email = info.email;
+        const profile = await enrichProfileViaApify(out.instagram as string);
+        if (profile?.phone) out.instagramPhone = profile.phone;
+        if (profile?.email && !out.email) (out as any).email = profile.email;
       } catch (err: any) {
-        if (err.message === "SESSION_EXPIRED") {
-          // Session expired mid-job; mark in DB so UI shows reconnect prompt
-          // companyId not in scope here — handled in LeadScraperJobService catch
-          throw err;
-        }
+        // best-effort: Apify indisponível não derruba o enriquecimento
       }
     } else {
       const phone = await instagramBioPhone(out.instagram as string);

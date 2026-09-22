@@ -5,6 +5,7 @@ import * as LeadScraperController from "../controllers/LeadScraperController";
 
 const routes = Router();
 
+routes.get("/lead-scraper/engine-status", isAuth, LeadScraperController.getEngineStatus);
 routes.post("/lead-scraper/jobs", isAuth, checkPermission("contacts.import"), LeadScraperController.startJob);
 routes.get("/lead-scraper/jobs", isAuth, LeadScraperController.listJobs);
 routes.get("/lead-scraper/jobs/:id", isAuth, LeadScraperController.getJob);

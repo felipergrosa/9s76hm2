@@ -31,8 +31,8 @@ import { toast } from "react-toastify";
 import api from "../../services/api";
 import MainContainer from "../../components/MainContainer";
 import ConfirmationModal from "../../components/ConfirmationModal";
-import InstagramSessionModal from "../../components/InstagramSessionModal";
 import LeadMapPicker from "../../components/LeadMapPicker";
+import useUsersList from "../../hooks/useUsersList";
 
 const STATUS = {
   done:    { label: "Concluído",  bg: "#e8f5e9", color: "#2e7d32" },
@@ -248,8 +248,9 @@ export default function LeadScraper() {
   const [selectedIndices, setSelectedIndices] = useState([]);
   const [contactListName, setContactListName] = useState("");
   const [tagName, setTagName] = useState("");
-  const [igSession, setIgSession] = useState(null); // { username, status } or null
-  const [igModalOpen, setIgModalOpen] = useState(false);
+  const [walletUser, setWalletUser] = useState(null); // { id, name } | null
+  const [engineStatus, setEngineStatus] = useState(null);
+  const { users: walletUsers, loadUsersForSelection } = useUsersList(false);
   const pollRef = useRef(null);
 
   const [keyword, setKeyword] = useState("");
@@ -304,10 +305,10 @@ export default function LeadScraper() {
     } catch {}
   }, []);
 
-  const loadIgStatus = useCallback(async () => {
+  const loadEngineStatus = useCallback(async () => {
     try {
-      const { data } = await api.get("/instagram-session/status");
-      setIgSession(data.status === "none" ? null : data);
+      const { data } = await api.get("/lead-scraper/engine-status");
+      setEngineStatus(data);
     } catch {}
   }, []);
 
@@ -323,7 +324,10 @@ export default function LeadScraper() {
     } catch {}
   }, []);
 
-  useEffect(() => { loadJobs(); loadIgStatus(); loadListsAndTags(); }, [loadJobs, loadIgStatus, loadListsAndTags]);
+  useEffect(() => {
+    loadJobs(); loadEngineStatus(); loadListsAndTags(); loadUsersForSelection();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadJobs, loadEngineStatus, loadListsAndTags]);
 
   const startPoll = useCallback((jobId) => {
     if (pollRef.current) clearInterval(pollRef.current);
@@ -393,8 +397,8 @@ export default function LeadScraper() {
 
   const startFollowersJob = async () => {
     if (!igTargetHandle.trim()) { toast.warning("Informe o @ da conta alvo."); return; }
-    if (!igSession || igSession.status !== "active") {
-      toast.warning("Conecte uma conta Instagram primeiro (botão 📸 no topo).");
+    if (!engineStatus?.apify?.configured) {
+      toast.warning("Configure APIFY_TOKEN no ambiente para buscar seguidores do Instagram.");
       return;
     }
     setLoading(true);
@@ -480,6 +484,7 @@ export default function LeadScraper() {
     try {
       const { data } = await api.post(`/lead-scraper/jobs/${activeJob.id}/import`, {
         indices, contactListName: contactListName || undefined, tagName: tagName || undefined,
+        walletUserId: walletUser?.id || undefined,
       });
       const skipped = data.skipped || 0;
       const ignorados = [
@@ -553,47 +558,39 @@ export default function LeadScraper() {
             Busque empresas via Google Maps ou enriqueça CNPJs pela Receita Federal (BrasilAPI)
           </Typography>
         </Box>
-        {/* Instagram session badge */}
-        <Tooltip title={igSession?.status === "active" ? `Instagram conectado como @${igSession.username}` : "Conectar conta Instagram para capturar telefones e e-mails de perfis business"}>
-          <Button
-            size="small"
-            onClick={() => setIgModalOpen(true)}
-            style={{
-              textTransform: "none",
-              background: igSession?.status === "active" ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.08)",
-              color: "#fff",
-              border: `1px solid ${igSession?.status === "active" ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.2)"}`,
-              borderRadius: 8,
-              padding: "4px 12px",
-              fontSize: 12,
-              whiteSpace: "nowrap",
-              flexShrink: 0,
-            }}
-          >
-            📸 {igSession?.status === "active" ? `@${igSession.username}` : "Conectar Instagram"}
-          </Button>
+        {/* Status dos motores de busca (Apify/sidecar/Puppeteer) */}
+        <Tooltip title={
+          engineStatus?.apify?.configured
+            ? "Apify configurado — usado para Maps (quando disponível), Seguidores IG e telefone de bio"
+            : "APIFY_TOKEN não configurado — usando fallback local (Puppeteer/DDG). Configure em .env para engines mais estáveis."
+        }>
+          <Box style={{
+            display: "flex", alignItems: "center", gap: 6,
+            background: engineStatus?.apify?.configured ? "rgba(76,175,80,0.18)" : "rgba(255,255,255,0.08)",
+            color: "#fff",
+            border: `1px solid ${engineStatus?.apify?.configured ? "rgba(129,199,132,0.5)" : "rgba(255,255,255,0.2)"}`,
+            borderRadius: 8, padding: "4px 12px", fontSize: 12, whiteSpace: "nowrap", flexShrink: 0,
+          }}>
+            ⚙ Apify {engineStatus?.apify?.configured ? "ativo" : "não configurado"}
+            {engineStatus?.googleMaps?.engine && (
+              <Chip
+                size="small"
+                label={`Maps: ${engineStatus.googleMaps.engine}`}
+                style={{ height: 18, fontSize: 10, fontWeight: 700, background: "rgba(255,255,255,0.2)", color: "#fff" }}
+              />
+            )}
+          </Box>
         </Tooltip>
       </Box>
 
-      {/* Instagram session expired warning */}
-      {igSession?.status === "expired" && (
+      {!engineStatus?.apify?.configured && (
         <Box style={{
           background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 8,
-          padding: "10px 16px", marginBottom: 16, display: "flex", alignItems: "center", gap: 12,
+          padding: "10px 16px", marginBottom: 16, fontSize: 13, color: "#92400e",
         }}>
-          <Typography variant="body2" style={{ color: "#92400e", flex: 1 }}>
-            ⚠ Sessão do Instagram expirou — telefones de bio não serão coletados até reconectar.
-          </Typography>
-          <Button size="small" onClick={() => setIgModalOpen(true)} style={{ textTransform: "none", color: "#92400e", fontWeight: 600 }}>
-            Reconectar
-          </Button>
+          ⚠ Sem <strong>APIFY_TOKEN</strong> configurado: Seguidores IG fica indisponível e telefone/e-mail de bio do Instagram usa um fallback mais limitado (sem login). Busca no Maps continua funcionando via sidecar/Puppeteer.
         </Box>
       )}
-
-      <InstagramSessionModal
-        open={igModalOpen}
-        onClose={() => { setIgModalOpen(false); loadIgStatus(); }}
-      />
 
       <Grid container spacing={2}>
         {/* ── Left: form ── */}
@@ -728,7 +725,7 @@ export default function LeadScraper() {
                     <li>Ajuste o <strong>máximo de resultados</strong> (10 a 200). Mais resultados = mais tempo de processamento.</li>
                     <li>Clique em <strong>Iniciar Busca no Maps</strong>. O sistema extrai nome, telefone, e-mail, endereço, site e avaliação de cada empresa.</li>
                     <li>Ao atingir <strong>90% do progresso</strong>, começa o enriquecimento automático de redes sociais (Instagram, X, LinkedIn) para cada lead encontrado.</li>
-                    <li>Para capturar telefones do botão "Contato" do Instagram, conecte uma conta via <strong>📸 Conectar Instagram</strong> no topo da página.</li>
+                    <li>Para capturar telefone/e-mail de bio do Instagram automaticamente, configure <strong>APIFY_TOKEN</strong> no ambiente do servidor.</li>
                     <li>Após o status virar <strong>Concluído</strong>, selecione os leads na tabela e clique em <strong>Importar</strong> para salvá-los na sua lista de contatos.</li>
                   </ol>
                   <Box mt={1} style={{ fontSize: 12, opacity: 0.8 }}>
@@ -966,16 +963,13 @@ export default function LeadScraper() {
             </TabPanel>
             <TabPanel value={tab} index={2}>
               <Box mt={2}>
-                {(!igSession || igSession.status !== "active") && (
+                {!engineStatus?.apify?.configured && (
                   <Box style={{
                     background: "#fef3c7", border: "1px solid #fcd34d",
                     borderRadius: 8, padding: "10px 14px", marginBottom: 16, fontSize: 13,
                     color: "#92400e",
                   }}>
-                    ⚠ Conecte uma conta Instagram primeiro — clique em{" "}
-                    <strong style={{ cursor: "pointer", textDecoration: "underline" }} onClick={() => setIgModalOpen(true)}>
-                      📸 Conectar Instagram
-                    </strong>{" "}no topo.
+                    ⚠ Requer <strong>APIFY_TOKEN</strong> configurado no ambiente (Configurações → Integrações).
                   </Box>
                 )}
                 <TextField
@@ -1002,7 +996,7 @@ export default function LeadScraper() {
                     variant="contained" color="primary"
                     startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <FollowersIcon />}
                     onClick={startFollowersJob}
-                    disabled={loading || !igSession || igSession.status !== "active"}
+                    disabled={loading || !engineStatus?.apify?.configured}
                     style={{ textTransform: "none", fontWeight: 600 }}
                   >
                     Buscar Seguidores
@@ -1019,7 +1013,7 @@ export default function LeadScraper() {
                   <Box className={classes.helpBox}>
                     <strong>Como funciona — Seguidores do Instagram</strong>
                     <ol>
-                      <li><strong>Pré-requisito:</strong> conecte uma conta Instagram dedicada clicando em <strong>📸 Conectar Instagram</strong> no topo da página. Use uma conta exclusiva para scraping — não a sua pessoal.</li>
+                      <li><strong>Pré-requisito:</strong> configure <strong>APIFY_TOKEN</strong> no ambiente do servidor (Apify roda sem sessão pessoal — sem risco de ban).</li>
                       <li>Informe o <strong>@ da conta alvo</strong> — pode ser uma associação comercial, concorrente, evento ou nicho de mercado. Ex: <code>@abrasel_sp</code>.</li>
                       <li>A conta alvo precisa ser <strong>pública</strong>. Contas privadas bloqueiam o acesso à lista de seguidores.</li>
                       <li>Ajuste o <strong>limite de seguidores</strong> (50 a 5.000). O sistema coleta em páginas de 50 com ~3s de intervalo para evitar bloqueio.</li>
@@ -1291,6 +1285,7 @@ export default function LeadScraper() {
                       <TableCell className={classes.stickyHead} style={{ fontWeight: 700, fontSize: 11 }}>REDES SOCIAIS</TableCell>
                       <TableCell className={classes.stickyHead} style={{ fontWeight: 700, fontSize: 11 }}>ENDEREÇO</TableCell>
                       <TableCell className={classes.stickyHead} style={{ fontWeight: 700, fontSize: 11 }}>CNPJ</TableCell>
+                      <TableCell className={classes.stickyHead} style={{ fontWeight: 700, fontSize: 11 }}>RECEITA</TableCell>
                       {activeJob.source === "conselho" && (
                         <TableCell className={classes.stickyHead} style={{ fontWeight: 700, fontSize: 11 }}>STATUS</TableCell>
                       )}
@@ -1402,6 +1397,36 @@ export default function LeadScraper() {
                             )}
                           </Box>
                         </TableCell>
+                        <TableCell>
+                          {(r.cnaeDescricao || r.porte || r.situacao || r.naturezaJuridica || r.capitalSocial) ? (
+                            <Tooltip title={
+                              <Box style={{ fontSize: 12, lineHeight: 1.6 }}>
+                                {r.cnaeDescricao && <div>CNAE: {r.cnaeDescricao}</div>}
+                                {r.naturezaJuridica && <div>Natureza: {r.naturezaJuridica}</div>}
+                                {r.capitalSocial && <div>Capital social: R$ {Number(r.capitalSocial).toLocaleString("pt-BR")}</div>}
+                                {r.dataAbertura && <div>Abertura: {r.dataAbertura}</div>}
+                              </Box>
+                            }>
+                              <Box>
+                                {r.porte && (
+                                  <Chip label={r.porte} size="small"
+                                    style={{ fontSize: 9, height: 16, fontWeight: 600, marginRight: 4 }} />
+                                )}
+                                {r.situacao && (
+                                  <Chip
+                                    label={r.situacao}
+                                    size="small"
+                                    style={{
+                                      fontSize: 9, height: 16, fontWeight: 700,
+                                      background: /ativ/i.test(r.situacao) ? "#e8f5e9" : "#fce4ec",
+                                      color: /ativ/i.test(r.situacao) ? "#2e7d32" : "#c62828",
+                                    }}
+                                  />
+                                )}
+                              </Box>
+                            </Tooltip>
+                          ) : <Typography variant="caption" color="textSecondary">—</Typography>}
+                        </TableCell>
                         {activeJob.source === "conselho" && (
                           <TableCell>
                             <Chip
@@ -1448,6 +1473,19 @@ export default function LeadScraper() {
                   )}
                   noOptionsText="Digite para criar uma nova tag"
                   style={{ minWidth: 170 }}
+                />
+                <Autocomplete
+                  options={walletUsers || []}
+                  getOptionLabel={opt => opt.name || ""}
+                  value={walletUser}
+                  onChange={(_, val) => setWalletUser(val)}
+                  renderInput={params => (
+                    <TextField {...params} label="Carteira (responsável)" size="small" variant="outlined"
+                      placeholder="atribuir a um usuário" />
+                  )}
+                  noOptionsText="Nenhum usuário encontrado"
+                  clearOnEscape
+                  style={{ minWidth: 200 }}
                 />
                 <Button
                   variant="contained" color="primary"

@@ -60,6 +60,8 @@ function mapOpenCnpj(d: any, cnpj: string): EnrichedLead {
     // OpenCNPJ não expõe código da natureza jurídica — só descrição
     naturezaJuridica: d.natureza_juridica || "",
     porte: d.porte_empresa || "",
+    capitalSocial: d.capital_social != null ? String(d.capital_social) : "",
+    dataAbertura: d.data_inicio_atividade || "",
     website: "",
   };
 }
@@ -88,6 +90,8 @@ function mapMinhaReceita(d: any, cnpj: string): EnrichedLead {
     _cnaesSec: (d.cnaes_secundarios || []).map((c: any) => toCnae7(c?.codigo)).filter(Boolean),
     naturezaJuridica: njCodigo && njDesc ? `${njCodigo} - ${njDesc}` : njDesc || njCodigo,
     porte: d.porte || d.descricao_porte || "",
+    capitalSocial: d.capital_social != null ? String(d.capital_social) : "",
+    dataAbertura: d.data_inicio_atividade || "",
     website: "",
   };
 }

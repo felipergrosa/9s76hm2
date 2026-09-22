@@ -29,6 +29,11 @@ export interface ScraperResult {
   linkedin?: string;
   instagramPhone?: string;
   googleMapsUrl?: string;
+  // dados adicionais da Receita Federal
+  capitalSocial?: string;
+  dataAbertura?: string;
+  // WhatsApp validado (dígitos, formato E.164 sem +)
+  phoneValid?: boolean;
   // conselho profissional (ex.: CAU)
   registro?: string;      // número do registro profissional no conselho
   registroTipo?: string;  // tipo do registro/conselho, ex.: "CAU"
@@ -65,6 +70,8 @@ export interface ScraperFilters {
   // conselho (conselhos profissionais: CAU, futuramente CREA/CRM...)
   conselho?: "cau";
   conselhoTipo?: "profissional" | "empresa";
+  // carteira: usuário responsável já atribuído no momento da importação
+  walletUserId?: number;
 }
 
 @Table

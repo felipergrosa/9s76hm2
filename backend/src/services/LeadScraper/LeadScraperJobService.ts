@@ -4,12 +4,10 @@ import { scrapeGoogleMaps } from "./GoogleMapsScraperService";
 import { enrichCnpj } from "./CnpjEnricherService";
 import { searchCnpjsByFilters } from "./CnpjSearchService";
 import { enrichLeadSocials } from "./SocialEnricherService";
-import { getSessionCookies, markSessionExpired } from "../Instagram/InstagramAuthService";
-import { InstagramBrowserSession } from "../Instagram/InstagramProfileService";
-import { scrapeFollowers } from "../Instagram/InstagramFollowersService";
 import { scrapeConselho } from "./ConselhoScraperService";
 import { isSidecarAvailable, scrapeViaSidecar } from "./GmapsSidecarService";
 import { isApifyConfigured, scrapeFollowersViaApify } from "../Instagram/InstagramApifyProvider";
+import { isGmapsApifyConfigured, scrapeGoogleMapsViaApify } from "./GoogleMapsApifyProvider";
 import { crossEnrichLead } from "./CrossEnricherService";
 import CheckContactNumber from "../WbotServices/CheckNumber";
 import GetDefaultWhatsApp from "../../helpers/GetDefaultWhatsApp";
@@ -17,6 +15,17 @@ import { safeNormalizePhoneNumber } from "../../utils/phone";
 import logger from "../../utils/logger";
 
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+// Normaliza telefones assim que o scraping bruto termina — feedback em tempo
+// real na tabela (antes do enriquecimento social/WhatsApp rodar).
+function normalizePhonesInPlace(results: ScraperResult[]): void {
+  for (const r of results) {
+    if (r.phone) {
+      const { canonical } = safeNormalizePhoneNumber(r.phone);
+      if (canonical) r.phone = canonical;
+    }
+  }
+}
 
 // Enriquecimento cruzado: leads sem CNPJ tentam ser localizados na Receita
 // Federal por nome (Brasil.io) e enriquecidos pela cascata OpenCNPJ →
@@ -103,40 +112,27 @@ async function runWhatsappValidation(job: LeadScraperJob, results: ScraperResult
 }
 
 // Enriquecimento social (progresso parametrizável — default 88→96).
-// Updates DB every 5 leads to reduce write load.
-// Opens ONE browser session for all Instagram profile visits — faster and less detectable than per-lead browser.
+// Updates DB every 5 leads to reduce write load. Usa Apify (instagram-profile-scraper)
+// quando configurado — sem sessão pessoal, sem risco de ban.
 async function runSocialEnrichment(job: LeadScraperJob, results: ScraperResult[], fromPct = 88, toPct = 96): Promise<void> {
-  const igCookies = await getSessionCookies(job.companyId).catch(() => null);
-  let igSession: InstagramBrowserSession | null = null;
-
-  if (igCookies) {
-    igSession = await InstagramBrowserSession.create(igCookies).catch(err => {
-      logger.warn(`[Instagram] Failed to create browser session: ${err.message}`);
-      return null;
-    });
-  }
-
-  try {
-    for (let i = 0; i < results.length; i++) {
-      try {
-        const socials = await enrichLeadSocials(results[i], igSession ?? undefined);
-        Object.assign(results[i], socials);
-      } catch (err: any) {
-        if (err.message === "SESSION_EXPIRED") {
-          logger.warn(`[Instagram] Session expired during job ${job.id}, marking for reconnect`);
-          await markSessionExpired(job.companyId).catch(() => {});
-          igSession = null; // stop using Puppeteer, fall back to axios for remaining leads
-        }
-        // ponytail: all other errors are swallowed — social enrichment is best-effort
-      }
-
-      if ((i + 1) % 5 === 0 || i === results.length - 1) {
-        const p = fromPct + Math.round(((i + 1) / results.length) * (toPct - fromPct));
-        await job.update({ results: [...results], progress: p });
-      }
+  for (let i = 0; i < results.length; i++) {
+    try {
+      const socials = await enrichLeadSocials(results[i]);
+      Object.assign(results[i], socials);
+    } catch {
+      // best-effort — enriquecimento social nunca derruba o job
     }
-  } finally {
-    await igSession?.close();
+
+    // Telefone em tempo real: normaliza assim que o lead sai do enriquecimento social
+    if (results[i].phone) {
+      const { canonical } = safeNormalizePhoneNumber(results[i].phone);
+      if (canonical) results[i].phone = canonical;
+    }
+
+    if ((i + 1) % 5 === 0 || i === results.length - 1) {
+      const p = fromPct + Math.round(((i + 1) / results.length) * (toPct - fromPct));
+      await job.update({ results: [...results], progress: p });
+    }
   }
 }
 
@@ -178,18 +174,24 @@ export const runScraperJob = async (jobId: number) => {
         ? { lat, lng, radiusKm: radiusKm || 5 }
         : undefined;
 
-      // Sidecar gosom/google-maps-scraper quando GMAPS_SCRAPER_URL está configurado
-      // e o serviço responde; senão cai para o scraper Puppeteer local.
-      const useSidecar = await isSidecarAvailable();
-      logger.info(`[LeadScraperJob] jobId=${job.id} google_maps via ${useSidecar ? "sidecar" : "puppeteer"}${geo ? ` geo(${lat},${lng},${geo.radiusKm}km)` : ""}`);
+      // Ordem de precedência dos motores de busca: Apify (compass~crawler-google-places,
+      // mais estável/escalável) → sidecar gosom/google-maps-scraper (GMAPS_SCRAPER_URL) →
+      // Puppeteer local (fallback sempre disponível, mais sujeito a bloqueio do Google).
+      const useApify = isGmapsApifyConfigured();
+      const useSidecar = !useApify && (await isSidecarAvailable());
+      const engine = useApify ? "apify" : useSidecar ? "sidecar" : "puppeteer";
+      logger.info(`[LeadScraperJob] jobId=${job.id} google_maps via ${engine}${geo ? ` geo(${lat},${lng},${geo.radiusKm}km)` : ""}`);
 
       const onProgress = async (current: number, total: number) => {
         await job.update({ progress: Math.round((current / total) * 80) });
       };
-      const results = useSidecar
-        ? await scrapeViaSidecar(keyword, cityQuery, Math.min(maxResults, 200), onProgress, geo)
-        : await scrapeGoogleMaps(keyword, cityQuery, Math.min(maxResults, 200), onProgress, { state, geo });
+      const results = useApify
+        ? await scrapeGoogleMapsViaApify(keyword, cityQuery, Math.min(maxResults, 200), onProgress, { state, geo })
+        : useSidecar
+          ? await scrapeViaSidecar(keyword, cityQuery, Math.min(maxResults, 200), onProgress, geo)
+          : await scrapeGoogleMaps(keyword, cityQuery, Math.min(maxResults, 200), onProgress, { state, geo });
 
+      normalizePhonesInPlace(results);
       await job.update({ results, totalFound: results.length, progress: 80 });
       await runCrossEnrichment(job, results);
       await runSocialEnrichment(job, results);
@@ -207,6 +209,7 @@ export const runScraperJob = async (jobId: number) => {
         await delay(350); // BrasilAPI: safe at ~3 req/sec
       }
 
+      normalizePhonesInPlace(results);
       await job.update({ results, totalFound: results.length, progress: 80 });
       // cross-enrich desnecessário: leads já vêm da Receita Federal
       await runSocialEnrichment(job, results);
@@ -220,6 +223,7 @@ export const runScraperJob = async (jobId: number) => {
           await job.update({ progress: Math.round((current / total) * 80) });
         }
       );
+      normalizePhonesInPlace(results);
       await job.update({ results, totalFound: results.length, progress: 80 });
       await runSocialEnrichment(job, results);
       await runWhatsappValidation(job, results);
@@ -228,29 +232,17 @@ export const runScraperJob = async (jobId: number) => {
     } else if (job.source === "ig_followers") {
       const { igTargetHandle = "", maxResults = 500 } = job.filters;
 
-      let results: ScraperResult[];
-      if (isApifyConfigured()) {
-        // Provider externo: não usa a sessão Instagram do cliente (sem risco de ban)
-        results = await scrapeFollowersViaApify(
-          igTargetHandle,
-          maxResults,
-          async (current, total) => {
-            await job.update({ progress: Math.round((current / total) * 80) });
-          }
-        );
-      } else {
-        const cookies = await getSessionCookies(job.companyId);
-        if (!cookies) throw new Error("Conta Instagram não configurada. Conecte uma conta em Captador de Leads → 📸 Conectar Instagram.");
-
-        results = await scrapeFollowers(
-          igTargetHandle,
-          cookies,
-          maxResults,
-          async (current, total) => {
-            await job.update({ progress: Math.round((current / total) * 80) });
-          }
-        );
+      if (!isApifyConfigured()) {
+        throw new Error("APIFY_TOKEN não configurado no ambiente. Configure em Configurações → Integrações para buscar seguidores do Instagram.");
       }
+      const results = await scrapeFollowersViaApify(
+        igTargetHandle,
+        maxResults,
+        async (current, total) => {
+          await job.update({ progress: Math.round((current / total) * 80) });
+        }
+      );
+      normalizePhonesInPlace(results);
       await job.update({ results, totalFound: results.length, progress: 80 });
       await runCrossEnrichment(job, results);
       await runSocialEnrichment(job, results);
@@ -264,6 +256,7 @@ export const runScraperJob = async (jobId: number) => {
           await job.update({ progress: Math.round((current / total) * 80) });
         }
       );
+      normalizePhonesInPlace(results);
       await job.update({ results, totalFound: results.length, progress: 80 });
       await runCrossEnrichment(job, results);
       await runSocialEnrichment(job, results);
