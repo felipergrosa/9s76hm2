@@ -108,6 +108,23 @@ const sqlString = (v: string) => v.replace(/'/g, "''").trim();
 // Sanitiza termo de LIKE: remove % e _ (curingas) e escapa aspas
 const likeTerm = (v: string) => sqlString(v.replace(/[%_]/g, " "));
 
+// O ArcGIS do CAU usa LIKE case/acento-sensitivo e não suporta REPLACE/UNACCENT.
+// Solução: UPPER() dos dois lados + variante do termo com vogais e 'c' trocadas
+// pelo curinga '_' (cobre ã/õ/ç/acentos). Mantém OR com o literal para quando o
+// usuário já digita o acento corretamente.
+const likeClause = (campo: string, termo: string): string => {
+  const literal = likeTerm(termo).toUpperCase();
+  const wildcard = literal.replace(/[AEIOUC]/g, "_");
+  // Termo só de vogais/c vira "___" — casaria tudo; usa só o literal
+  if (!wildcard.replace(/_/g, "").trim()) {
+    return `UPPER(${campo}) LIKE '%${literal}%'`;
+  }
+  if (literal === wildcard) {
+    return `UPPER(${campo}) LIKE '%${literal}%'`;
+  }
+  return `(UPPER(${campo}) LIKE '%${literal}%' OR UPPER(${campo}) LIKE '%${wildcard}%')`;
+};
+
 async function queryArcgis(url: string, params: Record<string, string>) {
   let lastErr: any;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -209,10 +226,10 @@ async function scrapeCau(
     condicoes.push(`uf='${uf}'`);
   }
   if (filters.municipio) {
-    condicoes.push(`cidade_normalizada LIKE '%${likeTerm(filters.municipio)}%'`);
+    condicoes.push(likeClause("cidade_normalizada", filters.municipio));
   }
   if (filters.keyword) {
-    condicoes.push(`${layer.campoNome} LIKE '%${likeTerm(filters.keyword)}%'`);
+    condicoes.push(likeClause(layer.campoNome, filters.keyword));
   }
   if (filters.situacao) {
     condicoes.push(

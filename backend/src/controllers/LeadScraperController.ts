@@ -118,6 +118,35 @@ export const getJob = async (req: Request, res: Response): Promise<Response> => 
   }
 };
 
+// Exclui um job finalizado do histórico (jobs em andamento não são removíveis)
+export const deleteJob = async (req: Request, res: Response): Promise<Response> => {
+  try {
+    const { companyId } = req.user;
+    const job = await LeadScraperJob.findOne({ where: { id: req.params.id, companyId } });
+    if (!job) return res.status(404).json({ error: "Job não encontrado" });
+    if (job.status === "pending" || job.status === "running") {
+      return res.status(409).json({ error: "Job em andamento não pode ser excluído" });
+    }
+    await job.destroy();
+    return res.json({ ok: true });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || "Erro ao excluir job" });
+  }
+};
+
+// Limpa todo o histórico finalizado da empresa (done/error)
+export const clearJobs = async (req: Request, res: Response): Promise<Response> => {
+  try {
+    const { companyId } = req.user;
+    const deleted = await LeadScraperJob.destroy({
+      where: { companyId, status: { [Op.in]: ["done", "error"] } }
+    });
+    return res.json({ ok: true, deleted });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || "Erro ao limpar histórico" });
+  }
+};
+
 export const importJobResults = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { companyId } = req.user;

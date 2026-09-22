@@ -32,6 +32,11 @@ export interface ScraperResult {
   // conselho profissional (ex.: CAU)
   registro?: string;      // número do registro profissional no conselho
   registroTipo?: string;  // tipo do registro/conselho, ex.: "CAU"
+  // validação WhatsApp (pós-scrape, via sessão conectada da empresa)
+  hasWhatsapp?: boolean;
+  whatsappChecked?: boolean;
+  // enriquecimento cruzado: fontes que complementaram o lead
+  enrichedFrom?: string[];  // ex.: ["receita"]
   imported?: boolean;
 }
 

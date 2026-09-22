@@ -24,10 +24,13 @@ import {
   HelpOutline as HelpIcon,
   Instagram as InstagramIcon,
   AccountBalanceOutlined as ConselhoIcon,
+  DeleteOutline as DeleteIcon,
+  DeleteSweepOutlined as ClearIcon,
 } from "@material-ui/icons";
 import { toast } from "react-toastify";
 import api from "../../services/api";
 import MainContainer from "../../components/MainContainer";
+import ConfirmationModal from "../../components/ConfirmationModal";
 import InstagramSessionModal from "../../components/InstagramSessionModal";
 import LeadMapPicker from "../../components/LeadMapPicker";
 
@@ -45,6 +48,15 @@ const SOCIAL_LINKS = {
 };
 const SOCIAL_COLORS = { instagram: "#e1306c", twitter: "#000", linkedin: "#0a66c2" };
 const SOCIAL_LABELS = { instagram: "IG", twitter: "X", linkedin: "LI" };
+
+// "5511987654321" → "(11) 98765-4321" | "(11) 3456-7890"; sem dígitos BR retorna como veio
+const formatPhoneBR = (v) => {
+  const d = String(v || "").replace(/\D/g, "");
+  const local = d.startsWith("55") && d.length > 10 ? d.slice(2) : d;
+  if (local.length === 11) return `(${local.slice(0, 2)}) ${local.slice(2, 7)}-${local.slice(7)}`;
+  if (local.length === 10) return `(${local.slice(0, 2)}) ${local.slice(2, 6)}-${local.slice(6)}`;
+  return v || "";
+};
 
 const STATES = [
   "AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT",
@@ -231,6 +243,7 @@ export default function LeadScraper() {
   const [helpOpen, setHelpOpen] = useState(false);
   const [jobs, setJobs] = useState([]);
   const [activeJob, setActiveJob] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(null); // {type:"job",job} | {type:"all"}
   const [loading, setLoading] = useState(false);
   const [selectedIndices, setSelectedIndices] = useState([]);
   const [contactListName, setContactListName] = useState("");
@@ -504,6 +517,23 @@ export default function LeadScraper() {
       clearInterval(pollRef.current);
       pollRef.current = null;
     }
+  };
+
+  const deleteJob = async (j) => {
+    try {
+      await api.delete(`/lead-scraper/jobs/${j.id}`);
+      setJobs(prev => prev.filter(x => x.id !== j.id));
+      if (activeJob?.id === j.id) setActiveJob(null);
+    } catch (e) { toast.error(e?.response?.data?.error || "Erro ao excluir busca."); }
+  };
+
+  const clearHistory = async () => {
+    try {
+      const { data } = await api.delete("/lead-scraper/jobs");
+      setJobs(prev => prev.filter(j => j.status === "pending" || j.status === "running"));
+      if (activeJob && activeJob.status !== "pending" && activeJob.status !== "running") setActiveJob(null);
+      toast.success(`${data.deleted || 0} busca(s) removida(s) do histórico`);
+    } catch (e) { toast.error(e?.response?.data?.error || "Erro ao limpar histórico."); }
   };
 
   const results = activeJob?.results || [];
@@ -1097,9 +1127,22 @@ export default function LeadScraper() {
           <Paper className={classes.paper} elevation={0} variant="outlined" style={{ minHeight: 200 }}>
             <Box display="flex" justifyContent="space-between" alignItems="center" style={{ marginBottom: 12 }}>
               <Typography variant="subtitle1" style={{ fontWeight: 700 }}>Histórico de Buscas</Typography>
-              <Tooltip title="Recarregar">
-                <IconButton size="small" onClick={loadJobs}><RefreshIcon fontSize="small" /></IconButton>
-              </Tooltip>
+              <Box display="flex" alignItems="center">
+                <Tooltip title="Limpar histórico">
+                  <span>
+                    <IconButton
+                      size="small"
+                      onClick={() => setConfirmDelete({ type: "all" })}
+                      disabled={!jobs.some(j => j.status === "done" || j.status === "error")}
+                    >
+                      <ClearIcon fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+                <Tooltip title="Recarregar">
+                  <IconButton size="small" onClick={loadJobs}><RefreshIcon fontSize="small" /></IconButton>
+                </Tooltip>
+              </Box>
             </Box>
 
             {jobs.length === 0 ? (
@@ -1145,6 +1188,17 @@ export default function LeadScraper() {
                         {j.totalFound || 0} leads
                       </Typography>
                     </Box>
+                    {(j.status === "done" || j.status === "error") && (
+                      <Tooltip title="Excluir busca">
+                        <IconButton
+                          size="small"
+                          style={{ marginLeft: 4, padding: 2 }}
+                          onClick={(e) => { e.stopPropagation(); setConfirmDelete({ type: "job", job: j }); }}
+                        >
+                          <DeleteIcon style={{ fontSize: 15 }} />
+                        </IconButton>
+                      </Tooltip>
+                    )}
                   </Box>
                 );
               })
@@ -1276,10 +1330,24 @@ export default function LeadScraper() {
                           </TableCell>
                         )}
                         <TableCell>
-                          <Typography variant="body2" style={{ fontSize: 12 }}>{r.phone || "—"}</Typography>
+                          <Box display="flex" alignItems="center" style={{ gap: 4 }}>
+                            <Typography variant="body2" style={{ fontSize: 12 }}>
+                              {r.phone ? formatPhoneBR(r.phone) : "—"}
+                            </Typography>
+                            {r.whatsappChecked && r.hasWhatsapp && (
+                              <Tooltip title="WhatsApp ativo (validado)">
+                                <span style={{ color: "#25d366", fontSize: 13, fontWeight: 700 }}>✓WA</span>
+                              </Tooltip>
+                            )}
+                            {r.whatsappChecked && r.hasWhatsapp === false && (
+                              <Tooltip title="Número sem WhatsApp">
+                                <span style={{ color: "#9e9e9e", fontSize: 11 }}>sem WA</span>
+                              </Tooltip>
+                            )}
+                          </Box>
                           {r.instagramPhone && r.instagramPhone !== r.phone && (
                             <Typography variant="caption" style={{ display: "block", color: SOCIAL_COLORS.instagram, fontSize: 11 }}>
-                              📸 {r.instagramPhone}
+                              📸 {formatPhoneBR(r.instagramPhone)}
                             </Typography>
                           )}
                         </TableCell>
@@ -1318,13 +1386,21 @@ export default function LeadScraper() {
                           </Typography>
                         </TableCell>
                         <TableCell>
-                          <Typography variant="body2" style={{ fontSize: 11, fontFamily: "monospace" }}>
-                            {r.cnpj
-                              ? r.cnpj.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5")
-                              : r.website
-                                ? <a href={r.website} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11 }}>site</a>
-                                : "—"}
-                          </Typography>
+                          <Box display="flex" alignItems="center" style={{ gap: 4 }}>
+                            <Typography variant="body2" style={{ fontSize: 11, fontFamily: "monospace" }}>
+                              {r.cnpj
+                                ? r.cnpj.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5")
+                                : r.website
+                                  ? <a href={r.website} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11 }}>site</a>
+                                  : "—"}
+                            </Typography>
+                            {(r.enrichedFrom || []).includes("receita") && (
+                              <Tooltip title="Enriquecido com dados da Receita Federal (encontrado pelo nome)">
+                                <Chip label="RF" size="small"
+                                  style={{ fontSize: 9, height: 16, fontWeight: 700, background: "#e8f5e9", color: "#2e7d32" }} />
+                              </Tooltip>
+                            )}
+                          </Box>
                         </TableCell>
                         {activeJob.source === "conselho" && (
                           <TableCell>
@@ -1390,6 +1466,22 @@ export default function LeadScraper() {
         </Paper>
       )}
     </Box>
+
+      <ConfirmationModal
+        title={confirmDelete?.type === "all" ? "Limpar histórico" : "Excluir busca"}
+        open={!!confirmDelete}
+        onClose={() => setConfirmDelete(null)}
+        onConfirm={() => {
+          const target = confirmDelete;
+          setConfirmDelete(null);
+          if (target?.type === "all") clearHistory();
+          else if (target?.type === "job") deleteJob(target.job);
+        }}
+      >
+        {confirmDelete?.type === "all"
+          ? "Excluir todo o histórico de buscas? Leads já importados não serão afetados."
+          : "Excluir esta busca do histórico? Leads já importados não serão afetados."}
+      </ConfirmationModal>
     </MainContainer>
   );
 }
