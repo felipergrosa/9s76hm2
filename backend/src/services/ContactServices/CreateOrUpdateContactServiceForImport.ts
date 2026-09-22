@@ -237,12 +237,15 @@ const CreateOrUpdateContactServiceForImport = async ({
     }
   }
 
-  // Chama o serviço centralizado para atualizar nome/avatar com proteção
-  try {
-    const RefreshContactAvatarService = (await import("./RefreshContactAvatarService")).default;
-    await RefreshContactAvatarService({ contactId: contact.id, companyId });
-  } catch (err) {
-    console.warn("Falha ao atualizar avatar/nome centralizado", err);
+  // Chama o serviço centralizado para atualizar nome/avatar com proteção.
+  // Em silentMode (importações em massa) o refresh é pulado — custo oculto por lead.
+  if (!silentMode) {
+    try {
+      const RefreshContactAvatarService = (await import("./RefreshContactAvatarService")).default;
+      await RefreshContactAvatarService({ contactId: contact.id, companyId });
+    } catch (err) {
+      console.warn("Falha ao atualizar avatar/nome centralizado", err);
+    }
   }
 
   return contact;

@@ -42,6 +42,8 @@ services:
       # WhatsApp Business API (Meta) - Configurações Globais
       WABA_WEBHOOK_VERIFY_TOKEN: ${WABA_WEBHOOK_VERIFY_TOKEN:-602536nblumi2025}
       WABA_API_VERSION: ${WABA_API_VERSION:-v18.0}
+      # Sidecar Google Maps Scraper (rede interna, sem porta publicada)
+      GMAPS_SCRAPER_URL: http://gmaps-scraper:8080
     networks:
       - nobreluminarias
     ports:
@@ -65,6 +67,19 @@ services:
     volumes:
       - ./frontend:/app
 
+  # Sidecar opcional: Google Maps Scraper (gosom/google-maps-scraper, MIT)
+  # API REST interna em :8080 — NÃO publicar porta (conflito com backend 8080 no host)
+  gmaps-scraper:
+    image: gosom/google-maps-scraper:v1.17.4
+    container_name: whaticket-gmaps-scraper
+    restart: unless-stopped
+    command: ["-data-folder", "/gmapsdata"]
+    networks:
+      - nobreluminarias
+    volumes:
+      - gmaps-playwright-cache:/opt
+      - gmaps-data:/gmapsdata
+
 networks:
   nobreluminarias:
     external: true
@@ -73,6 +88,9 @@ volumes:
   # Volumes para backend (uploads e sessões)
   backend-public:
   backend-private:
+  # Volumes do sidecar Google Maps Scraper
+  gmaps-playwright-cache:  # cache do browser/playwright do scraper
+  gmaps-data:              # jobs e CSVs gerados pelo scraper
   # IMPORTANTE: Postgres e Redis são serviços EXTERNOS
   # Se precisar incluí-los no compose, use estes volumes:
   # whaticket_postgres_data  # Dados do banco (361 tickets, 395 contatos)

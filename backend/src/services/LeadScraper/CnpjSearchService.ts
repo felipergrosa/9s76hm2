@@ -2,10 +2,16 @@ import axios from "axios";
 import { ScraperResult } from "../../models/LeadScraperJob";
 import logger from "../../utils/logger";
 
-// Brasil.io free tier: socios-brasil dataset (cnpj + razao_social + uf)
-// cnpj.ws public API: full enrichment per CNPJ (CNAE, phone, email, address)
+// Discovery: Brasil.io socios-brasil (keyword/uf, requer BRASILIO_TOKEN)
+//          ou minhareceita.org/?uf&cnae_fiscal (CNAE, sem auth, retorna registros completos)
+// Enrichment: cascata OpenCNPJ → minhareceita.org → BrasilAPI
 
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
+const UA = { "User-Agent": "Whaticket/1.0" };
+const RATE_LIMIT = "RATE_LIMIT";
+
+// campo interno para filtro de CNAE secundário; removido antes de ir para results
+type EnrichedLead = ScraperResult & { _cnaesSec?: string[] };
 
 export interface CnpjDiscoveryFilters {
   keyword?: string;        // text search in razao_social (brasil.io)
@@ -19,51 +25,216 @@ export interface CnpjDiscoveryFilters {
   maxResults?: number;
 }
 
-async function enrichViaCnpjWs(cnpj: string): Promise<ScraperResult | null> {
+// comparação de texto sem acento e case-insensitive ("São Paulo" casa "SAO PAULO")
+const norm = (s: string) =>
+  s.normalize("NFD").replace(/\p{Diacritic}/gu, "").toUpperCase();
+
+const toCnae7 = (v: any): string => {
+  const digits = String(v ?? "").replace(/\D/g, "");
+  return digits ? digits.padStart(7, "0") : "";
+};
+
+// --- mappers por fonte (shape real inspecionado via curl) ---
+
+function mapOpenCnpj(d: any, cnpj: string): EnrichedLead {
+  const tel = (d.telefones || []).find((t: any) => t?.numero && !t.is_fax)
+    || (d.telefones || []).find((t: any) => t?.numero);
+  const principal = (d.cnaes || []).find((c: any) => c?.is_principal);
+  return {
+    name: d.nome_fantasia || d.razao_social || cnpj,
+    razaoSocial: d.razao_social || "",
+    nomeFantasia: d.nome_fantasia || "",
+    phone: tel ? `(${tel.ddd}) ${tel.numero}` : "",
+    email: d.email || "",
+    address: [
+      d.tipo_logradouro, d.logradouro, d.numero && `nº ${d.numero}`,
+      d.complemento, d.bairro, d.municipio, d.uf,
+    ].filter(Boolean).join(" "),
+    cnpj,
+    municipio: d.municipio || "",
+    uf: d.uf || "",
+    situacao: d.situacao_cadastral || "",
+    cnaeId: toCnae7(d.cnae_principal),
+    cnaeDescricao: principal?.descricao || "",
+    _cnaesSec: (d.cnaes_secundarios || []).map(toCnae7).filter(Boolean),
+    // OpenCNPJ não expõe código da natureza jurídica — só descrição
+    naturezaJuridica: d.natureza_juridica || "",
+    porte: d.porte_empresa || "",
+    website: "",
+  };
+}
+
+// minhareceita.org e BrasilAPI expõem o mesmo shape (mesma base Receita)
+function mapMinhaReceita(d: any, cnpj: string): EnrichedLead {
+  const tel = String(d.ddd_telefone_1 || d.ddd_telefone_2 || "").replace(/\D/g, "");
+  const njCodigo = d.codigo_natureza_juridica ? String(d.codigo_natureza_juridica) : "";
+  const njDesc = d.natureza_juridica || "";
+  return {
+    name: d.nome_fantasia || d.razao_social || cnpj,
+    razaoSocial: d.razao_social || "",
+    nomeFantasia: d.nome_fantasia || "",
+    phone: tel ? `(${tel.slice(0, 2)}) ${tel.slice(2)}` : "",
+    email: d.email || "",
+    address: [
+      d.descricao_tipo_de_logradouro, d.logradouro, d.numero && `nº ${d.numero}`,
+      d.complemento, d.bairro, d.municipio, d.uf,
+    ].filter(Boolean).join(" "),
+    cnpj,
+    municipio: d.municipio || "",
+    uf: d.uf || "",
+    situacao: d.descricao_situacao_cadastral || "",
+    cnaeId: toCnae7(d.cnae_fiscal),
+    cnaeDescricao: d.cnae_fiscal_descricao || "",
+    _cnaesSec: (d.cnaes_secundarios || []).map((c: any) => toCnae7(c?.codigo)).filter(Boolean),
+    naturezaJuridica: njCodigo && njDesc ? `${njCodigo} - ${njDesc}` : njDesc || njCodigo,
+    porte: d.porte || d.descricao_porte || "",
+    website: "",
+  };
+}
+
+const ENRICH_SOURCES: Array<{
+  name: string;
+  url: (c: string) => string;
+  map: (d: any, c: string) => EnrichedLead;
+}> = [
+  { name: "opencnpj", url: c => `https://api.opencnpj.org/${c}`, map: mapOpenCnpj },
+  { name: "minhareceita", url: c => `https://minhareceita.org/${c}`, map: mapMinhaReceita },
+  { name: "brasilapi", url: c => `https://brasilapi.com.br/api/cnpj/v1/${c}`, map: mapMinhaReceita },
+];
+
+// cascata OpenCNPJ → minhareceita → BrasilAPI; lança RATE_LIMIT se todas falharem com 429
+export const enrichCnpjCascade = async (cnpj: string): Promise<ScraperResult | null> => {
   const cleaned = cnpj.replace(/\D/g, "");
   if (cleaned.length !== 14) return null;
-  try {
-    const { data } = await axios.get(`https://publica.cnpj.ws/cnpj/${cleaned}`, {
-      timeout: 10000,
-      headers: { "User-Agent": "Whaticket/1.0" },
-    });
 
-    const est = data.estabelecimento || {};
-    const phone = est.ddd1 && est.telefone1
-      ? `(${est.ddd1}) ${est.telefone1}`
-      : "";
-    // id = "8550301" (7 digits), subclasse = "8550-3/01" (formatted) — use id for filtering
-    const cnaeId: string = est.atividade_principal?.id ?? "";
-    const cnaeDesc: string = est.atividade_principal?.descricao ?? "";
-    const cnaeSubclasse: string = est.atividade_principal?.subclasse ?? "";
-    const njId: string = data.natureza_juridica?.id ?? "";
-    const njDesc: string = data.natureza_juridica?.descricao ?? "";
-
-    return {
-      name: est.nome_fantasia || data.razao_social || cnpj,
-      razaoSocial: data.razao_social || "",
-      nomeFantasia: est.nome_fantasia || "",
-      phone,
-      email: est.email || "",
-      address: [
-        est.tipo_logradouro, est.logradouro, est.numero && `nº ${est.numero}`,
-        est.bairro, est.cidade?.nome, est.estado?.sigla,
-      ].filter(Boolean).join(" "),
-      cnpj,
-      municipio: est.cidade?.nome || "",
-      uf: est.estado?.sigla || "",
-      situacao: est.situacao_cadastral || "",
-      cnaeId,                     // raw 7-digit id for filtering
-      cnaeDescricao: cnaeSubclasse ? `${cnaeSubclasse} - ${cnaeDesc}` : cnaeDesc,
-      naturezaJuridica: njId ? `${njId} - ${njDesc}` : njDesc,
-      porte: data.porte?.descricao || "",
-      website: "",
-    };
-  } catch (err: any) {
-    // ponytail: 429 means rate-limited; other errors = invalid CNPJ or temporary issue
-    if (err.response?.status === 429) throw new Error("RATE_LIMIT");
-    return null;
+  let sawRateLimit = false;
+  for (let i = 0; i < ENRICH_SOURCES.length; i++) {
+    const src = ENRICH_SOURCES[i];
+    try {
+      const { data } = await axios.get(src.url(cleaned), { timeout: 10000, headers: UA });
+      if (i > 0) logger.info(`[CnpjSearch] ${cleaned} enriquecido via fallback ${src.name}`);
+      return src.map(data, cleaned);
+    } catch (err: any) {
+      const status = err.response?.status;
+      if (status === 429) sawRateLimit = true;
+      logger.warn(
+        `[CnpjSearch] ${src.name} falhou p/ ${cleaned} (HTTP ${status ?? err.code ?? "?"}): ${err.message}`
+      );
+      await delay(200); // intervalo entre calls da cascata
+    }
   }
+  if (sawRateLimit) throw new Error(RATE_LIMIT);
+  return null;
+};
+
+// --- pós-filtros fail-closed: filtro setado + campo ausente/não-casante = rejeitado ---
+
+const passesFilters = (lead: EnrichedLead, f: CnpjDiscoveryFilters): boolean => {
+  if (f.situacao) {
+    if (!lead.situacao || !norm(lead.situacao).includes(norm(f.situacao))) return false;
+  }
+  if (f.cnae) {
+    const target = toCnae7(f.cnae);
+    const ids = [lead.cnaeId, ...(lead._cnaesSec || [])].filter(Boolean);
+    if (!ids.includes(target)) return false;
+  }
+  if (f.municipio) {
+    if (!lead.municipio || !norm(lead.municipio).includes(norm(f.municipio))) return false;
+  }
+  if (f.naturezaJuridica) {
+    const want = f.naturezaJuridica.trim();
+    const wantDigits = want.replace(/\D/g, "");
+    const leadDigits = (lead.naturezaJuridica || "").match(/\d{3,4}/)?.[0] || "";
+    const textMatch = norm(lead.naturezaJuridica || "").includes(norm(want));
+    const codeMatch = !!wantDigits && !!leadDigits && leadDigits === wantDigits;
+    if (!textMatch && !codeMatch) return false;
+  }
+  if (f.temTelefone && !lead.phone) return false;
+  if (f.temEmail && !lead.email) return false;
+  return true;
+};
+
+// --- discovery ---
+
+async function discoverViaBrasilIo(
+  filters: CnpjDiscoveryFilters,
+  fetchLimit: number,
+  token: string
+): Promise<string[]> {
+  const params: Record<string, string> = { page_size: "100" };
+  if (filters.uf) params.uf = filters.uf;
+  // keyword faz full-text search em razao_social; municipio reusa o search textual
+  const searchTerm = filters.keyword?.trim() || filters.municipio?.trim() || "";
+  if (searchTerm) params.search = searchTerm;
+
+  const cnpjSet = new Set<string>();
+  let page = 1;
+  while (cnpjSet.size < fetchLimit) {
+    try {
+      const { data } = await axios.get(
+        "https://api.brasil.io/v1/dataset/socios-brasil/empresas/data/",
+        {
+          params: { ...params, page },
+          headers: { Authorization: `Token ${token}`, "User-Agent": "Whaticket/1.0" },
+          timeout: 20000,
+        }
+      );
+      const rows: any[] = data.results || [];
+      for (const row of rows) {
+        const c = String(row.cnpj || "").replace(/\D/g, "");
+        if (c.length === 14) cnpjSet.add(c);
+      }
+      if (!data.next || rows.length === 0) break;
+      page++;
+      await delay(200);
+    } catch (err: any) {
+      logger.warn(
+        `[CnpjSearch] Brasil.io page ${page} HTTP ${err.response?.status ?? "?"}: ${err.message}`
+      );
+      break;
+    }
+  }
+  return [...cnpjSet];
+}
+
+// sem BRASILIO_TOKEN: busca por CNAE (uf opcional) — retorna registros já completos
+async function discoverViaMinhaReceita(
+  filters: CnpjDiscoveryFilters,
+  fetchLimit: number
+): Promise<EnrichedLead[]> {
+  const leads: EnrichedLead[] = [];
+  const seen = new Set<string>();
+  let cursor = "";
+  while (leads.length < fetchLimit) {
+    const params: Record<string, string> = { limit: "100" };
+    if (filters.uf) params.uf = filters.uf.toUpperCase();
+    if (filters.cnae) params.cnae_fiscal = filters.cnae.replace(/\D/g, "");
+    if (cursor) params.cursor = cursor;
+    try {
+      const { data } = await axios.get("https://minhareceita.org/", {
+        params,
+        headers: UA,
+        timeout: 20000,
+      });
+      const rows: any[] = data.data || [];
+      for (const row of rows) {
+        const c = String(row.cnpj || "").replace(/\D/g, "");
+        if (c.length === 14 && !seen.has(c)) {
+          seen.add(c);
+          leads.push(mapMinhaReceita(row, c));
+        }
+      }
+      cursor = data.cursor ? String(data.cursor) : "";
+      if (!cursor || rows.length === 0) break;
+      await delay(250);
+    } catch (err: any) {
+      logger.warn(
+        `[CnpjSearch] minhareceita discovery HTTP ${err.response?.status ?? "?"}: ${err.message}`
+      );
+      break;
+    }
+  }
+  return leads;
 }
 
 export const searchCnpjsByFilters = async (
@@ -71,99 +242,75 @@ export const searchCnpjsByFilters = async (
   onProgress?: (current: number, total: number) => Promise<void>
 ): Promise<ScraperResult[]> => {
   const token = process.env.BRASILIO_TOKEN;
-  if (!token) throw new Error(
-    "Configure BRASILIO_TOKEN no .env. Token gratuito em brasil.io/auth/tokens/"
-  );
-
   const maxResults = Math.min(filters.maxResults || 100, 500);
+  const fetchLimit = Math.min(maxResults * 3, 900);
 
-  // Step 1: get CNPJs from socios-brasil (free, filtered by uf + text search)
-  const brasilioParams: Record<string, string> = { page_size: "100" };
-  if (filters.uf) brasilioParams.uf = filters.uf;
-  // keyword searches in razao_social (brasil.io full-text search)
-  const searchTerm = filters.keyword?.trim() || filters.municipio?.trim() || "";
-  if (searchTerm) brasilioParams.search = searchTerm;
-
-  const cnpjList: string[] = [];
-  let page = 1;
-  const fetchLimit = Math.min(maxResults * 3, 300); // fetch 3× more to allow for post-filter losses
-
-  while (cnpjList.length < fetchLimit) {
-    try {
-      const { data } = await axios.get(
-        "https://api.brasil.io/v1/dataset/socios-brasil/empresas/data/",
-        {
-          params: { ...brasilioParams, page },
-          headers: {
-            Authorization: `Token ${token}`,
-            "User-Agent": "Whaticket/1.0",
-          },
-          timeout: 20000,
-        }
+  if (!token) {
+    if (filters.keyword?.trim()) {
+      throw new Error(
+        "Busca por palavra-chave requer BRASILIO_TOKEN (grátis em brasil.io/auth/tokens/). Sem o token, informe filters.cnae."
       );
-
-      const rows: any[] = data.results || [];
-      for (const row of rows) {
-        if (row.cnpj) cnpjList.push(String(row.cnpj).replace(/\D/g, ""));
-      }
-
-      if (!data.next || rows.length === 0) break;
-      page++;
-      await delay(200);
-    } catch (err: any) {
-      const status = err.response?.status;
-      logger.warn(`[CnpjSearch] Brasil.io page ${page} HTTP ${status ?? "?"}: ${err.message}`);
-      // 404 = endpoint/dataset gone; 5xx = transient — abort discovery gracefully
-      break;
+    }
+    if (!filters.cnae) {
+      throw new Error(
+        "Configure BRASILIO_TOKEN no .env ou informe filters.cnae para discovery via minhareceita.org."
+      );
     }
   }
 
+  const results: ScraperResult[] = [];
+
+  if (!token) {
+    // minhareceita: registros já vêm completos — só pós-filtrar
+    const leads = await discoverViaMinhaReceita(filters, fetchLimit);
+    for (const lead of leads) {
+      if (results.length >= maxResults) break;
+      if (!passesFilters(lead, filters)) continue;
+      delete lead._cnaesSec;
+      results.push(lead);
+      await onProgress?.(results.length, maxResults);
+    }
+    logger.info(`[CnpjSearch] minhareceita: ${leads.length} fetched → ${results.length} passed filters`);
+    return results;
+  }
+
+  // Brasil.io: discovery retorna só CNPJs — enriquecer um a um via cascata
+  const cnpjList = await discoverViaBrasilIo(filters, fetchLimit, token);
   if (!cnpjList.length) return [];
 
-  // Step 2: enrich each CNPJ via cnpj.ws and post-filter
-  const results: ScraperResult[] = [];
-  let enriched = 0;
+  let processed = 0;
+  let consecutiveRateLimits = 0;
 
   for (const cnpj of cnpjList) {
     if (results.length >= maxResults) break;
 
-    let lead: ScraperResult | null = null;
+    let lead: EnrichedLead | null = null;
     try {
-      lead = await enrichViaCnpjWs(cnpj);
+      lead = (await enrichCnpjCascade(cnpj)) as EnrichedLead | null;
+      consecutiveRateLimits = 0;
     } catch (err: any) {
-      if (err.message === "RATE_LIMIT") {
-        logger.warn("[CnpjSearch] cnpj.ws rate limit hit, waiting 30s");
-        await delay(30000);
-        lead = await enrichViaCnpjWs(cnpj).catch(() => null);
+      if (err.message === RATE_LIMIT) {
+        consecutiveRateLimits++;
+        logger.warn(`[CnpjSearch] rate limit consecutivo ${consecutiveRateLimits}/3`);
+        if (consecutiveRateLimits >= 3) {
+          logger.warn("[CnpjSearch] 3 rate limits seguidos — retornando resultados parciais");
+          break;
+        }
+      } else {
+        logger.warn(`[CnpjSearch] enrich ${cnpj}: ${err.message}`);
       }
     }
 
-    enriched++;
-    if (!lead) continue;
+    processed++;
+    if (lead && passesFilters(lead, filters)) {
+      delete lead._cnaesSec;
+      results.push(lead);
+      await onProgress?.(results.length, maxResults);
+    }
 
-    // Post-filters (cnpj.ws returns text labels like "Ativa", "Baixada")
-    if (filters.situacao && lead.situacao) {
-      if (!lead.situacao.toUpperCase().includes(filters.situacao.toUpperCase())) continue;
-    }
-    if (filters.cnae && lead.cnaeId) {
-      if (lead.cnaeId !== filters.cnae.replace(/\D/g, "")) continue;
-    }
-    if (filters.municipio && lead.municipio) {
-      if (!lead.municipio.toUpperCase().includes(filters.municipio.toUpperCase())) continue;
-    }
-    if (filters.naturezaJuridica && lead.naturezaJuridica) {
-      if (!lead.naturezaJuridica.startsWith(filters.naturezaJuridica)) continue;
-    }
-    if (filters.temTelefone && !lead.phone) continue;
-    if (filters.temEmail && !lead.email) continue;
-
-    results.push(lead);
-    await onProgress?.(results.length, maxResults);
-
-    // ponytail: 600ms between calls to stay within cnpj.ws rate limit
-    await delay(600);
+    await delay(250); // entre TODOS os CNPJs processados — rate-limit safety
   }
 
-  logger.info(`[CnpjSearch] enriched ${enriched} → ${results.length} passed filters`);
+  logger.info(`[CnpjSearch] ${processed} enriched → ${results.length} passed filters`);
   return results;
 };

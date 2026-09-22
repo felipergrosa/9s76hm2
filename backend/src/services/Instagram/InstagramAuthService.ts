@@ -2,6 +2,8 @@ import crypto from "crypto";
 import puppeteer from "../../libs/puppeteerStealth";
 import InstagramSession from "../../models/InstagramSession";
 import logger from "../../utils/logger";
+import AppError from "../../errors/AppError";
+import { encryptString, decryptString } from "../../utils/crypto";
 
 const LAUNCH_ARGS = [
   "--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage",
@@ -11,16 +13,43 @@ const LAUNCH_ARGS = [
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
 const jitter = (base: number) => base + Math.floor(Math.random() * base * 0.4);
 
-// In-memory map for 2FA pending logins (browser stays open until code submitted or timeout)
+// In-memory map for 2FA pending logins (browser stays open until code submitted or timeout).
+// companyId is stored so submitTwoFa can enforce tenant ownership of the pending session.
 const PENDING_2FA = new Map<string, {
   browser: any; page: any; timer: NodeJS.Timeout; username: string;
+  companyId: number; createdAt: number;
 }>();
+
+// Garante no máximo 1 login 2FA pendente por empresa: uma nova tentativa
+// invalida a anterior e fecha o browser antigo para não vazar recursos.
+const invalidateCompanyPending = (companyId: number): void => {
+  for (const [id, pending] of PENDING_2FA) {
+    if (pending.companyId === companyId) {
+      clearTimeout(pending.timer);
+      pending.browser.close().catch(() => {});
+      PENDING_2FA.delete(id);
+      logger.warn(`[Instagram] 2FA session ${id} invalidated by new login attempt (company ${companyId})`);
+    }
+  }
+};
+
+// Cookies da sessão contêm sessionid (= takeover da conta), então nunca são
+// persistidos em plaintext. Formato salvo na coluna JSON: { __enc: true, data: "ENC::..." }.
+// Se a chave (OPENAI_ENCRYPTION_KEY/DATA_KEY) estiver ausente, encryptString lança
+// erro claro e a sessão NÃO é gravada (falha segura, sem degradar para plaintext).
+const encodeCookies = (cookies: any[]): { __enc: boolean; data: string } => ({
+  __enc: true,
+  data: encryptString(JSON.stringify(cookies)),
+});
 
 export const loginInstagram = async (
   companyId: number,
   username: string,
   password: string
 ): Promise<{ status: "success" | "needs_2fa"; pendingId?: string }> => {
+  // Nova tentativa de login invalida qualquer 2FA pendente desta empresa.
+  invalidateCompanyPending(companyId);
+
   const browser = await (puppeteer as any).launch({ headless: true, args: LAUNCH_ARGS });
   const page = await browser.newPage();
   await page.setViewport({ width: 1280, height: 800 });
@@ -73,7 +102,9 @@ export const loginInstagram = async (
         PENDING_2FA.delete(pendingId);
         logger.warn(`[Instagram] 2FA session ${pendingId} expired`);
       }, 5 * 60 * 1000);
-      PENDING_2FA.set(pendingId, { browser, page, timer, username });
+      PENDING_2FA.set(pendingId, {
+        browser, page, timer, username, companyId, createdAt: Date.now(),
+      });
       return { status: "needs_2fa", pendingId };
     }
 
@@ -104,6 +135,12 @@ export const submitTwoFa = async (
   const pending = PENDING_2FA.get(pendingId);
   if (!pending) throw new Error("Sessão 2FA expirou (5 min). Faça login novamente.");
 
+  // O pendingId pertence ao tenant que iniciou o login — rejeita uso cruzado
+  // sem derrubar a sessão do dono legítimo.
+  if (pending.companyId !== companyId) {
+    throw new AppError("ERR_NO_PERMISSION", 403);
+  }
+
   const { browser, page, timer, username } = pending;
   clearTimeout(timer);
   PENDING_2FA.delete(pendingId);
@@ -133,11 +170,38 @@ export const saveSession = async (
   username: string,
   cookies: any[]
 ): Promise<void> => {
+  // Falha segura: sem chave de criptografia o erro sobe e nada é persistido.
+  const encoded = encodeCookies(cookies);
   const [session] = await InstagramSession.findOrCreate({
     where: { companyId },
-    defaults: { companyId, username, cookies, status: "active", lastLoginAt: new Date() } as any,
+    defaults: { companyId, username, cookies: encoded, status: "active", lastLoginAt: new Date() } as any,
   });
-  await session.update({ username, cookies, status: "active", lastLoginAt: new Date() });
+  await session.update({ username, cookies: encoded, status: "active", lastLoginAt: new Date() } as any);
+};
+
+// Lê os cookies persistidos suportando os dois formatos:
+// - { __enc: true, data }: descriptografa (erro claro se a chave estiver ausente);
+// - array plaintext legado: retorna como está e migra oportunisticamente para
+//   o formato criptografado; sem chave, mantém leitura plaintext (fallback read-only).
+const decodeStoredCookies = async (session: InstagramSession): Promise<any[] | null> => {
+  const stored = session.cookies as any;
+
+  if (stored && !Array.isArray(stored) && stored.__enc === true && typeof stored.data === "string") {
+    return JSON.parse(decryptString(stored.data));
+  }
+
+  if (Array.isArray(stored)) {
+    if (stored.length > 0) {
+      try {
+        await session.update({ cookies: encodeCookies(stored) } as any);
+      } catch (err: any) {
+        logger.warn(`[Instagram] Cookies legados em plaintext e criptografia indisponível: ${err.message}`);
+      }
+    }
+    return stored;
+  }
+
+  return null;
 };
 
 export const getSessionCookies = async (companyId: number): Promise<any[] | null> => {
@@ -146,7 +210,7 @@ export const getSessionCookies = async (companyId: number): Promise<any[] | null
   });
   if (!session) return null;
   await session.update({ lastUsedAt: new Date() });
-  return session.cookies as any[];
+  return decodeStoredCookies(session);
 };
 
 export const markSessionExpired = async (companyId: number): Promise<void> => {

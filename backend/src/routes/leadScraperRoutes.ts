@@ -1,12 +1,13 @@
 import { Router } from "express";
 import isAuth from "../middleware/isAuth";
+import { checkPermission } from "../middleware/checkPermission";
 import * as LeadScraperController from "../controllers/LeadScraperController";
 
 const routes = Router();
 
-routes.post("/lead-scraper/jobs", isAuth, LeadScraperController.startJob);
+routes.post("/lead-scraper/jobs", isAuth, checkPermission("contacts.import"), LeadScraperController.startJob);
 routes.get("/lead-scraper/jobs", isAuth, LeadScraperController.listJobs);
 routes.get("/lead-scraper/jobs/:id", isAuth, LeadScraperController.getJob);
-routes.post("/lead-scraper/jobs/:id/import", isAuth, LeadScraperController.importJobResults);
+routes.post("/lead-scraper/jobs/:id/import", isAuth, checkPermission("contacts.import"), LeadScraperController.importJobResults);
 
 export default routes;

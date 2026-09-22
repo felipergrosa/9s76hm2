@@ -39,6 +39,22 @@ services:
     networks:
       - whaticket-dev-net
 
+  # Sidecar opcional: Google Maps Scraper (gosom/google-maps-scraper, MIT)
+  # Em dev o backend roda no host — porta 8082 publicada p/ não conflitar com o backend (8080).
+  # No .env de dev: GMAPS_SCRAPER_URL=http://localhost:8082
+  gmaps-scraper:
+    image: gosom/google-maps-scraper:v1.17.4
+    container_name: whaticket-gmaps-scraper-dev
+    restart: unless-stopped
+    command: ["-data-folder", "/gmapsdata"]
+    ports:
+      - "8082:8080"
+    volumes:
+      - gmaps-playwright-cache-dev:/opt
+      - gmaps-data-dev:/gmapsdata
+    networks:
+      - whaticket-dev-net
+
 networks:
   whaticket-dev-net:
     driver: bridge
@@ -46,3 +62,5 @@ networks:
 volumes:
   postgres-data-dev:
   redis-data-dev:
+  gmaps-playwright-cache-dev:
+  gmaps-data-dev:

@@ -1,10 +1,15 @@
 import { Request, Response } from "express";
+import AppError from "../errors/AppError";
 import {
   loginInstagram,
   submitTwoFa,
   clearSession,
   getSessionStatus,
 } from "../services/Instagram/InstagramAuthService";
+
+// Propaga o statusCode de AppError (ex.: 403 de tenant errado no 2FA)
+const errStatus = (err: any, fallback: number): number =>
+  err instanceof AppError ? err.statusCode : fallback;
 
 export const connect = async (req: Request, res: Response): Promise<Response> => {
   try {
@@ -28,7 +33,7 @@ export const verify2fa = async (req: Request, res: Response): Promise<Response> 
     await submitTwoFa(companyId, pendingId, code.replace(/\D/g, ""));
     return res.json({ status: "success" });
   } catch (err: any) {
-    return res.status(400).json({ error: err.message });
+    return res.status(errStatus(err, 400)).json({ error: err.message });
   }
 };
 

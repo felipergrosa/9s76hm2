@@ -1,6 +1,6 @@
 import { head } from "lodash";
 import XLSX from "xlsx";
-import Contact from "../../models/Contact";
+import fs from "fs";
 import ContactCustomField from "../../models/ContactCustomField";
 import ContactList from "../../models/ContactList";
 import ContactListItem from "../../models/ContactListItem";
@@ -19,6 +19,7 @@ export interface LeadInput {
   email?: string;
   cnpj?: string;
   cnae?: string;
+  cnaeId?: string;
   porte?: string;
   segmento?: string;
   cidade?: string;
@@ -29,6 +30,10 @@ export interface LeadInput {
   instagram?: string;
   twitter?: string;
   linkedin?: string;
+  rating?: string;
+  situacao?: string;
+  naturezaJuridica?: string;
+  registro?: string;
 }
 
 interface Request {
@@ -42,11 +47,56 @@ interface Request {
 
 const PORTE_OPTIONS = ["MEI", "Pequena", "Média", "Grande"];
 
+// Fontes externas (Receita, scrapers de Maps) retornam o porte em formatos que
+// não batem com as opções do select ("MICRO EMPRESA", "EPP", "DEMAIS"...) e o
+// hook do ContactCustomField lançava AppError, derrubando o lead inteiro.
+// Normaliza para as opções válidas; valor desconhecido vira null e o campo
+// simplesmente não é criado — nunca se lança erro por valor de porte.
+const PORTE_MAP: Record<string, string> = {
+  "MEI": "MEI",
+  "MICRO EMPRESA": "Pequena",
+  "MICROEMPRESA": "Pequena",
+  "EPP": "Pequena",
+  "EMPRESA DE PEQUENO PORTE": "Pequena",
+  "PEQUENA": "Pequena",
+  "EMPRESA DE MÉDIO PORTE": "Média",
+  "EMPRESA DE MEDIO PORTE": "Média",
+  "MÉDIA": "Média",
+  "MEDIA": "Média",
+  "DEMAIS": "Grande",
+  "GRANDE": "Grande"
+};
+
+function normalizePorte(raw?: string): string | null {
+  if (!raw) return null;
+  const key = String(raw).trim().toUpperCase();
+  if (!key) return null;
+  return PORTE_MAP[key] || null;
+}
+
+// Aceita handle puro ("@user"), URL completa ou variações — retorna só o handle.
+function sanitizeInstagramHandle(raw?: string): string | undefined {
+  if (!raw) return undefined;
+  let handle = String(raw).trim();
+  if (!handle) return undefined;
+  const match = handle.match(/instagram\.com\/([^/?#]+)/i);
+  if (match) handle = match[1];
+  handle = handle.replace(/^@+/, "").replace(/\/+$/, "").trim();
+  return handle || undefined;
+}
+
 // Lê um arquivo XLSX/CSV no mesmo formato usado pelos demais imports do
 // sistema e mapeia colunas comuns de planilhas de lead-gen (CNPJ + Google
 // Maps) para o formato interno de LeadInput.
 function parseLeadsFile(file: Express.Multer.File): LeadInput[] {
   const workbook = XLSX.readFile(file.path);
+  // Remove o arquivo temporário criado pelo multer após a leitura
+  try {
+    fs.unlinkSync(file.path);
+  } catch {
+    // arquivo pode já ter sido removido — não bloqueia a importação
+  }
+
   const worksheet = head(Object.values(workbook.Sheets)) as any;
   const rows: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 0 });
 
@@ -66,13 +116,21 @@ function parseLeadsFile(file: Express.Multer.File): LeadInput[] {
     email: pick(row, "email", "Email", "e-mail", "E-mail"),
     cnpj: pick(row, "cnpj", "CNPJ"),
     cnae: pick(row, "cnae", "CNAE"),
+    cnaeId: pick(row, "cnaeId", "cnae_id", "CNAE código", "cnae_codigo"),
     porte: pick(row, "porte", "Porte"),
     segmento: pick(row, "segmento", "Segmento", "segment"),
     cidade: pick(row, "cidade", "Cidade", "city"),
     uf: pick(row, "uf", "UF", "estado"),
     endereco: pick(row, "endereco", "endereço", "Endereço", "address"),
     website: pick(row, "website", "Website", "site"),
-    googleMapsUrl: pick(row, "googleMapsUrl", "google_maps_url", "Google Maps", "maps")
+    googleMapsUrl: pick(row, "googleMapsUrl", "google_maps_url", "Google Maps", "maps"),
+    instagram: pick(row, "instagram", "Instagram", "insta"),
+    twitter: pick(row, "twitter", "Twitter"),
+    linkedin: pick(row, "linkedin", "LinkedIn"),
+    rating: pick(row, "rating", "avaliacao", "avaliação", "Avaliação", "nota"),
+    situacao: pick(row, "situacao", "situação", "Situação", "situacao_rf", "Situação RF"),
+    naturezaJuridica: pick(row, "naturezaJuridica", "natureza_juridica", "Natureza Jurídica"),
+    registro: pick(row, "registro", "Registro", "registro_profissional", "Registro profissional")
   }));
 }
 
@@ -83,14 +141,22 @@ function parseLeadsFile(file: Express.Multer.File): LeadInput[] {
 async function upsertTypedCustomFields(contactId: number, lead: LeadInput) {
   const entries: Array<{ name: string; value: string; type: string; options?: string[] }> = [];
 
+  const porte = normalizePorte(lead.porte);
+  const instagramHandle = sanitizeInstagramHandle(lead.instagram);
+
   if (lead.cnae) entries.push({ name: "CNAE", value: lead.cnae, type: "text" });
-  if (lead.porte) entries.push({ name: "Porte", value: lead.porte, type: "select", options: PORTE_OPTIONS });
+  if (lead.cnaeId) entries.push({ name: "CNAE código", value: lead.cnaeId, type: "text" });
+  if (porte) entries.push({ name: "Porte", value: porte, type: "select", options: PORTE_OPTIONS });
   if (lead.website) entries.push({ name: "Website", value: lead.website, type: "text" });
   if (lead.googleMapsUrl) entries.push({ name: "Google Maps", value: lead.googleMapsUrl, type: "text" });
   if (lead.endereco) entries.push({ name: "Endereço", value: lead.endereco, type: "text" });
-  if (lead.instagram) entries.push({ name: "Instagram", value: `https://instagram.com/${lead.instagram}`, type: "text" });
+  if (instagramHandle) entries.push({ name: "Instagram", value: `https://instagram.com/${instagramHandle}`, type: "text" });
   if (lead.twitter) entries.push({ name: "Twitter/X", value: `https://x.com/${lead.twitter}`, type: "text" });
   if (lead.linkedin) entries.push({ name: "LinkedIn", value: `https://linkedin.com/company/${lead.linkedin}`, type: "text" });
+  if (lead.rating) entries.push({ name: "Avaliação", value: lead.rating, type: "text" });
+  if (lead.situacao) entries.push({ name: "Situação RF", value: lead.situacao, type: "text" });
+  if (lead.naturezaJuridica) entries.push({ name: "Natureza Jurídica", value: lead.naturezaJuridica, type: "text" });
+  if (lead.registro) entries.push({ name: "Registro profissional", value: lead.registro, type: "text" });
 
   for (const entry of entries) {
     const [field] = await ContactCustomField.findOrCreate({
@@ -142,16 +208,32 @@ const ImportLeadsService = async ({
   let updated = 0;
   let skipped = 0;
   const errors: Array<{ index: number; reason: string }> = [];
+  const leadsSemTelefone: Array<{ name: string; reason: string }> = [];
+  // IDs dos contatos criados/atualizados — usados pelo export batch p/ ERP
+  const contactIds: number[] = [];
+  // Pré-dedupe do lote: mesma canonicalNumber repetida não reprocessa o update
+  const seenNumbers = new Set<string>();
 
   for (let i = 0; i < items.length; i++) {
     const lead = items[i];
     const rawNumber = String(lead.phone || lead.number || "").replace(/\D/g, "");
 
     if (!rawNumber || rawNumber.length < 8) {
+      const reason = "Telefone inválido ou ausente";
       skipped++;
-      errors.push({ index: i, reason: "Telefone inválido ou ausente" });
+      errors.push({ index: i, reason });
+      leadsSemTelefone.push({ name: lead.name || lead.razaoSocial || "", reason });
       continue;
     }
+
+    const { canonical: dedupeCanonical } = safeNormalizePhoneNumber(rawNumber);
+    const dedupeKey = dedupeCanonical || rawNumber;
+    if (seenNumbers.has(dedupeKey)) {
+      skipped++;
+      errors.push({ index: i, reason: "duplicado no lote" });
+      continue;
+    }
+    seenNumbers.add(dedupeKey);
 
     try {
       let number = rawNumber;
@@ -164,11 +246,6 @@ const ImportLeadsService = async ({
         }
       }
 
-      const { canonical } = safeNormalizePhoneNumber(number);
-      const existing = await Contact.findOne({
-        where: { companyId, canonicalNumber: canonical || number }
-      });
-
       const contact = await CreateOrUpdateContactServiceForImport({
         name: lead.name || lead.razaoSocial || number,
         number,
@@ -180,9 +257,11 @@ const ImportLeadsService = async ({
         region: lead.uf,
         fantasyName: lead.name,
         segment: lead.segmento,
+        instagram: sanitizeInstagramHandle(lead.instagram),
         silentMode: true
       });
 
+      contactIds.push(contact.id);
       await upsertTypedCustomFields(contact.id, lead);
 
       if (tag) {
@@ -211,8 +290,12 @@ const ImportLeadsService = async ({
         });
       }
 
-      if (existing) updated++;
-      else created++;
+      // created/updated inferido do retorno do service (createdAt === updatedAt
+      // em registro recém-criado) — elimina o findOne redundante por lead
+      const wasCreated =
+        new Date(contact.createdAt).getTime() === new Date(contact.updatedAt).getTime();
+      if (wasCreated) created++;
+      else updated++;
     } catch (error: any) {
       skipped++;
       errors.push({ index: i, reason: error?.message || "Erro desconhecido" });
@@ -226,6 +309,8 @@ const ImportLeadsService = async ({
     updated,
     skipped,
     errors,
+    leadsSemTelefone,
+    contactIds,
     contactListId: contactList?.id,
     tagId: tag?.id
   };

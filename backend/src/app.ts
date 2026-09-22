@@ -37,7 +37,20 @@ export const isBullAuth = (req, res, next) => {
 dotenvConfig();
 
 // Inicializar Sentry
-Sentry.init({ dsn: process.env.SENTRY_DSN });
+Sentry.init({
+  dsn: process.env.SENTRY_DSN,
+  // Sanitiza campos sensíveis do body capturado em erros (ex.: senha e cookies
+  // de sessão enviados em POST /instagram-session/connect).
+  beforeSend(event) {
+    const data = (event.request?.data ?? null) as any;
+    if (data && typeof data === "object") {
+      for (const field of ["password", "cookies", "sessionid"]) {
+        if (field in data) data[field] = "[Filtered]";
+      }
+    }
+    return event;
+  },
+});
 
 const app = express();
 

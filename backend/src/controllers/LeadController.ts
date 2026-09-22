@@ -1,5 +1,7 @@
 import { Request, Response } from "express";
 import ImportLeadsService from "../services/ContactServices/ImportLeadsService";
+import { enqueueLeadExport } from "../services/LeadScraper/LeadExportService";
+import logger from "../utils/logger";
 
 export const importLeads = async (req: Request, res: Response): Promise<Response> => {
   const { companyId } = req.user;
@@ -16,6 +18,17 @@ export const importLeads = async (req: Request, res: Response): Promise<Response
     tagName,
     validateNumber: validateNumber === true || validateNumber === "true"
   });
+
+  // Envia lote p/ ERP via n8n em background (importações manuais também sincronizam)
+  try {
+    await enqueueLeadExport({
+      companyId,
+      contactIds: result.contactIds || [],
+      source: "leads_import"
+    });
+  } catch (err: any) {
+    logger.warn(`[LeadController] Falha ao enfileirar export ERP: ${err?.message}`);
+  }
 
   return res.status(200).json(result);
 };

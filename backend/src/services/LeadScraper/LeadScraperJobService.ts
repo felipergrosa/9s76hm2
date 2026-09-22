@@ -1,3 +1,4 @@
+import { Op } from "sequelize";
 import LeadScraperJob, { ScraperFilters, ScraperResult } from "../../models/LeadScraperJob";
 import { scrapeGoogleMaps } from "./GoogleMapsScraperService";
 import { enrichCnpj } from "./CnpjEnricherService";
@@ -6,6 +7,9 @@ import { enrichLeadSocials } from "./SocialEnricherService";
 import { getSessionCookies, markSessionExpired } from "../Instagram/InstagramAuthService";
 import { InstagramBrowserSession } from "../Instagram/InstagramProfileService";
 import { scrapeFollowers } from "../Instagram/InstagramFollowersService";
+import { scrapeConselho } from "./ConselhoScraperService";
+import { isSidecarAvailable, scrapeViaSidecar } from "./GmapsSidecarService";
+import { isApifyConfigured, scrapeFollowersViaApify } from "../Instagram/InstagramApifyProvider";
 import logger from "../../utils/logger";
 
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
@@ -49,7 +53,8 @@ async function runSocialEnrichment(job: LeadScraperJob, results: ScraperResult[]
 
 export const createScraperJob = async (
   companyId: number,
-  source: "google_maps" | "cnpj" | "cnpj_search",
+  // "conselho" é fonte futura — aceita no contrato, sem branch de execução ainda
+  source: "google_maps" | "cnpj" | "cnpj_search" | "ig_followers" | "conselho",
   filters: ScraperFilters
 ) => {
   return LeadScraperJob.create({
@@ -64,17 +69,29 @@ export const createScraperJob = async (
 };
 
 export const runScraperJob = async (jobId: number) => {
-  const job = await LeadScraperJob.findByPk(jobId);
-  if (!job) return;
-
-  await job.update({ status: "running", progress: 0 });
-
+  // Referência externa p/ o catch conseguir persistir o status de erro
+  let jobRef: LeadScraperJob | null = null;
   try {
+    const job = await LeadScraperJob.findByPk(jobId);
+    if (!job) return;
+    jobRef = job;
+
+    // Idempotência: só executa se ainda estiver pendente (evita re-run em retry da fila)
+    if (job.status !== "pending") return;
+
+    await job.update({ status: "running", progress: 0 });
+
     if (job.source === "google_maps") {
       const { keyword = "", city = "", state = "", maxResults = 50 } = job.filters;
       const cityQuery = state ? `${city} ${state}` : city;
 
-      const results = await scrapeGoogleMaps(
+      // Sidecar gosom/google-maps-scraper quando GMAPS_SCRAPER_URL está configurado
+      // e o serviço responde; senão cai para o scraper Puppeteer local.
+      const useSidecar = await isSidecarAvailable();
+      const scrape = useSidecar ? scrapeViaSidecar : scrapeGoogleMaps;
+      logger.info(`[LeadScraperJob] jobId=${job.id} google_maps via ${useSidecar ? "sidecar" : "puppeteer"}`);
+
+      const results = await scrape(
         keyword,
         cityQuery,
         Math.min(maxResults, 200),
@@ -115,13 +132,37 @@ export const runScraperJob = async (jobId: number) => {
 
     } else if (job.source === "ig_followers") {
       const { igTargetHandle = "", maxResults = 500 } = job.filters;
-      const cookies = await getSessionCookies(job.companyId);
-      if (!cookies) throw new Error("Conta Instagram não configurada. Conecte uma conta em Captador de Leads → 📸 Conectar Instagram.");
 
-      const results = await scrapeFollowers(
-        igTargetHandle,
-        cookies,
-        maxResults,
+      let results: ScraperResult[];
+      if (isApifyConfigured()) {
+        // Provider externo: não usa a sessão Instagram do cliente (sem risco de ban)
+        results = await scrapeFollowersViaApify(
+          igTargetHandle,
+          maxResults,
+          async (current, total) => {
+            await job.update({ progress: Math.round((current / total) * 85) });
+          }
+        );
+      } else {
+        const cookies = await getSessionCookies(job.companyId);
+        if (!cookies) throw new Error("Conta Instagram não configurada. Conecte uma conta em Captador de Leads → 📸 Conectar Instagram.");
+
+        results = await scrapeFollowers(
+          igTargetHandle,
+          cookies,
+          maxResults,
+          async (current, total) => {
+            await job.update({ progress: Math.round((current / total) * 85) });
+          }
+        );
+      }
+      await job.update({ results, totalFound: results.length, progress: 90 });
+      await runSocialEnrichment(job, results);
+      await job.update({ status: "done", progress: 100 });
+
+    } else if (job.source === "conselho") {
+      const results = await scrapeConselho(
+        job.filters,
         async (current, total) => {
           await job.update({ progress: Math.round((current / total) * 85) });
         }
@@ -129,9 +170,28 @@ export const runScraperJob = async (jobId: number) => {
       await job.update({ results, totalFound: results.length, progress: 90 });
       await runSocialEnrichment(job, results);
       await job.update({ status: "done", progress: 100 });
+
+    } else {
+      await job.update({ status: "error", errorMessage: "source desconhecido" });
     }
   } catch (err: any) {
     logger.error(`[LeadScraperJob] jobId=${jobId} error: ${err.message}`);
-    await job.update({ status: "error", errorMessage: err.message, progress: 0 });
+    if (jobRef) {
+      await jobRef.update({ status: "error", errorMessage: err.message, progress: 0 }).catch((e: any) => {
+        logger.error(`[LeadScraperJob] jobId=${jobId} falha ao persistir status de erro: ${e.message}`);
+      });
+    }
+  }
+};
+
+// Recovery no boot: jobs presos em pending/running há mais de 10 min viram "error"
+export const recoverOrphanScraperJobs = async (): Promise<void> => {
+  const cutoff = new Date(Date.now() - 10 * 60 * 1000);
+  const [affected] = await LeadScraperJob.update(
+    { status: "error", errorMessage: "interrompido por restart do servidor" },
+    { where: { status: { [Op.in]: ["pending", "running"] }, updatedAt: { [Op.lt]: cutoff } } }
+  );
+  if (affected > 0) {
+    logger.warn(`[LeadScraperJob] ${affected} job(s) órfão(s) marcado(s) como error após restart`);
   }
 };

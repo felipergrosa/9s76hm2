@@ -28,6 +28,10 @@ export interface ScraperResult {
   twitter?: string;
   linkedin?: string;
   instagramPhone?: string;
+  googleMapsUrl?: string;
+  // conselho profissional (ex.: CAU)
+  registro?: string;      // número do registro profissional no conselho
+  registroTipo?: string;  // tipo do registro/conselho, ex.: "CAU"
   imported?: boolean;
 }
 
@@ -49,6 +53,9 @@ export interface ScraperFilters {
   maxResults?: number;
   // ig_followers
   igTargetHandle?: string;
+  // conselho (conselhos profissionais: CAU, futuramente CREA/CRM...)
+  conselho?: "cau";
+  conselhoTipo?: "profissional" | "empresa";
 }
 
 @Table
@@ -64,7 +71,7 @@ class LeadScraperJob extends Model<LeadScraperJob> {
   company: Company;
 
   @Column({ type: DataType.STRING, allowNull: false })
-  source: "google_maps" | "cnpj" | "cnpj_search" | "ig_followers";
+  source: "google_maps" | "cnpj" | "cnpj_search" | "ig_followers" | "conselho";
 
   @Column({ type: DataType.ENUM("pending", "running", "done", "error"), defaultValue: "pending" })
   status: "pending" | "running" | "done" | "error";
@@ -83,6 +90,16 @@ class LeadScraperJob extends Model<LeadScraperJob> {
 
   @Column(DataType.TEXT)
   errorMessage: string;
+
+  // Status do envio em lote dos contatos importados para o ERP (via n8n)
+  @Column(DataType.STRING)
+  erpSyncStatus: "pending" | "sent" | "failed" | null;
+
+  @Column(DataType.DATE)
+  erpSyncedAt: Date | null;
+
+  @Column(DataType.TEXT)
+  erpSyncError: string | null;
 
   @CreatedAt
   createdAt: Date;

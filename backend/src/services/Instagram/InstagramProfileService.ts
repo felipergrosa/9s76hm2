@@ -1,5 +1,6 @@
 import puppeteer from "../../libs/puppeteerStealth";
 import logger from "../../utils/logger";
+import { decryptString } from "../../utils/crypto";
 
 const LAUNCH_ARGS = [
   "--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage",
@@ -26,13 +27,19 @@ export class InstagramBrowserSession {
     this.browser = browser;
   }
 
-  static async create(cookies: any[]): Promise<InstagramBrowserSession> {
+  static async create(cookies: any[] | { __enc: boolean; data: string }): Promise<InstagramBrowserSession> {
     const browser = await (puppeteer as any).launch({ headless: true, args: LAUNCH_ARGS });
+
+    // Aceita array de cookies ou o formato criptografado persistido no banco
+    // ({ __enc: true, data: "ENC::..." }), caso um caller repasse session.cookies cru.
+    const plainCookies: any[] = !Array.isArray(cookies) && (cookies as any)?.__enc
+      ? JSON.parse(decryptString((cookies as any).data))
+      : (cookies as any[]);
 
     // Seed cookies on instagram.com domain before any profile visit
     const page = await browser.newPage();
     await page.goto("https://www.instagram.com/", { waitUntil: "domcontentloaded", timeout: 15000 });
-    const domainCookies = cookies.map((c: any) => ({
+    const domainCookies = plainCookies.map((c: any) => ({
       ...c,
       domain: c.domain || ".instagram.com",
     }));

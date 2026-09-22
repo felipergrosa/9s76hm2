@@ -311,7 +311,16 @@ export const queueMonitor = new BullQueue("QueueMonitor", connection);
 export const validateWhatsappContactsQueue = new BullQueue("ValidateWhatsappContacts", connection);
 export const sessionWindowRenewalQueue = new BullQueue(`${process.env.DB_NAME}-SessionWindowRenewal`, connection);
 export const contactAvatarQueue = new BullQueue("ContactAvatarQueue", connection);
-export const leadScraperQueue = new BullQueue("LeadScraperQueue", connection);
+// Jobs longos (Puppeteer): lock/stall tolerantes a execuções de vários minutos
+export const leadScraperQueue = new BullQueue("LeadScraperQueue", connection, {
+  settings: {
+    stalledInterval: 300000,
+    maxStalledCount: 1,
+    lockDuration: 600000
+  }
+});
+// Envio em lote de leads importados para o ERP (webhook n8n)
+export const leadExportQueue = new BullQueue("LeadExportQueue", connection);
 
 // Fila para mensagens Baileys (concurrency=1 - protege WebSocket único)
 export const baileysMessageQueue = new BullQueue("BaileysMessageQueue", connection, {
@@ -3307,6 +3316,11 @@ export async function startQueueProcess() {
   leadScraperQueue.process("RunJob", 1, async (job) => {
     const { runScraperJob } = await import("./services/LeadScraper/LeadScraperJobService");
     return runScraperJob(job.data.jobId);
+  });
+
+  leadExportQueue.process("ExportBatch", 2, async (job) => {
+    const { processLeadExport } = await import("./services/LeadScraper/LeadExportService");
+    return processLeadExport(job.data);
   });
 
   scheduleMonitor.add(

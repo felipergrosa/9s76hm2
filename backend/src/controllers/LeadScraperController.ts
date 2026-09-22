@@ -1,16 +1,67 @@
 import { Request, Response } from "express";
+import { Op } from "sequelize";
 import LeadScraperJob from "../models/LeadScraperJob";
 import { createScraperJob, runScraperJob } from "../services/LeadScraper/LeadScraperJobService";
 import ImportLeadsService from "../services/ContactServices/ImportLeadsService";
+import { leadScraperQueue } from "../queues";
+import logger from "../utils/logger";
+
+const VALID_SOURCES = ["google_maps", "cnpj", "cnpj_search", "ig_followers", "conselho"];
+const IG_HANDLE_REGEX = /^[a-zA-Z0-9._]{1,30}$/;
 
 export const startJob = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { companyId } = req.user;
     const { source, filters } = req.body;
-    if (!source || !filters) return res.status(400).json({ error: "source e filters são obrigatórios" });
+
+    if (!VALID_SOURCES.includes(source)) {
+      return res.status(400).json({ error: "source inválido" });
+    }
+    if (!filters || typeof filters !== "object" || Array.isArray(filters)) {
+      return res.status(400).json({ error: "filters deve ser um objeto" });
+    }
+
+    if (filters.maxResults !== undefined) {
+      const n = Number(filters.maxResults);
+      if (!Number.isFinite(n)) return res.status(400).json({ error: "maxResults deve ser um inteiro" });
+      filters.maxResults = Math.min(Math.max(Math.trunc(n), 1), 5000);
+    }
+    if (filters.cnpjs !== undefined) {
+      if (!Array.isArray(filters.cnpjs)) return res.status(400).json({ error: "cnpjs deve ser um array" });
+      if (filters.cnpjs.length > 500) return res.status(400).json({ error: "máximo de 500 CNPJs por job" });
+    }
+    if (filters.igTargetHandle !== undefined) {
+      const handle = String(filters.igTargetHandle).trim().replace(/^@+/, "");
+      if (!IG_HANDLE_REGEX.test(handle)) return res.status(400).json({ error: "igTargetHandle inválido" });
+      filters.igTargetHandle = handle;
+    }
+
+    // Anti-concorrência: apenas 1 job ativo por empresa
+    const active = await LeadScraperJob.findOne({
+      where: { companyId, status: { [Op.in]: ["pending", "running"] } },
+      attributes: ["id"]
+    });
+    if (active) return res.status(409).json({ error: "Já existe um job em andamento para esta empresa" });
+
     const job = await createScraperJob(companyId, source, filters);
-    // Fire-and-forget: run in background without blocking HTTP response
-    setImmediate(() => runScraperJob(job.id));
+
+    try {
+      await leadScraperQueue.add("RunJob", { jobId: job.id }, {
+        jobId: String(job.id),
+        attempts: 1,
+        removeOnComplete: true,
+        removeOnFail: false
+      });
+    } catch (qErr: any) {
+      // Fallback se a fila/Redis estiver indisponível: executa em background como antes
+      logger.warn(`[LeadScraper] fila indisponível (${qErr?.message}), executando job ${job.id} via setImmediate`);
+      setImmediate(() => {
+        runScraperJob(job.id).catch((e: any) =>
+          logger.error(`[LeadScraper] job ${job.id} falhou: ${e?.message}`)
+        );
+      });
+    }
+
     return res.status(201).json(job);
   } catch (err: any) {
     return res.status(500).json({ error: err.message || "Erro ao iniciar job" });
@@ -20,13 +71,25 @@ export const startJob = async (req: Request, res: Response): Promise<Response> =
 export const listJobs = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { companyId } = req.user;
-    const jobs = await LeadScraperJob.findAll({
+    const attributes = ["id", "source", "status", "progress", "totalFound", "filters", "createdAt"];
+    const order: any = [["createdAt", "DESC"]];
+
+    // Retrocompatibilidade: sem ?page retorna array plano (formato esperado pelo frontend atual)
+    if (req.query.page === undefined) {
+      const jobs = await LeadScraperJob.findAll({ where: { companyId }, attributes, order, limit: 30 });
+      return res.json(jobs);
+    }
+
+    const page = Math.max(1, parseInt(String(req.query.page), 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit), 10) || 30));
+    const { rows, count } = await LeadScraperJob.findAndCountAll({
       where: { companyId },
-      attributes: ["id", "source", "status", "progress", "totalFound", "filters", "createdAt"],
-      order: [["createdAt", "DESC"]],
-      limit: 30
+      attributes,
+      order,
+      limit,
+      offset: (page - 1) * limit
     });
-    return res.json(jobs);
+    return res.json({ jobs: rows, count, pages: Math.ceil(count / limit) });
   } catch (err: any) {
     return res.status(500).json({ error: err.message || "Erro ao listar jobs" });
   }
@@ -49,11 +112,29 @@ export const importJobResults = async (req: Request, res: Response): Promise<Res
     const { indices, contactListName, tagName } = req.body;
     const job = await LeadScraperJob.findOne({ where: { id: req.params.id, companyId } });
     if (!job) return res.status(404).json({ error: "Job não encontrado" });
+    if (job.status !== "done") return res.status(409).json({ error: "job ainda não concluído" });
+
+    let indexSet: Set<number> | null = null;
+    if (indices !== undefined && indices !== null) {
+      if (!Array.isArray(indices) || !indices.every((i: any) => Number.isInteger(i) && i >= 0)) {
+        return res.status(400).json({ error: "indices deve ser um array de inteiros" });
+      }
+      indexSet = new Set(indices);
+    }
+    if (contactListName !== undefined && (typeof contactListName !== "string" || contactListName.length > 100)) {
+      return res.status(400).json({ error: "contactListName inválido (máx. 100 caracteres)" });
+    }
+    if (tagName !== undefined && (typeof tagName !== "string" || tagName.length > 100)) {
+      return res.status(400).json({ error: "tagName inválido (máx. 100 caracteres)" });
+    }
 
     const allResults = job.results || [];
-    const selected = indices?.length
-      ? allResults.filter((_: any, i: number) => indices.includes(i))
-      : allResults;
+    const selectedIdx: number[] = [];
+    const selected = allResults.filter((_: any, i: number) => {
+      const ok = indexSet ? indexSet.has(i) : true;
+      if (ok) selectedIdx.push(i);
+      return ok;
+    });
 
     const leads = selected.map((r: any) => ({
       name: r.nomeFantasia || r.name || "",
@@ -70,9 +151,38 @@ export const importJobResults = async (req: Request, res: Response): Promise<Res
       instagram: r.instagram || "",
       twitter: r.twitter || "",
       linkedin: r.linkedin || "",
+      // Campos opcionais consumidos pelo ImportLeadsService
+      rating: r.rating || "",
+      situacao: r.situacao || "",
+      naturezaJuridica: r.naturezaJuridica || "",
+      cnaeId: r.cnaeId || "",
+      registro: r.registro || "",
+      segmento: r.category || r.cnaeDescricao || "",
+      googleMapsUrl: r.googleMapsUrl || ""
     }));
 
     const result = await ImportLeadsService({ companyId, leads, contactListName, tagName });
+
+    // Envia lote p/ ERP via n8n em background (sem bloquear a resposta)
+    try {
+      const { enqueueLeadExport } = await import("../services/LeadScraper/LeadExportService");
+      await enqueueLeadExport({
+        companyId,
+        contactIds: result.contactIds || [],
+        jobId: job.id,
+        source: `lead_scraper:${job.source}`
+      });
+    } catch (err: any) {
+      logger.warn(`[LeadScraper] Falha ao enfileirar export ERP: ${err?.message}`);
+    }
+
+    // Marca os índices importados e persiste no job (array novo p/ Sequelize detectar mudança no JSON)
+    const results = [...allResults];
+    selectedIdx.forEach(i => {
+      results[i] = { ...results[i], imported: true };
+    });
+    await job.update({ results });
+
     return res.json(result);
   } catch (err: any) {
     return res.status(500).json({ error: err.message || "Erro ao importar leads" });

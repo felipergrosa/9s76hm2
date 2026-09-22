@@ -173,6 +173,14 @@ const server = app.listen(port, async () => {
   // Isso evita que o servidor ache que há "outra instância" rodando após um restart
   await clearSessionLocks();
 
+  // Marca jobs de scraping órfãos (pending/running há >10min) como error após restart
+  try {
+    const { recoverOrphanScraperJobs } = await import("./services/LeadScraper/LeadScraperJobService");
+    await recoverOrphanScraperJobs();
+  } catch (e: any) {
+    logger.error(`[Server] Falha ao recuperar jobs órfãos do LeadScraper: ${e?.message || e}`);
+  }
+
   const companies = await Company.findAll({
     where: { status: true },
     attributes: ["id"]

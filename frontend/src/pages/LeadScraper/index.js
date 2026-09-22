@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import Autocomplete from "@material-ui/lab/Autocomplete";
 import CNAES from "../../data/cnaeList";
 import NJS from "../../data/naturezaJuridicaList";
+import SEGMENT_PRESETS from "../../data/leadSegmentPresets";
 import {
   Box, Paper, Typography, Tabs, Tab, TextField, Button, Slider,
   Select, MenuItem, FormControl, InputLabel, LinearProgress,
@@ -21,6 +22,8 @@ import {
   FilterList as FilterIcon,
   PeopleOutlined as FollowersIcon,
   HelpOutline as HelpIcon,
+  Instagram as InstagramIcon,
+  AccountBalanceOutlined as ConselhoIcon,
 } from "@material-ui/icons";
 import { toast } from "react-toastify";
 import api from "../../services/api";
@@ -45,6 +48,15 @@ const SOCIAL_LABELS = { instagram: "IG", twitter: "X", linkedin: "LI" };
 const STATES = [
   "AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT",
   "PA","PB","PE","PI","PR","RJ","RN","RO","RR","RS","SC","SE","SP","TO",
+];
+
+// Somente CAU habilitado por ora; demais conselhos entram como "em breve"
+const CONSELHOS = [
+  { value: "cau",    label: "CAU — Arquitetura e Urbanismo",        disabled: false },
+  { value: "confea", label: "CONFEA/CREA — Engenharia (em breve)",  disabled: true },
+  { value: "cfm",    label: "CFM/CRM — Medicina (em breve)",        disabled: true },
+  { value: "cro",    label: "CRO — Odontologia (em breve)",         disabled: true },
+  { value: "oab",    label: "OAB — Advocacia (em breve)",           disabled: true },
 ];
 
 const useStyles = makeStyles(theme => ({
@@ -236,6 +248,21 @@ export default function LeadScraper() {
   const [igTargetHandle, setIgTargetHandle] = useState("");
   const [igMaxFollowers, setIgMaxFollowers] = useState(500);
 
+  // conselho state
+  const [consConselho, setConsConselho] = useState("cau");
+  const [consTipo, setConsTipo] = useState("profissional"); // "profissional" | "empresa"
+  const [consUf, setConsUf] = useState("");
+  const [consMunicipio, setConsMunicipio] = useState("");
+  const [consKeyword, setConsKeyword] = useState("");
+  const [consMaxResults, setConsMaxResults] = useState(100);
+
+  // atalhos de segmento (Maps preenche keyword, RF preenche CNAE)
+  const [segMaps, setSegMaps] = useState(null);
+  const [segRf, setSegRf] = useState(null);
+
+  // último job visto pelo poll — evita zerar seleção a cada tick
+  const lastPollRef = useRef({ jobId: null, status: null });
+
   // CNPJ discovery mode
   const [cnpjMode, setCnpjMode] = useState("enrich"); // "enrich" | "search"
   const [srKeyword, setSrKeyword] = useState("");
@@ -251,7 +278,8 @@ export default function LeadScraper() {
   const loadJobs = useCallback(async () => {
     try {
       const { data } = await api.get("/lead-scraper/jobs");
-      setJobs(data);
+      // backend pode responder { jobs, count } quando paginado — compat com array
+      setJobs(Array.isArray(data) ? data : (data?.jobs || []));
     } catch {}
   }, []);
 
@@ -270,7 +298,12 @@ export default function LeadScraper() {
       try {
         const { data } = await api.get(`/lead-scraper/jobs/${jobId}`);
         setActiveJob(data);
-        setSelectedIndices([]);
+        const prev = lastPollRef.current;
+        // zera a seleção apenas quando o job muda ou conclui pela 1ª vez — nunca a cada tick
+        if (prev.jobId !== data.id || (prev.status !== "done" && data.status === "done")) {
+          setSelectedIndices([]);
+        }
+        lastPollRef.current = { jobId: data.id, status: data.status };
         if (data.status === "done" || data.status === "error") {
           clearInterval(pollRef.current);
           pollRef.current = null;
@@ -280,21 +313,26 @@ export default function LeadScraper() {
     }, 2500);
   }, [loadJobs]);
 
-  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
+  useEffect(() => () => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+  }, []);
 
   const startMapsJob = async () => {
     if (!keyword.trim() || !city.trim()) { toast.warning("Preencha a palavra-chave e a cidade."); return; }
     setLoading(true);
     try {
       const { data } = await api.post("/lead-scraper/jobs", {
-        source: "google_maps", filters: { keyword, city, state, maxResults }
+        source: "google_maps",
+        filters: { keyword: keyword.trim(), city: city.trim(), state, maxResults }
       });
       setActiveJob(data);
       setSelectedIndices([]);
       toast.success("Busca iniciada! Acompanhe o progresso ao lado.");
       startPoll(data.id);
       loadJobs();
-    } catch { toast.error("Erro ao iniciar busca."); }
+    } catch (err) {
+      toast.error(err?.response?.data?.error || "Erro ao iniciar busca.");
+    }
     finally { setLoading(false); }
   };
 
@@ -309,7 +347,9 @@ export default function LeadScraper() {
       toast.success(`Enriquecendo ${cnpjs.length} CNPJs…`);
       startPoll(data.id);
       loadJobs();
-    } catch { toast.error("Erro ao iniciar enriquecimento."); }
+    } catch (err) {
+      toast.error(err?.response?.data?.error || "Erro ao iniciar enriquecimento.");
+    }
     finally { setLoading(false); }
   };
 
@@ -323,7 +363,7 @@ export default function LeadScraper() {
     try {
       const { data } = await api.post("/lead-scraper/jobs", {
         source: "ig_followers",
-        filters: { igTargetHandle: igTargetHandle.replace(/^@/, ""), maxResults: igMaxFollowers },
+        filters: { igTargetHandle: igTargetHandle.trim().replace(/^@+/, ""), maxResults: igMaxFollowers },
       });
       setActiveJob(data);
       setSelectedIndices([]);
@@ -365,6 +405,33 @@ export default function LeadScraper() {
     finally { setLoading(false); }
   };
 
+  const startConselhoJob = async () => {
+    if (!consUf && !consMunicipio.trim() && !consKeyword.trim()) {
+      toast.warning("Informe ao menos: UF, município ou nome.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const filters = {
+        conselho: consConselho,
+        conselhoTipo: consTipo,
+        uf: consUf || undefined,
+        municipio: consMunicipio.trim() || undefined,
+        keyword: consKeyword.trim() || undefined,
+        maxResults: consMaxResults,
+      };
+      const { data } = await api.post("/lead-scraper/jobs", { source: "conselho", filters });
+      setActiveJob(data);
+      setSelectedIndices([]);
+      toast.success("Busca no conselho iniciada! Acompanhe o progresso ao lado.");
+      startPoll(data.id);
+      loadJobs();
+    } catch (err) {
+      toast.error(err?.response?.data?.error || "Erro ao iniciar busca no conselho.");
+    }
+    finally { setLoading(false); }
+  };
+
   const importSelected = async () => {
     if (!activeJob?.id) return;
     const indices = selectedIndices.length
@@ -376,7 +443,18 @@ export default function LeadScraper() {
       const { data } = await api.post(`/lead-scraper/jobs/${activeJob.id}/import`, {
         indices, contactListName: contactListName || undefined, tagName: tagName || undefined,
       });
-      toast.success(`✓ ${data.created} criados · ${data.updated} atualizados`);
+      const skipped = data.skipped || 0;
+      const ignorados = [
+        ...(Array.isArray(data.errors) ? data.errors : []),
+        ...(Array.isArray(data.leadsSemTelefone) ? data.leadsSemTelefone : []),
+      ];
+      toast.success(
+        `✓ ${data.created || 0} criados · ${data.updated || 0} atualizados${skipped ? ` · ${skipped} ignorados` : ""}`
+      );
+      if (ignorados.length) {
+        console.warn("[LeadScraper] Leads ignorados na importação:", ignorados);
+        toast.info(`${ignorados.length} lead(s) ignorados — motivos no console (F12)`);
+      }
     } catch { toast.error("Erro ao importar leads."); }
     finally { setLoading(false); }
   };
@@ -393,7 +471,14 @@ export default function LeadScraper() {
     const { data } = await api.get(`/lead-scraper/jobs/${j.id}`);
     setActiveJob(data);
     setSelectedIndices([]);
-    if (data.status === "running" || data.status === "pending") startPoll(data.id);
+    lastPollRef.current = { jobId: data.id, status: data.status };
+    if (data.status === "running" || data.status === "pending") {
+      startPoll(data.id);
+    } else if (pollRef.current) {
+      // job finalizado selecionado: encerra poll antigo para não sobrescrever a view
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
   };
 
   const results = activeJob?.results || [];
@@ -463,6 +548,7 @@ export default function LeadScraper() {
               <Tab label={<Box display="flex" alignItems="center" style={{ gap: 6 }}><MapsIcon fontSize="small" /> Google Maps</Box>} />
               <Tab label={<Box display="flex" alignItems="center" style={{ gap: 6 }}><CnpjIcon fontSize="small" /> CNPJ / Receita Federal</Box>} />
               <Tab label={<Box display="flex" alignItems="center" style={{ gap: 6 }}><FollowersIcon fontSize="small" /> Seguidores IG</Box>} />
+              <Tab label={<Box display="flex" alignItems="center" style={{ gap: 6 }}><ConselhoIcon fontSize="small" /> Conselhos</Box>} />
             </Tabs>
 
             <TabPanel value={tab} index={0}>
@@ -471,6 +557,19 @@ export default function LeadScraper() {
                   label="Palavra-chave" placeholder="academias de ginástica"
                   value={keyword} onChange={e => setKeyword(e.target.value)}
                   variant="outlined" size="small" style={{ flex: 2, minWidth: 180 }}
+                />
+                <Autocomplete
+                  options={SEGMENT_PRESETS}
+                  getOptionLabel={opt => opt.label}
+                  value={segMaps}
+                  onChange={(_, val) => { setSegMaps(val); if (val) setKeyword(val.mapsKeyword); }}
+                  renderInput={params => (
+                    <TextField {...params} label="Segmento (atalho)" variant="outlined" size="small"
+                      placeholder="ex: Odontologia" />
+                  )}
+                  noOptionsText="Nenhum segmento"
+                  clearOnEscape
+                  style={{ flex: 2, minWidth: 180 }}
                 />
                 <TextField
                   label="Cidade" placeholder="São Paulo"
@@ -611,6 +710,24 @@ export default function LeadScraper() {
                     className={classes.fullRow}
                   />
 
+                  {/* Segmento — atalho que preenche o CNAE */}
+                  <Autocomplete
+                    options={SEGMENT_PRESETS}
+                    getOptionLabel={opt => opt.label}
+                    value={segRf}
+                    onChange={(_, val) => {
+                      setSegRf(val);
+                      const digits = val?.cnae?.replace(/\D/g, "");
+                      setSrCnae(digits ? CNAES.find(o => o.code === digits) || null : null);
+                    }}
+                    renderInput={params => (
+                      <TextField {...params} label="Segmento (atalho)" variant="outlined" size="small"
+                        placeholder="ex: Restaurantes" helperText="Preenche o CNAE automaticamente" />
+                    )}
+                    noOptionsText="Nenhum segmento"
+                    clearOnEscape
+                  />
+
                   {/* CNAE Autocomplete */}
                   <Autocomplete
                     options={CNAES}
@@ -650,11 +767,11 @@ export default function LeadScraper() {
                   <FormControl variant="outlined" size="small">
                     <InputLabel>Situação</InputLabel>
                     <Select value={srSituacao} onChange={e => setSrSituacao(e.target.value)} label="Situação">
+                      <MenuItem value="">Todas</MenuItem>
                       <MenuItem value="ATIVA">Ativa</MenuItem>
                       <MenuItem value="SUSPENSA">Suspensa</MenuItem>
                       <MenuItem value="INAPTA">Inapta</MenuItem>
                       <MenuItem value="BAIXADA">Baixada</MenuItem>
-                      <MenuItem value="">Todas</MenuItem>
                     </Select>
                   </FormControl>
 
@@ -719,12 +836,11 @@ export default function LeadScraper() {
                         <strong>Como funciona — Pesquisa Avançada de CNPJs</strong>
                         <ol>
                           <li><strong>Pré-requisito:</strong> obtenha seu token gratuito em <code>brasil.io/auth/tokens/</code> (login com Google ou e-mail) e adicione no arquivo <code>.env</code> do servidor: <code>BRASILIO_TOKEN=seu_token_aqui</code></li>
-                          <li>Informe ao menos um filtro: <strong>CNAE</strong>, <strong>UF</strong> ou <strong>Município</strong>. Combinar filtros reduz o resultado e melhora a qualidade dos leads.</li>
+                          <li>Informe ao menos um filtro: <strong>palavra-chave no nome</strong>, <strong>UF</strong> ou <strong>município</strong>. Combinar filtros reduz o resultado e melhora a qualidade dos leads.</li>
                           <li><strong>CNAE</strong>: código de 7 dígitos da atividade principal. Ex: <code>4711301</code> = supermercados. Consulte em <code>cnae.ibge.gov.br</code>.</li>
                           <li><strong>Situação</strong>: use "Ativa" para empresas em funcionamento. "Baixada" e "Inapta" geralmente não são leads qualificados.</li>
-                          <li><strong>Tipo Matriz/Filial</strong>: "Apenas Matriz" evita duplicatas para redes com várias unidades.</li>
                           <li>Marque <strong>"Apenas com telefone"</strong> ou <strong>"Apenas com e-mail"</strong> para filtrar leads com dados de contato já cadastrados na Receita Federal.</li>
-                          <li>Ajuste o <strong>máximo de resultados</strong> (50–1000). Cada resultado consome uma chamada à API do brasil.io.</li>
+                          <li>Ajuste o <strong>máximo de resultados</strong> (10–500). Cada resultado consome uma chamada à API do brasil.io.</li>
                           <li>Após a coleta, o sistema enriquece automaticamente com <strong>Instagram, X e LinkedIn</strong> de cada empresa.</li>
                         </ol>
                         <Box mt={1} style={{ fontSize: 12, opacity: 0.8 }}>
@@ -807,6 +923,90 @@ export default function LeadScraper() {
                 </Collapse>
               </Box>
             </TabPanel>
+
+            <TabPanel value={tab} index={3}>
+              <Box className={classes.searchGrid}>
+                <Box className={classes.infoNote}>
+                  Busca registros em <strong>conselhos de classe</strong>.
+                  O <strong>CAU</strong> já está disponível; CONFEA, CFM, CRO e OAB chegam em breve.
+                  Retorna nome, número de registro, situação e município/UF.
+                </Box>
+
+                <FormControl variant="outlined" size="small">
+                  <InputLabel>Conselho</InputLabel>
+                  <Select
+                    value={consConselho}
+                    onChange={e => setConsConselho(e.target.value)}
+                    label="Conselho"
+                  >
+                    {CONSELHOS.map(c => (
+                      <MenuItem key={c.value} value={c.value} disabled={c.disabled}>
+                        {c.label}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+
+                <Box className={classes.modeToggle} style={{ marginTop: 0, alignSelf: "center" }}>
+                  <Button
+                    className={`${classes.modeBtn} ${consTipo === "profissional" ? classes.modeBtnActive : ""}`}
+                    onClick={() => setConsTipo("profissional")}
+                  >
+                    Profissional
+                  </Button>
+                  <Button
+                    className={`${classes.modeBtn} ${consTipo === "empresa" ? classes.modeBtnActive : ""}`}
+                    onClick={() => setConsTipo("empresa")}
+                  >
+                    Empresa
+                  </Button>
+                </Box>
+
+                <FormControl variant="outlined" size="small">
+                  <InputLabel>UF</InputLabel>
+                  <Select value={consUf} onChange={e => setConsUf(e.target.value)} label="UF">
+                    <MenuItem value="">Todas</MenuItem>
+                    {STATES.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}
+                  </Select>
+                </FormControl>
+
+                <TextField
+                  label="Município" placeholder="ex: São Paulo"
+                  value={consMunicipio} onChange={e => setConsMunicipio(e.target.value)}
+                  variant="outlined" size="small"
+                />
+
+                <TextField
+                  label="Nome (opcional)" placeholder="ex: Silva Arquitetura"
+                  value={consKeyword} onChange={e => setConsKeyword(e.target.value)}
+                  variant="outlined" size="small"
+                  className={classes.fullRow}
+                  helperText="Informe ao menos UF, município ou nome para pesquisar"
+                />
+
+                <Box className={classes.fullRow}>
+                  <Typography variant="body2" style={{ marginBottom: 6 }}>
+                    Máximo de resultados: <strong>{consMaxResults}</strong>
+                  </Typography>
+                  <Slider
+                    value={consMaxResults} onChange={(_, v) => setConsMaxResults(v)}
+                    min={10} max={200} step={10}
+                    marks={[{ value: 10, label: "10" }, { value: 100, label: "100" }, { value: 200, label: "200" }]}
+                  />
+                </Box>
+
+                <Box className={classes.fullRow}>
+                  <Button
+                    variant="contained" color="primary"
+                    startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <ConselhoIcon />}
+                    onClick={startConselhoJob} disabled={loading}
+                    style={{ textTransform: "none", fontWeight: 600 }}
+                  >
+                    Buscar no Conselho
+                  </Button>
+                </Box>
+              </Box>
+            </TabPanel>
           </Paper>
         </Grid>
 
@@ -832,10 +1032,12 @@ export default function LeadScraper() {
                 const jobName = j.source === "google_maps"
                   ? `${j.filters?.keyword || "?"} — ${j.filters?.city || "?"} ${j.filters?.state || ""}`
                   : j.source === "cnpj_search"
-                    ? `RF: ${j.filters?.cnae || ""} ${j.filters?.uf || ""} ${j.filters?.municipio || ""}`.trim()
+                    ? `RF: ${[j.filters?.keyword, j.filters?.cnae, j.filters?.uf, j.filters?.municipio].filter(Boolean).join(" ") || "?"}`
                     : j.source === "ig_followers"
-                      ? `📸 Seguidores de @${j.filters?.igTargetHandle || "?"}`
-                      : `${j.filters?.cnpjs?.length || 0} CNPJs`;
+                      ? `📸 @${j.filters?.igTargetHandle || "?"}`
+                      : j.source === "conselho"
+                        ? `${(j.filters?.conselho || "conselho").toUpperCase()} · ${j.filters?.conselhoTipo === "empresa" ? "Empresas" : "Profissionais"}${j.filters?.uf ? ` ${j.filters.uf}` : ""}`
+                        : `${j.filters?.cnpjs?.length || 0} CNPJs`;
                 return (
                   <Box
                     key={j.id}
@@ -876,8 +1078,15 @@ export default function LeadScraper() {
             <Box display="flex" alignItems="center" style={{ gap: 12 }}>
               <Typography variant="h6" style={{ fontWeight: 700 }}>Resultados</Typography>
               <Box className={classes.sourceBadge}>
-                {activeJob.source === "google_maps" ? <MapsIcon style={{ fontSize: 12 }} /> : <CnpjIcon style={{ fontSize: 12 }} />}
-                {activeJob.source === "google_maps" ? "Google Maps" : activeJob.source === "cnpj_search" ? "RF Pesquisa Avançada" : "Receita Federal"}
+                {activeJob.source === "google_maps" ? <MapsIcon style={{ fontSize: 12 }} />
+                  : activeJob.source === "ig_followers" ? <InstagramIcon style={{ fontSize: 12 }} />
+                  : activeJob.source === "conselho" ? <ConselhoIcon style={{ fontSize: 12 }} />
+                  : <CnpjIcon style={{ fontSize: 12 }} />}
+                {activeJob.source === "google_maps" ? "Google Maps"
+                  : activeJob.source === "cnpj_search" ? "RF Pesquisa Avançada"
+                  : activeJob.source === "ig_followers" ? "Instagram"
+                  : activeJob.source === "conselho" ? "Conselho de Classe"
+                  : "Receita Federal"}
               </Box>
               <Chip
                 label={STATUS[activeJob.status]?.label || activeJob.status}
@@ -939,10 +1148,16 @@ export default function LeadScraper() {
                         />
                       </TableCell>
                       <TableCell className={classes.stickyHead} style={{ fontWeight: 700, fontSize: 11 }}>NOME</TableCell>
+                      {activeJob.source === "conselho" && (
+                        <TableCell className={classes.stickyHead} style={{ fontWeight: 700, fontSize: 11 }}>REGISTRO</TableCell>
+                      )}
                       <TableCell className={classes.stickyHead} style={{ fontWeight: 700, fontSize: 11 }}>TELEFONE</TableCell>
                       <TableCell className={classes.stickyHead} style={{ fontWeight: 700, fontSize: 11 }}>REDES SOCIAIS</TableCell>
                       <TableCell className={classes.stickyHead} style={{ fontWeight: 700, fontSize: 11 }}>ENDEREÇO</TableCell>
                       <TableCell className={classes.stickyHead} style={{ fontWeight: 700, fontSize: 11 }}>CNPJ</TableCell>
+                      {activeJob.source === "conselho" && (
+                        <TableCell className={classes.stickyHead} style={{ fontWeight: 700, fontSize: 11 }}>STATUS</TableCell>
+                      )}
                       <TableCell className={classes.stickyHead} style={{ fontWeight: 700, fontSize: 11 }}>AVALIAÇÃO</TableCell>
                     </TableRow>
                   </TableHead>
@@ -971,6 +1186,13 @@ export default function LeadScraper() {
                             </Typography>
                           )}
                         </TableCell>
+                        {activeJob.source === "conselho" && (
+                          <TableCell>
+                            <Typography variant="body2" style={{ fontSize: 11, fontFamily: "monospace" }}>
+                              {r.registro || "—"}
+                            </Typography>
+                          </TableCell>
+                        )}
                         <TableCell>
                           <Typography variant="body2" style={{ fontSize: 12 }}>{r.phone || "—"}</Typography>
                           {r.instagramPhone && r.instagramPhone !== r.phone && (
@@ -1022,6 +1244,15 @@ export default function LeadScraper() {
                                 : "—"}
                           </Typography>
                         </TableCell>
+                        {activeJob.source === "conselho" && (
+                          <TableCell>
+                            <Chip
+                              label={r.situacao || "—"}
+                              size="small"
+                              style={{ fontSize: 10, height: 20, fontWeight: 600 }}
+                            />
+                          </TableCell>
+                        )}
                         <TableCell>
                           <span className={classes.rating}><Stars value={r.rating} /></span>
                         </TableCell>
