@@ -1,5 +1,6 @@
 import axios from "axios";
 import { ScraperFilters, ScraperResult } from "../../models/LeadScraperJob";
+import { toArray, resolveMaxResults } from "./ScraperFilterUtils";
 import logger from "../../utils/logger";
 
 // ============================================================================
@@ -95,7 +96,6 @@ const LAYERS = {
 
 const PAGE_SIZE = 1000; // maxRecordCount do serviço é 6000; 1000 é gentil com o servidor
 const MAX_RESULTS_CAP = 2000;
-const DEFAULT_MAX_RESULTS = 200;
 const DELAY_MS = 300;
 const TIMEOUT_MS = 20000;
 const MAX_RETRIES = 2;
@@ -123,6 +123,13 @@ const likeClause = (campo: string, termo: string): string => {
     return `UPPER(${campo}) LIKE '%${literal}%'`;
   }
   return `(UPPER(${campo}) LIKE '%${literal}%' OR UPPER(${campo}) LIKE '%${wildcard}%')`;
+};
+
+// OR de N condições geradas por `build` para cada valor, entre parênteses
+// quando há mais de uma (mesmo padrão que likeClause já usa para acentos).
+const orClause = (valores: string[], build: (v: string) => string): string => {
+  const partes = valores.map(build);
+  return partes.length > 1 ? `(${partes.join(" OR ")})` : partes[0];
 };
 
 async function queryArcgis(url: string, params: Record<string, string>) {
@@ -203,39 +210,43 @@ function mapEmpresa(a: Record<string, any>): ScraperResult {
   };
 }
 
-async function scrapeCau(
+// Monta a cláusula where para um layer (profissional|empresa) a partir dos filtros.
+function buildWhere(
   filters: ScraperFilters,
-  onProgress?: (current: number, total: number) => Promise<void>
-): Promise<ScraperResult[]> {
-  const tipo = filters.conselhoTipo === "empresa" ? "empresa" : "profissional";
+  tipo: "profissional" | "empresa"
+): string {
   const layer = LAYERS[tipo];
-  const url = `${CAU_BASE}/${layer.id}/query`;
-
-  const maxResults = Math.min(
-    filters.maxResults || DEFAULT_MAX_RESULTS,
-    MAX_RESULTS_CAP
-  );
-
-  // Monta cláusula where a partir dos filtros disponíveis
   const condicoes: string[] = [];
-  if (filters.uf) {
-    const uf = sqlString(filters.uf).toUpperCase();
-    if (!/^[A-Z]{2}$/.test(uf)) {
-      throw new Error(`UF inválida para consulta ao CAU: "${filters.uf}"`);
+
+  const ufs = toArray(filters.uf).map(v => sqlString(v).toUpperCase());
+  if (ufs.length) {
+    for (const uf of ufs) {
+      if (!/^[A-Z]{2}$/.test(uf)) {
+        throw new Error(`UF inválida para consulta ao CAU: "${uf}"`);
+      }
     }
-    condicoes.push(`uf='${uf}'`);
+    condicoes.push(orClause(ufs, uf => `uf='${uf}'`));
   }
-  if (filters.municipio) {
-    condicoes.push(likeClause("cidade_normalizada", filters.municipio));
+
+  const municipios = toArray(filters.municipio);
+  if (municipios.length) {
+    condicoes.push(orClause(municipios, m => likeClause("cidade_normalizada", m)));
   }
+
+  const regionais = toArray(filters.regional);
+  if (regionais.length) {
+    condicoes.push(orClause(regionais, r => likeClause("regional", r)));
+  }
+
   if (filters.keyword) {
     condicoes.push(likeClause(layer.campoNome, filters.keyword));
   }
-  if (filters.situacao) {
-    condicoes.push(
-      `${layer.campoSituacao}='${sqlString(filters.situacao).toUpperCase()}'`
-    );
+
+  const situacoes = toArray(filters.situacao).map(v => sqlString(v).toUpperCase());
+  if (situacoes.length) {
+    condicoes.push(orClause(situacoes, s => `${layer.campoSituacao}='${s}'`));
   }
+
   if (filters.temEmail) condicoes.push("email IS NOT NULL AND email <> ''");
   if (filters.temTelefone) {
     condicoes.push(
@@ -244,7 +255,20 @@ async function scrapeCau(
         : "telefone IS NOT NULL"
     );
   }
-  const where = condicoes.length ? condicoes.join(" AND ") : "1=1";
+
+  return condicoes.length ? condicoes.join(" AND ") : "1=1";
+}
+
+// Executa a busca paginada em um único layer, até `maxResults`.
+async function scrapeLayer(
+  filters: ScraperFilters,
+  tipo: "profissional" | "empresa",
+  maxResults: number,
+  onProgress?: (current: number, total: number) => Promise<void>
+): Promise<ScraperResult[]> {
+  const layer = LAYERS[tipo];
+  const url = `${CAU_BASE}/${layer.id}/query`;
+  const where = buildWhere(filters, tipo);
 
   logger.info(
     `[ConselhoScraper] CAU/${tipo} layer=${layer.id} where="${where}" max=${maxResults}`
@@ -287,6 +311,24 @@ async function scrapeCau(
     `[ConselhoScraper] CAU/${tipo}: ${results.length} leads coletados`
   );
   return results;
+}
+
+async function scrapeCau(
+  filters: ScraperFilters,
+  onProgress?: (current: number, total: number) => Promise<void>
+): Promise<ScraperResult[]> {
+  const maxResults = resolveMaxResults(filters.maxResults, MAX_RESULTS_CAP);
+
+  if (filters.conselhoTipo === "ambos") {
+    // ponytail: split simples 50/50 em vez de intercalar as duas queries.
+    const metade = Math.ceil(maxResults / 2);
+    const profissionais = await scrapeLayer(filters, "profissional", metade, onProgress);
+    const empresas = await scrapeLayer(filters, "empresa", metade, onProgress);
+    return [...profissionais, ...empresas].slice(0, maxResults);
+  }
+
+  const tipo = filters.conselhoTipo === "empresa" ? "empresa" : "profissional";
+  return scrapeLayer(filters, tipo, maxResults, onProgress);
 }
 
 export const scrapeConselho = async (

@@ -6,6 +6,9 @@ import * as LeadScraperController from "../controllers/LeadScraperController";
 const routes = Router();
 
 routes.get("/lead-scraper/engine-status", isAuth, LeadScraperController.getEngineStatus);
+routes.get("/lead-scraper/apify-token", isAuth, checkPermission("contacts.import"), LeadScraperController.getApifyTokenStatus);
+routes.post("/lead-scraper/apify-token", isAuth, checkPermission("contacts.import"), LeadScraperController.saveApifyToken);
+routes.delete("/lead-scraper/apify-token", isAuth, checkPermission("contacts.import"), LeadScraperController.deleteApifyToken);
 routes.post("/lead-scraper/jobs", isAuth, checkPermission("contacts.import"), LeadScraperController.startJob);
 routes.get("/lead-scraper/jobs", isAuth, LeadScraperController.listJobs);
 routes.get("/lead-scraper/jobs/:id", isAuth, LeadScraperController.getJob);

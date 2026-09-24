@@ -1,6 +1,7 @@
 import axios from "axios";
 import { ScraperResult } from "../../models/LeadScraperJob";
 import { APIFY_TOKEN_ENV } from "../Instagram/InstagramApifyProvider";
+import { getCompanyApifyToken } from "./ApifyTokenService";
 import logger from "../../utils/logger";
 
 // Motor de busca alternativo para Google Maps via Apify (compass~crawler-google-places-api).
@@ -18,12 +19,22 @@ const RUN_TIMEOUT_MS = 30 * 60 * 1_000; // 30 min
 
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
 
-export const isGmapsApifyConfigured = (): boolean =>
-  Boolean(process.env[APIFY_TOKEN_ENV]?.trim());
+// Mesma precedência do InstagramApifyProvider: override por empresa (DB,
+// criptografado) → fallback global process.env.APIFY_TOKEN.
+const resolveApifyToken = async (companyId?: number): Promise<string | null> => {
+  if (companyId) {
+    const companyToken = await getCompanyApifyToken(companyId);
+    if (companyToken) return companyToken;
+  }
+  return process.env[APIFY_TOKEN_ENV]?.trim() || null;
+};
 
-const apifyToken = (): string => {
-  const token = process.env[APIFY_TOKEN_ENV]?.trim();
-  if (!token) throw new Error("APIFY_TOKEN não configurado no ambiente.");
+export const isGmapsApifyConfigured = async (companyId?: number): Promise<boolean> =>
+  Boolean(await resolveApifyToken(companyId));
+
+const apifyToken = async (companyId?: number): Promise<string> => {
+  const token = await resolveApifyToken(companyId);
+  if (!token) throw new Error("APIFY_TOKEN não configurado. Configure em Configurações → Lead Scraper ou defina APIFY_TOKEN no ambiente.");
   return token;
 };
 
@@ -44,12 +55,12 @@ interface ApifyRun {
   defaultDatasetId: string;
 }
 
-const startActorRun = async (actorId: string, input: object): Promise<ApifyRun> => {
+const startActorRun = async (actorId: string, input: object, companyId?: number): Promise<ApifyRun> => {
   try {
     const { data } = await axios.post(
       `${APIFY_BASE_URL}/acts/${actorId}/runs`,
       input,
-      { params: { token: apifyToken() }, timeout: 15_000 }
+      { params: { token: await apifyToken(companyId) }, timeout: 15_000 }
     );
     return data.data as ApifyRun;
   } catch (err: any) {
@@ -57,10 +68,10 @@ const startActorRun = async (actorId: string, input: object): Promise<ApifyRun> 
   }
 };
 
-const getDatasetItemCount = async (datasetId: string): Promise<number> => {
+const getDatasetItemCount = async (datasetId: string, companyId?: number): Promise<number> => {
   try {
     const { data } = await axios.get(`${APIFY_BASE_URL}/datasets/${datasetId}`, {
-      params: { token: apifyToken() },
+      params: { token: await apifyToken(companyId) },
       timeout: 10_000,
     });
     return data?.data?.itemCount ?? 0;
@@ -73,14 +84,15 @@ const waitForRun = async (
   runId: string,
   datasetId: string,
   max: number,
-  onProgress?: (current: number, total: number) => Promise<void>
+  onProgress?: (current: number, total: number) => Promise<void>,
+  companyId?: number
 ): Promise<ApifyRun> => {
   const startedAt = Date.now();
   for (;;) {
     let run: ApifyRun;
     try {
       const { data } = await axios.get(`${APIFY_BASE_URL}/actor-runs/${runId}`, {
-        params: { token: apifyToken() },
+        params: { token: await apifyToken(companyId) },
         timeout: 15_000,
       });
       run = data.data as ApifyRun;
@@ -97,7 +109,7 @@ const waitForRun = async (
     }
 
     if (onProgress) {
-      const count = await getDatasetItemCount(datasetId);
+      const count = await getDatasetItemCount(datasetId, companyId);
       await onProgress(Math.min(count, max), max);
     }
 
@@ -105,10 +117,10 @@ const waitForRun = async (
   }
 };
 
-const getDatasetItems = async (datasetId: string): Promise<any[]> => {
+const getDatasetItems = async (datasetId: string, companyId?: number): Promise<any[]> => {
   try {
     const { data } = await axios.get(`${APIFY_BASE_URL}/datasets/${datasetId}/items`, {
-      params: { token: apifyToken(), format: "json" },
+      params: { token: await apifyToken(companyId), format: "json" },
       timeout: 30_000,
     });
     return Array.isArray(data) ? data : [];
@@ -122,9 +134,10 @@ export const scrapeGoogleMapsViaApify = async (
   cityQuery: string,
   maxResults = 50,
   onProgress?: (current: number, total: number) => Promise<void>,
-  opts?: { state?: string; geo?: { lat: number; lng: number; radiusKm: number } }
+  opts?: { state?: string; geo?: { lat: number; lng: number; radiusKm: number }; companyId?: number }
 ): Promise<ScraperResult[]> => {
   const geo = opts?.geo;
+  const companyId = opts?.companyId;
   const input: Record<string, any> = {
     searchStringsArray: [keyword],
     maxCrawledPlacesPerSearch: Math.min(maxResults, 200),
@@ -141,11 +154,11 @@ export const scrapeGoogleMapsViaApify = async (
     input.locationQuery = cityQuery;
   }
 
-  const run = await startActorRun(GMAPS_ACTOR_ID, input);
+  const run = await startActorRun(GMAPS_ACTOR_ID, input, companyId);
   logger.info(`[GmapsApify] run ${run.id} iniciado para "${keyword}" ${geo ? `geo(${geo.lat},${geo.lng})` : cityQuery}`);
 
-  const done = await waitForRun(run.id, run.defaultDatasetId, maxResults, onProgress);
-  const items = await getDatasetItems(done.defaultDatasetId);
+  const done = await waitForRun(run.id, run.defaultDatasetId, maxResults, onProgress, companyId);
+  const items = await getDatasetItems(done.defaultDatasetId, companyId);
 
   const results: ScraperResult[] = [];
   for (const item of items) {

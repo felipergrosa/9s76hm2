@@ -31,6 +31,7 @@ import { toast } from "react-toastify";
 import api from "../../services/api";
 import MainContainer from "../../components/MainContainer";
 import ConfirmationModal from "../../components/ConfirmationModal";
+import ApifyTokenModal from "../../components/ApifyTokenModal";
 import LeadMapPicker from "../../components/LeadMapPicker";
 import useUsersList from "../../hooks/useUsersList";
 
@@ -250,6 +251,7 @@ export default function LeadScraper() {
   const [tagName, setTagName] = useState("");
   const [walletUser, setWalletUser] = useState(null); // { id, name } | null
   const [engineStatus, setEngineStatus] = useState(null);
+  const [apifyModalOpen, setApifyModalOpen] = useState(false);
   const { users: walletUsers, loadUsersForSelection } = useUsersList(false);
   const pollRef = useRef(null);
 
@@ -561,16 +563,18 @@ export default function LeadScraper() {
         {/* Status dos motores de busca (Apify/sidecar/Puppeteer) */}
         <Tooltip title={
           engineStatus?.apify?.configured
-            ? "Apify configurado — usado para Maps (quando disponível), Seguidores IG e telefone de bio"
-            : "APIFY_TOKEN não configurado — usando fallback local (Puppeteer/DDG). Configure em .env para engines mais estáveis."
+            ? "Apify configurado — usado para Maps (quando disponível), Seguidores IG e telefone de bio. Clique para gerenciar o token."
+            : "APIFY_TOKEN não configurado — usando fallback local (Puppeteer/DDG). Clique para configurar o token."
         }>
-          <Box style={{
-            display: "flex", alignItems: "center", gap: 6,
-            background: engineStatus?.apify?.configured ? "rgba(76,175,80,0.18)" : "rgba(255,255,255,0.08)",
-            color: "#fff",
-            border: `1px solid ${engineStatus?.apify?.configured ? "rgba(129,199,132,0.5)" : "rgba(255,255,255,0.2)"}`,
-            borderRadius: 8, padding: "4px 12px", fontSize: 12, whiteSpace: "nowrap", flexShrink: 0,
-          }}>
+          <Box
+            onClick={() => setApifyModalOpen(true)}
+            style={{
+              display: "flex", alignItems: "center", gap: 6, cursor: "pointer",
+              background: engineStatus?.apify?.configured ? "rgba(76,175,80,0.18)" : "rgba(255,255,255,0.08)",
+              color: "#fff",
+              border: `1px solid ${engineStatus?.apify?.configured ? "rgba(129,199,132,0.5)" : "rgba(255,255,255,0.2)"}`,
+              borderRadius: 8, padding: "4px 12px", fontSize: 12, whiteSpace: "nowrap", flexShrink: 0,
+            }}>
             ⚙ Apify {engineStatus?.apify?.configured ? "ativo" : "não configurado"}
             {engineStatus?.googleMaps?.engine && (
               <Chip
@@ -583,12 +587,18 @@ export default function LeadScraper() {
         </Tooltip>
       </Box>
 
+      <ApifyTokenModal
+        open={apifyModalOpen}
+        onClose={() => setApifyModalOpen(false)}
+        onSaved={loadEngineStatus}
+      />
+
       {!engineStatus?.apify?.configured && (
         <Box style={{
           background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 8,
           padding: "10px 16px", marginBottom: 16, fontSize: 13, color: "#92400e",
         }}>
-          ⚠ Sem <strong>APIFY_TOKEN</strong> configurado: Seguidores IG fica indisponível e telefone/e-mail de bio do Instagram usa um fallback mais limitado (sem login). Busca no Maps continua funcionando via sidecar/Puppeteer.
+          ⚠ Sem token Apify configurado: Seguidores IG fica indisponível e telefone/e-mail de bio do Instagram usa um fallback mais limitado (sem login). Busca no Maps continua funcionando via sidecar/Puppeteer. Clique no badge "Apify" acima para configurar.
         </Box>
       )}
 
@@ -1013,7 +1023,7 @@ export default function LeadScraper() {
                   <Box className={classes.helpBox}>
                     <strong>Como funciona — Seguidores do Instagram</strong>
                     <ol>
-                      <li><strong>Pré-requisito:</strong> configure <strong>APIFY_TOKEN</strong> no ambiente do servidor (Apify roda sem sessão pessoal — sem risco de ban).</li>
+                      <li><strong>Pré-requisito:</strong> configure o token Apify no badge "Apify" no topo da página (Apify roda sem sessão pessoal — sem risco de ban).</li>
                       <li>Informe o <strong>@ da conta alvo</strong> — pode ser uma associação comercial, concorrente, evento ou nicho de mercado. Ex: <code>@abrasel_sp</code>.</li>
                       <li>A conta alvo precisa ser <strong>pública</strong>. Contas privadas bloqueiam o acesso à lista de seguidores.</li>
                       <li>Ajuste o <strong>limite de seguidores</strong> (50 a 5.000). O sistema coleta em páginas de 50 com ~3s de intervalo para evitar bloqueio.</li>

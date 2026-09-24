@@ -8,32 +8,76 @@ import { leadScraperQueue } from "../queues";
 import { isApifyConfigured } from "../services/Instagram/InstagramApifyProvider";
 import { isGmapsApifyConfigured } from "../services/LeadScraper/GoogleMapsApifyProvider";
 import { GMAPS_SIDECAR_ENV, isSidecarAvailable } from "../services/LeadScraper/GmapsSidecarService";
+import {
+  getCompanyApifyTokenStatus,
+  setCompanyApifyToken,
+  clearCompanyApifyToken
+} from "../services/LeadScraper/ApifyTokenService";
 import logger from "../utils/logger";
 
 const VALID_SOURCES = ["google_maps", "cnpj", "cnpj_search", "ig_followers", "conselho"];
 const IG_HANDLE_REGEX = /^[a-zA-Z0-9._]{1,30}$/;
 
-// Expõe (sem vazar segredos) quais motores/integrações estão configurados no
-// ambiente, para o frontend informar o usuário sobre qual engine será usada
-// e evitar disparar buscas que vão falhar por falta de configuração.
-export const getEngineStatus = async (_req: Request, res: Response): Promise<Response> => {
-  const apify = isApifyConfigured();
+// Expõe (sem vazar segredos) quais motores/integrações estão configurados
+// (override por empresa ou fallback global), para o frontend informar o
+// usuário sobre qual engine será usada e evitar disparar buscas que vão
+// falhar por falta de configuração.
+export const getEngineStatus = async (req: Request, res: Response): Promise<Response> => {
+  const { companyId } = req.user;
+  const apify = await isApifyConfigured(companyId);
   const gmapsSidecarConfigured = Boolean(process.env[GMAPS_SIDECAR_ENV]?.trim());
   const gmapsSidecarUp = gmapsSidecarConfigured ? await isSidecarAvailable() : false;
+  const gmapsApifyAvailable = await isGmapsApifyConfigured(companyId);
 
-  const gmapsEngine = isGmapsApifyConfigured() ? "apify" : gmapsSidecarUp ? "sidecar" : "puppeteer";
+  const gmapsEngine = gmapsApifyAvailable ? "apify" : gmapsSidecarUp ? "sidecar" : "puppeteer";
 
   return res.json({
     apify: { configured: apify },
     googleMaps: {
       engine: gmapsEngine,
-      apifyAvailable: isGmapsApifyConfigured(),
+      apifyAvailable: gmapsApifyAvailable,
       sidecarConfigured: gmapsSidecarConfigured,
       sidecarUp: gmapsSidecarUp
     },
     instagramFollowers: { requiresApify: true, available: apify },
     brasilIo: { configured: Boolean(process.env.BRASILIO_TOKEN?.trim()) }
   });
+};
+
+// Configurações do token Apify por empresa — nunca retorna o valor em texto
+// puro, só um status mascarado (ex.: "sk-...ab12").
+export const getApifyTokenStatus = async (req: Request, res: Response): Promise<Response> => {
+  try {
+    const { companyId } = req.user;
+    const status = await getCompanyApifyTokenStatus(companyId);
+    return res.json(status);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || "Erro ao consultar token Apify" });
+  }
+};
+
+export const saveApifyToken = async (req: Request, res: Response): Promise<Response> => {
+  try {
+    const { companyId } = req.user;
+    const token = String(req.body?.token || "").trim();
+    if (!token) return res.status(400).json({ error: "token é obrigatório" });
+    if (token.length > 500) return res.status(400).json({ error: "token inválido" });
+
+    const masked = await setCompanyApifyToken(companyId, token);
+    return res.json({ ok: true, masked });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || "Erro ao salvar token Apify" });
+  }
+};
+
+export const deleteApifyToken = async (req: Request, res: Response): Promise<Response> => {
+  try {
+    const { companyId } = req.user;
+    await clearCompanyApifyToken(companyId);
+    return res.json({ ok: true });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || "Erro ao remover token Apify" });
+  }
 };
 
 export const startJob = async (req: Request, res: Response): Promise<Response> => {

@@ -45,11 +45,16 @@ export interface ScraperResult {
   imported?: boolean;
 }
 
+// Campos de filtro que aceitam seleção única ou múltipla — normalizados para
+// array em runtime (ver toArray() em ScraperFilterUtils). Mantém string única
+// aceita por retrocompatibilidade com jobs/integrações já existentes.
+export type MultiValue = string | string[];
+
 export interface ScraperFilters {
   // google_maps
   keyword?: string;
-  city?: string;
-  state?: string;
+  city?: MultiValue;
+  state?: MultiValue;
   // geo: busca por área no mapa (alternativa a city/state)
   lat?: number;
   lng?: number;
@@ -57,19 +62,23 @@ export interface ScraperFilters {
   // cnpj (enrich)
   cnpjs?: string[];
   // cnpj_search (discovery)
-  cnae?: string;
-  naturezaJuridica?: string;
-  situacao?: string;
-  uf?: string;
-  municipio?: string;
+  cnae?: MultiValue;
+  naturezaJuridica?: MultiValue;
+  situacao?: MultiValue;
+  uf?: MultiValue;
+  municipio?: MultiValue;
+  regional?: MultiValue;
   temTelefone?: boolean;
   temEmail?: boolean;
+  // 0/undefined = sem limite (até o teto absoluto de segurança do source)
   maxResults?: number;
   // ig_followers
   igTargetHandle?: string;
   // conselho (conselhos profissionais: CAU, futuramente CREA/CRM...)
   conselho?: "cau";
-  conselhoTipo?: "profissional" | "empresa";
+  conselhoTipo?: "profissional" | "empresa" | "ambos";
+  // dedupe: quando true (padrão), ignora leads já capturados por qualquer job anterior da empresa
+  skipDuplicates?: boolean;
   // carteira: usuário responsável já atribuído no momento da importação
   walletUserId?: number;
 }

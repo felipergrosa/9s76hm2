@@ -173,10 +173,18 @@ const server = app.listen(port, async () => {
   // Isso evita que o servidor ache que há "outra instância" rodando após um restart
   await clearSessionLocks();
 
-  // Marca jobs de scraping órfãos (pending/running há >10min) como error após restart
+  // Marca jobs de scraping órfãos (pending/running há >10min) como error.
+  // Roda no boot E a cada 5min — um job pode travar (crash do worker, fila
+  // perdida) sem o processo inteiro reiniciar, então depender só do boot
+  // deixava jobs presos em "Executando" indefinidamente.
   try {
     const { recoverOrphanScraperJobs } = await import("./services/LeadScraper/LeadScraperJobService");
     await recoverOrphanScraperJobs();
+    setInterval(() => {
+      recoverOrphanScraperJobs().catch((e: any) =>
+        logger.error(`[Server] Falha ao recuperar jobs órfãos do LeadScraper (interval): ${e?.message || e}`)
+      );
+    }, 5 * 60 * 1000);
   } catch (e: any) {
     logger.error(`[Server] Falha ao recuperar jobs órfãos do LeadScraper: ${e?.message || e}`);
   }

@@ -1,5 +1,6 @@
 import axios from "axios";
 import { ScraperResult } from "../../models/LeadScraperJob";
+import { getCompanyApifyToken } from "../LeadScraper/ApifyTokenService";
 import logger from "../../utils/logger";
 
 // Provider alternativo para o source `ig_followers` via API da Apify.
@@ -33,13 +34,23 @@ const MAX_HARD_LIMIT = 5000; // mesmo teto do provider de sessão
 
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
 
-export const isApifyConfigured = (): boolean =>
-  Boolean(process.env[APIFY_TOKEN_ENV]?.trim());
+// Resolve o token: override por empresa (salvo criptografado via Configurações,
+// tem precedência) → fallback global process.env.APIFY_TOKEN (self-hosted single-tenant).
+const resolveApifyToken = async (companyId?: number): Promise<string | null> => {
+  if (companyId) {
+    const companyToken = await getCompanyApifyToken(companyId);
+    if (companyToken) return companyToken;
+  }
+  return process.env[APIFY_TOKEN_ENV]?.trim() || null;
+};
 
-const apifyToken = (): string => {
-  const token = process.env[APIFY_TOKEN_ENV]?.trim();
+export const isApifyConfigured = async (companyId?: number): Promise<boolean> =>
+  Boolean(await resolveApifyToken(companyId));
+
+const apifyToken = async (companyId?: number): Promise<string> => {
+  const token = await resolveApifyToken(companyId);
   if (!token) {
-    throw new Error("APIFY_TOKEN não configurado no ambiente.");
+    throw new Error("APIFY_TOKEN não configurado. Configure em Configurações → Lead Scraper ou defina APIFY_TOKEN no ambiente.");
   }
   return token;
 };
@@ -63,12 +74,12 @@ interface ApifyRun {
 }
 
 // POST /acts/{actor}/runs?token= — inicia o run e devolve o runId
-const startActorRun = async (actorId: string, input: object): Promise<ApifyRun> => {
+const startActorRun = async (actorId: string, input: object, companyId?: number): Promise<ApifyRun> => {
   try {
     const { data } = await axios.post(
       `${APIFY_BASE_URL}/acts/${actorId}/runs`,
       input,
-      { params: { token: apifyToken() }, timeout: 15_000 }
+      { params: { token: await apifyToken(companyId) }, timeout: 15_000 }
     );
     return data.data as ApifyRun;
   } catch (err: any) {
@@ -77,10 +88,10 @@ const startActorRun = async (actorId: string, input: object): Promise<ApifyRun> 
 };
 
 // GET /datasets/{id} — usado só para reportar progresso (itemCount parcial)
-const getDatasetItemCount = async (datasetId: string): Promise<number> => {
+const getDatasetItemCount = async (datasetId: string, companyId?: number): Promise<number> => {
   try {
     const { data } = await axios.get(`${APIFY_BASE_URL}/datasets/${datasetId}`, {
-      params: { token: apifyToken() },
+      params: { token: await apifyToken(companyId) },
       timeout: 10_000,
     });
     return data?.data?.itemCount ?? 0;
@@ -94,7 +105,8 @@ const waitForRun = async (
   runId: string,
   datasetId: string,
   max: number,
-  onProgress?: (current: number, total: number) => Promise<void>
+  onProgress?: (current: number, total: number) => Promise<void>,
+  companyId?: number
 ): Promise<ApifyRun> => {
   const startedAt = Date.now();
 
@@ -102,7 +114,7 @@ const waitForRun = async (
     let run: ApifyRun;
     try {
       const { data } = await axios.get(`${APIFY_BASE_URL}/actor-runs/${runId}`, {
-        params: { token: apifyToken() },
+        params: { token: await apifyToken(companyId) },
         timeout: 15_000,
       });
       run = data.data as ApifyRun;
@@ -120,7 +132,7 @@ const waitForRun = async (
 
     // Progresso real: itens já gravados no dataset do run
     if (onProgress) {
-      const count = await getDatasetItemCount(datasetId);
+      const count = await getDatasetItemCount(datasetId, companyId);
       await onProgress(Math.min(count, max), max);
     }
 
@@ -129,10 +141,10 @@ const waitForRun = async (
 };
 
 // GET /datasets/{datasetId}/items?format=json
-const getDatasetItems = async (datasetId: string): Promise<any[]> => {
+const getDatasetItems = async (datasetId: string, companyId?: number): Promise<any[]> => {
   try {
     const { data } = await axios.get(`${APIFY_BASE_URL}/datasets/${datasetId}/items`, {
-      params: { token: apifyToken(), format: "json" },
+      params: { token: await apifyToken(companyId), format: "json" },
       timeout: 30_000,
     });
     return Array.isArray(data) ? data : [];
@@ -144,7 +156,8 @@ const getDatasetItems = async (datasetId: string): Promise<any[]> => {
 export const scrapeFollowersViaApify = async (
   handle: string,
   maxResults: number,
-  onProgress?: (current: number, total: number) => Promise<void>
+  onProgress?: (current: number, total: number) => Promise<void>,
+  companyId?: number
 ): Promise<ScraperResult[]> => {
   const username = handle.replace(/^@/, "").trim();
   if (!username) throw new Error("Handle do Instagram inválido.");
@@ -155,11 +168,11 @@ export const scrapeFollowersViaApify = async (
     usernames: [username],
     dataToScrape: "followers",
     resultsLimit: max,
-  });
+  }, companyId);
   logger.info(`[Instagram/Apify] run ${run.id} iniciado para @${username} (limit=${max})`);
 
-  const done = await waitForRun(run.id, run.defaultDatasetId, max, onProgress);
-  const items = await getDatasetItems(done.defaultDatasetId);
+  const done = await waitForRun(run.id, run.defaultDatasetId, max, onProgress, companyId);
+  const items = await getDatasetItems(done.defaultDatasetId, companyId);
 
   const results: ScraperResult[] = [];
   const errorDescriptions: string[] = [];
@@ -203,14 +216,15 @@ export const scrapeFollowersViaApify = async (
 // Enriquecimento de um único perfil via apify/instagram-profile-scraper.
 // Retorna dados públicos do perfil (bio, site, categoria, contato se exposto).
 export const enrichProfileViaApify = async (
-  handle: string
+  handle: string,
+  companyId?: number
 ): Promise<Partial<ScraperResult> | null> => {
   const username = handle.replace(/^@/, "").trim();
   if (!username) return null;
 
-  const run = await startActorRun(PROFILE_ACTOR_ID, { usernames: [username] });
-  const done = await waitForRun(run.id, run.defaultDatasetId, 1);
-  const items = await getDatasetItems(done.defaultDatasetId);
+  const run = await startActorRun(PROFILE_ACTOR_ID, { usernames: [username] }, companyId);
+  const done = await waitForRun(run.id, run.defaultDatasetId, 1, undefined, companyId);
+  const items = await getDatasetItems(done.defaultDatasetId, companyId);
 
   const profile = items.find(i => i && !i.error && (i.username || i.fullName));
   if (!profile) {

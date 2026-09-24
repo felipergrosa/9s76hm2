@@ -12,6 +12,8 @@ import { crossEnrichLead } from "./CrossEnricherService";
 import CheckContactNumber from "../WbotServices/CheckNumber";
 import GetDefaultWhatsApp from "../../helpers/GetDefaultWhatsApp";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
+import { toArray, resolveMaxResults } from "./ScraperFilterUtils";
+import { filterOutDuplicates } from "./DedupeService";
 import logger from "../../utils/logger";
 
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
@@ -117,7 +119,7 @@ async function runWhatsappValidation(job: LeadScraperJob, results: ScraperResult
 async function runSocialEnrichment(job: LeadScraperJob, results: ScraperResult[], fromPct = 88, toPct = 96): Promise<void> {
   for (let i = 0; i < results.length; i++) {
     try {
-      const socials = await enrichLeadSocials(results[i]);
+      const socials = await enrichLeadSocials(results[i], job.companyId);
       Object.assign(results[i], socials);
     } catch {
       // best-effort — enriquecimento social nunca derruba o job
@@ -167,35 +169,59 @@ export const runScraperJob = async (jobId: number) => {
     await job.update({ status: "running", progress: 0 });
 
     if (job.source === "google_maps") {
-      const { keyword = "", city = "", state = "", maxResults = 50, lat, lng, radiusKm } = job.filters;
-      const cityQuery = state ? `${city} ${state}` : city;
+      const { keyword = "", city, state, maxResults, lat, lng, radiusKm } = job.filters;
       // Busca por área no mapa tem precedência sobre cidade/UF
       const geo = typeof lat === "number" && typeof lng === "number"
         ? { lat, lng, radiusKm: radiusKm || 5 }
         : undefined;
 
+      // Multi-select: cada cidade × cada UF vira uma query "cidade UF" separada
+      // (motores de Maps não têm operador OR de localização — precisa rodar N buscas).
+      const cities = toArray(city);
+      const states = toArray(state);
+      const cityQueries: string[] = geo
+        ? [""] // geo mode: uma única query, localização vem das coords
+        : cities.length
+          ? (states.length ? cities.flatMap(c => states.map(s => `${c} ${s}`)) : cities)
+          : states.length
+            ? states
+            : [""];
+
+      const cap = resolveMaxResults(maxResults, 200);
+      const perQueryCap = Math.max(1, Math.ceil(cap / cityQueries.length));
+
       // Ordem de precedência dos motores de busca: Apify (compass~crawler-google-places,
       // mais estável/escalável) → sidecar gosom/google-maps-scraper (GMAPS_SCRAPER_URL) →
       // Puppeteer local (fallback sempre disponível, mais sujeito a bloqueio do Google).
-      const useApify = isGmapsApifyConfigured();
+      const useApify = await isGmapsApifyConfigured(job.companyId);
       const useSidecar = !useApify && (await isSidecarAvailable());
       const engine = useApify ? "apify" : useSidecar ? "sidecar" : "puppeteer";
-      logger.info(`[LeadScraperJob] jobId=${job.id} google_maps via ${engine}${geo ? ` geo(${lat},${lng},${geo.radiusKm}km)` : ""}`);
+      logger.info(`[LeadScraperJob] jobId=${job.id} google_maps via ${engine} (${cityQueries.length} query(ies))${geo ? ` geo(${lat},${lng},${geo.radiusKm}km)` : ""}`);
 
-      const onProgress = async (current: number, total: number) => {
-        await job.update({ progress: Math.round((current / total) * 80) });
-      };
-      const results = useApify
-        ? await scrapeGoogleMapsViaApify(keyword, cityQuery, Math.min(maxResults, 200), onProgress, { state, geo })
-        : useSidecar
-          ? await scrapeViaSidecar(keyword, cityQuery, Math.min(maxResults, 200), onProgress, geo)
-          : await scrapeGoogleMaps(keyword, cityQuery, Math.min(maxResults, 200), onProgress, { state, geo });
+      const results: ScraperResult[] = [];
+      for (let qi = 0; qi < cityQueries.length; qi++) {
+        if (results.length >= cap) break;
+        const cityQuery = cityQueries[qi];
+        const onProgress = async (current: number, total: number) => {
+          const queryShare = 80 / cityQueries.length;
+          const p = qi * queryShare + (current / Math.max(total, 1)) * queryShare;
+          await job.update({ progress: Math.round(p) });
+        };
+        const remaining = Math.min(perQueryCap, cap - results.length);
+        const queryResults = useApify
+          ? await scrapeGoogleMapsViaApify(keyword, cityQuery, remaining, onProgress, { state: states[0], geo, companyId: job.companyId })
+          : useSidecar
+            ? await scrapeViaSidecar(keyword, cityQuery, remaining, onProgress, geo)
+            : await scrapeGoogleMaps(keyword, cityQuery, remaining, onProgress, { state: states[0], geo });
+        results.push(...queryResults);
+      }
 
       normalizePhonesInPlace(results);
-      await job.update({ results, totalFound: results.length, progress: 80 });
-      await runCrossEnrichment(job, results);
-      await runSocialEnrichment(job, results);
-      await runWhatsappValidation(job, results);
+      const deduped = await filterOutDuplicates(job.companyId, results, job.filters.skipDuplicates);
+      await job.update({ results: deduped, totalFound: deduped.length, progress: 80 });
+      await runCrossEnrichment(job, deduped);
+      await runSocialEnrichment(job, deduped);
+      await runWhatsappValidation(job, deduped);
       await job.update({ status: "done", progress: 100 });
 
     } else if (job.source === "cnpj") {
@@ -232,15 +258,16 @@ export const runScraperJob = async (jobId: number) => {
     } else if (job.source === "ig_followers") {
       const { igTargetHandle = "", maxResults = 500 } = job.filters;
 
-      if (!isApifyConfigured()) {
-        throw new Error("APIFY_TOKEN não configurado no ambiente. Configure em Configurações → Integrações para buscar seguidores do Instagram.");
+      if (!(await isApifyConfigured(job.companyId))) {
+        throw new Error("APIFY_TOKEN não configurado. Configure em Configurações → Lead Scraper para buscar seguidores do Instagram.");
       }
       const results = await scrapeFollowersViaApify(
         igTargetHandle,
         maxResults,
         async (current, total) => {
           await job.update({ progress: Math.round((current / total) * 80) });
-        }
+        },
+        job.companyId
       );
       normalizePhonesInPlace(results);
       await job.update({ results, totalFound: results.length, progress: 80 });

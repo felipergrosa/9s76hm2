@@ -1,6 +1,7 @@
 import axios from "axios";
-import { ScraperResult } from "../../models/LeadScraperJob";
+import { ScraperResult, MultiValue } from "../../models/LeadScraperJob";
 import logger from "../../utils/logger";
+import { toArray, resolveMaxResults } from "./ScraperFilterUtils";
 
 // Discovery: Brasil.io socios-brasil (keyword/uf, requer BRASILIO_TOKEN)
 //          ou minhareceita.org/?uf&cnae_fiscal (CNAE, sem auth, retorna registros completos)
@@ -15,11 +16,11 @@ type EnrichedLead = ScraperResult & { _cnaesSec?: string[] };
 
 export interface CnpjDiscoveryFilters {
   keyword?: string;        // text search in razao_social (brasil.io)
-  cnae?: string;           // post-filter: 7-digit CNAE code
-  naturezaJuridica?: string; // post-filter: e.g. "206-2"
-  situacao?: string;       // post-filter: ATIVA | SUSPENSA | INAPTA | BAIXADA
-  uf?: string;
-  municipio?: string;      // post-filter: city name
+  cnae?: MultiValue;           // post-filter: 7-digit CNAE code
+  naturezaJuridica?: MultiValue; // post-filter: e.g. "206-2"
+  situacao?: MultiValue;       // post-filter: ATIVA | SUSPENSA | INAPTA | BAIXADA
+  uf?: MultiValue;
+  municipio?: MultiValue;      // post-filter: city name
   temTelefone?: boolean;
   temEmail?: boolean;
   maxResults?: number;
@@ -134,24 +135,30 @@ export const enrichCnpjCascade = async (cnpj: string): Promise<ScraperResult | n
 // --- pós-filtros fail-closed: filtro setado + campo ausente/não-casante = rejeitado ---
 
 const passesFilters = (lead: EnrichedLead, f: CnpjDiscoveryFilters): boolean => {
-  if (f.situacao) {
-    if (!lead.situacao || !norm(lead.situacao).includes(norm(f.situacao))) return false;
+  const situacoes = toArray(f.situacao);
+  if (situacoes.length) {
+    if (!lead.situacao || !situacoes.some(v => norm(lead.situacao).includes(norm(v)))) return false;
   }
-  if (f.cnae) {
-    const target = toCnae7(f.cnae);
+  const cnaes = toArray(f.cnae);
+  if (cnaes.length) {
+    const targets = cnaes.map(toCnae7);
     const ids = [lead.cnaeId, ...(lead._cnaesSec || [])].filter(Boolean);
-    if (!ids.includes(target)) return false;
+    if (!targets.some(target => ids.includes(target))) return false;
   }
-  if (f.municipio) {
-    if (!lead.municipio || !norm(lead.municipio).includes(norm(f.municipio))) return false;
+  const municipios = toArray(f.municipio);
+  if (municipios.length) {
+    if (!lead.municipio || !municipios.some(v => norm(lead.municipio).includes(norm(v)))) return false;
   }
-  if (f.naturezaJuridica) {
-    const want = f.naturezaJuridica.trim();
-    const wantDigits = want.replace(/\D/g, "");
+  const naturezas = toArray(f.naturezaJuridica);
+  if (naturezas.length) {
     const leadDigits = (lead.naturezaJuridica || "").match(/\d{3,4}/)?.[0] || "";
-    const textMatch = norm(lead.naturezaJuridica || "").includes(norm(want));
-    const codeMatch = !!wantDigits && !!leadDigits && leadDigits === wantDigits;
-    if (!textMatch && !codeMatch) return false;
+    const matches = naturezas.some(want => {
+      const wantDigits = want.replace(/\D/g, "");
+      const textMatch = norm(lead.naturezaJuridica || "").includes(norm(want));
+      const codeMatch = !!wantDigits && !!leadDigits && leadDigits === wantDigits;
+      return textMatch || codeMatch;
+    });
+    if (!matches) return false;
   }
   if (f.temTelefone && !lead.phone) return false;
   if (f.temEmail && !lead.email) return false;
@@ -165,77 +172,107 @@ async function discoverViaBrasilIo(
   fetchLimit: number,
   token: string
 ): Promise<string[]> {
-  const params: Record<string, string> = { page_size: "100" };
-  if (filters.uf) params.uf = filters.uf;
-  // keyword faz full-text search em razao_social; municipio reusa o search textual
-  const searchTerm = filters.keyword?.trim() || filters.municipio?.trim() || "";
-  if (searchTerm) params.search = searchTerm;
+  // API do Brasil.io só aceita 1 uf por request — itera por uf quando multi-select
+  const ufs = toArray(filters.uf);
+  const ufList: Array<string | undefined> = ufs.length ? ufs : [undefined];
+
+  // keyword faz full-text search em razao_social; municipio (primeiro valor) reusa o search textual
+  const searchTerm = filters.keyword?.trim() || toArray(filters.municipio)[0] || "";
 
   const cnpjSet = new Set<string>();
-  let page = 1;
-  while (cnpjSet.size < fetchLimit) {
-    try {
-      const { data } = await axios.get(
-        "https://api.brasil.io/v1/dataset/socios-brasil/empresas/data/",
-        {
-          params: { ...params, page },
-          headers: { Authorization: `Token ${token}`, "User-Agent": "Whaticket/1.0" },
-          timeout: 20000,
+
+  for (const uf of ufList) {
+    if (cnpjSet.size >= fetchLimit) break;
+    const params: Record<string, string> = { page_size: "100" };
+    if (uf) params.uf = uf;
+    if (searchTerm) params.search = searchTerm;
+
+    let page = 1;
+    while (cnpjSet.size < fetchLimit) {
+      try {
+        const { data } = await axios.get(
+          "https://api.brasil.io/v1/dataset/socios-brasil/empresas/data/",
+          {
+            params: { ...params, page },
+            headers: { Authorization: `Token ${token}`, "User-Agent": "Whaticket/1.0" },
+            timeout: 20000,
+          }
+        );
+        const rows: any[] = data.results || [];
+        for (const row of rows) {
+          const c = String(row.cnpj || "").replace(/\D/g, "");
+          if (c.length === 14) cnpjSet.add(c);
         }
-      );
-      const rows: any[] = data.results || [];
-      for (const row of rows) {
-        const c = String(row.cnpj || "").replace(/\D/g, "");
-        if (c.length === 14) cnpjSet.add(c);
+        if (!data.next || rows.length === 0) break;
+        page++;
+        await delay(200);
+      } catch (err: any) {
+        logger.warn(
+          `[CnpjSearch] Brasil.io page ${page} (uf=${uf ?? "-"}) HTTP ${err.response?.status ?? "?"}: ${err.message}`
+        );
+        break;
       }
-      if (!data.next || rows.length === 0) break;
-      page++;
-      await delay(200);
-    } catch (err: any) {
-      logger.warn(
-        `[CnpjSearch] Brasil.io page ${page} HTTP ${err.response?.status ?? "?"}: ${err.message}`
-      );
-      break;
     }
   }
   return [...cnpjSet];
 }
 
 // sem BRASILIO_TOKEN: busca por CNAE (uf opcional) — retorna registros já completos
+// ponytail: guarda simples pra não deixar um usuário escolher 10 ufs x 10 cnaes e martelar a API
+const MAX_MINHARECEITA_COMBOS = 12;
+
 async function discoverViaMinhaReceita(
   filters: CnpjDiscoveryFilters,
   fetchLimit: number
 ): Promise<EnrichedLead[]> {
+  const ufs = toArray(filters.uf);
+  const cnaes = toArray(filters.cnae);
+  const ufList: Array<string | undefined> = ufs.length ? ufs : [undefined];
+  const cnaeList: Array<string | undefined> = cnaes.length ? cnaes : [undefined];
+
+  const combos: Array<{ uf?: string; cnae?: string }> = [];
+  for (const uf of ufList) {
+    for (const cnae of cnaeList) {
+      combos.push({ uf, cnae });
+      if (combos.length >= MAX_MINHARECEITA_COMBOS) break;
+    }
+    if (combos.length >= MAX_MINHARECEITA_COMBOS) break;
+  }
+
   const leads: EnrichedLead[] = [];
   const seen = new Set<string>();
-  let cursor = "";
-  while (leads.length < fetchLimit) {
-    const params: Record<string, string> = { limit: "100" };
-    if (filters.uf) params.uf = filters.uf.toUpperCase();
-    if (filters.cnae) params.cnae_fiscal = filters.cnae.replace(/\D/g, "");
-    if (cursor) params.cursor = cursor;
-    try {
-      const { data } = await axios.get("https://minhareceita.org/", {
-        params,
-        headers: UA,
-        timeout: 20000,
-      });
-      const rows: any[] = data.data || [];
-      for (const row of rows) {
-        const c = String(row.cnpj || "").replace(/\D/g, "");
-        if (c.length === 14 && !seen.has(c)) {
-          seen.add(c);
-          leads.push(mapMinhaReceita(row, c));
+
+  for (const combo of combos) {
+    if (leads.length >= fetchLimit) break;
+    let cursor = "";
+    while (leads.length < fetchLimit) {
+      const params: Record<string, string> = { limit: "100" };
+      if (combo.uf) params.uf = combo.uf.toUpperCase();
+      if (combo.cnae) params.cnae_fiscal = combo.cnae.replace(/\D/g, "");
+      if (cursor) params.cursor = cursor;
+      try {
+        const { data } = await axios.get("https://minhareceita.org/", {
+          params,
+          headers: UA,
+          timeout: 20000,
+        });
+        const rows: any[] = data.data || [];
+        for (const row of rows) {
+          const c = String(row.cnpj || "").replace(/\D/g, "");
+          if (c.length === 14 && !seen.has(c)) {
+            seen.add(c);
+            leads.push(mapMinhaReceita(row, c));
+          }
         }
+        cursor = data.cursor ? String(data.cursor) : "";
+        if (!cursor || rows.length === 0) break;
+        await delay(250);
+      } catch (err: any) {
+        logger.warn(
+          `[CnpjSearch] minhareceita discovery (uf=${combo.uf ?? "-"}, cnae=${combo.cnae ?? "-"}) HTTP ${err.response?.status ?? "?"}: ${err.message}`
+        );
+        break;
       }
-      cursor = data.cursor ? String(data.cursor) : "";
-      if (!cursor || rows.length === 0) break;
-      await delay(250);
-    } catch (err: any) {
-      logger.warn(
-        `[CnpjSearch] minhareceita discovery HTTP ${err.response?.status ?? "?"}: ${err.message}`
-      );
-      break;
     }
   }
   return leads;
@@ -246,7 +283,7 @@ export const searchCnpjsByFilters = async (
   onProgress?: (current: number, total: number) => Promise<void>
 ): Promise<ScraperResult[]> => {
   const token = process.env.BRASILIO_TOKEN;
-  const maxResults = Math.min(filters.maxResults || 100, 500);
+  const maxResults = resolveMaxResults(filters.maxResults, 500);
   const fetchLimit = Math.min(maxResults * 3, 900);
 
   if (!token) {

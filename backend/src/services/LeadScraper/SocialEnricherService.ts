@@ -76,7 +76,8 @@ async function instagramBioPhone(handle: string): Promise<string | null> {
 }
 
 export const enrichLeadSocials = async (
-  result: ScraperResult
+  result: ScraperResult,
+  companyId?: number
 ): Promise<Pick<ScraperResult, "instagram" | "twitter" | "linkedin" | "instagramPhone">> => {
   const out: Partial<ScraperResult> = {};
 
@@ -107,9 +108,9 @@ export const enrichLeadSocials = async (
   // publicamente, sem sessão pessoal/risco de ban); fallback: parse do meta description via axios.
   if (out.instagram) {
     await delay(600);
-    if (isApifyConfigured()) {
+    if (await isApifyConfigured(companyId)) {
       try {
-        const profile = await enrichProfileViaApify(out.instagram as string);
+        const profile = await enrichProfileViaApify(out.instagram as string, companyId);
         if (profile?.phone) out.instagramPhone = profile.phone;
         if (profile?.email && !out.email) (out as any).email = profile.email;
       } catch (err: any) {
