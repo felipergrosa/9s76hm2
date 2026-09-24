@@ -26,6 +26,10 @@ import {
   AccountBalanceOutlined as ConselhoIcon,
   DeleteOutline as DeleteIcon,
   DeleteSweepOutlined as ClearIcon,
+  WhatsApp as WhatsAppIcon,
+  ArrowUpward as SortAscIcon,
+  ArrowDownward as SortDescIcon,
+  UnfoldMore as SortNoneIcon,
 } from "@material-ui/icons";
 import { toast } from "react-toastify";
 import api from "../../services/api";
@@ -238,6 +242,23 @@ function TabPanel({ children, value, index }) {
   return value === index ? <Box>{children}</Box> : null;
 }
 
+function SortableHeader({ className, label, sortKey, sortConfig, onSort }) {
+  const active = sortConfig.key === sortKey;
+  const Icon = active ? (sortConfig.dir === "asc" ? SortAscIcon : SortDescIcon) : SortNoneIcon;
+  return (
+    <TableCell
+      className={className}
+      style={{ fontWeight: 700, fontSize: 11, cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
+      onClick={() => onSort(sortKey)}
+    >
+      <Box display="flex" alignItems="center" style={{ gap: 2 }}>
+        {label}
+        <Icon style={{ fontSize: 13, opacity: active ? 1 : 0.35 }} />
+      </Box>
+    </TableCell>
+  );
+}
+
 export default function LeadScraper() {
   const classes = useStyles();
   const [tab, setTab] = useState(0);
@@ -290,7 +311,7 @@ export default function LeadScraper() {
   const lastPollRef = useRef({ jobId: null, status: null });
 
   // CNPJ discovery mode
-  const [cnpjMode, setCnpjMode] = useState("enrich"); // "enrich" | "search"
+  const [cnpjMode, setCnpjMode] = useState("search"); // "enrich" | "search" — Pesquisa Avançada como padrão
   const [srKeyword, setSrKeyword] = useState("");
   const [srCnae, setSrCnae] = useState([]);   // { code, label }[]
   const [srNj, setSrNj] = useState([]);        // { code, label }[] — Natureza Jurídica
@@ -512,8 +533,9 @@ export default function LeadScraper() {
     setSelectedIndices(prev => prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i]);
 
   const toggleAll = () => {
-    const total = (activeJob?.results || []).length;
-    setSelectedIndices(prev => prev.length === total ? [] : (activeJob.results || []).map((_, i) => i));
+    const visibleIndices = displayRows.map(({ i }) => i);
+    const allVisibleSelected = visibleIndices.length > 0 && visibleIndices.every(i => selectedIndices.includes(i));
+    setSelectedIndices(allVisibleSelected ? [] : visibleIndices);
   };
 
   const selectJob = async (j) => {
@@ -551,6 +573,47 @@ export default function LeadScraper() {
   const allSelected = results.length > 0 && selectedIndices.length === results.length;
   const someSelected = selectedIndices.length > 0;
   const isRunning = activeJob?.status === "running" || activeJob?.status === "pending";
+
+  // Índices de results NUNCA mudam — indices/import/seleção dependem deles.
+  // sort/filtro atuam só na ORDEM/VISIBILIDADE de exibição via displayRows.
+  const [sortConfig, setSortConfig] = useState({ key: null, dir: "asc" }); // key: "name"|"phone"|"cnpj"|"rating"|"situacao"
+  const [quickFilters, setQuickFilters] = useState({ hasPhone: false, hasCnpj: false, hasWhatsapp: false, hasReceita: false });
+
+  const toggleQuickFilter = (key) => setQuickFilters(prev => ({ ...prev, [key]: !prev[key] }));
+
+  const requestSort = (key) => {
+    setSortConfig(prev => prev.key === key
+      ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
+      : { key, dir: "asc" });
+  };
+
+  const sortValue = (r, key) => {
+    switch (key) {
+      case "name": return (r.nomeFantasia || r.name || "").toLowerCase();
+      case "phone": return r.phone || "";
+      case "cnpj": return r.cnpj || "";
+      case "rating": return parseFloat(r.rating) || 0;
+      case "situacao": return (r.situacao || "").toLowerCase();
+      default: return "";
+    }
+  };
+
+  const displayRows = results
+    .map((r, i) => ({ r, i }))
+    .filter(({ r }) => {
+      if (quickFilters.hasPhone && !r.phone) return false;
+      if (quickFilters.hasCnpj && !r.cnpj) return false;
+      if (quickFilters.hasWhatsapp && !(r.whatsappChecked && r.hasWhatsapp)) return false;
+      if (quickFilters.hasReceita && !(r.enrichedFrom || []).includes("receita") && !r.cnaeDescricao) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      if (!sortConfig.key) return 0;
+      const va = sortValue(a.r, sortConfig.key);
+      const vb = sortValue(b.r, sortConfig.key);
+      const cmp = typeof va === "number" ? va - vb : String(va).localeCompare(String(vb));
+      return sortConfig.dir === "asc" ? cmp : -cmp;
+    });
 
   return (
     <MainContainer useWindowScroll>
@@ -727,8 +790,8 @@ export default function LeadScraper() {
                 </Typography>
                 <Slider
                   value={maxResults} onChange={(_, v) => setMaxResults(v)}
-                  min={0} max={200} step={10}
-                  marks={[{ value: 0, label: "∞" }, { value: 100, label: "100" }, { value: 200, label: "200" }]}
+                  min={0} max={1000} step={50}
+                  marks={[{ value: 0, label: "∞" }, { value: 500, label: "500" }, { value: 1000, label: "1000" }]}
                 />
               </Box>
               <Box mt={2}>
@@ -768,18 +831,18 @@ export default function LeadScraper() {
               {/* Mode toggle */}
               <Box className={classes.modeToggle}>
                 <Button
-                  className={`${classes.modeBtn} ${cnpjMode === "enrich" ? classes.modeBtnActive : ""}`}
-                  onClick={() => setCnpjMode("enrich")}
-                  startIcon={<CnpjIcon fontSize="small" />}
-                >
-                  Enriquecer CNPJs
-                </Button>
-                <Button
                   className={`${classes.modeBtn} ${cnpjMode === "search" ? classes.modeBtnActive : ""}`}
                   onClick={() => setCnpjMode("search")}
                   startIcon={<FilterIcon fontSize="small" />}
                 >
                   Pesquisa Avançada
+                </Button>
+                <Button
+                  className={`${classes.modeBtn} ${cnpjMode === "enrich" ? classes.modeBtnActive : ""}`}
+                  onClick={() => setCnpjMode("enrich")}
+                  startIcon={<CnpjIcon fontSize="small" />}
+                >
+                  Enriquecer CNPJs
                 </Button>
               </Box>
 
@@ -961,7 +1024,7 @@ export default function LeadScraper() {
 
                   <Box className={classes.fullRow}>
                     <Typography variant="body2" style={{ marginBottom: 6 }}>
-                      Máximo de resultados: <strong>{srMaxResults === 0 ? "sem limite (até 500)" : srMaxResults}</strong>
+                      Máximo de resultados: <strong>{srMaxResults === 0 ? "sem limite (até 1000)" : srMaxResults}</strong>
                       {srMaxResults > 0 && (
                         <span style={{ fontSize: 11, marginLeft: 8, opacity: 0.6 }}>
                           (~{Math.ceil(srMaxResults * 0.6 / 60)}–{Math.ceil(srMaxResults / 60)} min)
@@ -970,8 +1033,8 @@ export default function LeadScraper() {
                     </Typography>
                     <Slider
                       value={srMaxResults} onChange={(_, v) => setSrMaxResults(v)}
-                      min={0} max={200} step={10}
-                      marks={[{ value: 0, label: "∞" }, { value: 100, label: "100" }, { value: 200, label: "200" }]}
+                      min={0} max={1000} step={50}
+                      marks={[{ value: 0, label: "∞" }, { value: 500, label: "500" }, { value: 1000, label: "1000" }]}
                     />
                   </Box>
 
@@ -1035,11 +1098,11 @@ export default function LeadScraper() {
                 </Typography>
                 <Slider
                   value={igMaxFollowers} onChange={(_, v) => setIgMaxFollowers(v)}
-                  min={0} max={5000} step={50}
+                  min={0} max={1000} step={50}
                   marks={[
                     { value: 0, label: "∞" },
-                    { value: 1000, label: "1k" },
-                    { value: 5000, label: "5k" },
+                    { value: 500, label: "500" },
+                    { value: 1000, label: "1000" },
                   ]}
                 />
                 <Box mt={2} style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
@@ -1196,8 +1259,8 @@ export default function LeadScraper() {
                   </Typography>
                   <Slider
                     value={consMaxResults} onChange={(_, v) => setConsMaxResults(v)}
-                    min={0} max={200} step={10}
-                    marks={[{ value: 0, label: "∞" }, { value: 100, label: "100" }, { value: 200, label: "200" }]}
+                    min={0} max={1000} step={50}
+                    marks={[{ value: 0, label: "∞" }, { value: 500, label: "500" }, { value: 1000, label: "1000" }]}
                   />
                 </Box>
 
@@ -1373,6 +1436,32 @@ export default function LeadScraper() {
             </Box>
           ) : results.length > 0 ? (
             <>
+              <Box display="flex" style={{ gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+                {[
+                  { key: "hasPhone", label: "Com telefone" },
+                  { key: "hasWhatsapp", label: "Com WhatsApp" },
+                  { key: "hasCnpj", label: "Com CNPJ" },
+                  { key: "hasReceita", label: "Com dados da Receita" },
+                ].map(f => (
+                  <Chip
+                    key={f.key}
+                    label={f.label}
+                    size="small"
+                    clickable
+                    onClick={() => toggleQuickFilter(f.key)}
+                    style={{
+                      fontSize: 11, fontWeight: 600,
+                      background: quickFilters[f.key] ? "#c62828" : undefined,
+                      color: quickFilters[f.key] ? "#fff" : undefined,
+                    }}
+                  />
+                ))}
+                {displayRows.length !== results.length && (
+                  <Typography variant="caption" color="textSecondary" style={{ alignSelf: "center", marginLeft: 4 }}>
+                    {displayRows.length} de {results.length} exibidos
+                  </Typography>
+                )}
+              </Box>
               <Box className={classes.tableContainer}>
                 <Table size="small" stickyHeader>
                   <TableHead>
@@ -1385,23 +1474,23 @@ export default function LeadScraper() {
                           size="small"
                         />
                       </TableCell>
-                      <TableCell className={classes.stickyHead} style={{ fontWeight: 700, fontSize: 11 }}>NOME</TableCell>
+                      <SortableHeader className={classes.stickyHead} label="NOME" sortKey="name" sortConfig={sortConfig} onSort={requestSort} />
                       {activeJob.source === "conselho" && (
                         <TableCell className={classes.stickyHead} style={{ fontWeight: 700, fontSize: 11 }}>REGISTRO</TableCell>
                       )}
-                      <TableCell className={classes.stickyHead} style={{ fontWeight: 700, fontSize: 11 }}>TELEFONE</TableCell>
+                      <SortableHeader className={classes.stickyHead} label="TELEFONE" sortKey="phone" sortConfig={sortConfig} onSort={requestSort} />
                       <TableCell className={classes.stickyHead} style={{ fontWeight: 700, fontSize: 11 }}>REDES SOCIAIS</TableCell>
                       <TableCell className={classes.stickyHead} style={{ fontWeight: 700, fontSize: 11 }}>ENDEREÇO</TableCell>
-                      <TableCell className={classes.stickyHead} style={{ fontWeight: 700, fontSize: 11 }}>CNPJ</TableCell>
-                      <TableCell className={classes.stickyHead} style={{ fontWeight: 700, fontSize: 11 }}>RECEITA</TableCell>
+                      <SortableHeader className={classes.stickyHead} label="CNPJ" sortKey="cnpj" sortConfig={sortConfig} onSort={requestSort} />
+                      <SortableHeader className={classes.stickyHead} label="RECEITA" sortKey="situacao" sortConfig={sortConfig} onSort={requestSort} />
                       {activeJob.source === "conselho" && (
                         <TableCell className={classes.stickyHead} style={{ fontWeight: 700, fontSize: 11 }}>STATUS</TableCell>
                       )}
-                      <TableCell className={classes.stickyHead} style={{ fontWeight: 700, fontSize: 11 }}>AVALIAÇÃO</TableCell>
+                      <SortableHeader className={classes.stickyHead} label="AVALIAÇÃO" sortKey="rating" sortConfig={sortConfig} onSort={requestSort} />
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {results.map((r, i) => (
+                    {displayRows.map(({ r, i }) => (
                       <TableRow key={i} hover selected={selectedIndices.includes(i)}>
                         <TableCell padding="checkbox">
                           <Checkbox
@@ -1439,7 +1528,7 @@ export default function LeadScraper() {
                             </Typography>
                             {r.whatsappChecked && r.hasWhatsapp && (
                               <Tooltip title="WhatsApp ativo (validado)">
-                                <span style={{ color: "#25d366", fontSize: 13, fontWeight: 700 }}>✓WA</span>
+                                <WhatsAppIcon style={{ fontSize: 15, color: "#25d366" }} />
                               </Tooltip>
                             )}
                             {r.whatsappChecked && r.hasWhatsapp === false && (

@@ -283,8 +283,8 @@ export const searchCnpjsByFilters = async (
   onProgress?: (current: number, total: number) => Promise<void>
 ): Promise<ScraperResult[]> => {
   const token = process.env.BRASILIO_TOKEN;
-  const maxResults = resolveMaxResults(filters.maxResults, 500);
-  const fetchLimit = Math.min(maxResults * 3, 900);
+  const maxResults = resolveMaxResults(filters.maxResults, 1000);
+  const fetchLimit = Math.min(maxResults * 3, 3000);
 
   if (!token) {
     if (filters.keyword?.trim()) {

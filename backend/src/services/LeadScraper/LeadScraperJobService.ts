@@ -187,7 +187,7 @@ export const runScraperJob = async (jobId: number) => {
             ? states
             : [""];
 
-      const cap = resolveMaxResults(maxResults, 200);
+      const cap = resolveMaxResults(maxResults, 1000);
       const perQueryCap = Math.max(1, Math.ceil(cap / cityQueries.length));
 
       // Ordem de precedência dos motores de busca: Apify (compass~crawler-google-places,
