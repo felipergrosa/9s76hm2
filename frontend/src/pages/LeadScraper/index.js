@@ -704,12 +704,12 @@ export default function LeadScraper() {
               )}
               <Box className={classes.sliderBox}>
                 <Typography variant="body2" style={{ marginBottom: 6 }}>
-                  Máximo de resultados: <strong>{maxResults}</strong>
+                  Máximo de resultados: <strong>{maxResults === 0 ? "sem limite" : maxResults}</strong>
                 </Typography>
                 <Slider
                   value={maxResults} onChange={(_, v) => setMaxResults(v)}
-                  min={10} max={200} step={10}
-                  marks={[{ value: 10, label: "10" }, { value: 100, label: "100" }, { value: 200, label: "200" }]}
+                  min={0} max={200} step={10}
+                  marks={[{ value: 0, label: "∞" }, { value: 100, label: "100" }, { value: 200, label: "200" }]}
                 />
               </Box>
               <Box mt={2}>
@@ -922,15 +922,17 @@ export default function LeadScraper() {
 
                   <Box className={classes.fullRow}>
                     <Typography variant="body2" style={{ marginBottom: 6 }}>
-                      Máximo de resultados: <strong>{srMaxResults}</strong>
-                      <span style={{ fontSize: 11, marginLeft: 8, opacity: 0.6 }}>
-                        (~{Math.ceil(srMaxResults * 0.6 / 60)}–{Math.ceil(srMaxResults / 60)} min)
-                      </span>
+                      Máximo de resultados: <strong>{srMaxResults === 0 ? "sem limite (até 500)" : srMaxResults}</strong>
+                      {srMaxResults > 0 && (
+                        <span style={{ fontSize: 11, marginLeft: 8, opacity: 0.6 }}>
+                          (~{Math.ceil(srMaxResults * 0.6 / 60)}–{Math.ceil(srMaxResults / 60)} min)
+                        </span>
+                      )}
                     </Typography>
                     <Slider
                       value={srMaxResults} onChange={(_, v) => setSrMaxResults(v)}
-                      min={10} max={200} step={10}
-                      marks={[{ value: 10, label: "10" }, { value: 100, label: "100" }, { value: 200, label: "200" }]}
+                      min={0} max={200} step={10}
+                      marks={[{ value: 0, label: "∞" }, { value: 100, label: "100" }, { value: 200, label: "200" }]}
                     />
                   </Box>
 
@@ -990,13 +992,13 @@ export default function LeadScraper() {
                   style={{ marginBottom: 20 }}
                 />
                 <Typography variant="body2" style={{ marginBottom: 6 }}>
-                  Máximo de seguidores: <strong>{igMaxFollowers.toLocaleString("pt-BR")}</strong>
+                  Máximo de seguidores: <strong>{igMaxFollowers === 0 ? "sem limite (até 5.000)" : igMaxFollowers.toLocaleString("pt-BR")}</strong>
                 </Typography>
                 <Slider
                   value={igMaxFollowers} onChange={(_, v) => setIgMaxFollowers(v)}
-                  min={50} max={5000} step={50}
+                  min={0} max={5000} step={50}
                   marks={[
-                    { value: 50, label: "50" },
+                    { value: 0, label: "∞" },
                     { value: 1000, label: "1k" },
                     { value: 5000, label: "5k" },
                   ]}
@@ -1102,12 +1104,12 @@ export default function LeadScraper() {
 
                 <Box className={classes.fullRow}>
                   <Typography variant="body2" style={{ marginBottom: 6 }}>
-                    Máximo de resultados: <strong>{consMaxResults}</strong>
+                    Máximo de resultados: <strong>{consMaxResults === 0 ? "sem limite (até 2000)" : consMaxResults}</strong>
                   </Typography>
                   <Slider
                     value={consMaxResults} onChange={(_, v) => setConsMaxResults(v)}
-                    min={10} max={200} step={10}
-                    marks={[{ value: 10, label: "10" }, { value: 100, label: "100" }, { value: 200, label: "200" }]}
+                    min={0} max={200} step={10}
+                    marks={[{ value: 0, label: "∞" }, { value: 100, label: "100" }, { value: 200, label: "200" }]}
                   />
                 </Box>
 
@@ -1127,9 +1129,14 @@ export default function LeadScraper() {
         </Grid>
 
         {/* ── Right: jobs history ── */}
-        <Grid item xs={12} md={5}>
-          <Paper className={classes.paper} elevation={0} variant="outlined" style={{ minHeight: 200 }}>
-            <Box display="flex" justifyContent="space-between" alignItems="center" style={{ marginBottom: 12 }}>
+        <Grid item xs={12} md={5} style={{ display: "flex" }}>
+          <Paper
+            className={classes.paper}
+            elevation={0}
+            variant="outlined"
+            style={{ minHeight: 200, maxHeight: 560, display: "flex", flexDirection: "column", flex: 1 }}
+          >
+            <Box display="flex" justifyContent="space-between" alignItems="center" style={{ marginBottom: 12, flexShrink: 0 }}>
               <Typography variant="subtitle1" style={{ fontWeight: 700 }}>Histórico de Buscas</Typography>
               <Box display="flex" alignItems="center">
                 <Tooltip title="Limpar histórico">
@@ -1149,6 +1156,7 @@ export default function LeadScraper() {
               </Box>
             </Box>
 
+            <Box style={{ overflowY: "auto", flex: 1, minHeight: 0 }}>
             {jobs.length === 0 ? (
               <Box textAlign="center" py={4}>
                 <LeadIcon style={{ fontSize: 40, opacity: 0.18, marginBottom: 8 }} />
@@ -1207,6 +1215,7 @@ export default function LeadScraper() {
                 );
               })
             )}
+            </Box>
           </Paper>
         </Grid>
       </Grid>
