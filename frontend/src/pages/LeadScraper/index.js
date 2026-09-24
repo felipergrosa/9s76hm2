@@ -256,8 +256,8 @@ export default function LeadScraper() {
   const pollRef = useRef(null);
 
   const [keyword, setKeyword] = useState("");
-  const [city, setCity] = useState("");
-  const [state, setState] = useState("SP");
+  const [city, setCity] = useState([]); // string[] — multi-cidade
+  const [state, setState] = useState(["SP"]); // string[] — multi-UF
   const [maxResults, setMaxResults] = useState(50);
   // geo: área escolhida direto no mapa (alternativa a cidade/UF)
   const [mapsMode, setMapsMode] = useState("city"); // "city" | "map"
@@ -274,9 +274,11 @@ export default function LeadScraper() {
 
   // conselho state
   const [consConselho, setConsConselho] = useState("cau");
-  const [consTipo, setConsTipo] = useState("profissional"); // "profissional" | "empresa"
-  const [consUf, setConsUf] = useState("");
-  const [consMunicipio, setConsMunicipio] = useState("");
+  const [consTipo, setConsTipo] = useState("profissional"); // "profissional" | "empresa" | "ambos"
+  const [consUf, setConsUf] = useState([]); // string[]
+  const [consMunicipio, setConsMunicipio] = useState([]); // string[]
+  const [consRegional, setConsRegional] = useState([]); // string[]
+  const [consSituacao, setConsSituacao] = useState([]); // string[]
   const [consKeyword, setConsKeyword] = useState("");
   const [consMaxResults, setConsMaxResults] = useState(100);
 
@@ -290,11 +292,11 @@ export default function LeadScraper() {
   // CNPJ discovery mode
   const [cnpjMode, setCnpjMode] = useState("enrich"); // "enrich" | "search"
   const [srKeyword, setSrKeyword] = useState("");
-  const [srCnae, setSrCnae] = useState(null);   // { code, label } | null
-  const [srNj, setSrNj] = useState(null);        // { code, label } | null — Natureza Jurídica
-  const [srSituacao, setSrSituacao] = useState("ATIVA");
-  const [srUf, setSrUf] = useState("");
-  const [srMunicipio, setSrMunicipio] = useState("");
+  const [srCnae, setSrCnae] = useState([]);   // { code, label }[]
+  const [srNj, setSrNj] = useState([]);        // { code, label }[] — Natureza Jurídica
+  const [srSituacao, setSrSituacao] = useState(["ATIVA"]);
+  const [srUf, setSrUf] = useState([]);
+  const [srMunicipio, setSrMunicipio] = useState([]);
   const [srTemTelefone, setSrTemTelefone] = useState(false);
   const [srTemEmail, setSrTemEmail] = useState(false);
   const [srMaxResults, setSrMaxResults] = useState(200);
@@ -358,13 +360,13 @@ export default function LeadScraper() {
 
   const startMapsJob = async () => {
     if (!keyword.trim()) { toast.warning("Preencha a palavra-chave."); return; }
-    if (mapsMode === "city" && !city.trim()) { toast.warning("Preencha a cidade."); return; }
+    if (mapsMode === "city" && !city.some(c => c.trim())) { toast.warning("Preencha a cidade."); return; }
     if (mapsMode === "map" && !geo) { toast.warning("Clique no mapa para escolher o ponto central da busca."); return; }
     setLoading(true);
     try {
       const filters = mapsMode === "map"
         ? { keyword: keyword.trim(), lat: geo.lat, lng: geo.lng, radiusKm, maxResults }
-        : { keyword: keyword.trim(), city: city.trim(), state, maxResults };
+        : { keyword: keyword.trim(), city, state, maxResults };
       const { data } = await api.post("/lead-scraper/jobs", {
         source: "google_maps",
         filters
@@ -420,7 +422,7 @@ export default function LeadScraper() {
   };
 
   const startCnpjSearchJob = async () => {
-    if (!srKeyword.trim() && !srUf && !srMunicipio.trim()) {
+    if (!srKeyword.trim() && !srUf.length && !srMunicipio.some(m => m.trim())) {
       toast.warning("Informe ao menos: palavra-chave no nome, UF ou município.");
       return;
     }
@@ -428,11 +430,11 @@ export default function LeadScraper() {
     try {
       const filters = {
         keyword: srKeyword.trim() || undefined,
-        cnae: srCnae?.code || undefined,
-        naturezaJuridica: srNj?.code || undefined,
-        situacao: srSituacao || undefined,
-        uf: srUf || undefined,
-        municipio: srMunicipio.trim() || undefined,
+        cnae: srCnae?.length ? srCnae.map(o => o.code) : undefined,
+        naturezaJuridica: srNj?.length ? srNj.map(o => o.code) : undefined,
+        situacao: srSituacao?.length ? srSituacao : undefined,
+        uf: srUf?.length ? srUf : undefined,
+        municipio: srMunicipio?.length ? srMunicipio : undefined,
         temTelefone: srTemTelefone || undefined,
         temEmail: srTemEmail || undefined,
         maxResults: srMaxResults,
@@ -450,7 +452,7 @@ export default function LeadScraper() {
   };
 
   const startConselhoJob = async () => {
-    if (!consUf && !consMunicipio.trim() && !consKeyword.trim()) {
+    if (!consUf.length && !consMunicipio.some(m => m.trim()) && !consKeyword.trim()) {
       toast.warning("Informe ao menos: UF, município ou nome.");
       return;
     }
@@ -459,8 +461,10 @@ export default function LeadScraper() {
       const filters = {
         conselho: consConselho,
         conselhoTipo: consTipo,
-        uf: consUf || undefined,
-        municipio: consMunicipio.trim() || undefined,
+        uf: consUf?.length ? consUf : undefined,
+        municipio: consMunicipio?.length ? consMunicipio : undefined,
+        regional: consRegional?.length ? consRegional : undefined,
+        situacao: consSituacao?.length ? consSituacao : undefined,
         keyword: consKeyword.trim() || undefined,
         maxResults: consMaxResults,
       };
@@ -633,15 +637,30 @@ export default function LeadScraper() {
                   clearOnEscape
                   style={{ flex: 2, minWidth: 180 }}
                 />
-                <TextField
-                  label="Cidade" placeholder="São Paulo"
-                  value={city} onChange={e => setCity(e.target.value)}
-                  variant="outlined" size="small" style={{ flex: 1, minWidth: 130 }}
+                <Autocomplete
+                  multiple freeSolo
+                  options={[]}
+                  value={city}
+                  onChange={(_, val) => setCity(val)}
                   disabled={mapsMode === "map"}
+                  renderTags={(val, getTagProps) => val.map((opt, i) => (
+                    <Chip variant="outlined" size="small" label={opt} {...getTagProps({ index: i })} key={opt} />
+                  ))}
+                  renderInput={params => (
+                    <TextField {...params} label="Cidade" placeholder="São Paulo"
+                      variant="outlined" size="small" />
+                  )}
+                  style={{ flex: 1, minWidth: 180 }}
                 />
-                <FormControl variant="outlined" size="small" style={{ minWidth: 80 }} disabled={mapsMode === "map"}>
+                <FormControl variant="outlined" size="small" style={{ minWidth: 100 }} disabled={mapsMode === "map"}>
                   <InputLabel>UF</InputLabel>
-                  <Select value={state} onChange={e => setState(e.target.value)} label="UF">
+                  <Select
+                    multiple
+                    value={state}
+                    onChange={e => setState(e.target.value)}
+                    label="UF"
+                    renderValue={sel => sel.join(", ")}
+                  >
                     {STATES.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}
                   </Select>
                 </FormControl>
@@ -666,11 +685,11 @@ export default function LeadScraper() {
                 {mapsMode === "map" && (
                   <Button
                     size="small" variant="outlined"
-                    disabled={!city.trim()}
+                    disabled={!city.some(c => c.trim())}
                     onClick={async () => {
-                      // Geocode gratuito (Nominatim/OSM): centraliza o mapa na cidade digitada
+                      // Geocode gratuito (Nominatim/OSM): centraliza o mapa na 1ª cidade digitada
                       try {
-                        const q = encodeURIComponent(`${city} ${state}, Brasil`);
+                        const q = encodeURIComponent(`${city[0]} ${state[0] || ""}, Brasil`);
                         const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1`);
                         const [hit] = await r.json();
                         if (hit) setGeo({ lat: +hit.lat, lng: +hit.lon });
@@ -678,7 +697,7 @@ export default function LeadScraper() {
                       } catch { toast.error("Falha ao localizar a cidade no mapa."); }
                     }}
                   >
-                    Centralizar em {city || "cidade"}
+                    Centralizar em {city[0] || "cidade"}
                   </Button>
                 )}
               </Box>
@@ -837,7 +856,8 @@ export default function LeadScraper() {
                     onChange={(_, val) => {
                       setSegRf(val);
                       const digits = val?.cnae?.replace(/\D/g, "");
-                      setSrCnae(digits ? CNAES.find(o => o.code === digits) || null : null);
+                      const found = digits ? CNAES.find(o => o.code === digits) : null;
+                      setSrCnae(found ? [found] : []);
                     }}
                     renderInput={params => (
                       <TextField {...params} label="Segmento (atalho)" variant="outlined" size="small"
@@ -849,6 +869,7 @@ export default function LeadScraper() {
 
                   {/* CNAE Autocomplete */}
                   <Autocomplete
+                    multiple
                     options={CNAES}
                     getOptionLabel={opt => opt.label}
                     value={srCnae}
@@ -867,6 +888,7 @@ export default function LeadScraper() {
 
                   {/* Natureza Jurídica Autocomplete */}
                   <Autocomplete
+                    multiple
                     options={NJS}
                     getOptionLabel={opt => opt.label}
                     value={srNj}
@@ -885,8 +907,13 @@ export default function LeadScraper() {
 
                   <FormControl variant="outlined" size="small">
                     <InputLabel>Situação</InputLabel>
-                    <Select value={srSituacao} onChange={e => setSrSituacao(e.target.value)} label="Situação">
-                      <MenuItem value="">Todas</MenuItem>
+                    <Select
+                      multiple
+                      value={srSituacao}
+                      onChange={e => setSrSituacao(e.target.value)}
+                      label="Situação"
+                      renderValue={sel => sel.join(", ") || "Todas"}
+                    >
                       <MenuItem value="ATIVA">Ativa</MenuItem>
                       <MenuItem value="SUSPENSA">Suspensa</MenuItem>
                       <MenuItem value="INAPTA">Inapta</MenuItem>
@@ -896,17 +923,29 @@ export default function LeadScraper() {
 
                   <FormControl variant="outlined" size="small">
                     <InputLabel>UF</InputLabel>
-                    <Select value={srUf} onChange={e => setSrUf(e.target.value)} label="UF">
-                      <MenuItem value="">Todas</MenuItem>
+                    <Select
+                      multiple
+                      value={srUf}
+                      onChange={e => setSrUf(e.target.value)}
+                      label="UF"
+                      renderValue={sel => sel.join(", ") || "Todas"}
+                    >
                       {STATES.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}
                     </Select>
                   </FormControl>
 
-                  <TextField
-                    label="Município (pós-filtro)" placeholder="ex: São Paulo"
-                    value={srMunicipio} onChange={e => setSrMunicipio(e.target.value)}
-                    variant="outlined" size="small"
-                    helperText="Filtra pela cidade nos dados do cnpj.ws"
+                  <Autocomplete
+                    multiple freeSolo
+                    options={[]}
+                    value={srMunicipio}
+                    onChange={(_, val) => setSrMunicipio(val)}
+                    renderTags={(val, getTagProps) => val.map((opt, i) => (
+                      <Chip variant="outlined" size="small" label={opt} {...getTagProps({ index: i })} key={opt} />
+                    ))}
+                    renderInput={params => (
+                      <TextField {...params} label="Município (pós-filtro)" placeholder="ex: São Paulo"
+                        variant="outlined" size="small" helperText="Filtra pela cidade nos dados do cnpj.ws" />
+                    )}
                   />
 
                   <Box className={classes.checkRow}>
@@ -1078,21 +1117,70 @@ export default function LeadScraper() {
                   >
                     Empresa
                   </Button>
+                  <Button
+                    className={`${classes.modeBtn} ${consTipo === "ambos" ? classes.modeBtnActive : ""}`}
+                    onClick={() => setConsTipo("ambos")}
+                  >
+                    Ambos
+                  </Button>
                 </Box>
 
                 <FormControl variant="outlined" size="small">
                   <InputLabel>UF</InputLabel>
-                  <Select value={consUf} onChange={e => setConsUf(e.target.value)} label="UF">
-                    <MenuItem value="">Todas</MenuItem>
+                  <Select
+                    multiple
+                    value={consUf}
+                    onChange={e => setConsUf(e.target.value)}
+                    label="UF"
+                    renderValue={sel => sel.join(", ") || "Todas"}
+                  >
                     {STATES.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}
                   </Select>
                 </FormControl>
 
-                <TextField
-                  label="Município" placeholder="ex: São Paulo"
-                  value={consMunicipio} onChange={e => setConsMunicipio(e.target.value)}
-                  variant="outlined" size="small"
+                <Autocomplete
+                  multiple freeSolo
+                  options={[]}
+                  value={consMunicipio}
+                  onChange={(_, val) => setConsMunicipio(val)}
+                  renderTags={(val, getTagProps) => val.map((opt, i) => (
+                    <Chip variant="outlined" size="small" label={opt} {...getTagProps({ index: i })} key={opt} />
+                  ))}
+                  renderInput={params => (
+                    <TextField {...params} label="Município" placeholder="ex: São Paulo"
+                      variant="outlined" size="small" />
+                  )}
                 />
+
+                <Autocomplete
+                  multiple freeSolo
+                  options={[]}
+                  value={consRegional}
+                  onChange={(_, val) => setConsRegional(val)}
+                  renderTags={(val, getTagProps) => val.map((opt, i) => (
+                    <Chip variant="outlined" size="small" label={opt} {...getTagProps({ index: i })} key={opt} />
+                  ))}
+                  renderInput={params => (
+                    <TextField {...params} label="Regional (opcional)" placeholder="ex: SP1, RJ2"
+                      variant="outlined" size="small" helperText="Filtra pela regional do conselho (ex: CAU/SP)" />
+                  )}
+                />
+
+                <FormControl variant="outlined" size="small">
+                  <InputLabel>Situação do registro</InputLabel>
+                  <Select
+                    multiple
+                    value={consSituacao}
+                    onChange={e => setConsSituacao(e.target.value)}
+                    label="Situação do registro"
+                    renderValue={sel => sel.join(", ") || "Todas"}
+                  >
+                    <MenuItem value="ATIVO">Ativo</MenuItem>
+                    <MenuItem value="CANCELADO">Cancelado</MenuItem>
+                    <MenuItem value="INTERROMPIDO">Interrompido</MenuItem>
+                    <MenuItem value="SUSPENSO">Suspenso</MenuItem>
+                  </Select>
+                </FormControl>
 
                 <TextField
                   label="Nome (opcional)" placeholder="ex: Silva Arquitetura"
@@ -1166,14 +1254,15 @@ export default function LeadScraper() {
               jobs.map(j => {
                 const st = STATUS[j.status] || STATUS.pending;
                 const isActive = activeJob?.id === j.id;
+                const asStr = v => Array.isArray(v) ? v.join(", ") : v;
                 const jobName = j.source === "google_maps"
-                  ? `${j.filters?.keyword || "?"} — ${j.filters?.city || "?"} ${j.filters?.state || ""}`
+                  ? `${j.filters?.keyword || "?"} — ${asStr(j.filters?.city) || "?"} ${asStr(j.filters?.state) || ""}`
                   : j.source === "cnpj_search"
-                    ? `RF: ${[j.filters?.keyword, j.filters?.cnae, j.filters?.uf, j.filters?.municipio].filter(Boolean).join(" ") || "?"}`
+                    ? `RF: ${[j.filters?.keyword, asStr(j.filters?.cnae), asStr(j.filters?.uf), asStr(j.filters?.municipio)].filter(Boolean).join(" ") || "?"}`
                     : j.source === "ig_followers"
                       ? `📸 @${j.filters?.igTargetHandle || "?"}`
                       : j.source === "conselho"
-                        ? `${(j.filters?.conselho || "conselho").toUpperCase()} · ${j.filters?.conselhoTipo === "empresa" ? "Empresas" : "Profissionais"}${j.filters?.uf ? ` ${j.filters.uf}` : ""}`
+                        ? `${(j.filters?.conselho || "conselho").toUpperCase()} · ${j.filters?.conselhoTipo === "empresa" ? "Empresas" : j.filters?.conselhoTipo === "ambos" ? "Ambos" : "Profissionais"}${j.filters?.uf ? ` ${asStr(j.filters.uf)}` : ""}`
                         : `${j.filters?.cnpjs?.length || 0} CNPJs`;
                 return (
                   <Box
