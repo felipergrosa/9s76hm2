@@ -52,7 +52,6 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ./backend
-          push: true
           build-args: |
             GIT_COMMIT=${{ github.sha }}
             BUILD_DATE=${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}
@@ -64,6 +63,7 @@ jobs:
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
           platforms: linux/amd64
-          # manifest Docker v2 p/ Swarm/shepherd (OCI manifest nao e suportado)
+          # manifest Docker v2 p/ Swarm/shepherd (OCI nao e suportado pelo daemon)
+          outputs: type=registry,oci-mediatypes=false
           provenance: false
           sbom: false

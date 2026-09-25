@@ -52,7 +52,6 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
-          push: true
           build-args: |
             REACT_APP_FRONTEND_VERSION=${{ steps.vcalc.outputs.version_label }}
           tags: |
@@ -62,6 +61,7 @@ jobs:
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
           platforms: linux/amd64
-          # manifest Docker v2 p/ Swarm/shepherd (OCI manifest nao e suportado)
+          # manifest Docker v2 p/ Swarm/shepherd (OCI nao e suportado pelo daemon)
+          outputs: type=registry,oci-mediatypes=false
           provenance: false
           sbom: false
