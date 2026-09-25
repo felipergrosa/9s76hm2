@@ -40,12 +40,18 @@ async function scrapeMapsBranch(
       ? (states.length ? cities.flatMap(c => states.map(s => `${c} ${s}`)) : cities)
       : states.length ? states : [""];
 
+  // presets de público enviam mapQueries[] — sem eles, usa a keyword única
+  const queries = toArray(filters.mapQueries).length
+    ? toArray(filters.mapQueries)
+    : [keyword].filter(Boolean);
+  if (!queries.length) return [];
+
   const cap = Math.min(filters.maxResults || 200, 1000);
   const perQueryCap = Math.max(1, Math.ceil(cap / cityQueries.length));
 
   const useApify = await isGmapsApifyConfigured(companyId);
   const useSidecar = !useApify && (await isSidecarAvailable());
-  logger.info(`[GlobalSearch] maps via ${useApify ? "apify" : useSidecar ? "sidecar" : "puppeteer"} (${cityQueries.length} queries)`);
+  logger.info(`[GlobalSearch] maps via ${useApify ? "apify" : useSidecar ? "sidecar" : "puppeteer"} (${queries.length} queries x ${cityQueries.length} locais)`);
 
   const results: ScraperResult[] = [];
   for (let qi = 0; qi < cityQueries.length; qi++) {
@@ -57,12 +63,22 @@ async function scrapeMapsBranch(
       await onProgress(Math.round(qi * qShare + (cur / Math.max(total, 1)) * qShare), 100);
     };
     const remaining = Math.min(perQueryCap, cap - results.length);
-    const batch = useApify
-      ? await scrapeGoogleMapsViaApify(keyword, cityQueries[qi], remaining, share, { state: states[0], geo, companyId })
-      : useSidecar
-        ? await scrapeViaSidecar(keyword, cityQueries[qi], remaining, share, geo)
-        : await scrapeGoogleMaps(keyword, cityQueries[qi], remaining, share, { state: states[0], geo });
-    results.push(...batch);
+    if (useApify) {
+      // Apify aceita o array inteiro de queries num único run
+      const batch = await scrapeGoogleMapsViaApify(queries, cityQueries[qi], remaining, share, { state: states[0], geo, companyId });
+      results.push(...batch);
+    } else {
+      // sidecar/puppeteer: itera uma query por vez com cap dividido
+      const perQ = Math.max(1, Math.ceil(remaining / queries.length));
+      for (const q of queries) {
+        checkCancelled();
+        if (results.length >= cap) break;
+        const batch = useSidecar
+          ? await scrapeViaSidecar(q, cityQueries[qi], Math.min(perQ, cap - results.length), share, geo)
+          : await scrapeGoogleMaps(q, cityQueries[qi], Math.min(perQ, cap - results.length), share, { state: states[0], geo });
+        results.push(...batch);
+      }
+    }
   }
   return results;
 }
@@ -72,19 +88,44 @@ async function scrapeReceitaBranch(
   onProgress: (cur: number, total: number) => Promise<void>,
   checkCancelled: () => void
 ): Promise<ScraperResult[]> {
-  return searchCnpjsByFilters(
-    {
-      keyword: filters.keyword,
-      uf: filters.state || filters.uf,
-      municipio: filters.city || filters.municipio,
-      maxResults: Math.min(filters.maxResults || 200, 1000),
-      situacao: filters.situacao,
-    } as ScraperFilters,
-    async (cur, total) => {
-      checkCancelled();
-      await onProgress(cur, total);
-    }
-  );
+  // presets de público enviam keywords[] (texto na razão social, via Brasil.io)
+  // e/ou cnae[] (discovery direto por CNAE, via minhareceita — a API do
+  // Brasil.io não filtra CNAE server-side, então CNAE-only força minhareceita)
+  const keywords = toArray(filters.keywords).length
+    ? toArray(filters.keywords)
+    : toArray(filters.keyword);
+  const cnaes = toArray(filters.cnae);
+
+  const groups: Array<Partial<ScraperFilters>> = [
+    ...keywords.map(k => ({ keyword: k })),
+    ...(cnaes.length ? [{ cnae: cnaes, forceMinhaReceita: true } as Partial<ScraperFilters>] : []),
+  ];
+  if (!groups.length) groups.push({});
+
+  const cap = Math.min(filters.maxResults || 200, 1000);
+  const perGroup = Math.max(1, Math.ceil(cap / groups.length));
+  const results: ScraperResult[] = [];
+
+  for (let gi = 0; gi < groups.length; gi++) {
+    checkCancelled();
+    if (results.length >= cap) break;
+    const gShare = 100 / groups.length;
+    const batch = await searchCnpjsByFilters(
+      {
+        ...groups[gi],
+        uf: filters.state || filters.uf,
+        municipio: filters.city || filters.municipio,
+        maxResults: Math.min(perGroup, cap - results.length),
+        situacao: filters.situacao,
+      } as ScraperFilters,
+      async (cur, total) => {
+        checkCancelled();
+        await onProgress(Math.round(gi * gShare + (cur / Math.max(total, 1)) * gShare), 100);
+      }
+    );
+    results.push(...batch);
+  }
+  return results;
 }
 
 async function scrapeConselhoBranch(

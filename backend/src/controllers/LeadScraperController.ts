@@ -101,6 +101,15 @@ export const startJob = async (req: Request, res: Response): Promise<Response> =
       if (!Array.isArray(filters.cnpjs)) return res.status(400).json({ error: "cnpjs deve ser um array" });
       if (filters.cnpjs.length > 500) return res.status(400).json({ error: "máximo de 500 CNPJs por job" });
     }
+    // presets de público: múltiplas queries por fonte (busca global)
+    for (const key of ["keywords", "mapQueries"] as const) {
+      const v = filters[key];
+      if (v === undefined) continue;
+      const arr = (Array.isArray(v) ? v : [v]).map(s => String(s).trim()).filter(Boolean);
+      if (!arr.every(s => s.length <= 100)) return res.status(400).json({ error: `${key}: item excede 100 caracteres` });
+      if (arr.length > 20) return res.status(400).json({ error: `${key}: máximo de 20 queries` });
+      filters[key] = arr;
+    }
     if (filters.igTargetHandle !== undefined) {
       const handle = String(filters.igTargetHandle).trim().replace(/^@+/, "");
       if (!IG_HANDLE_REGEX.test(handle)) return res.status(400).json({ error: "igTargetHandle inválido" });

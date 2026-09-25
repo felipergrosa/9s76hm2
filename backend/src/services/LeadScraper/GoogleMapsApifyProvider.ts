@@ -133,7 +133,7 @@ const getDatasetItems = async (datasetId: string, companyId?: number): Promise<a
 };
 
 export const scrapeGoogleMapsViaApify = async (
-  keyword: string,
+  keyword: string | string[],
   cityQuery: string,
   maxResults = 50,
   onProgress?: (current: number, total: number) => Promise<void>,
@@ -141,9 +141,13 @@ export const scrapeGoogleMapsViaApify = async (
 ): Promise<ScraperResult[]> => {
   const geo = opts?.geo;
   const companyId = opts?.companyId;
+  // aceita várias queries num único run (searchStringsArray nativo) — o cap
+  // é por query, então divide o total para não estourar custo/limites
+  const queries = (Array.isArray(keyword) ? keyword : [keyword])
+    .map(q => String(q).trim()).filter(Boolean).slice(0, 20);
   const input: Record<string, any> = {
-    searchStringsArray: [keyword],
-    maxCrawledPlacesPerSearch: Math.min(maxResults, 200),
+    searchStringsArray: queries,
+    maxCrawledPlacesPerSearch: Math.min(Math.ceil(maxResults / Math.max(queries.length, 1)), 200),
     language: "pt-BR",
     // extrai email/telefone/socials (IG/X/LinkedIn/Facebook) da página de contato
     // do site do lugar — scrapeSocialMediaProfiles é add-on pago por perfil,
@@ -162,7 +166,7 @@ export const scrapeGoogleMapsViaApify = async (
   }
 
   const run = await startActorRun(GMAPS_ACTOR_ID, input, companyId);
-  logger.info(`[GmapsApify] run ${run.id} iniciado para "${keyword}" ${geo ? `geo(${geo.lat},${geo.lng})` : cityQuery}`);
+  logger.info(`[GmapsApify] run ${run.id} iniciado para "${queries.join(" | ")}" ${geo ? `geo(${geo.lat},${geo.lng})` : cityQuery}`);
 
   const done = await waitForRun(run.id, run.defaultDatasetId, maxResults, onProgress, companyId);
   const items = await getDatasetItems(done.defaultDatasetId, companyId);

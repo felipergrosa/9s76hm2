@@ -78,6 +78,35 @@ const STATES = [
   "PA","PB","PE","PI","PR","RJ","RN","RO","RR","RS","SC","SE","SP","TO",
 ];
 
+// Presets de público-alvo da Busca Global: keywords[] alimentam a Receita
+// (texto na razão social), mapQueries[] alimentam o Maps (1 run, várias
+// queries), cnae[] alimenta a RF por CNAE (minhareceita). O usuário só
+// troca cidade/UF — as queries ficam fixas por público.
+const GLOBAL_PRESETS = {
+  arquitetos: {
+    label: "Arquitetos / Light Design",
+    keywords: ["luminotecnico", "projeto luminotecnico", "lighting design", "light design"],
+    mapQueries: [
+      "projeto luminotécnico", "lighting designer",
+      "design de iluminação", "consultoria luminotécnica",
+    ],
+    cnae: ["7111100", "7490102"], // serviços de arquitetura + design de interiores
+    conselhoTipo: "ambos",
+    defaultSources: ["google_maps", "cnpj_search", "conselho"],
+  },
+  lojistas: {
+    label: "Lojistas e Distribuidores",
+    keywords: ["luminaria", "lustres", "material eletrico", "iluminacao"],
+    mapQueries: [
+      "loja de iluminação", "loja de material elétrico",
+      "loja de lustres", "distribuidora de lustres", "materiais de construção",
+    ],
+    cnae: ["4742300", "4744001", "4744099"], // mat. elétrico + ferragens + mat. construção
+    conselhoTipo: "ambos",
+    defaultSources: ["google_maps", "cnpj_search"],
+  },
+};
+
 // Somente CAU habilitado por ora; demais conselhos entram como "em breve"
 const CONSELHOS = [
   { value: "cau",    label: "CAU — Arquitetura e Urbanismo",        disabled: false },
@@ -315,6 +344,7 @@ export default function LeadScraper() {
   // busca global — reutiliza keyword/city/state/maxResults da aba Maps;
   // state próprio só para as fontes habilitadas
   const [globalSources, setGlobalSources] = useState(["google_maps", "cnpj_search", "conselho"]);
+  const [globalPreset, setGlobalPreset] = useState(""); // "" | "arquitetos" | "lojistas"
   const [consMaxResults, setConsMaxResults] = useState(100);
 
   // atalhos de segmento (Maps preenche keyword, RF preenche CNAE)
@@ -516,17 +546,30 @@ export default function LeadScraper() {
   };
 
   const startGlobalJob = async () => {
-    if (!keyword.trim()) { toast.warning("Preencha a palavra-chave."); return; }
+    const preset = GLOBAL_PRESETS[globalPreset];
+    if (!preset && !keyword.trim()) { toast.warning("Preencha a palavra-chave."); return; }
     if (!globalSources.length) { toast.warning("Selecione ao menos uma fonte."); return; }
     setLoading(true);
     try {
-      const filters = {
-        keyword: keyword.trim(),
-        city, state, maxResults,
-        sources: globalSources,
-        conselho: "cau",
-        conselhoTipo: "ambos",
-      };
+      const filters = preset
+        ? {
+            preset: globalPreset,
+            keyword: keyword.trim(),
+            keywords: preset.keywords,
+            mapQueries: preset.mapQueries,
+            cnae: preset.cnae,
+            city, state, maxResults,
+            sources: globalSources,
+            conselho: "cau",
+            conselhoTipo: preset.conselhoTipo,
+          }
+        : {
+            keyword: keyword.trim(),
+            city, state, maxResults,
+            sources: globalSources,
+            conselho: "cau",
+            conselhoTipo: "ambos",
+          };
       const { data } = await api.post("/lead-scraper/jobs", { source: "global", filters });
       setActiveJob(data);
       setSelectedIndices([]);
@@ -1329,11 +1372,29 @@ export default function LeadScraper() {
             {/* ── Busca Global: todas as fontes em paralelo, merge por identidade ── */}
             <TabPanel value={tab} index={4}>
               <Box className={classes.filterRow}>
-                <TextField
-                  label="Palavra-chave" placeholder="ex: iluminação, arquitetura, academia"
-                  value={keyword} onChange={e => setKeyword(e.target.value)}
-                  variant="outlined" size="small" style={{ flex: 2, minWidth: 180 }}
-                />
+                <FormControl variant="outlined" size="small" style={{ minWidth: 210 }}>
+                  <InputLabel>Público-alvo</InputLabel>
+                  <Select
+                    value={globalPreset}
+                    onChange={e => {
+                      const p = e.target.value;
+                      setGlobalPreset(p);
+                      if (p && GLOBAL_PRESETS[p]) setGlobalSources(GLOBAL_PRESETS[p].defaultSources);
+                    }}
+                    label="Público-alvo"
+                  >
+                    <MenuItem value=""><em>Personalizado</em></MenuItem>
+                    <MenuItem value="arquitetos">Arquitetos / Light Design</MenuItem>
+                    <MenuItem value="lojistas">Lojistas e Distribuidores</MenuItem>
+                  </Select>
+                </FormControl>
+                {!globalPreset && (
+                  <TextField
+                    label="Palavra-chave" placeholder="ex: iluminação, arquitetura, academia"
+                    value={keyword} onChange={e => setKeyword(e.target.value)}
+                    variant="outlined" size="small" style={{ flex: 2, minWidth: 180 }}
+                  />
+                )}
                 <Autocomplete
                   multiple freeSolo
                   options={[]}
@@ -1361,6 +1422,25 @@ export default function LeadScraper() {
                   </Select>
                 </FormControl>
               </Box>
+
+              {globalPreset && GLOBAL_PRESETS[globalPreset] && (
+                <Box mt={1} mb={0.5}>
+                  <Typography variant="body2" style={{ fontWeight: 600, fontSize: 12 }}>
+                    {GLOBAL_PRESETS[globalPreset].label} — busca:
+                  </Typography>
+                  <Box display="flex" style={{ gap: 4, flexWrap: "wrap", marginTop: 4 }}>
+                    {GLOBAL_PRESETS[globalPreset].mapQueries.map(q => (
+                      <Chip key={q} size="small" label={q} variant="outlined" color="primary" />
+                    ))}
+                    {GLOBAL_PRESETS[globalPreset].keywords.map(q => (
+                      <Chip key={q} size="small" label={`RF: ${q}`} variant="outlined" color="secondary" />
+                    ))}
+                    {GLOBAL_PRESETS[globalPreset].cnae.map(c => (
+                      <Chip key={c} size="small" label={`CNAE ${c}`} variant="outlined" />
+                    ))}
+                  </Box>
+                </Box>
+              )}
 
               <Box display="flex" alignItems="center" style={{ gap: 4, marginTop: 8, flexWrap: "wrap" }}>
                 <Typography variant="body2" style={{ fontWeight: 600, marginRight: 4 }}>Fontes:</Typography>
@@ -1468,7 +1548,7 @@ export default function LeadScraper() {
                 const isActive = activeJob?.id === j.id;
                 const asStr = v => Array.isArray(v) ? v.join(", ") : v;
                 const jobName = j.source === "global"
-                  ? `🌐 ${j.filters?.keyword || "?"} — ${asStr(j.filters?.city) || asStr(j.filters?.state) || "Brasil"}`
+                  ? `🌐 ${(j.filters?.preset && GLOBAL_PRESETS[j.filters.preset]?.label) || j.filters?.keyword || "?"} — ${asStr(j.filters?.city) || asStr(j.filters?.state) || "Brasil"}`
                   : j.source === "google_maps"
                   ? `${j.filters?.keyword || "?"} — ${asStr(j.filters?.city) || "?"} ${asStr(j.filters?.state) || ""}`
                   : j.source === "cnpj_search"

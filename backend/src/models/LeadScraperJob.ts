@@ -86,6 +86,11 @@ export interface ScraperFilters {
   walletUserId?: number;
   // busca global: fontes habilitadas (default: todas aplicáveis)
   sources?: string[];
+  // presets de público: múltiplas keywords para a RF (texto em razão social)
+  // e múltiplas queries para o Maps num mesmo job (ex.: "loja de lustres")
+  keywords?: MultiValue;
+  mapQueries?: MultiValue;
+  preset?: string; // identificador do preset (ex.: "arquitetos", "lojistas")
 }
 
 @Table

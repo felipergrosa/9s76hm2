@@ -24,6 +24,9 @@ export interface CnpjDiscoveryFilters {
   temTelefone?: boolean;
   temEmail?: boolean;
   maxResults?: number;
+  // discovery CNAE-only: força minhareceita mesmo com BRASILIO_TOKEN — a API
+  // do Brasil.io não filtra por CNAE no request, varreria a UF inteira
+  forceMinhaReceita?: boolean;
 }
 
 // comparação de texto sem acento e case-insensitive ("São Paulo" casa "SAO PAULO")
@@ -286,8 +289,8 @@ export const searchCnpjsByFilters = async (
   const maxResults = resolveMaxResults(filters.maxResults, 1000);
   const fetchLimit = Math.min(maxResults * 3, 3000);
 
-  if (!token) {
-    if (filters.keyword?.trim()) {
+  if (!token || filters.forceMinhaReceita) {
+    if (filters.keyword?.trim() && !filters.forceMinhaReceita) {
       throw new Error(
         "Busca por palavra-chave requer BRASILIO_TOKEN (grátis em brasil.io/auth/tokens/). Sem o token, informe filters.cnae."
       );
@@ -301,7 +304,7 @@ export const searchCnpjsByFilters = async (
 
   const results: ScraperResult[] = [];
 
-  if (!token) {
+  if (!token || filters.forceMinhaReceita) {
     // minhareceita: registros já vêm completos — só pós-filtrar
     const leads = await discoverViaMinhaReceita(filters, fetchLimit);
     for (const lead of leads) {
