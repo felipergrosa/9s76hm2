@@ -74,7 +74,7 @@ interface ApifyRun {
 }
 
 // POST /acts/{actor}/runs?token= — inicia o run e devolve o runId
-const startActorRun = async (actorId: string, input: object, companyId?: number): Promise<ApifyRun> => {
+export const startActorRun = async (actorId: string, input: object, companyId?: number): Promise<ApifyRun> => {
   try {
     const { data } = await axios.post(
       `${APIFY_BASE_URL}/acts/${actorId}/runs`,
@@ -88,7 +88,7 @@ const startActorRun = async (actorId: string, input: object, companyId?: number)
 };
 
 // GET /datasets/{id} — usado só para reportar progresso (itemCount parcial)
-const getDatasetItemCount = async (datasetId: string, companyId?: number): Promise<number> => {
+export const getDatasetItemCount = async (datasetId: string, companyId?: number): Promise<number> => {
   try {
     const { data } = await axios.get(`${APIFY_BASE_URL}/datasets/${datasetId}`, {
       params: { token: await apifyToken(companyId) },
@@ -101,7 +101,7 @@ const getDatasetItemCount = async (datasetId: string, companyId?: number): Promi
 };
 
 // Poll GET /actor-runs/{runId} até status terminal (5s, timeout 20min)
-const waitForRun = async (
+export const waitForRun = async (
   runId: string,
   datasetId: string,
   max: number,
@@ -141,7 +141,7 @@ const waitForRun = async (
 };
 
 // GET /datasets/{datasetId}/items?format=json
-const getDatasetItems = async (datasetId: string, companyId?: number): Promise<any[]> => {
+export const getDatasetItems = async (datasetId: string, companyId?: number): Promise<any[]> => {
   try {
     const { data } = await axios.get(`${APIFY_BASE_URL}/datasets/${datasetId}/items`, {
       params: { token: await apifyToken(companyId), format: "json" },

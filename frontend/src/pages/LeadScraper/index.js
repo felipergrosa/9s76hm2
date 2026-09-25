@@ -59,9 +59,10 @@ const SOCIAL_LINKS = {
   instagram: h => `https://instagram.com/${h}`,
   twitter:   h => `https://x.com/${h}`,
   linkedin:  h => `https://linkedin.com/company/${h}`,
+  facebook:  h => `https://facebook.com/${h}`,
 };
-const SOCIAL_COLORS = { instagram: "#e1306c", twitter: "#000", linkedin: "#0a66c2" };
-const SOCIAL_LABELS = { instagram: "IG", twitter: "X", linkedin: "LI" };
+const SOCIAL_COLORS = { instagram: "#e1306c", twitter: "#000", linkedin: "#0a66c2", facebook: "#1877f2" };
+const SOCIAL_LABELS = { instagram: "IG", twitter: "X", linkedin: "LI", facebook: "FB" };
 
 // "5511987654321" → "(11) 98765-4321" | "(11) 3456-7890"; sem dígitos BR retorna como veio
 const formatPhoneBR = (v) => {
@@ -1715,9 +1716,9 @@ export default function LeadScraper() {
                             </Typography>
                           </TableCell>
                         )}
-                        <TableCell>
+                        <TableCell style={{ whiteSpace: "nowrap" }}>
                           <Box display="flex" alignItems="center" style={{ gap: 4 }}>
-                            <Typography variant="body2" style={{ fontSize: 12 }}>
+                            <Typography variant="body2" style={{ fontSize: 12, whiteSpace: "nowrap" }}>
                               {r.phone ? formatPhoneBR(r.phone) : "—"}
                             </Typography>
                             {r.whatsappChecked && r.hasWhatsapp && (
@@ -1739,7 +1740,7 @@ export default function LeadScraper() {
                         </TableCell>
                         <TableCell>
                           <Box display="flex" style={{ gap: 4, flexWrap: "wrap" }}>
-                            {["instagram","twitter","linkedin"].map(p =>
+                            {["instagram","twitter","linkedin","facebook"].map(p =>
                               r[p] ? (
                                 <a
                                   key={p}
@@ -1761,7 +1762,7 @@ export default function LeadScraper() {
                                 </a>
                               ) : null
                             )}
-                            {!r.instagram && !r.twitter && !r.linkedin && (
+                            {!r.instagram && !r.twitter && !r.linkedin && !r.facebook && (
                               <Typography variant="caption" color="textSecondary">—</Typography>
                             )}
                           </Box>
@@ -1771,9 +1772,9 @@ export default function LeadScraper() {
                             {r.address || (r.municipio ? `${r.municipio}/${r.uf}` : "—")}
                           </Typography>
                         </TableCell>
-                        <TableCell>
+                        <TableCell style={{ whiteSpace: "nowrap" }}>
                           <Box display="flex" alignItems="center" style={{ gap: 4 }}>
-                            <Typography variant="body2" style={{ fontSize: 11, fontFamily: "monospace" }}>
+                            <Typography variant="body2" style={{ fontSize: 11, fontFamily: "monospace", whiteSpace: "nowrap" }}>
                               {r.cnpj
                                 ? r.cnpj.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5")
                                 : r.website

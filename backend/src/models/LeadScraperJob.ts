@@ -27,6 +27,7 @@ export interface ScraperResult {
   instagram?: string;
   twitter?: string;
   linkedin?: string;
+  facebook?: string;
   instagramPhone?: string;
   googleMapsUrl?: string;
   // dados adicionais da Receita Federal

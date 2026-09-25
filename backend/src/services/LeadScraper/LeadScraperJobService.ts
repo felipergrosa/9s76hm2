@@ -3,7 +3,7 @@ import LeadScraperJob, { ScraperFilters, ScraperResult } from "../../models/Lead
 import { scrapeGoogleMaps } from "./GoogleMapsScraperService";
 import { enrichCnpj } from "./CnpjEnricherService";
 import { searchCnpjsByFilters } from "./CnpjSearchService";
-import { enrichLeadSocials } from "./SocialEnricherService";
+import { enrichLeadSocials, enrichFromWebsitesBatch, enrichSocialsBatchViaApify, enrichIgPhonesBatch } from "./SocialEnricherService";
 import { scrapeConselho } from "./ConselhoScraperService";
 import { isSidecarAvailable, scrapeViaSidecar } from "./GmapsSidecarService";
 import { isApifyConfigured, scrapeFollowersViaApify, enrichProfilesBatchViaApify } from "../Instagram/InstagramApifyProvider";
@@ -161,6 +161,32 @@ async function runIgBatchEnrichment(job: LeadScraperJob, results: ScraperResult[
 // Updates DB every 5 leads to reduce write load. Usa Apify (instagram-profile-scraper)
 // quando configurado — sem sessão pessoal, sem risco de ban.
 async function runSocialEnrichment(job: LeadScraperJob, results: ScraperResult[], fromPct = 88, toPct = 96): Promise<void> {
+  // Modo batch (Apify configurado): 1 run do Google cobre N leads + profiles em
+  // lote — DDG por lead estava sendo bloqueado (HTTP 202 anti-bot).
+  const useBatch = await isApifyConfigured(job.companyId).catch(() => false);
+  if (useBatch) {
+    const span = toPct - fromPct;
+    // websites primeiro (grátis, paralelo): 1/3 da fatia
+    await enrichFromWebsitesBatch(results, async (done, total) => {
+      throwIfCancelled(job.id);
+      await job.update({ results: [...results], progress: fromPct + Math.round((done / Math.max(total, 1)) * span / 3) });
+    });
+    // google search batch: 2/3 da fatia
+    await enrichSocialsBatchViaApify(results, job.companyId, async (cur, total) => {
+      throwIfCancelled(job.id);
+      await job.update({ results: [...results], progress: fromPct + Math.round(span / 3) + Math.round((cur / Math.max(total, 1)) * span / 3) });
+    });
+    // telefones/email dos perfis IG em lote
+    await enrichIgPhonesBatch(results, job.companyId).catch(err => {
+      if (err instanceof JobCancelledError || cancelRequested.has(job.id)) throw err;
+      logger.warn(`[LeadScraperJob] jobId=${job.id}: batch IG phones falhou (${err?.message})`);
+    });
+    normalizePhonesInPlace(results);
+    throwIfCancelled(job.id);
+    await job.update({ results: [...results], progress: toPct });
+    return;
+  }
+
   for (let i = 0; i < results.length; i++) {
     throwIfCancelled(job.id);
     try {

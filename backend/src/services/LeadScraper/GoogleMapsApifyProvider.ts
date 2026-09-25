@@ -174,14 +174,26 @@ export const scrapeGoogleMapsViaApify = async (
     // scrapeContacts: emails/phones extraídos do site do lugar (array)
     const siteEmail = Array.isArray(item.emails) ? item.emails[0] : "";
     const sitePhone = Array.isArray(item.phones) ? item.phones[0] : "";
-    const ig = item.socials?.instagrams?.[0] || "";
+    // scrapeSocialMediaProfiles: perfis sociais extraídos do site/Google.
+    // O actor pode devolver URL completa ou handle — normaliza para handle/slug.
+    const soc = item.socials || {};
+    const first = (v: any) => (Array.isArray(v) ? v[0] : null);
+    const toHandle = (v: any) => {
+      const s = String(v || "").trim();
+      if (!s) return "";
+      const m = s.match(/(?:instagram|twitter|x|facebook|linkedin)\.com\/(?:company\/|in\/)?([a-zA-Z0-9._%@-]{2,80})/i);
+      return m ? m[1].replace(/[?/].*$/, "") : s.replace(/^@/, "");
+    };
 
     results.push({
       name,
       phone: item.phone || item.phoneUnformatted || sitePhone || "",
       website: item.website || "",
       email: siteEmail || "",
-      ...(ig ? { instagram: String(ig).replace(/^@/, "") } : {}),
+      ...(first(soc.instagrams) ? { instagram: toHandle(first(soc.instagrams)) } : {}),
+      ...(first(soc.twitters) ? { twitter: toHandle(first(soc.twitters)) } : {}),
+      ...(first(soc.linkedins) ? { linkedin: toHandle(first(soc.linkedins)) } : {}),
+      ...(first(soc.facebooks) ? { facebook: toHandle(first(soc.facebooks)) } : {}),
       address,
       rating: item.totalScore ? String(item.totalScore) : "",
       category: item.categoryName || (Array.isArray(item.categories) ? item.categories[0] : "") || "",
