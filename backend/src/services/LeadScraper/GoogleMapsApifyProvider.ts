@@ -12,7 +12,7 @@ import logger from "../../utils/logger";
 //   output { title, phone/phoneUnformatted, website, address, totalScore, categoryName, url }
 
 const APIFY_BASE_URL = "https://api.apify.com/v2";
-const GMAPS_ACTOR_ID = "compass~crawler-google-places-api";
+const GMAPS_ACTOR_ID = "compass~crawler-google-places";
 
 const POLL_INTERVAL_MS = 5_000;
 const RUN_TIMEOUT_MS = 30 * 60 * 1_000; // 30 min
@@ -142,6 +142,9 @@ export const scrapeGoogleMapsViaApify = async (
     searchStringsArray: [keyword],
     maxCrawledPlacesPerSearch: Math.min(maxResults, 200),
     language: "pt-BR",
+    // extrai email/telefone/socials da página de contato do site do lugar
+    scrapeContacts: true,
+    scrapeSocialMediaProfiles: true,
   };
 
   if (geo) {
@@ -168,11 +171,17 @@ export const scrapeGoogleMapsViaApify = async (
 
     const address = [item.address, item.city, item.state].filter(Boolean).join(", ") || item.address || "";
 
+    // scrapeContacts: emails/phones extraídos do site do lugar (array)
+    const siteEmail = Array.isArray(item.emails) ? item.emails[0] : "";
+    const sitePhone = Array.isArray(item.phones) ? item.phones[0] : "";
+    const ig = item.socials?.instagrams?.[0] || "";
+
     results.push({
       name,
-      phone: item.phone || item.phoneUnformatted || "",
+      phone: item.phone || item.phoneUnformatted || sitePhone || "",
       website: item.website || "",
-      email: "",
+      email: siteEmail || "",
+      ...(ig ? { instagram: String(ig).replace(/^@/, "") } : {}),
       address,
       rating: item.totalScore ? String(item.totalScore) : "",
       category: item.categoryName || (Array.isArray(item.categories) ? item.categories[0] : "") || "",

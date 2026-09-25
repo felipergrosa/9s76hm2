@@ -6,7 +6,7 @@ import { searchCnpjsByFilters } from "./CnpjSearchService";
 import { enrichLeadSocials } from "./SocialEnricherService";
 import { scrapeConselho } from "./ConselhoScraperService";
 import { isSidecarAvailable, scrapeViaSidecar } from "./GmapsSidecarService";
-import { isApifyConfigured, scrapeFollowersViaApify } from "../Instagram/InstagramApifyProvider";
+import { isApifyConfigured, scrapeFollowersViaApify, enrichProfilesBatchViaApify } from "../Instagram/InstagramApifyProvider";
 import { isGmapsApifyConfigured, scrapeGoogleMapsViaApify } from "./GoogleMapsApifyProvider";
 import { crossEnrichLead } from "./CrossEnricherService";
 import CheckContactNumber from "../WbotServices/CheckNumber";
@@ -123,6 +123,38 @@ async function runWhatsappValidation(job: LeadScraperJob, results: ScraperResult
     await delay(800);
   }
   await job.update({ results: [...results], progress: 99 });
+}
+
+// Enriquecimento IG em lote: 1 run do profile-scraper cobre todos os handles
+// (chunks de 100), trazendo telefone/email/site/categoria de perfis business.
+// Muito mais barato e rápido que 1 run por lead. Progresso: 88→96.
+async function runIgBatchEnrichment(job: LeadScraperJob, results: ScraperResult[]): Promise<void> {
+  const handles = results.map(r => r.instagram).filter(Boolean) as string[];
+  if (!handles.length || !(await isApifyConfigured(job.companyId))) {
+    await job.update({ progress: 96 });
+    return;
+  }
+  const profiles = await enrichProfilesBatchViaApify(
+    handles,
+    job.companyId,
+    async (current, total) => {
+      throwIfCancelled(job.id);
+      await job.update({ progress: 88 + Math.round((current / Math.max(total, 1)) * 8) });
+    }
+  );
+  let enriched = 0;
+  for (const r of results) {
+    const p = profiles.get(String(r.instagram || "").toLowerCase());
+    if (!p) continue;
+    enriched++;
+    if (!r.phone && p.phone) r.phone = p.phone;
+    if (!r.email && p.email) r.email = p.email;
+    if (!r.website && p.website) r.website = p.website;
+    if (!r.category && p.category) r.category = p.category;
+    if (!r.name && p.name) r.name = p.name;
+  }
+  logger.info(`[LeadScraperJob] jobId=${job.id}: batch IG enriqueceu ${enriched}/${results.length} leads`);
+  await job.update({ results: [...results], progress: 96 });
 }
 
 // Enriquecimento social (progresso parametrizável — default 88→96).
@@ -293,7 +325,15 @@ export const runScraperJob = async (jobId: number) => {
       normalizePhonesInPlace(results);
       await job.update({ results, totalFound: results.length, progress: 80 });
       await runCrossEnrichment(job, results);
-      await runSocialEnrichment(job, results);
+      // Batch: 1 run cobre todos os perfis; fallback per-lead se falhar
+      const batchOk = await runIgBatchEnrichment(job, results)
+        .then(() => true)
+        .catch(async (err: any) => {
+          if (err instanceof JobCancelledError || cancelRequested.has(job.id)) throw err;
+          logger.warn(`[LeadScraperJob] jobId=${job.id}: batch IG falhou (${err.message}) — fallback per-lead`);
+          return false;
+        });
+      if (!batchOk) await runSocialEnrichment(job, results);
       await runWhatsappValidation(job, results);
       throwIfCancelled(job.id);
       await job.update({ status: "done", progress: 100 });

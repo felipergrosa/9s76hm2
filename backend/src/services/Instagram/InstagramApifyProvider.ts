@@ -184,7 +184,8 @@ export const scrapeFollowersViaApify = async (
       continue;
     }
     // Garante que só entram seguidores (actor também suporta "following")
-    if (item?.type && item.type !== "FOLLOWER") continue;
+    // — actor retorna "follower" lowercase apesar do readme indicar "FOLLOWER"
+    if (item?.type && String(item.type).toUpperCase() !== "FOLLOWER") continue;
     if (!item?.username) continue;
 
     const isPrivate = item.isPrivate ?? item.is_private;
@@ -232,24 +233,58 @@ export const enrichProfileViaApify = async (
     return null;
   }
 
-  const isPrivate = profile.private ?? profile.isPrivate ?? profile.is_private;
-  const isVerified = profile.verified ?? profile.isVerified ?? profile.is_verified;
+  return parseProfileItem(profile, username);
+};
+
+// Normaliza um item do dataset do profile-scraper para ScraperResult
+const parseProfileItem = (item: any, fallbackUsername?: string): Partial<ScraperResult> => {
+  const isPrivate = item.private ?? item.isPrivate ?? item.is_private;
+  const isVerified = item.verified ?? item.isVerified ?? item.is_verified;
   const email =
-    profile.businessEmail || profile.publicEmail || profile.public_email ||
-    profile.email || "";
+    item.businessEmail || item.publicEmail || item.public_email ||
+    item.email || "";
   const phone =
-    profile.businessPhoneNumber || profile.contactPhoneNumber ||
-    profile.public_phone_number || profile.contact_phone_number ||
-    profile.phone || "";
+    item.businessPhoneNumber || item.contactPhoneNumber ||
+    item.public_phone_number || item.contact_phone_number ||
+    item.phone || "";
 
   return {
-    name: profile.fullName || profile.full_name || profile.username || username,
-    instagram: profile.username || username,
-    website: profile.externalUrl || profile.external_url || "",
-    category: profile.businessCategoryName || profile.categoryName || profile.category || "",
+    name: item.fullName || item.full_name || item.username || fallbackUsername || "",
+    instagram: item.username || fallbackUsername || "",
+    website: item.externalUrl || item.external_url || "",
+    category: item.businessCategoryName || item.categoryName || item.category || "",
     situacao: isPrivate ? "privada" : "pública",
     porte: isVerified ? "verificada" : "",
     ...(email ? { email } : {}),
     ...(phone ? { phone } : {}),
   };
+};
+
+// Enriquecimento em lote: 1 run para N handles (vs N runs no modo por-perfil).
+// Retorna mapa username(lowercase) → dados do perfil. Chunks de 100.
+export const enrichProfilesBatchViaApify = async (
+  handles: string[],
+  companyId?: number,
+  onProgress?: (current: number, total: number) => Promise<void>
+): Promise<Map<string, Partial<ScraperResult>>> => {
+  const CHUNK = 100;
+  const clean = [...new Set(
+    handles.map(h => String(h || "").replace(/^@/, "").trim().toLowerCase()).filter(Boolean)
+  )];
+  const out = new Map<string, Partial<ScraperResult>>();
+
+  for (let i = 0; i < clean.length; i += CHUNK) {
+    const chunk = clean.slice(i, i + CHUNK);
+    const run = await startActorRun(PROFILE_ACTOR_ID, { usernames: chunk }, companyId);
+    logger.info(`[Instagram/Apify] batch enrich run ${run.id}: ${chunk.length} perfis`);
+    const done = await waitForRun(run.id, run.defaultDatasetId, chunk.length, onProgress, companyId);
+    const items = await getDatasetItems(done.defaultDatasetId, companyId);
+    for (const item of items) {
+      if (!item || item.error) continue;
+      const u = String(item.username || "").toLowerCase();
+      if (!u) continue;
+      out.set(u, parseProfileItem(item));
+    }
+  }
+  return out;
 };

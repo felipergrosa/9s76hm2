@@ -111,14 +111,20 @@ export const enrichLeadSocials = async (
     if (await isApifyConfigured(companyId)) {
       try {
         const profile = await enrichProfileViaApify(out.instagram as string, companyId);
-        if (profile?.phone) out.instagramPhone = profile.phone;
+        if (profile?.phone) {
+          out.instagramPhone = profile.phone;
+          if (!result.phone) (out as any).phone = profile.phone;
+        }
         if (profile?.email && !out.email) (out as any).email = profile.email;
       } catch (err: any) {
         // best-effort: Apify indisponível não derruba o enriquecimento
       }
     } else {
       const phone = await instagramBioPhone(out.instagram as string);
-      if (phone) out.instagramPhone = phone;
+      if (phone) {
+        out.instagramPhone = phone;
+        if (!result.phone) (out as any).phone = phone;
+      }
     }
   }
 
