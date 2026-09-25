@@ -1,17 +1,19 @@
 version: "3.8"
 services:
   backend:
+    image: felipergrosa/9s76hm2-backend:latest
     build:
       context: ./backend
       args:
         BUILD_DATE: ${BUILD_DATE}
         GIT_COMMIT: ${GIT_COMMIT}
         BACKEND_VERSION: ${BACKEND_VERSION}
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
     container_name: whaticket-backend
     restart: always
-    depends_on:
-      - postgres
-      - redis
+    # postgres/redis sao externos (rede nobreluminarias) — auto-migrate.sh
+    # ja aguarda o banco ficar pronto antes de migrar e subir o server
     environment:
       NODE_ENV: production
       # Heap limit 1GB (uso real ~268MB, container limit 3GB)
@@ -33,6 +35,12 @@ services:
       JWT_REFRESH_SECRET: supersecretrefresh
       SESSIONS_DRIVER: fs
       SESSIONS_DIR: private/sessions
+      # Chave AES-256-GCM p/ cofre (cookies IG, token Apify). Gerar:
+      #   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+      # Definir no .env ao lado do compose. Sem ela, cofre falha por design.
+      DATA_KEY: ${DATA_KEY:-}
+      # Brasil.io — busca textual de CNPJ no enriquecimento cruzado
+      BRASILIO_TOKEN: ${BRASILIO_TOKEN:-}
       # Configurações de validação WhatsApp (REVERTIDO AO ORIGINAL)
       CONTACT_FILTER_ASYNC_VALIDATION: "false"
       CONTACT_VALIDATION_BATCH_SIZE: "50"
@@ -55,11 +63,12 @@ services:
       - backend-private:/app/private
 
   frontend:
+    image: felipergrosa/9s76hm2-frontend:latest
     build: ./frontend
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
     container_name: whaticket-frontend
     restart: always
-    depends_on:
-      - backend
     ports:
       - "80:80"
     networks:
@@ -79,6 +88,22 @@ services:
     volumes:
       - gmaps-playwright-cache:/opt
       - gmaps-data:/gmapsdata
+
+  # Watchtower: auto-deploy — monitora DockerHub e recria containers quando
+  # a imagem :latest muda (apos push na main -> Actions build -> pull aqui).
+  # --label-enable: so toca containers marcados (backend/frontend); demais
+  # containers do host (postgres, redis, outros projetos) ficam intactos.
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: whaticket-watchtower
+    restart: unless-stopped
+    command: ["--label-enable", "--cleanup", "--interval", "300", "--rolling-restart"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Credenciais do Docker Hub (caso as imagens fiquem privadas)
+      - ${DOCKER_CONFIG:-~/.docker}/config.json:/config.json:ro
+    networks:
+      - nobreluminarias
 
 networks:
   nobreluminarias:
