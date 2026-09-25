@@ -120,6 +120,26 @@ const waitForRun = async (
   }
 };
 
+// O actor devolve state por extenso ou sigla — normaliza para UF
+const STATE_TO_UF: Record<string, string> = {
+  acre: "AC", alagoas: "AL", amapa: "AP", amazonas: "AM", bahia: "BA",
+  ceara: "CE", "distrito federal": "DF", "espirito santo": "ES",
+  goias: "GO", maranhao: "MA", "mato grosso": "MT", "mato grosso do sul": "MS",
+  "minas gerais": "MG", para: "PA", paraiba: "PB", parana: "PR",
+  pernambuco: "PE", piaui: "PI", "rio de janeiro": "RJ",
+  "rio grande do norte": "RN", "rio grande do sul": "RS", rondonia: "RO",
+  roraima: "RR", "santa catarina": "SC", "sao paulo": "SP",
+  sergipe: "SE", tocantins: "TO",
+};
+
+const toUf = (state: any): string => {
+  const s = String(state || "").trim();
+  if (!s) return "";
+  if (/^[A-Z]{2}$/.test(s)) return s;
+  const key = s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  return STATE_TO_UF[key] || s.slice(0, 2).toUpperCase();
+};
+
 const getDatasetItems = async (datasetId: string, companyId?: number): Promise<any[]> => {
   try {
     const { data } = await axios.get(`${APIFY_BASE_URL}/datasets/${datasetId}/items`, {
@@ -203,6 +223,8 @@ export const scrapeGoogleMapsViaApify = async (
       ...(first(soc.linkedins) ? { linkedin: toHandle(first(soc.linkedins)) } : {}),
       ...(first(soc.facebooks) ? { facebook: toHandle(first(soc.facebooks)) } : {}),
       address,
+      municipio: item.city || "",
+      uf: toUf(item.state),
       rating: item.totalScore ? String(item.totalScore) : "",
       category: item.categoryName || (Array.isArray(item.categories) ? item.categories[0] : "") || "",
       googleMapsUrl: item.url || "",

@@ -82,6 +82,36 @@ const STATES = [
 // (texto na razão social), mapQueries[] alimentam o Maps (1 run, várias
 // queries), cnae[] alimenta a RF por CNAE (minhareceita). O usuário só
 // troca cidade/UF — as queries ficam fixas por público.
+// Lista real de municípios via IBGE — carrega por UF selecionada (leve,
+// ~200-600 cidades/UF) com cache em memória para não refazer requests.
+const ibgeCache = {};
+const useCityOptions = (ufs) => {
+  const [options, setOptions] = useState([]);
+  const key = (ufs || []).join(",");
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      if (!ufs?.length) { if (alive) setOptions([]); return; }
+      const names = new Set();
+      await Promise.all(ufs.map(async uf => {
+        if (ibgeCache[uf]) { ibgeCache[uf].forEach(n => names.add(n)); return; }
+        try {
+          const res = await fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${uf}/municipios?orderBy=nome`);
+          const rows = await res.json();
+          const list = (rows || []).map(m => m.nome).filter(Boolean);
+          ibgeCache[uf] = list;
+          list.forEach(n => names.add(n));
+        } catch { /* IBGE fora — autocomplete continua freeSolo */ }
+      }));
+      if (alive) setOptions([...names].sort());
+    };
+    load();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  return options;
+};
+
 const GLOBAL_PRESETS = {
   arquitetos: {
     label: "Arquitetos / Light Design",
@@ -365,6 +395,11 @@ export default function LeadScraper() {
   const [srTemTelefone, setSrTemTelefone] = useState(false);
   const [srTemEmail, setSrTemEmail] = useState(false);
   const [srMaxResults, setSrMaxResults] = useState(200);
+
+  // opções reais de município (IBGE) por UF — Maps/Global dividem `state`
+  const cityOptions = useCityOptions(state);
+  const srCityOptions = useCityOptions(srUf);
+  const consCityOptions = useCityOptions(consUf);
 
   const loadJobs = useCallback(async () => {
     try {
@@ -794,7 +829,7 @@ export default function LeadScraper() {
                 />
                 <Autocomplete
                   multiple freeSolo
-                  options={[]}
+                  options={cityOptions}
                   value={city}
                   onChange={(_, val) => setCity(val)}
                   disabled={mapsMode === "map"}
@@ -1091,7 +1126,7 @@ export default function LeadScraper() {
 
                   <Autocomplete
                     multiple freeSolo
-                    options={[]}
+                    options={srCityOptions}
                     value={srMunicipio}
                     onChange={(_, val) => setSrMunicipio(val)}
                     renderTags={(val, getTagProps) => val.map((opt, i) => (
@@ -1295,7 +1330,7 @@ export default function LeadScraper() {
 
                 <Autocomplete
                   multiple freeSolo
-                  options={[]}
+                  options={consCityOptions}
                   value={consMunicipio}
                   onChange={(_, val) => setConsMunicipio(val)}
                   renderTags={(val, getTagProps) => val.map((opt, i) => (
@@ -1397,7 +1432,7 @@ export default function LeadScraper() {
                 )}
                 <Autocomplete
                   multiple freeSolo
-                  options={[]}
+                  options={cityOptions}
                   value={city}
                   onChange={(_, val) => setCity(val)}
                   renderTags={(val, getTagProps) => val.map((opt, i) => (

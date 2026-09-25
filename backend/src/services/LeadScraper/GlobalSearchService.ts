@@ -19,6 +19,25 @@ const toArray = (v?: MultiValue): string[] => {
 
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
 
+// Pós-filtro geo para leads do Maps: queries amplas fazem o Google expandir
+// o raio (busca "araras" trouxe Marília/Bauru). Descarta só quando o campo
+// do lead é conhecido e difere — lead sem cidade/UF passa (conservador).
+const normGeo = (s: string) =>
+  s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, "");
+
+const geoMatches = (leadVal: string, wanted: string[]): boolean => {
+  const l = normGeo(leadVal);
+  return wanted.some(v => { const w = normGeo(v); return l.includes(w) || w.includes(l); });
+};
+
+const passesGeoFilter = (r: ScraperResult, filters: ScraperFilters): boolean => {
+  const cities = toArray(filters.city);
+  if (cities.length && r.municipio && !geoMatches(r.municipio, cities)) return false;
+  const ufs = toArray(filters.state || filters.uf);
+  if (ufs.length && r.uf && !ufs.some(u => u.toUpperCase() === r.uf)) return false;
+  return true;
+};
+
 // ── Fontes ──────────────────────────────────────────────────────────────────
 
 async function scrapeMapsBranch(
@@ -63,10 +82,17 @@ async function scrapeMapsBranch(
       await onProgress(Math.round(qi * qShare + (cur / Math.max(total, 1)) * qShare), 100);
     };
     const remaining = Math.min(perQueryCap, cap - results.length);
+    const accept = (batch: ScraperResult[]) => {
+      const kept = batch.filter(r => passesGeoFilter(r, filters));
+      if (kept.length < batch.length) {
+        logger.info(`[GlobalSearch] geo-filter: ${batch.length - kept.length} leads fora de ${cities.join("/") || states.join("/")} descartados`);
+      }
+      results.push(...kept);
+    };
     if (useApify) {
       // Apify aceita o array inteiro de queries num único run
       const batch = await scrapeGoogleMapsViaApify(queries, cityQueries[qi], remaining, share, { state: states[0], geo, companyId });
-      results.push(...batch);
+      accept(batch);
     } else {
       // sidecar/puppeteer: itera uma query por vez com cap dividido
       const perQ = Math.max(1, Math.ceil(remaining / queries.length));
@@ -76,7 +102,7 @@ async function scrapeMapsBranch(
         const batch = useSidecar
           ? await scrapeViaSidecar(q, cityQueries[qi], Math.min(perQ, cap - results.length), share, geo)
           : await scrapeGoogleMaps(q, cityQueries[qi], Math.min(perQ, cap - results.length), share, { state: states[0], geo });
-        results.push(...batch);
+        accept(batch);
       }
     }
   }
