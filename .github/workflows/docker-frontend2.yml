@@ -1,4 +1,4 @@
-name: Build and Push Frontend Docker image
+name: Build, Push and Deploy Frontend
 
 on:
   push:
@@ -14,54 +14,43 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Runner self-hosted na VPS (stack ci-runner) — gratis em repo privado.
+    # O runner tem docker.sock: builda, publica e atualiza o service do swarm.
+    runs-on: [self-hosted, vps]
+    timeout-minutes: 45
 
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Read frontend version
-        id: pkg
-        run: |
-          echo "Reading frontend/package.json version..."
-          VER=$(node -p -e "require('./frontend/package.json').version")
-          echo "version=$VER" >> $GITHUB_OUTPUT
-
       - name: Compute frontend version label
         id: vcalc
         run: |
           BASE=$(node -p -e "require('./frontend/package.json').version")
-          # Extrai prefixo antes de 'v-<n>' se existir, senão usa BASE como prefixo
           PREFIX=$(node -e "const v=process.argv[1];const m=v.match(/^(.*?)(?:v-\d+)?$/);process.stdout.write(m?m[1]:v)" "$BASE")
-          echo "Base version: $BASE -> Prefix: $PREFIX"
-          AUTO=${GITHUB_RUN_NUMBER}
-          FINAL="${PREFIX}v-${AUTO}"
-          echo "version_label=$FINAL" >> $GITHUB_OUTPUT
+          echo "version_label=${PREFIX}v-${GITHUB_RUN_NUMBER}" >> $GITHUB_OUTPUT
 
       - name: Login to DockerHub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-          
+        run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./frontend
-          build-args: |
-            REACT_APP_FRONTEND_VERSION=${{ steps.vcalc.outputs.version_label }}
-          tags: |
-            felipergrosa/9s76hm2-frontend:latest
-            felipergrosa/9s76hm2-frontend:${{ github.sha }}
-            felipergrosa/9s76hm2-frontend:v${{ steps.vcalc.outputs.version_label }}
-          cache-from: type=gha,scope=frontend
-          cache-to: type=gha,mode=max,scope=frontend
-          platforms: linux/amd64
-          # manifest Docker v2 p/ Swarm/shepherd (OCI nao e suportado pelo daemon)
-          outputs: type=registry,oci-mediatypes=false
-          provenance: false
-          sbom: false
+        run: |
+          docker build \
+            --build-arg REACT_APP_FRONTEND_VERSION=${{ steps.vcalc.outputs.version_label }} \
+            -t felipergrosa/9s76hm2-frontend:latest \
+            -t felipergrosa/9s76hm2-frontend:${{ github.sha }} \
+            -t felipergrosa/9s76hm2-frontend:v${{ steps.vcalc.outputs.version_label }} \
+            ./frontend
+          docker push felipergrosa/9s76hm2-frontend:latest
+          docker push felipergrosa/9s76hm2-frontend:${{ github.sha }}
+          docker push felipergrosa/9s76hm2-frontend:v${{ steps.vcalc.outputs.version_label }}
+
+      - name: Deploy no swarm
+        run: |
+          docker service update --with-registry-auth --force \
+            --image felipergrosa/9s76hm2-frontend:latest \
+            whaticket_whaticketfront
+
+      - name: Cleanup docker cache
+        if: always()
+        run: docker system prune -af --filter "until=24h" || true
