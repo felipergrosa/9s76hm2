@@ -31,6 +31,7 @@ import {
   ArrowDownward as SortDescIcon,
   UnfoldMore as SortNoneIcon,
   StopOutlined as StopIcon,
+  Public as GlobalIcon,
 } from "@material-ui/icons";
 import { toast } from "react-toastify";
 import api from "../../services/api";
@@ -46,6 +47,12 @@ const STATUS = {
   error:   { label: "Erro",       bg: "#fce4ec", color: "#c62828" },
   pending: { label: "Aguardando", bg: "#f5f5f5", color: "#757575" },
   cancelled: { label: "Cancelado", bg: "#efebe9", color: "#5d4037" },
+};
+
+const GLOBAL_SOURCE_META = {
+  google_maps: { label: "Maps", color: "#1a73e8" },
+  cnpj_search: { label: "RF", color: "#2e7d32" },
+  conselho: { label: "CAU", color: "#6a1b9a" },
 };
 
 const SOCIAL_LINKS = {
@@ -303,6 +310,10 @@ export default function LeadScraper() {
   const [consRegional, setConsRegional] = useState([]); // string[]
   const [consSituacao, setConsSituacao] = useState([]); // string[]
   const [consKeyword, setConsKeyword] = useState("");
+
+  // busca global — reutiliza keyword/city/state/maxResults da aba Maps;
+  // state próprio só para as fontes habilitadas
+  const [globalSources, setGlobalSources] = useState(["google_maps", "cnpj_search", "conselho"]);
   const [consMaxResults, setConsMaxResults] = useState(100);
 
   // atalhos de segmento (Maps preenche keyword, RF preenche CNAE)
@@ -503,6 +514,30 @@ export default function LeadScraper() {
     finally { setLoading(false); }
   };
 
+  const startGlobalJob = async () => {
+    if (!keyword.trim()) { toast.warning("Preencha a palavra-chave."); return; }
+    if (!globalSources.length) { toast.warning("Selecione ao menos uma fonte."); return; }
+    setLoading(true);
+    try {
+      const filters = {
+        keyword: keyword.trim(),
+        city, state, maxResults,
+        sources: globalSources,
+        conselho: "cau",
+        conselhoTipo: "ambos",
+      };
+      const { data } = await api.post("/lead-scraper/jobs", { source: "global", filters });
+      setActiveJob(data);
+      setSelectedIndices([]);
+      toast.success("Busca global iniciada — todas as fontes em paralelo!");
+      startPoll(data.id);
+      loadJobs();
+    } catch (err) {
+      toast.error(err?.response?.data?.error || "Erro ao iniciar busca global.");
+    }
+    finally { setLoading(false); }
+  };
+
   const importSelected = async () => {
     if (!activeJob?.id) return;
     const indices = selectedIndices.length
@@ -690,6 +725,7 @@ export default function LeadScraper() {
               <Tab label={<Box display="flex" alignItems="center" style={{ gap: 6 }}><CnpjIcon fontSize="small" /> CNPJ / Receita Federal</Box>} />
               <Tab label={<Box display="flex" alignItems="center" style={{ gap: 6 }}><FollowersIcon fontSize="small" /> Seguidores IG</Box>} />
               <Tab label={<Box display="flex" alignItems="center" style={{ gap: 6 }}><ConselhoIcon fontSize="small" /> Conselhos</Box>} />
+              <Tab label={<Box display="flex" alignItems="center" style={{ gap: 6 }}><GlobalIcon fontSize="small" /> Busca Global</Box>} />
             </Tabs>
 
             <TabPanel value={tab} index={0}>
@@ -1288,6 +1324,106 @@ export default function LeadScraper() {
                 </Box>
               </Box>
             </TabPanel>
+
+            {/* ── Busca Global: todas as fontes em paralelo, merge por identidade ── */}
+            <TabPanel value={tab} index={4}>
+              <Box className={classes.filterRow}>
+                <TextField
+                  label="Palavra-chave" placeholder="ex: iluminação, arquitetura, academia"
+                  value={keyword} onChange={e => setKeyword(e.target.value)}
+                  variant="outlined" size="small" style={{ flex: 2, minWidth: 180 }}
+                />
+                <Autocomplete
+                  multiple freeSolo
+                  options={[]}
+                  value={city}
+                  onChange={(_, val) => setCity(val)}
+                  renderTags={(val, getTagProps) => val.map((opt, i) => (
+                    <Chip variant="outlined" size="small" label={opt} {...getTagProps({ index: i })} key={opt} />
+                  ))}
+                  renderInput={params => (
+                    <TextField {...params} label="Cidade" placeholder="São Paulo"
+                      variant="outlined" size="small" />
+                  )}
+                  style={{ flex: 1, minWidth: 160 }}
+                />
+                <FormControl variant="outlined" size="small" style={{ minWidth: 100 }}>
+                  <InputLabel>UF</InputLabel>
+                  <Select
+                    multiple
+                    value={state}
+                    onChange={e => setState(e.target.value)}
+                    label="UF"
+                    renderValue={sel => sel.join(", ")}
+                  >
+                    {STATES.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}
+                  </Select>
+                </FormControl>
+              </Box>
+
+              <Box display="flex" alignItems="center" style={{ gap: 4, marginTop: 8, flexWrap: "wrap" }}>
+                <Typography variant="body2" style={{ fontWeight: 600, marginRight: 4 }}>Fontes:</Typography>
+                {[
+                  { key: "google_maps", label: "Google Maps", hint: "nome, telefone, site, endereço, avaliação + contatos do site" },
+                  { key: "cnpj_search", label: "Receita Federal", hint: "CNPJ, razão social, CNAE, situação cadastral" },
+                  { key: "conselho", label: "CAU (arquitetura)", hint: "registro profissional/empresarial no CAU" },
+                ].map(s => (
+                  <Tooltip key={s.key} title={s.hint}>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          size="small"
+                          checked={globalSources.includes(s.key)}
+                          onChange={e => setGlobalSources(prev =>
+                            e.target.checked ? [...prev, s.key] : prev.filter(x => x !== s.key)
+                          )}
+                        />
+                      }
+                      label={<span style={{ fontSize: 12 }}>{s.label}</span>}
+                      style={{ marginRight: 4 }}
+                    />
+                  </Tooltip>
+                ))}
+              </Box>
+
+              <Box className={classes.sliderBox}>
+                <Typography variant="body2" style={{ marginBottom: 6 }}>
+                  Máximo de resultados <em>por fonte</em>: <strong>{maxResults === 0 ? "sem limite" : maxResults}</strong>
+                </Typography>
+                <Slider
+                  value={maxResults} onChange={(_, v) => setMaxResults(v)}
+                  min={0} max={1000} step={50}
+                  marks={[{ value: 0, label: "∞" }, { value: 500, label: "500" }, { value: 1000, label: "1000" }]}
+                />
+              </Box>
+
+              <Box mt={2}>
+                <Button
+                  variant="contained" color="primary"
+                  startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <GlobalIcon />}
+                  onClick={startGlobalJob} disabled={loading}
+                  style={{ textTransform: "none", fontWeight: 600 }}
+                >
+                  Buscar em todas as fontes
+                </Button>
+              </Box>
+              <Box className={classes.helpToggle} onClick={() => setHelpOpen(o => !o)}>
+                <HelpIcon style={{ fontSize: 15 }} />
+                <span>{helpOpen ? "Ocultar tutorial" : "Como funciona?"}</span>
+              </Box>
+              <Collapse in={helpOpen}>
+                <Box className={classes.helpBox}>
+                  <strong>Busca Global — uma busca, todas as fontes</strong>
+                  <ol>
+                    <li>Digite o <strong>segmento</strong> e a <strong>localização</strong>. As fontes selecionadas rodam <strong>em paralelo</strong>.</li>
+                    <li>O sistema <strong>cruza os resultados</strong>: a mesma empresa encontrada no Maps e na Receita vira <strong>um único lead</strong> com os dados de todas as fontes (badge mostra as origens).</li>
+                    <li>Matches por CNPJ, telefone ou Instagram são 100% precisos; por nome+UF são conservadores.</li>
+                    <li>Se uma fonte falhar, as demais continuam e a falha aparece no log.</li>
+                    <li>Depois do merge, o pipeline normal roda: dedupe global, enriquecimento Receita/social e validação WhatsApp.</li>
+                  </ol>
+                </Box>
+              </Collapse>
+            </TabPanel>
           </Paper>
         </Grid>
 
@@ -1330,7 +1466,9 @@ export default function LeadScraper() {
                 const st = STATUS[j.status] || STATUS.pending;
                 const isActive = activeJob?.id === j.id;
                 const asStr = v => Array.isArray(v) ? v.join(", ") : v;
-                const jobName = j.source === "google_maps"
+                const jobName = j.source === "global"
+                  ? `🌐 ${j.filters?.keyword || "?"} — ${asStr(j.filters?.city) || asStr(j.filters?.state) || "Brasil"}`
+                  : j.source === "google_maps"
                   ? `${j.filters?.keyword || "?"} — ${asStr(j.filters?.city) || "?"} ${asStr(j.filters?.state) || ""}`
                   : j.source === "cnpj_search"
                     ? `RF: ${[j.filters?.keyword, asStr(j.filters?.cnae), asStr(j.filters?.uf), asStr(j.filters?.municipio)].filter(Boolean).join(" ") || "?"}`
@@ -1402,11 +1540,13 @@ export default function LeadScraper() {
             <Box display="flex" alignItems="center" style={{ gap: 12 }}>
               <Typography variant="h6" style={{ fontWeight: 700 }}>Resultados</Typography>
               <Box className={classes.sourceBadge}>
-                {activeJob.source === "google_maps" ? <MapsIcon style={{ fontSize: 12 }} />
+                {activeJob.source === "global" ? <GlobalIcon style={{ fontSize: 12 }} />
+                  : activeJob.source === "google_maps" ? <MapsIcon style={{ fontSize: 12 }} />
                   : activeJob.source === "ig_followers" ? <InstagramIcon style={{ fontSize: 12 }} />
                   : activeJob.source === "conselho" ? <ConselhoIcon style={{ fontSize: 12 }} />
                   : <CnpjIcon style={{ fontSize: 12 }} />}
-                {activeJob.source === "google_maps" ? "Google Maps"
+                {activeJob.source === "global" ? "Busca Global"
+                  : activeJob.source === "google_maps" ? "Google Maps"
                   : activeJob.source === "cnpj_search" ? "RF Pesquisa Avançada"
                   : activeJob.source === "ig_followers" ? "Instagram"
                   : activeJob.source === "conselho" ? "Conselho de Classe"
@@ -1549,6 +1689,23 @@ export default function LeadScraper() {
                             <Typography variant="caption" color="textSecondary" style={{ display: "block" }}>
                               {r.email}
                             </Typography>
+                          )}
+                          {Array.isArray(r.sources) && r.sources.length > 0 && (
+                            <Box display="flex" style={{ gap: 3, marginTop: 2, flexWrap: "wrap" }}>
+                              {r.sources.map(src => (
+                                <span
+                                  key={src}
+                                  style={{
+                                    background: (GLOBAL_SOURCE_META[src]?.color || "#555") + "22",
+                                    color: GLOBAL_SOURCE_META[src]?.color || "#555",
+                                    borderRadius: 3, padding: "0 5px",
+                                    fontSize: 9, fontWeight: 800, letterSpacing: 0.3,
+                                  }}
+                                >
+                                  {GLOBAL_SOURCE_META[src]?.label || src}
+                                </span>
+                              ))}
+                            </Box>
                           )}
                         </TableCell>
                         {activeJob.source === "conselho" && (

@@ -42,6 +42,8 @@ export interface ScraperResult {
   whatsappChecked?: boolean;
   // enriquecimento cruzado: fontes que complementaram o lead
   enrichedFrom?: string[];  // ex.: ["receita"]
+  // busca global: fontes de origem do lead (ex.: ["google_maps","cnpj_search"])
+  sources?: string[];
   imported?: boolean;
 }
 
@@ -81,6 +83,8 @@ export interface ScraperFilters {
   skipDuplicates?: boolean;
   // carteira: usuário responsável já atribuído no momento da importação
   walletUserId?: number;
+  // busca global: fontes habilitadas (default: todas aplicáveis)
+  sources?: string[];
 }
 
 @Table

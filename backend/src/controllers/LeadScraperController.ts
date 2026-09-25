@@ -15,7 +15,7 @@ import {
 } from "../services/LeadScraper/ApifyTokenService";
 import logger from "../utils/logger";
 
-const VALID_SOURCES = ["google_maps", "cnpj", "cnpj_search", "ig_followers", "conselho"];
+const VALID_SOURCES = ["google_maps", "cnpj", "cnpj_search", "ig_followers", "conselho", "global"];
 const IG_HANDLE_REGEX = /^[a-zA-Z0-9._]{1,30}$/;
 
 // Expõe (sem vazar segredos) quais motores/integrações estão configurados

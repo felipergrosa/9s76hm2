@@ -186,7 +186,7 @@ async function runSocialEnrichment(job: LeadScraperJob, results: ScraperResult[]
 export const createScraperJob = async (
   companyId: number,
   // "conselho" é fonte futura — aceita no contrato, sem branch de execução ainda
-  source: "google_maps" | "cnpj" | "cnpj_search" | "ig_followers" | "conselho",
+  source: "google_maps" | "cnpj" | "cnpj_search" | "ig_followers" | "conselho" | "global",
   filters: ScraperFilters
 ) => {
   return LeadScraperJob.create({
@@ -351,6 +351,31 @@ export const runScraperJob = async (jobId: number) => {
       await runCrossEnrichment(job, results);
       await runSocialEnrichment(job, results);
       await runWhatsappValidation(job, results);
+      throwIfCancelled(job.id);
+      await job.update({ status: "done", progress: 100 });
+
+    } else if (job.source === "global") {
+      // Busca multi-fonte: Maps + Receita + conselhos em paralelo, com merge
+      // por identidade (CNPJ/telefone/IG/nome+UF). Fases: 0-70 scrape paralelo,
+      // 70-75 merge+dedupe, depois o pipeline normal de enriquecimento.
+      const { runGlobalSearch } = await import("./GlobalSearchService");
+      const merged = await runGlobalSearch({
+        companyId: job.companyId,
+        filters: job.filters,
+        checkCancelled: () => throwIfCancelled(job.id),
+        onProgress: async (pct) => {
+          throwIfCancelled(job.id);
+          await job.update({ progress: Math.round(pct * 0.7) });
+        },
+      });
+
+      normalizePhonesInPlace(merged);
+      const deduped = await filterOutDuplicates(job.companyId, merged, job.filters.skipDuplicates);
+      await job.update({ results: deduped, totalFound: deduped.length, progress: 75 });
+      // Fontes já fornecem CNPJ quando possível — cross ainda vale para Maps sem CNPJ
+      await runCrossEnrichment(job, deduped);
+      await runSocialEnrichment(job, deduped);
+      await runWhatsappValidation(job, deduped);
       throwIfCancelled(job.id);
       await job.update({ status: "done", progress: 100 });
 
