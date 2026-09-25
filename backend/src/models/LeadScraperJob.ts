@@ -98,8 +98,8 @@ class LeadScraperJob extends Model<LeadScraperJob> {
   @Column({ type: DataType.STRING, allowNull: false })
   source: "google_maps" | "cnpj" | "cnpj_search" | "ig_followers" | "conselho";
 
-  @Column({ type: DataType.ENUM("pending", "running", "done", "error"), defaultValue: "pending" })
-  status: "pending" | "running" | "done" | "error";
+  @Column({ type: DataType.ENUM("pending", "running", "done", "error", "cancelled"), defaultValue: "pending" })
+  status: "pending" | "running" | "done" | "error" | "cancelled";
 
   @Column({ type: DataType.JSON, defaultValue: {} })
   filters: ScraperFilters;

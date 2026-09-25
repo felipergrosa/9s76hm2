@@ -30,6 +30,7 @@ import {
   ArrowUpward as SortAscIcon,
   ArrowDownward as SortDescIcon,
   UnfoldMore as SortNoneIcon,
+  StopOutlined as StopIcon,
 } from "@material-ui/icons";
 import { toast } from "react-toastify";
 import api from "../../services/api";
@@ -44,6 +45,7 @@ const STATUS = {
   running: { label: "Executando", bg: "#e3f2fd", color: "#1565c0" },
   error:   { label: "Erro",       bg: "#fce4ec", color: "#c62828" },
   pending: { label: "Aguardando", bg: "#f5f5f5", color: "#757575" },
+  cancelled: { label: "Cancelado", bg: "#efebe9", color: "#5d4037" },
 };
 
 const SOCIAL_LINKS = {
@@ -366,7 +368,7 @@ export default function LeadScraper() {
           setSelectedIndices([]);
         }
         lastPollRef.current = { jobId: data.id, status: data.status };
-        if (data.status === "done" || data.status === "error") {
+        if (data.status === "done" || data.status === "error" || data.status === "cancelled") {
           clearInterval(pollRef.current);
           pollRef.current = null;
           loadJobs();
@@ -550,6 +552,16 @@ export default function LeadScraper() {
       clearInterval(pollRef.current);
       pollRef.current = null;
     }
+  };
+
+  const stopJob = async (j) => {
+    try {
+      await api.post(`/lead-scraper/jobs/${j.id}/stop`);
+      setJobs(prev => prev.map(x => x.id === j.id ? { ...x, status: "cancelled" } : x));
+      if (activeJob?.id === j.id) setActiveJob(prev => prev ? { ...prev, status: "cancelled" } : prev);
+      toast.info("Busca cancelada. Leads já coletados permanecem disponíveis.");
+      loadJobs();
+    } catch (e) { toast.error(e?.response?.data?.error || "Erro ao cancelar busca."); }
   };
 
   const deleteJob = async (j) => {
@@ -1295,7 +1307,7 @@ export default function LeadScraper() {
                     <IconButton
                       size="small"
                       onClick={() => setConfirmDelete({ type: "all" })}
-                      disabled={!jobs.some(j => j.status === "done" || j.status === "error")}
+                      disabled={!jobs.some(j => j.status === "done" || j.status === "error" || j.status === "cancelled")}
                     >
                       <ClearIcon fontSize="small" />
                     </IconButton>
@@ -1352,7 +1364,18 @@ export default function LeadScraper() {
                         {j.totalFound || 0} leads
                       </Typography>
                     </Box>
-                    {(j.status === "done" || j.status === "error") && (
+                    {(j.status === "pending" || j.status === "running") && (
+                      <Tooltip title="Parar busca">
+                        <IconButton
+                          size="small"
+                          style={{ marginLeft: 4, padding: 2 }}
+                          onClick={(e) => { e.stopPropagation(); setConfirmDelete({ type: "stop", job: j }); }}
+                        >
+                          <StopIcon style={{ fontSize: 15 }} />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                    {(j.status === "done" || j.status === "error" || j.status === "cancelled") && (
                       <Tooltip title="Excluir busca">
                         <IconButton
                           size="small"
@@ -1398,6 +1421,20 @@ export default function LeadScraper() {
                   fontWeight: 700, fontSize: 11,
                 }}
               />
+              {isRunning && (
+                <Tooltip title="Parar busca — leads já coletados serão mantidos">
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="secondary"
+                    startIcon={<StopIcon style={{ fontSize: 14 }} />}
+                    onClick={() => setConfirmDelete({ type: "stop", job: activeJob })}
+                    style={{ fontSize: 11, textTransform: "none", fontWeight: 700 }}
+                  >
+                    Parar
+                  </Button>
+                </Tooltip>
+              )}
             </Box>
             <Typography variant="body2" color="textSecondary" style={{ fontWeight: 600 }}>
               {activeJob.totalFound || 0} leads encontrados
@@ -1688,7 +1725,7 @@ export default function LeadScraper() {
                   variant="contained" color="primary"
                   startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <ImportIcon />}
                   onClick={importSelected}
-                  disabled={loading || activeJob.status !== "done"}
+                  disabled={loading || (activeJob.status !== "done" && activeJob.status !== "cancelled")}
                   style={{ textTransform: "none", fontWeight: 600, whiteSpace: "nowrap" }}
                 >
                   {someSelected
@@ -1703,7 +1740,7 @@ export default function LeadScraper() {
     </Box>
 
       <ConfirmationModal
-        title={confirmDelete?.type === "all" ? "Limpar histórico" : "Excluir busca"}
+        title={confirmDelete?.type === "all" ? "Limpar histórico" : confirmDelete?.type === "stop" ? "Parar busca" : "Excluir busca"}
         open={!!confirmDelete}
         onClose={() => setConfirmDelete(null)}
         onConfirm={() => {
@@ -1711,11 +1748,14 @@ export default function LeadScraper() {
           setConfirmDelete(null);
           if (target?.type === "all") clearHistory();
           else if (target?.type === "job") deleteJob(target.job);
+          else if (target?.type === "stop") stopJob(target.job);
         }}
       >
         {confirmDelete?.type === "all"
           ? "Excluir todo o histórico de buscas? Leads já importados não serão afetados."
-          : "Excluir esta busca do histórico? Leads já importados não serão afetados."}
+          : confirmDelete?.type === "stop"
+            ? "Parar esta busca? Os leads já coletados serão mantidos."
+            : "Excluir esta busca do histórico? Leads já importados não serão afetados."}
       </ConfirmationModal>
     </MainContainer>
   );

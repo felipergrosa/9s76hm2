@@ -29,6 +29,16 @@ function normalizePhonesInPlace(results: ScraperResult[]): void {
   }
 }
 
+// Cancelamento cooperativo: requestJobCancel sinaliza; checkpoints nos loops
+// abortam com JobCancelledError (pego no catch de runScraperJob, que mantém o
+// status "cancelled" gravado pelo controller — nao vira "error").
+class JobCancelledError extends Error {}
+const cancelRequested = new Set<number>();
+export const requestJobCancel = (jobId: number) => { cancelRequested.add(jobId); };
+const throwIfCancelled = (jobId: number) => {
+  if (cancelRequested.has(jobId)) throw new JobCancelledError();
+};
+
 // Enriquecimento cruzado: leads sem CNPJ tentam ser localizados na Receita
 // Federal por nome (Brasil.io) e enriquecidos pela cascata OpenCNPJ →
 // minhareceita → BrasilAPI. Progresso: 80→88.
@@ -40,6 +50,7 @@ async function runCrossEnrichment(job: LeadScraperJob, results: ScraperResult[])
   }
   let done = 0;
   for (const lead of targets) {
+    throwIfCancelled(job.id);
     await crossEnrichLead(lead).catch(() => {});
     done++;
     if (done % 5 === 0 || done === targets.length) {
@@ -84,6 +95,7 @@ async function runWhatsappValidation(job: LeadScraperJob, results: ScraperResult
 
   let done = 0;
   for (const lead of candidates) {
+    throwIfCancelled(job.id);
     try {
       const jid = await CheckContactNumber(lead.phone!, job.companyId);
       lead.hasWhatsapp = true;
@@ -118,6 +130,7 @@ async function runWhatsappValidation(job: LeadScraperJob, results: ScraperResult
 // quando configurado — sem sessão pessoal, sem risco de ban.
 async function runSocialEnrichment(job: LeadScraperJob, results: ScraperResult[], fromPct = 88, toPct = 96): Promise<void> {
   for (let i = 0; i < results.length; i++) {
+    throwIfCancelled(job.id);
     try {
       const socials = await enrichLeadSocials(results[i], job.companyId);
       Object.assign(results[i], socials);
@@ -200,9 +213,11 @@ export const runScraperJob = async (jobId: number) => {
 
       const results: ScraperResult[] = [];
       for (let qi = 0; qi < cityQueries.length; qi++) {
+        throwIfCancelled(job.id);
         if (results.length >= cap) break;
         const cityQuery = cityQueries[qi];
         const onProgress = async (current: number, total: number) => {
+          throwIfCancelled(job.id);
           const queryShare = 80 / cityQueries.length;
           const p = qi * queryShare + (current / Math.max(total, 1)) * queryShare;
           await job.update({ progress: Math.round(p) });
@@ -222,6 +237,7 @@ export const runScraperJob = async (jobId: number) => {
       await runCrossEnrichment(job, deduped);
       await runSocialEnrichment(job, deduped);
       await runWhatsappValidation(job, deduped);
+      throwIfCancelled(job.id);
       await job.update({ status: "done", progress: 100 });
 
     } else if (job.source === "cnpj") {
@@ -229,6 +245,7 @@ export const runScraperJob = async (jobId: number) => {
       const results: ScraperResult[] = [];
 
       for (let i = 0; i < cnpjs.length; i++) {
+        throwIfCancelled(job.id);
         const enriched = await enrichCnpj(cnpjs[i]);
         if (enriched) results.push(enriched);
         await job.update({ progress: Math.round(((i + 1) / cnpjs.length) * 80) });
@@ -240,12 +257,14 @@ export const runScraperJob = async (jobId: number) => {
       // cross-enrich desnecessário: leads já vêm da Receita Federal
       await runSocialEnrichment(job, results);
       await runWhatsappValidation(job, results);
+      throwIfCancelled(job.id);
       await job.update({ status: "done", progress: 100 });
 
     } else if (job.source === "cnpj_search") {
       const results = await searchCnpjsByFilters(
         job.filters,
         async (current, total) => {
+          throwIfCancelled(job.id);
           await job.update({ progress: Math.round((current / total) * 80) });
         }
       );
@@ -253,6 +272,7 @@ export const runScraperJob = async (jobId: number) => {
       await job.update({ results, totalFound: results.length, progress: 80 });
       await runSocialEnrichment(job, results);
       await runWhatsappValidation(job, results);
+      throwIfCancelled(job.id);
       await job.update({ status: "done", progress: 100 });
 
     } else if (job.source === "ig_followers") {
@@ -265,6 +285,7 @@ export const runScraperJob = async (jobId: number) => {
         igTargetHandle,
         maxResults,
         async (current, total) => {
+          throwIfCancelled(job.id);
           await job.update({ progress: Math.round((current / total) * 80) });
         },
         job.companyId
@@ -274,12 +295,14 @@ export const runScraperJob = async (jobId: number) => {
       await runCrossEnrichment(job, results);
       await runSocialEnrichment(job, results);
       await runWhatsappValidation(job, results);
+      throwIfCancelled(job.id);
       await job.update({ status: "done", progress: 100 });
 
     } else if (job.source === "conselho") {
       const results = await scrapeConselho(
         job.filters,
         async (current, total) => {
+          throwIfCancelled(job.id);
           await job.update({ progress: Math.round((current / total) * 80) });
         }
       );
@@ -288,12 +311,19 @@ export const runScraperJob = async (jobId: number) => {
       await runCrossEnrichment(job, results);
       await runSocialEnrichment(job, results);
       await runWhatsappValidation(job, results);
+      throwIfCancelled(job.id);
       await job.update({ status: "done", progress: 100 });
 
     } else {
       await job.update({ status: "error", errorMessage: "source desconhecido" });
     }
   } catch (err: any) {
+    if (err instanceof JobCancelledError || cancelRequested.has(jobId)) {
+      // cancelado pelo usuario: controller ja gravou status "cancelled"
+      logger.info(`[LeadScraperJob] jobId=${jobId} cancelado pelo usuário`);
+      cancelRequested.delete(jobId);
+      return;
+    }
     logger.error(`[LeadScraperJob] jobId=${jobId} error: ${err.message}`);
     if (jobRef) {
       await jobRef.update({ status: "error", errorMessage: err.message, progress: 0 }).catch((e: any) => {

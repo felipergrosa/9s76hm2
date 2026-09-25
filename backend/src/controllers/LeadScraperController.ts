@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { Op } from "sequelize";
 import LeadScraperJob from "../models/LeadScraperJob";
 import User from "../models/User";
-import { createScraperJob, runScraperJob } from "../services/LeadScraper/LeadScraperJobService";
+import { createScraperJob, runScraperJob, requestJobCancel } from "../services/LeadScraper/LeadScraperJobService";
 import ImportLeadsService from "../services/ContactServices/ImportLeadsService";
 import { leadScraperQueue } from "../queues";
 import { isApifyConfigured } from "../services/Instagram/InstagramApifyProvider";
@@ -205,12 +205,40 @@ export const deleteJob = async (req: Request, res: Response): Promise<Response> 
   }
 };
 
+// Cancela um job pendente ou em andamento: sinaliza o processor para abortar
+// no próximo checkpoint e remove o item da fila Bull se ainda não iniciou.
+export const stopJob = async (req: Request, res: Response): Promise<Response> => {
+  try {
+    const { companyId } = req.user;
+    const job = await LeadScraperJob.findOne({ where: { id: req.params.id, companyId } });
+    if (!job) return res.status(404).json({ error: "Job não encontrado" });
+    if (job.status !== "pending" && job.status !== "running") {
+      return res.status(409).json({ error: "Job já finalizado" });
+    }
+
+    requestJobCancel(job.id);
+
+    // Se ainda aguardando na fila, remove para não disparar o processor
+    // (remove() falha em job "active" — nesse caso o cancelamento cooperativo cuida)
+    try {
+      const bullJob = await leadScraperQueue.getJob(String(job.id));
+      if (bullJob) await bullJob.remove().catch(() => {});
+    } catch {}
+
+    await job.update({ status: "cancelled", errorMessage: "Cancelado pelo usuário" });
+    logger.info(`[LeadScraperJob] jobId=${job.id} cancelado por companyId=${companyId}`);
+    return res.json({ ok: true });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || "Erro ao cancelar job" });
+  }
+};
+
 // Limpa todo o histórico finalizado da empresa (done/error)
 export const clearJobs = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { companyId } = req.user;
     const deleted = await LeadScraperJob.destroy({
-      where: { companyId, status: { [Op.in]: ["done", "error"] } }
+      where: { companyId, status: { [Op.in]: ["done", "error", "cancelled"] } }
     });
     return res.json({ ok: true, deleted });
   } catch (err: any) {
@@ -224,7 +252,10 @@ export const importJobResults = async (req: Request, res: Response): Promise<Res
     const { indices, contactListName, tagName, walletUserId } = req.body;
     const job = await LeadScraperJob.findOne({ where: { id: req.params.id, companyId } });
     if (!job) return res.status(404).json({ error: "Job não encontrado" });
-    if (job.status !== "done") return res.status(409).json({ error: "job ainda não concluído" });
+    // cancelled é importável: leads coletados até o cancelamento continuam válidos
+    if (job.status !== "done" && job.status !== "cancelled") {
+      return res.status(409).json({ error: "job ainda não concluído" });
+    }
 
     let indexSet: Set<number> | null = null;
     if (indices !== undefined && indices !== null) {
