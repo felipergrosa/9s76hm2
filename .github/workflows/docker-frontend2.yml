@@ -62,3 +62,6 @@ jobs:
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
           platforms: linux/amd64
+          # manifest Docker v2 p/ Swarm/shepherd (OCI manifest nao e suportado)
+          provenance: false
+          sbom: false
