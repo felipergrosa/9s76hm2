@@ -64,6 +64,9 @@ const apifyError = (err: any, context: string): Error => {
   if (status === 402) {
     return new Error(`${context}: créditos Apify insuficientes (HTTP 402).`);
   }
+  // Apify devolve detalhe do input inválido em error.message
+  const detail = err?.response?.data?.error?.message;
+  if (detail) return new Error(`${context}: ${detail}`);
   return new Error(`${context}: ${err?.message || "erro desconhecido"}`);
 };
 

@@ -46,6 +46,9 @@ const apifyError = (err: any, context: string): Error => {
   if (status === 402) {
     return new Error(`${context}: créditos Apify insuficientes (HTTP 402).`);
   }
+  // Apify devolve detalhe do input inválido em error.message
+  const detail = err?.response?.data?.error?.message;
+  if (detail) return new Error(`${context}: ${detail}`);
   return new Error(`${context}: ${err?.message || "erro desconhecido"}`);
 };
 
@@ -142,9 +145,10 @@ export const scrapeGoogleMapsViaApify = async (
     searchStringsArray: [keyword],
     maxCrawledPlacesPerSearch: Math.min(maxResults, 200),
     language: "pt-BR",
-    // extrai email/telefone/socials da página de contato do site do lugar
+    // extrai email/telefone/socials (IG/X/LinkedIn/Facebook) da página de contato
+    // do site do lugar — scrapeSocialMediaProfiles é add-on pago por perfil,
+    // scrapeContacts já cobre os links sociais
     scrapeContacts: true,
-    scrapeSocialMediaProfiles: true,
   };
 
   if (geo) {
