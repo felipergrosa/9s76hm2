@@ -8,7 +8,9 @@ import {
   Chip,
   IconButton,
   Tooltip,
-  Divider
+  Divider,
+  Button,
+  CircularProgress
 } from "@material-ui/core";
 import { makeStyles } from "@material-ui/core/styles";
 import { Alert } from "@material-ui/lab";
@@ -20,6 +22,8 @@ import {
   VpnKey,
   Security
 } from "@material-ui/icons";
+import api from "../../services/api";
+import toastError from "../../errors/toastError";
 
 const useStyles = makeStyles((theme) => ({
   sectionTitle: {
@@ -78,11 +82,11 @@ const MetaAPIFields = ({ values, errors, touched, channelType }) => {
   const classes = useStyles();
   const [copiedWebhook, setCopiedWebhook] = useState(false);
   const [copiedToken, setCopiedToken] = useState(false);
+  const [oauthLoading, setOauthLoading] = useState(false);
 
   const backendUrl = process.env.REACT_APP_BACKEND_URL || window.location.origin;
-  const webhookUrl = channelType === "instagram" 
-    ? `${backendUrl}/webhook/instagram`
-    : `${backendUrl}/webhook/facebook`;
+  // endpoint único: /webhook atende page (facebook) e instagram
+  const webhookUrl = `${backendUrl}/webhook`;
 
   const handleCopyWebhook = () => {
     navigator.clipboard.writeText(webhookUrl);
@@ -103,12 +107,50 @@ const MetaAPIFields = ({ values, errors, touched, channelType }) => {
   const channelColor = isInstagram ? "#e1306c" : "#3b5998";
   const channelName = isInstagram ? "Instagram" : "Facebook";
 
+  // OAuth Meta: redireciona para autorização e cria/atualiza as conexões
+  // de todas as páginas da conta automaticamente (inclui webhook subscribe)
+  const handleConnectViaMeta = async () => {
+    setOauthLoading(true);
+    try {
+      const { data } = await api.get("/meta-oauth/start", {
+        params: { channel: channelType }
+      });
+      window.location.href = data.url;
+    } catch (err) {
+      setOauthLoading(false);
+      toastError(err);
+    }
+  };
+
   return (
     <>
       <Typography variant="h6" className={classes.sectionTitle}>
         <ChannelIcon style={{ color: channelColor }} />
         Configuração do {channelName}
         <Chip label="Meta API" size="small" style={{ backgroundColor: channelColor, color: "#fff" }} className={classes.chip} />
+      </Typography>
+
+      {/* Conexão automática via OAuth Meta — cria 1 conexão por página/conta */}
+      <Box mb={2}>
+        <Button
+          variant="contained"
+          startIcon={oauthLoading ? <CircularProgress size={16} color="inherit" /> : <ChannelIcon />}
+          onClick={handleConnectViaMeta}
+          disabled={oauthLoading}
+          style={{ backgroundColor: channelColor, color: "#fff", textTransform: "none" }}
+        >
+          {oauthLoading ? "Redirecionando…" : `Conectar ${channelName} automaticamente`}
+        </Button>
+        <Typography variant="caption" display="block" color="textSecondary" style={{ marginTop: 4 }}>
+          Abre o login da Meta e conecta todas as páginas autorizadas de uma vez
+          (webhook configurado automaticamente). Requer META_APP_ID no servidor.
+          Para conectar várias contas, repita o processo com cada login.
+        </Typography>
+      </Box>
+
+      <Divider className={classes.divider} />
+      <Typography variant="subtitle2" style={{ marginBottom: 8 }}>
+        Ou configure manualmente:
       </Typography>
 
       <Alert severity="info" style={{ marginBottom: 16 }}>
