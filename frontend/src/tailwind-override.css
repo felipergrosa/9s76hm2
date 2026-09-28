@@ -277,15 +277,13 @@ table thead th {
   border-bottom: 1px solid #d1d5db !important;
 }
 
-/* Dark mode */
-@media (prefers-color-scheme: dark) {
-  table tbody tr {
-    border-bottom: 1px solid #374151 !important;
-  }
-  
-  table thead th {
-    border-bottom: 1px solid #4b5563 !important;
-  }
+/* Dark mode (segue o toggle do app via classe .dark no <html>) */
+html.dark table tbody tr {
+  border-bottom: 1px solid #374151 !important;
+}
+
+html.dark table thead th {
+  border-bottom: 1px solid #4b5563 !important;
 }
 
 /* Garantir que classes Tailwind de borda não sobrecrevam */
@@ -294,9 +292,7 @@ tr[class*="border-b"] {
   border-bottom-color: #e5e7eb !important;
 }
 
-@media (prefers-color-scheme: dark) {
-  tr.border-b,
-  tr[class*="border-b"] {
-    border-bottom-color: #374151 !important;
-  }
+html.dark tr.border-b,
+html.dark tr[class*="border-b"] {
+  border-bottom-color: #374151 !important;
 }

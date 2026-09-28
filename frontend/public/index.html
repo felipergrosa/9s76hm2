@@ -15,7 +15,7 @@
 					theme = (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
 				}
 				if (theme === "dark") {
-					document.documentElement.classList.add("theme-dark-init");
+					document.documentElement.classList.add("theme-dark-init", "dark");
 				}
 			} catch (e) {}
 		})();

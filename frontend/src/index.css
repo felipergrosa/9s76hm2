@@ -1,2 +1,4 @@
 @import "tailwindcss";
+/* Variante dark controlada pela classe .dark no <html> (App.js), e não pelo tema do SO */
+@custom-variant dark (&:where(.dark, .dark *));
 @import './tailwind-override.css';
