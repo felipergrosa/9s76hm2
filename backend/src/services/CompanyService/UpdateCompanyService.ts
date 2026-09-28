@@ -2,6 +2,7 @@ import AppError from "../../errors/AppError";
 import Company from "../../models/Company";
 import Setting from "../../models/Setting";
 import User from "../../models/User";
+import { serviceCache } from "../../utils/serviceCache";
 
 interface CompanyData {
   name: string;
@@ -65,6 +66,9 @@ const UpdateCompanyService = async (
   
   await user.update({ email, password });
 
+  // Invalida o cache do usuário usado pelo middleware checkPermission (chave user:{id})
+  serviceCache.invalidate(`user:${user.id}`);
+
 
   await company.update({
     name,
@@ -93,6 +97,9 @@ const UpdateCompanyService = async (
     if (!created) {
       await setting.update({ value: `${campaignsEnabled}` });
     }
+
+    // Invalida o cache da listagem de settings da empresa (chave settings:{companyId})
+    serviceCache.invalidate(`settings:${company.id}`);
   }
 
   return company;

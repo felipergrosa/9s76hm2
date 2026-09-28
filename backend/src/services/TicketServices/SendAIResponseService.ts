@@ -208,11 +208,12 @@ const SendAIResponseService = async ({
 
       // Emitir evento via Socket.IO
       const io = getIO();
-      io.of(String(companyId))
+      io.of(`/workspace-${companyId}`)
+        .to(String(ticket.uuid || ticketId))
         .to(String(ticketId))
         .to(ticket.status)
         .to("notification")
-        .emit("appMessage", {
+        .emit(`company-${companyId}-appMessage`, {
           action: "create",
           message: newMessage,
           ticket,

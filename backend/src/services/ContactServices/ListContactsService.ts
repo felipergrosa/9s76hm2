@@ -1,6 +1,5 @@
 import { Sequelize, fn, col, where, Op, Filterable, literal } from "sequelize";
 import Contact from "../../models/Contact";
-import Ticket from "../../models/Ticket";
 import ContactTag from "../../models/ContactTag";
 import { intersection } from "lodash";
 import Tag from "../../models/Tag";
