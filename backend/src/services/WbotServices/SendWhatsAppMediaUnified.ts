@@ -10,6 +10,8 @@ import logger from "../../utils/logger";
 import { IWhatsAppMessage } from "../../libs/whatsapp";
 import ResolveSendJid from "../../helpers/ResolveSendJid";
 import { generatePdfThumbnail } from "../../helpers/PdfThumbnailGenerator";
+import EnsureOfficialSessionWindow from "../MetaServices/EnsureOfficialSessionWindow";
+import { signPublicMediaUrl } from "../../utils/publicMediaAccess";
 
 interface Request {
   media: Express.Multer.File;
@@ -49,6 +51,9 @@ const SendWhatsAppMediaUnified = async ({
     logger.debug(`[SendMediaUnified] Obtendo adapter...`);
     const adapter = await GetTicketAdapter(ticket);
     const channelType = adapter.channelType;
+    if (channelType === "official") {
+      await EnsureOfficialSessionWindow(ticket);
+    }
     logger.info(`[SendMediaUnified] Adapter obtido: channelType=${channelType}`);
     
     // Obter contato
@@ -199,7 +204,8 @@ const SendWhatsAppMediaUnified = async ({
         }
       }
 
-      logger.info(`[SendMediaUnified] URL pública da mídia: ${mediaUrl}`);
+      mediaUrl = signPublicMediaUrl(mediaUrl, ticket.companyId);
+      logger.info(`[SendMediaUnified] URL temporária de mídia criada para companyId=${ticket.companyId}`);
 
       sentMessage = await adapter.sendMessage({
         to: number.split("@")[0],

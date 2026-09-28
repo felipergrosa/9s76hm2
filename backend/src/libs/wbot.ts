@@ -1424,7 +1424,16 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
             }
           }
         );
-        wsocket.ev.on("creds.update", saveCreds);
+        wsocket.ev.on("creds.update", () => {
+          void saveCreds().catch((error: any) => {
+            logger.error(`[wbot] Falha ao persistir credenciais da sessão ${whatsapp.id}: ${error?.message || error}`);
+            try {
+              wsocket.end(new Error("Baileys credentials persistence failed"));
+            } catch (closeError: any) {
+              logger.error(`[wbot] Falha ao encerrar sessão com credenciais não persistidas: ${closeError?.message || closeError}`);
+            }
+          });
+        });
 
 
         // Handler geral: extrai labels de messaging-history.set e atualiza caches/persistência

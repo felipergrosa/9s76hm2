@@ -1,10 +1,11 @@
 import express from "express";
 
 import * as MessageController from "../../controllers/api/MessageController";
-import isAuthCompany from "../../middleware/isAuthCompany";
+import isAuth from "../../middleware/isAuth";
+import checkPermission from "../../middleware/checkPermission";
 
 const apiMessageRoutes = express.Router();
 
-apiMessageRoutes.get("/messagesRange", isAuthCompany, MessageController.show);
+apiMessageRoutes.get("/messagesRange", isAuth, checkPermission("tickets.view"), MessageController.show);
 
 export default apiMessageRoutes;

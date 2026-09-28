@@ -15,7 +15,8 @@
     "db:migrate": "npx sequelize db:migrate",
     "db:migrate:prod": "sequelize db:migrate",
     "db:seed": "sequelize db:seed:all",
-    "lint": "eslint src/**/*.ts"
+    "lint": "eslint src/**/*.ts",
+    "test": "jest --coverage=false"
   },
   "license": "MIT",
   "dependencies": {

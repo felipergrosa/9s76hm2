@@ -32,7 +32,7 @@ const DeleteBaileysService = async (id: string | number, options?: {
       let companyId = 1; // Default
       
       try {
-        const Whatsapp = require("../models/Whatsapp").default;
+        const Whatsapp = require("../../models/Whatsapp").default;
         const whatsapp = await Whatsapp.findByPk(whatsappId);
         if (whatsapp && whatsapp.companyId) {
           companyId = whatsapp.companyId;
@@ -41,29 +41,23 @@ const DeleteBaileysService = async (id: string | number, options?: {
         logger.warn(`[DeleteBaileysService] Não foi possível obter companyId para whatsappId=${whatsappId}, usando default=1`);
       }
 
-      // Limpar arquivos da sessão no filesystem
-      const sessionDir = path.resolve(
-        process.cwd(),
-        "src",
-        "wbot",
-        "sessions",
-        companyId.toString(),
-        whatsappId.toString()
-      );
+      // Limpar arquivos da sessão no filesystem — path legado (src/wbot/sessions)
+      // e o path atual (private/sessions), mais o journal inbound da conexão
+      const sessionDirs = [
+        path.resolve(process.cwd(), "src", "wbot", "sessions", companyId.toString(), whatsappId.toString()),
+        path.resolve(process.cwd(), process.env.SESSIONS_DIR || "private/sessions", companyId.toString(), whatsappId.toString()),
+      ];
 
-      if (fs.existsSync(sessionDir)) {
-        logger.info(`[DeleteBaileysService] Limpando arquivos da sessão: ${sessionDir}`);
-        
-        // Listar arquivos antes de deletar (log)
-        const files = fs.readdirSync(sessionDir);
-        logger.debug(`[DeleteBaileysService] Arquivos encontrados: ${files.join(", ")}`);
-        
-        // Remover diretório inteiro
-        fs.rmSync(sessionDir, { recursive: true, force: true });
-        logger.info(`[DeleteBaileysService] Sessão ${whatsappId} limpa do filesystem`);
-      } else {
-        logger.debug(`[DeleteBaileysService] Diretório da sessão não encontrado: ${sessionDir}`);
+      for (const sessionDir of sessionDirs) {
+        if (fs.existsSync(sessionDir)) {
+          logger.info(`[DeleteBaileysService] Limpando arquivos da sessão: ${sessionDir}`);
+          fs.rmSync(sessionDir, { recursive: true, force: true });
+          logger.info(`[DeleteBaileysService] Sessão ${whatsappId} limpa do filesystem`);
+        }
       }
+
+      const { clearBaileysInbound } = await import("../WbotServices/BaileysInboundJournal");
+      await clearBaileysInbound(companyId, whatsappId);
     }
 
     // Limpar cache Redis (sempre executa)

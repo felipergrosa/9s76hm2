@@ -46,6 +46,13 @@ export interface UpdateMessageCommand {
   }>;
 }
 
+// A falha de entrega é terminal para mensagens ainda não entregues, mas um
+// webhook atrasado de falha não deve desfazer uma confirmação de entrega/leitura.
+const shouldUpdateAck = (currentAck: number, nextAck: number): boolean => {
+  if (nextAck === -1) return currentAck !== -1 && currentAck < 2;
+  return currentAck === -1 || nextAck > currentAck;
+};
+
 // Cria uma nova mensagem (Command)
 export async function createMessage(command: CreateMessageCommand): Promise<Message> {
   const { companyId, ticketId, ...messageData } = command;
@@ -191,8 +198,7 @@ export async function updateMessageAck(
     return null;
   }
 
-  // Só atualiza se o novo ACK for maior
-  if (message.ack >= ack) {
+  if (!shouldUpdateAck(message.ack, ack)) {
     return message;
   }
 
@@ -213,10 +219,11 @@ export async function updateMessageAck(
 // Atualiza ACK de uma mensagem por WID (usado pelo wbotMessageListener)
 export async function updateMessageAckByWid(
   wid: string,
+  companyId: number,
   ack: number
 ): Promise<Message | null> {
   const message = await Message.findOne({
-    where: { wid },
+    where: { wid, companyId },
     include: [
       "contact",
       {
@@ -238,8 +245,7 @@ export async function updateMessageAckByWid(
     return null;
   }
 
-  // Só atualiza se o novo ACK for maior
-  if (message.ack >= ack) {
+  if (!shouldUpdateAck(message.ack, ack)) {
     return message;
   }
 

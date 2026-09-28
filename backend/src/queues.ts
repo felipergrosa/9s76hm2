@@ -59,10 +59,15 @@ import CreateMessageService from "./services/MessageServices/CreateMessageServic
 import { buildOfficialPreviewData } from "./utils/officialMessagePreview";
 import { setupEmailCampaignProcessors, scheduleEmailCampaignVerification } from "./queues/EmailCampaignQueue";
 import { setupDripSequenceProcessors, scheduleDripSequenceVerification } from "./queues/DripSequenceQueue";
+import { startOfficialWebhookQueue } from "./queues/OfficialWebhookQueue";
 
 const connection = process.env.REDIS_URI || "";
 const limiterMax = process.env.REDIS_OPT_LIMITER_MAX || 1;
 const limiterDuration = process.env.REDIS_OPT_LIMITER_DURATION || 3000;
+const positiveRateLimit = (value: string | undefined, fallback: number): number => {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+};
 
 // Controle de backoff por conexão (whatsappId) em memória
 type BackoffState = { count: number; lastErrorAt: number; pausedUntil?: number };
@@ -309,7 +314,7 @@ export const sendScheduledMessages = new BullQueue("SendSacheduledMessages", con
 export const campaignQueue = new BullQueue("CampaignQueue", connection);
 export const queueMonitor = new BullQueue("QueueMonitor", connection);
 export const validateWhatsappContactsQueue = new BullQueue("ValidateWhatsappContacts", connection);
-export const sessionWindowRenewalQueue = new BullQueue(`${process.env.DB_NAME}-SessionWindowRenewal`, connection);
+export const sessionWindowRenewalQueue = new BullQueue(`${process.env.DB_NAME || "whaticket"}-SessionWindowRenewal`, connection);
 export const contactAvatarQueue = new BullQueue("ContactAvatarQueue", connection);
 // Jobs longos (Puppeteer): lock/stall tolerantes a execuções de vários minutos
 export const leadScraperQueue = new BullQueue("LeadScraperQueue", connection, {
@@ -338,10 +343,21 @@ export const officialMessageQueue = new BullQueue("OfficialMessageQueue", connec
   }
 });
 
-// FILAS PARA CHAT AO VIVO - Mensagens manuais do usuário (SEM rate limiter)
-// Estas filas processam mensagens imediatamente, sem delay
-export const baileysChatQueue = new BullQueue("BaileysChatQueue", connection);
-export const officialChatQueue = new BullQueue("OfficialChatQueue", connection);
+// Limites por conexão evitam que um pico no chat sature o socket ou a Cloud API.
+export const baileysChatQueue = new BullQueue("BaileysChatQueue", connection, {
+  limiter: {
+    max: positiveRateLimit(process.env.BAILEYS_CHAT_LIMIT_PER_SECOND, 5),
+    duration: 1000,
+    groupKey: "whatsappId"
+  }
+});
+export const officialChatQueue = new BullQueue("OfficialChatQueue", connection, {
+  limiter: {
+    max: positiveRateLimit(process.env.WABA_CHAT_LIMIT_PER_SECOND, 20),
+    duration: 1000,
+    groupKey: "whatsappId"
+  }
+});
 
 export const messageQueue = baileysMessageQueue;
 
@@ -3241,6 +3257,7 @@ handleCloseTicketsAutomatic();
 
 export async function startQueueProcess() {
   logger.info("Iniciando processamento de filas");
+  startOfficialWebhookQueue();
 
   // ===== FILA BAILEYS (concurrency=1 - protege WebSocket único) =====
   logger.info("Iniciando fila Baileys com concurrency=1");
@@ -3259,8 +3276,8 @@ export async function startQueueProcess() {
   officialMessageQueue.process("SendMessage", 10, handleSendMessage);
   // API Oficial não precisa de handleMessage/handleMessageAck (usa webhook)
 
-  // ===== FILAS DE CHAT AO VIVO (sem rate limiter - mensagens instantâneas) =====
-  logger.info("Iniciando filas de chat ao vivo (sem rate limiter)");
+  // ===== FILAS DE CHAT AO VIVO (limite por conexão) =====
+  logger.info("Iniciando filas de chat ao vivo com limite por conexão");
   baileysChatQueue.process("SendMessage", 1, handleSendMessage);
   officialChatQueue.process("SendMessage", 10, handleSendMessage);
 

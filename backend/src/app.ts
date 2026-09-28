@@ -21,6 +21,7 @@ import BullQueue from "./libs/queue"
 import BullBoard from 'bull-board';
 import basicAuth from 'basic-auth';
 import trackUserActivity from "./middleware/trackUserActivity";
+import { authorizePublicMedia, issuePublicMediaCookie } from "./utils/publicMediaAccess";
 
 // Função de middleware para autenticação básica
 export const isBullAuth = (req, res, next) => {
@@ -121,15 +122,18 @@ app.use(
   })
 );
 
-// Servir arquivos estáticos com headers CORS explícitos
-app.use("/public", (req, res, next) => {
+// Issue a tenant-bound, media-only cookie after a verified JWT API request.
+app.use(issuePublicMediaCookie);
+
+// Company files require a tenant-bound credential, including direct image requests.
+app.use("/public", authorizePublicMedia, (req, res, next) => {
   // Adiciona headers CORS para permitir carregamento de imagens/mídias cross-origin
   // Deve usar o origin específico (não wildcard) quando credentials estiver ativo
   const origin = req.headers.origin;
   if (typeof origin === "string" && isOriginAllowed(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Vary', 'Origin');
+    res.vary('Origin');
   }
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   next();

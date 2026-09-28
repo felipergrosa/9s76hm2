@@ -45,7 +45,8 @@ import ShowMessageService, { GetWhatsAppFromMessage } from "../services/MessageS
 import ImportContactHistoryService from "../services/MessageServices/ImportContactHistoryService";
 import ClearTicketMessagesService from "../services/MessageServices/ClearTicketMessagesService";
 import ResyncTicketMessagesService from "../services/MessageServices/ResyncTicketMessagesService";
-import { baileysMessageQueue, officialMessageQueue, baileysChatQueue, officialChatQueue } from "../queues";
+import { baileysChatQueue, officialChatQueue } from "../queues";
+import EnsureOfficialSessionWindow from "../services/MetaServices/EnsureOfficialSessionWindow";
 
 type IndexQuery = {
   pageNumber: string;
@@ -897,20 +898,12 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
         
         const channelType = whatsappConnection?.channelType || "baileys";
         const isOfficial = channelType === "official";
-        
-        // Selecionar fila apropriada
-        // Usar fila de chat (sem rate limiter) para mensagens manuais de tickets
-        // Usar fila normal (com rate limiter) para campanhas/agendamentos
-        const isChatMessage = !!ticket.id;
-        let targetQueue;
-        
-        if (isChatMessage) {
-          // Mensagens de chat ao vivo usam filas rápidas (sem rate limiter)
-          targetQueue = isOfficial ? officialChatQueue : baileysChatQueue;
-        } else {
-          // Campanhas e mensagens em massa usam filas com rate limiter
-          targetQueue = isOfficial ? officialMessageQueue : baileysMessageQueue;
+        if (isOfficial) {
+          await EnsureOfficialSessionWindow(ticket);
         }
+        
+        // Esta rota sempre envia de um ticket; campanhas usam seus próprios jobs.
+        const targetQueue = isOfficial ? officialChatQueue : baileysChatQueue;
         
         await targetQueue.add(
           "SendMessage",

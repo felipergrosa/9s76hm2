@@ -1,6 +1,7 @@
 import Ticket from "../../models/Ticket";
 import Whatsapp from "../../models/Whatsapp";
 import logger from "../../utils/logger";
+import { Op } from "sequelize";
 
 /**
  * Serviço para gerenciar a janela de sessão de 24h da API Oficial WhatsApp Business
@@ -29,7 +30,8 @@ interface SessionWindowStatus {
  */
 export const UpdateSessionWindow = async (
   ticketId: number,
-  whatsappId: number
+  whatsappId: number,
+  receivedAtMs: number = Date.now()
 ): Promise<void> => {
   try {
     // Verificar se a conexão é API Oficial
@@ -42,13 +44,26 @@ export const UpdateSessionWindow = async (
       return;
     }
 
-    // Calcular nova expiração (agora + 24h)
-    const expiresAt = new Date(Date.now() + HOURS_WINDOW * 60 * 60 * 1000);
+    if (!Number.isFinite(receivedAtMs) || receivedAtMs <= 0) {
+      throw new Error("Timestamp de mensagem recebida inválido");
+    }
+
+    // A janela começa no horário da mensagem, não no horário em que um webhook
+    // atrasado foi processado. Nunca encurtar uma janela já mais recente.
+    const expiresAt = new Date(Math.min(receivedAtMs, Date.now()) + HOURS_WINDOW * 60 * 60 * 1000);
 
     // Atualizar ticket
     await Ticket.update(
       { sessionWindowExpiresAt: expiresAt },
-      { where: { id: ticketId } }
+      {
+        where: {
+          id: ticketId,
+          [Op.or]: [
+            { sessionWindowExpiresAt: null },
+            { sessionWindowExpiresAt: { [Op.lt]: expiresAt } }
+          ]
+        }
+      }
     );
 
     logger.info(
@@ -56,6 +71,7 @@ export const UpdateSessionWindow = async (
     );
   } catch (error: any) {
     logger.error(`[SessionWindow] Erro ao atualizar janela do ticket ${ticketId}: ${error.message}`);
+    throw error;
   }
 };
 

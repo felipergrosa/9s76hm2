@@ -1,10 +1,28 @@
 import axios from "axios";
 import fs from "fs";
 import path from "path";
+import { Transform } from "stream";
+import { pipeline } from "stream/promises";
 import logger from "../../utils/logger";
 import Whatsapp from "../../models/Whatsapp";
 import * as Sentry from "@sentry/node";
 import { generatePdfThumbnail } from "../../helpers/PdfThumbnailGenerator";
+import { officialApiVersion } from "../../libs/whatsapp/officialApiVersion";
+
+const MAX_MEDIA_BYTES = 50 * 1024 * 1024;
+
+function isTrustedMediaUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" &&
+      (url.hostname === "graph.facebook.com" ||
+        url.hostname === "lookaside.fbsbx.com" ||
+        url.hostname.endsWith(".fbcdn.net") ||
+        url.hostname.endsWith(".fbsbx.com"));
+  } catch {
+    return false;
+  }
+}
 
 interface DownloadMediaOptions {
   mediaId: string;
@@ -43,7 +61,7 @@ export const DownloadOfficialMediaService = async ({
 
     // 1. Obter informações da mídia (URL + MIME type)
     const mediaInfoResponse = await axios.get(
-      `https://graph.facebook.com/v18.0/${mediaId}`,
+      `https://graph.facebook.com/${officialApiVersion()}/${encodeURIComponent(mediaId)}`,
       {
         headers: {
           Authorization: `Bearer ${accessToken}`
@@ -55,8 +73,10 @@ export const DownloadOfficialMediaService = async ({
     const mediaUrl = mediaInfoResponse.data.url;
     const mimeType = mediaInfoResponse.data.mime_type;
     const fileSize = mediaInfoResponse.data.file_size;
+    if (!isTrustedMediaUrl(mediaUrl) || (fileSize && fileSize > MAX_MEDIA_BYTES)) {
+      throw new Error("URL ou tamanho de mídia inválido");
+    }
     
-    logger.debug(`[DownloadOfficialMedia] URL obtida: ${mediaUrl?.substring(0, 100)}...`);
     logger.debug(`[DownloadOfficialMedia] MIME: ${mimeType}, Size: ${fileSize} bytes`);
 
     // 2. Baixar arquivo binário
@@ -64,15 +84,17 @@ export const DownloadOfficialMediaService = async ({
       headers: {
         Authorization: `Bearer ${accessToken}`
       },
-      responseType: "arraybuffer",
+      responseType: "stream",
       timeout: 60000, // 60 segundos para download
-      maxContentLength: 50 * 1024 * 1024 // Max 50MB
+      maxRedirects: 0
     });
 
     // 3. Determinar extensão do arquivo
     const ext = getExtensionFromMimeType(mimeType) || getDefaultExtension(mediaType);
     const timestamp = Date.now();
-    const filename = `${mediaId}-${timestamp}.${ext}`;
+    const safeMediaId = String(mediaId).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 100);
+    if (!safeMediaId) throw new Error("ID de mídia inválido");
+    const filename = `${safeMediaId}-${timestamp}.${ext}`;
 
     // 4. Criar pasta por contato se não existir
     const publicDir = path.join(
@@ -82,16 +104,26 @@ export const DownloadOfficialMediaService = async ({
       `contact${contactId}`
     );
 
-    if (!fs.existsSync(publicDir)) {
-      fs.mkdirSync(publicDir, { recursive: true });
-      logger.debug(`[DownloadOfficialMedia] Pasta criada: ${publicDir}`);
-    }
+    await fs.promises.mkdir(publicDir, { recursive: true });
 
     // 5. Salvar arquivo
     const filePath = path.join(publicDir, filename);
-    fs.writeFileSync(filePath, mediaResponse.data);
+    let receivedBytes = 0;
+    const limiter = new Transform({
+      transform(chunk: Buffer, _encoding, callback) {
+        receivedBytes += chunk.length;
+        if (receivedBytes > MAX_MEDIA_BYTES) callback(new Error("Mídia excede 50 MB"));
+        else callback(null, chunk);
+      }
+    });
+    try {
+      await pipeline(mediaResponse.data, limiter, fs.createWriteStream(filePath, { flags: "wx" }));
+    } catch (error) {
+      await fs.promises.unlink(filePath).catch(() => undefined);
+      throw error;
+    }
 
-    logger.info(`[DownloadOfficialMedia] Mídia salva: ${filename} (${(mediaResponse.data.length / 1024).toFixed(2)} KB)`);
+    logger.info(`[DownloadOfficialMedia] Mídia salva: ${filename} (${(receivedBytes / 1024).toFixed(2)} KB)`);
 
     // 6. Gerar thumbnail da primeira página para PDFs
     try {

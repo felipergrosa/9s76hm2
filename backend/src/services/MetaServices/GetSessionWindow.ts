@@ -1,7 +1,7 @@
-import Message from "../../models/Message";
 import Ticket from "../../models/Ticket";
 import Whatsapp from "../../models/Whatsapp";
 import logger from "../../utils/logger";
+import { Op } from "sequelize";
 
 export interface GetSessionWindowParams {
   whatsappId: number;
@@ -47,24 +47,18 @@ export const GetSessionWindow = async ({
       };
     }
 
-    const lastInbound = await Message.findOne({
+    const ticket = await Ticket.findOne({
       where: {
         contactId,
         companyId,
-        fromMe: false
+        whatsappId: whatsapp.id,
+        sessionWindowExpiresAt: { [Op.ne]: null }
       },
-      include: [
-        {
-          model: Ticket,
-          as: "ticket",
-          where: { whatsappId: whatsapp.id },
-          attributes: []
-        }
-      ],
-      order: [["createdAt", "DESC"]]
+      attributes: ["sessionWindowExpiresAt"],
+      order: [["sessionWindowExpiresAt", "DESC"]]
     });
 
-    if (!lastInbound) {
+    if (!ticket?.sessionWindowExpiresAt) {
       logger.info(
         `[GetSessionWindow] Nenhuma mensagem de cliente encontrada para contactId=${contactId}, whatsappId=${whatsappId}`
       );
@@ -76,7 +70,7 @@ export const GetSessionWindow = async ({
     }
 
     const now = Date.now();
-    const last = new Date(lastInbound.createdAt).getTime();
+    const last = new Date(ticket.sessionWindowExpiresAt).getTime() - HOURS_WINDOW * 60 * 60 * 1000;
     const diffMs = Math.max(0, now - last);
     const diffHours = diffMs / (1000 * 60 * 60);
     const hasOpenSession = diffHours < HOURS_WINDOW;
@@ -89,7 +83,7 @@ export const GetSessionWindow = async ({
 
     return {
       hasOpenSession,
-      lastUserMessageAt: lastInbound.createdAt,
+      lastUserMessageAt: new Date(last),
       diffHours
     };
   } catch (error: any) {

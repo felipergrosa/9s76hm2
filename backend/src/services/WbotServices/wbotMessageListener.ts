@@ -8,6 +8,7 @@ import { isNil, isNull } from "lodash";
 import axios from "axios";
 import { generatePdfThumbnail } from "../../helpers/PdfThumbnailGenerator";
 import logger, { sanitizeMessageForLog } from "../../utils/logger";
+import { listBaileysInbound, persistBaileysInbound, removeBaileysInbound } from "./BaileysInboundJournal";
 
 import {
   downloadMediaMessage,
@@ -1467,13 +1468,16 @@ const getMessageMedia = (message: proto.IMessage) => {
   );
 }
 const downloadMedia = async (msg: proto.IWebMessageInfo, isImported: Date = null, wbot: Session, ticket: Ticket) => {
-  const unpackedMessage = getUnpackedMessage(msg);
+  const unpackedMessage = getUnpackedMessage(msg) as proto.IMessage;
   const message = getMessageMedia(unpackedMessage);
   if (!message) {
     return null;
   }
-  const fileLimit = parseInt(await CheckSettings1("downloadLimit", "9999"), 10);
-  if (wbot && message?.fileLength && +message.fileLength > fileLimit * 1024 * 1024) {
+  const configuredLimit = Number(await CheckSettings1("downloadLimit", "25"));
+  const fileLimitMb = Number.isFinite(configuredLimit) && configuredLimit > 0
+    ? Math.min(configuredLimit, 100) : 25;
+  const fileLimitBytes = fileLimitMb * 1024 * 1024;
+  if (message.fileLength && Number(message.fileLength) > fileLimitBytes) {
     throw new Error("ERR_FILESIZE_OVER_LIMIT");
   }
 
@@ -1490,18 +1494,25 @@ const downloadMedia = async (msg: proto.IWebMessageInfo, isImported: Date = null
     }
   }
 
-  let buffer;
+  let buffer: Buffer;
   try {
-    buffer = await downloadMediaMessage(
-      msg as any,
-      "buffer",
-      {},
-      {
-        logger,
-        reuploadRequest: wbot.updateMediaMessage
+    const stream = await downloadMediaMessage(msg as any, "stream", {}, {
+      logger,
+      reuploadRequest: wbot.updateMediaMessage
+    });
+    const chunks: Buffer[] = [];
+    let totalBytes = 0;
+    for await (const chunk of stream) {
+      totalBytes += chunk.length;
+      if (totalBytes > fileLimitBytes) {
+        stream.destroy();
+        throw new Error("ERR_FILESIZE_OVER_LIMIT");
       }
-    );
+      chunks.push(chunk);
+    }
+    buffer = Buffer.concat(chunks, totalBytes);
   } catch (err) {
+    if (err?.message === "ERR_FILESIZE_OVER_LIMIT") throw err;
     if (isImported) {
       console.log(
         "Falha ao fazer o download de uma mensagem importada, provavelmente a mensagem já não esta mais disponível"
@@ -1513,7 +1524,7 @@ const downloadMedia = async (msg: proto.IWebMessageInfo, isImported: Date = null
     }
   }
 
-  let filename = msg.message?.documentMessage?.fileName || "";
+  let filename = (message as proto.Message.IDocumentMessage)?.fileName || "";
 
   const mineType =
     msg.message?.imageMessage ||
@@ -1554,7 +1565,11 @@ const downloadMedia = async (msg: proto.IWebMessageInfo, isImported: Date = null
     const ext = mineType.mimetype.split("/")[1].split(";")[0];
     filename = `${new Date().getTime()}.${ext}`;
   } else {
-    filename = `${new Date().getTime()}_${filename}`;
+    const safeName = path.basename(String(filename).replace(/\\/g, "/"))
+      .replace(/[<>:"/\\|?*\x00-\x1f]/g, "_")
+      .replace(/^\.+/, "")
+      .slice(0, 180);
+    filename = `${new Date().getTime()}_${safeName || "documento"}`;
   }
 
   if (!buffer) {
@@ -2093,7 +2108,8 @@ const verifyContact = async (
 };
 
 const verifyQuotedMessage = async (
-  msg: proto.IWebMessageInfo
+  msg: proto.IWebMessageInfo,
+  companyId: number
 ): Promise<Message | null> => {
   if (!msg) {
     logger.info(`[verifyQuotedMessage] msg é null/undefined`);
@@ -2109,7 +2125,7 @@ const verifyQuotedMessage = async (
   }
 
   const quotedMsg = await Message.findOne({
-    where: { wid: quoted }
+    where: { wid: quoted, companyId }
   });
 
   if (!quotedMsg) {
@@ -2132,7 +2148,7 @@ export const verifyMediaMessage = async (
   isCampaign: boolean = false  // Se true, não emite para a sala da conversa (background)
 ): Promise<Message> => {
   const io = getIO();
-  const quotedMsg = await verifyQuotedMessage(msg);
+  const quotedMsg = await verifyQuotedMessage(msg, ticket.companyId);
   const companyId = ticket.companyId;
 
   logger.info(`[verifyMediaMessage] quotedMsg retornado: ${quotedMsg ? `id=${quotedMsg.id}, wid=${quotedMsg.wid}` : 'NULL'}`);
@@ -2247,15 +2263,14 @@ export const verifyMediaMessage = async (
 
       // Criar pasta recursivamente se não existir
       if (!fs.existsSync(folder)) {
-        fs.mkdirSync(folder, { recursive: true });
-        fs.chmodSync(folder, 0o777);
+        fs.mkdirSync(folder, { recursive: true, mode: 0o750 });
       }
 
-      await writeFileAsync(
-        join(folder, media.filename),
-        media.data.toString("base64"),
-        "base64"
-      ) // Correção adicionada por Altemir 16-08-2023
+      const targetPath = path.resolve(folder, media.filename);
+      if (!targetPath.startsWith(folder + path.sep)) {
+        throw new Error("ERR_INVALID_MEDIA_FILENAME");
+      }
+      await fs.promises.writeFile(targetPath, media.data)
         .then(() => {
           // console.log("Arquivo salvo com sucesso!");
           if (media.mimetype.includes("audio")) {
@@ -2502,7 +2517,7 @@ export const verifyMessage = async (
 ) => {
   // console.log("Mensagem recebida:", JSON.stringify(msg, null, 2));
   const io = getIO();
-  const quotedMsg = await verifyQuotedMessage(msg);
+  const quotedMsg = await verifyQuotedMessage(msg, ticket.companyId);
   let body = getBodyMessage(msg);
   const companyId = ticket.companyId;
   let generatedLinkPreview: (LinkPreviewData & { sourceUrl?: string; messageText?: string }) | null = null;
@@ -5103,7 +5118,7 @@ const flowbuilderIntegration = async (
   isTranfered?: boolean
 ) => {
   const io = getIO();
-  const quotedMsg = await verifyQuotedMessage(msg);
+  const quotedMsg = await verifyQuotedMessage(msg, companyId);
   const body = getBodyMessage(msg);
 
   /*
@@ -6711,11 +6726,13 @@ const handleMessage = async (
     Sentry.captureException(err);
     console.log(err);
     logger.error(`Error handling whatsapp message: Err: ${err}`);
+    throw err;
   }
 };
 const handleMsgAck = async (
   msg: WAMessage,
-  chat: number | null | undefined
+  chat: number | null | undefined,
+  companyId: number
 ) => {
   await new Promise(r => setTimeout(r, 500));
   const io = getIO();
@@ -6723,7 +6740,8 @@ const handleMsgAck = async (
   try {
     const messageToUpdate = await Message.findOne({
       where: {
-        wid: msg.key.id
+        wid: msg.key.id,
+        companyId
       },
       include: [
         "contact",
@@ -6926,7 +6944,7 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
   
   logger.info(`[wbotMessageListener] Iniciado para whatsappId=${wbot.id}, companyId=${companyId}, userJid=${wbotUserJid}, phoneNumber=${phoneNumber}`);
   
-  wbot.ev.on("messages.upsert", async (messageUpsert: ImessageUpsert) => {
+  const onMessagesUpsert = async (messageUpsert: ImessageUpsert) => {
     logger.debug(`[messages.upsert] Evento recebido: ${messageUpsert.messages?.length || 0} mensagens, type=${messageUpsert.type}, whatsappId=${wbot.id}`);
     
     // Filtrar mensagens primeiro (necessário para verificação de líder)
@@ -6943,7 +6961,22 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
     // ordem por conversa, mas permite paralelismo entre conversas diferentes.
     messages.forEach((message: proto.IWebMessageInfo) => {
       const inboundKey = `inbound-${wbot.id}-${message.key.remoteJid || "unknown"}`;
-      void withJidLock(inboundKey, async () => {
+      void (async () => {
+      // dedup antes do journal: redelivery em massa pós-reconnect não deve
+      // gerar write+unlink de arquivo por mensagem já persistida no banco
+      if (message.key?.id) {
+        const alreadyStored = await Message.count({
+          where: { wid: message.key.id, companyId }
+        });
+        if (alreadyStored) {
+          if (message.key.remoteJid?.endsWith("@g.us")) {
+            await handleMsgAck(message as any, 2, companyId);
+          }
+          return;
+        }
+      }
+      const journalFile = await persistBaileysInbound(companyId, wbot.id, message);
+      await withJidLock(inboundKey, async () => {
       if (
         message?.messageStubParameters?.length &&
         message.messageStubParameters[0].includes("absent")
@@ -7002,9 +7035,11 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
       }
 
       if (message.key.remoteJid?.endsWith("@g.us")) {
-        await handleMsgAck(message as any, 2);
+        await handleMsgAck(message as any, 2, companyId);
       }
-      }).catch((error: any) => {
+      });
+      await removeBaileysInbound(journalFile);
+      })().catch((error: any) => {
         Sentry.captureException(error);
         logger.error({
           error: error?.message || error,
@@ -7028,7 +7063,19 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
     //     await verifyCampaignMessageAndCloseTicket(message, companyId);
     //   }
     // });
-  });
+  };
+  wbot.ev.on("messages.upsert", onMessagesUpsert);
+  void listBaileysInbound(companyId, wbot.id)
+    .then(entries => {
+      if (entries.length) logger.warn(`[messages.upsert] Reprocessando ${entries.length} mensagens pendentes para whatsappId=${wbot.id}`);
+      for (const entry of entries) {
+        void onMessagesUpsert({ messages: [entry.message], type: "notify" } as ImessageUpsert);
+      }
+    })
+    .catch((error: any) => {
+      Sentry.captureException(error);
+      logger.error(`[messages.upsert] Falha ao recuperar mensagens pendentes: ${error?.message || error}`);
+    });
 
   wbot.ev.on("messages.update", (messageUpdate: WAMessageUpdate[]) => {
     if (messageUpdate.length === 0) return;
@@ -7078,7 +7125,7 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
       }
 
       const ackKey = `ack-${companyId}-${message.key.id || message.key.remoteJid || "unknown"}`;
-      await withJidLock(ackKey, () => handleMsgAck(message as any, ack));
+      await withJidLock(ackKey, () => handleMsgAck(message as any, ack, companyId));
     });
   });
 
@@ -7091,7 +7138,7 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
         if (!ack) return;
         logger.debug(`[message-receipt.update] ACK=${ack} para msgId=${msg?.key?.id}`);
         const ackKey = `ack-${companyId}-${msg?.key?.id || msg?.key?.remoteJid || "unknown"}`;
-        await withJidLock(ackKey, () => handleMsgAck(msg, ack));
+        await withJidLock(ackKey, () => handleMsgAck(msg, ack, companyId));
       } catch (err) {
         logger.error(`[message-receipt.update] Erro: ${err}`);
       }

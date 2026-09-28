@@ -1,13 +1,11 @@
-import { Op } from "sequelize";
 import { Request, Response } from "express";
 import * as Sentry from "@sentry/node";
 import logger from "../utils/logger";
-import ProcessWhatsAppWebhook from "../services/WbotServices/ProcessWhatsAppWebhook";
 import Whatsapp from "../models/Whatsapp";
 import {
-  checkMetaWebhookSignature,
-  WEBHOOK_SIGNATURE_ENFORCE
+  checkOfficialWebhookSignature
 } from "../services/WebhookService/CheckMetaWebhookSignature";
+import { enqueueOfficialWebhookChange } from "../queues/OfficialWebhookQueue";
 
 /**
  * Controller para receber webhooks da WhatsApp Business API Oficial
@@ -41,7 +39,7 @@ export const verifyWebhook = async (req: Request, res: Response): Promise<Respon
     const isGlobalTokenValid = !!globalToken && token === globalToken;
 
     const isPerConnectionTokenValid =
-      typeof token === "string" &&
+      typeof token === "string" && token.length > 0 &&
       !!(await Whatsapp.findOne({
         where: { wabaWebhookVerifyToken: token }
       }));
@@ -69,61 +67,52 @@ export const verifyWebhook = async (req: Request, res: Response): Promise<Respon
 export const processWebhook = async (req: Request, res: Response): Promise<Response> => {
   try {
     const body = req.body;
-
-    logger.debug(`[Webhook] Evento recebido: ${JSON.stringify(body).substring(0, 200)}...`);
-
-    const signatureHeader = req.headers["x-hub-signature-256"] as string | undefined;
-    const isSignatureValid = await checkMetaWebhookSignature(
-      req.rawBody,
-      signatureHeader,
-      "WABA"
-    );
-
-    if (!isSignatureValid && WEBHOOK_SIGNATURE_ENFORCE) {
-      logger.warn(`[Webhook] Requisição rejeitada: assinatura HMAC inválida (enforce ativo)`);
-      return res.status(403).send("Forbidden");
-    }
-
-    // Validar payload básico
-    if (!body.object) {
-      logger.warn(`[Webhook] Payload inválido: sem campo 'object'`);
+    if (!body || body.object !== "whatsapp_business_account" || !Array.isArray(body.entry)) {
       return res.status(400).send("Bad Request");
     }
 
-    // Verificar se é evento do WhatsApp Business
-    if (body.object !== "whatsapp_business_account") {
-      logger.debug(`[Webhook] Ignorando evento de tipo: ${body.object}`);
+    const changes = body.entry.flatMap((entry: any) =>
+      Array.isArray(entry.changes) ? entry.changes : []
+    );
+    if (changes.length > 100) {
+      return res.status(400).send("Bad Request");
+    }
+
+    // Meta entrega outros fields no mesmo webhook (account_update,
+    // message_template_status_update...) — eles não têm metadata.phone_number_id.
+    // Rejeitar com 400 faria a Meta retentar para sempre: ack e ignora.
+    const messageChanges = changes.filter((c: any) => c?.field === "messages");
+    const ignored = changes.length - messageChanges.length;
+    if (ignored > 0) {
+      logger.info(`[Webhook] ${ignored} change(s) de outros fields ignorados`);
+    }
+    if (!messageChanges.length) {
       return res.status(200).send("OK");
     }
 
-    // Responder imediatamente (Meta espera resposta em 20 segundos)
-    res.status(200).send("OK");
-
-    // Processar eventos de forma assíncrona
-    if (body.entry && Array.isArray(body.entry)) {
-      for (const entry of body.entry) {
-        if (entry.changes && Array.isArray(entry.changes)) {
-          for (const change of entry.changes) {
-            // Processar cada mudança
-            try {
-              await ProcessWhatsAppWebhook(change);
-            } catch (error: any) {
-              // Não lançar erro para não afetar outros eventos
-              Sentry.captureException(error);
-              logger.error(`[Webhook] Erro ao processar change: ${error.message}`);
-            }
-          }
-        }
-      }
+    const phoneNumberIds = messageChanges.map((change: any) => change?.value?.metadata?.phone_number_id);
+    if (phoneNumberIds.some((id: any) => typeof id !== "string" || !id)) {
+      return res.status(400).send("Bad Request");
     }
 
-    return res;
+    const signatureHeader = req.headers["x-hub-signature-256"] as string | undefined;
+    const valid = await checkOfficialWebhookSignature(req.rawBody, signatureHeader, phoneNumberIds);
+    if (!valid) {
+      logger.warn("[Webhook] Assinatura oficial inválida para o número indicado");
+      return res.status(403).send("Forbidden");
+    }
+
+    // Acknowledgement only after Redis has accepted every event. Bull retries
+    // worker failures; Meta retries this request when Redis is unavailable.
+    for (const change of messageChanges) {
+      await enqueueOfficialWebhookChange(change, change.value.metadata.phone_number_id);
+    }
+    return res.status(200).send("OK");
     
   } catch (error: any) {
     Sentry.captureException(error);
     logger.error(`[Webhook] Erro ao processar webhook: ${error.message}`);
     
-    // Mesmo em caso de erro, retornar 200 para Meta não reenviar
-    return res.status(200).send("OK");
+    return res.status(503).send("Service Unavailable");
   }
 };

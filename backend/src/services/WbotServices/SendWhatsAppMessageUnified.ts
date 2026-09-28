@@ -11,6 +11,7 @@ import logger from "../../utils/logger";
 import ResolveSendJid from "../../helpers/ResolveSendJid";
 import { IWhatsAppMessage } from "../../libs/whatsapp";
 import { buildOfficialPreviewData } from "../../utils/officialMessagePreview";
+import EnsureOfficialSessionWindow from "../MetaServices/EnsureOfficialSessionWindow";
 
 interface TemplateButton {
   index: number;
@@ -68,6 +69,9 @@ const SendWhatsAppMessageUnified = async ({
     // Obter adapter apropriado (Baileys ou Official API)
     const adapter = await GetTicketAdapter(ticket);
     const channelType = adapter.channelType;
+    if (channelType === "official") {
+      await EnsureOfficialSessionWindow(ticket);
+    }
     
     // Obter contato
     const contactNumber = await Contact.findByPk(ticket.contactId);

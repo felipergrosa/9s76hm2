@@ -4,7 +4,9 @@ import makeWASocket, {
   WAMessage,
   proto,
   downloadMediaMessage,
-  isJidGroup
+  isJidGroup,
+  generateWAMessageContent,
+  generateWAMessageFromContent
 } from "@whiskeysockets/baileys";
 import * as Sentry from "@sentry/node";
 import fs from "fs";
@@ -316,7 +318,7 @@ export class BaileysAdapter implements IWhatsAppAdapter {
           
           // Tentar reenvio apenas uma vez
           try {
-            const retryResult = await this.socket.sendMessage(jid, content);
+            const retryResult = await this.socket.sendMessage(jid, content, options);
             
             // Validar retry também
             if (!retryResult || !retryResult.key || !retryResult.key.id) {
@@ -336,6 +338,44 @@ export class BaileysAdapter implements IWhatsAppAdapter {
 
       throw error;
     }
+  }
+
+  private async sendInteractiveButtons(
+    jid: string,
+    body: string,
+    buttons: NonNullable<ISendMessageOptions["buttons"]>,
+    image?: { url: string }
+  ): Promise<proto.IWebMessageInfo> {
+    const socket = this.socket;
+    if (!socket?.user?.id || !this.isSocketReady()) {
+      throw new WhatsAppAdapterError("Conexão WhatsApp fechada", "CONNECTION_CLOSED");
+    }
+
+    const header = image ? {
+      imageMessage: (await generateWAMessageContent(
+        { image },
+        { upload: socket.waUploadToServer! }
+      )).imageMessage,
+      hasMediaAttachment: true
+    } : undefined;
+    const message = generateWAMessageFromContent(jid, {
+      viewOnceMessage: {
+        message: {
+          interactiveMessage: {
+            body: { text: body },
+            ...(header ? { header } : {}),
+            nativeFlowMessage: {
+              buttons: buttons.map(button => ({
+                name: "quick_reply",
+                buttonParamsJson: JSON.stringify({ display_text: button.title, id: button.id })
+              }))
+            }
+          }
+        }
+      }
+    }, { userJid: socket.user.id });
+    await socket.relayMessage(jid, message.message!, { messageId: message.key.id! });
+    return message;
   }
 
   /**
@@ -375,15 +415,17 @@ export class BaileysAdapter implements IWhatsAppAdapter {
       let sentMsg: any;
 
       // Mensagem de texto simples
-      if (mediaType === "text" || !mediaType) {
+      if ((mediaType === "text" || !mediaType) && !vcard && !buttons?.length && !listSections?.length && !mediaPath && !mediaUrl) {
         content = { text: body || "" };
 
         // Adicionar quoted se existir
         if (quotedMsgId) {
           try {
+            const whatsapp = await Whatsapp.findByPk(this.whatsappId, { attributes: ["companyId"] });
+            if (!whatsapp) throw new WhatsAppAdapterError("Conexão não encontrada", "WHATSAPP_NOT_FOUND");
             // Buscar mensagem original para pegar informações completas do key
             const quotedMessage = await Message.findOne({
-              where: { wid: quotedMsgId }
+              where: { wid: quotedMsgId, companyId: whatsapp.companyId }
             });
 
             if (quotedMessage) {
@@ -401,18 +443,7 @@ export class BaileysAdapter implements IWhatsAppAdapter {
               };
               logger.debug(`[BaileysAdapter] Quote configurado com sucesso para mensagem ${quotedMsgId}`);
             } else {
-              // Fallback: usar informações mínimas (pode não funcionar em todos os casos)
-              logger.warn(`[BaileysAdapter] Mensagem citada ${quotedMsgId} não encontrada no banco, usando fallback`);
-              content.quoted = {
-                key: {
-                  id: quotedMsgId,
-                  remoteJid: toJid,
-                  fromMe: false
-                },
-                message: {
-                  conversation: ""
-                }
-              };
+              logger.warn(`[BaileysAdapter] Mensagem citada ${quotedMsgId} não encontrada nesta empresa`);
             }
           } catch (error) {
             logger.error(`[BaileysAdapter] Erro ao buscar mensagem citada: ${error.message}`);
@@ -426,18 +457,66 @@ export class BaileysAdapter implements IWhatsAppAdapter {
         
         sentMsg = await this.sendWithRetry(toJid, contentWithoutQuoted, options);
       }
-      // Mensagem com botões
-      else if (buttons && buttons.length > 0) {
+      // vCard (contato)
+      else if (vcard) {
         content = {
-          text: body || "",
-          buttons: buttons.map(btn => ({
-            buttonId: btn.id,
-            buttonText: { displayText: btn.title },
-            type: 1
-          })),
-          headerType: 1
+          contacts: {
+            displayName: "Contato",
+            contacts: [{ vcard }]
+          }
         };
         sentMsg = await this.sendWithRetry(toJid, content);
+      }
+      // Mensagem com mídia (inclusive imagem com botões)
+      else if (mediaPath || mediaUrl) {
+        let mediaData: any;
+        if (mediaPath) {
+          if (!fs.existsSync(mediaPath)) {
+            throw new WhatsAppAdapterError(`Arquivo não encontrado: ${mediaPath}`, "FILE_NOT_FOUND");
+          }
+          mediaData = { url: mediaPath };
+        } else {
+          mediaData = { url: mediaUrl };
+        }
+
+        if (mediaType === "image" && buttons?.length) {
+          sentMsg = await this.sendInteractiveButtons(toJid, caption || body || "", buttons, mediaData);
+        } else {
+        switch (mediaType) {
+          case "image":
+            content = {
+              image: mediaData,
+              caption: caption || body || "",
+              mimetype: options.mimetype || "image/jpeg"
+            };
+            if (buttons?.length) {
+              content.buttons = buttons.map(btn => ({
+                buttonId: btn.id,
+                buttonText: { displayText: btn.title },
+                type: 1
+              }));
+              content.headerType = 4;
+            }
+            break;
+          case "video":
+            content = { video: mediaData, caption: caption || "", mimetype: options.mimetype || "video/mp4", fileName: options.filename };
+            break;
+          case "audio":
+          case "ptt":
+            content = { audio: mediaData, mimetype: options.mimetype || "audio/mp4", ptt: mediaType === "ptt" };
+            break;
+          case "document":
+            content = { document: mediaData, mimetype: options.mimetype || "application/octet-stream", fileName: options.filename || "documento", caption: caption || "" };
+            break;
+          default:
+            throw new WhatsAppAdapterError(`Tipo de mídia não suportado: ${mediaType}`, "UNSUPPORTED_MEDIA_TYPE");
+        }
+        sentMsg = await this.sendWithRetry(toJid, content);
+        }
+      }
+      // Mensagem com botões
+      else if (buttons && buttons.length > 0) {
+        sentMsg = await this.sendInteractiveButtons(toJid, body || "", buttons);
       }
       // Mensagem com lista
       else if (listSections && listSections.length > 0) {
@@ -455,80 +534,6 @@ export class BaileysAdapter implements IWhatsAppAdapter {
           title: options.listTitle || "",
           footer: ""
         };
-        sentMsg = await this.sendWithRetry(toJid, content);
-      }
-      // vCard (contato)
-      else if (vcard) {
-        content = {
-          contacts: {
-            displayName: "Contato",
-            contacts: [{ vcard }]
-          }
-        };
-        sentMsg = await this.sendWithRetry(toJid, content);
-      }
-      // Mensagem com mídia
-      else if (mediaPath || mediaUrl) {
-        // Baileys espera:
-        // - Buffer diretamente para arquivos locais
-        // - { url: "https://..." } para URLs remotas
-        let mediaData: any;
-        if (mediaPath) {
-          const fsModule = require("fs");
-          if (fsModule.existsSync(mediaPath)) {
-            // Ler arquivo e passar Buffer diretamente
-            mediaData = fsModule.readFileSync(mediaPath);
-            logger.debug(`[BaileysAdapter] Arquivo lido: ${mediaPath}, tamanho: ${mediaData.length} bytes`);
-          } else {
-            throw new WhatsAppAdapterError(`Arquivo não encontrado: ${mediaPath}`, "FILE_NOT_FOUND");
-          }
-        } else {
-          mediaData = { url: mediaUrl };
-          logger.debug(`[BaileysAdapter] Usando URL: ${mediaUrl}`);
-        }
-        
-        logger.debug(`[BaileysAdapter] mediaType: ${mediaType}, mediaData type: ${typeof mediaData}`);
-
-        switch (mediaType) {
-          case "image":
-            // Imagem: passar mimetype explicitamente
-            content = {
-              image: mediaData,
-              caption: caption || "",
-              mimetype: options.mimetype || "image/jpeg"
-            };
-            break;
-          case "video":
-            content = {
-              video: mediaData,
-              caption: caption || "",
-              mimetype: options.mimetype || "video/mp4",
-              fileName: options.filename
-            };
-            break;
-          case "audio":
-          case "ptt":
-            content = {
-              audio: mediaData,
-              mimetype: options.mimetype || "audio/mp4",
-              ptt: mediaType === "ptt"
-            };
-            break;
-          case "document":
-            content = {
-              document: mediaData,
-              mimetype: options.mimetype || "application/octet-stream",
-              fileName: options.filename || "documento",
-              caption: caption || ""
-            };
-            break;
-          default:
-            throw new WhatsAppAdapterError(
-              `Tipo de mídia não suportado: ${mediaType}`,
-              "UNSUPPORTED_MEDIA_TYPE"
-            );
-        }
-
         sentMsg = await this.sendWithRetry(toJid, content);
       }
 

@@ -7,18 +7,22 @@ export default {
     priority: 1
   },
   async handle({ data }) {
-    const { msg, chat } = data || {};
+    const { msg, chat, companyId } = data || {};
     const wid = msg?.key?.id;
 
     try {
-      await handleMsgAck(msg, chat);
+      if (!Number.isSafeInteger(Number(companyId)) || Number(companyId) <= 0) {
+        throw new Error("ACK job sem companyId válido");
+      }
+      await handleMsgAck(msg, chat, Number(companyId));
     } catch (error: any) {
       logger.error(
         {
           error: error?.message || error,
           stack: error?.stack,
           wid,
-          chat
+          chat,
+          companyId
         },
         "[handleMessageAckQueue] Falha ao processar ACK"
       );

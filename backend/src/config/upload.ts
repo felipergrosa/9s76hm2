@@ -23,6 +23,20 @@ interface UploadRequest extends Request {
 }
 
 const publicFolder = path.resolve(__dirname, "..", "..", "public");
+const safeSegment = (value: unknown): string => {
+  const segment = String(value || "");
+  if (!/^[a-zA-Z0-9_-]{1,100}$/.test(segment)) {
+    throw new Error("Invalid upload path segment");
+  }
+  return segment;
+};
+
+const assertInside = (root: string, target: string): void => {
+  const relative = path.relative(root, target);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new Error("Upload path outside company directory");
+  }
+};
 
 export default {
   directory: publicFolder,
@@ -69,6 +83,7 @@ export default {
       const { typeArch, fileId, contactUuid, category } = req.body as any;
       let folder: string;
 
+      try {
       switch (typeArch) {
         case "announcements": {
           folder = path.resolve(publicFolder, typeArch);
@@ -83,12 +98,13 @@ export default {
             const err = new Error("Faltou contactUuid para upload de contato");
             return cb(err, null);
           }
+          const safeContactUuid = safeSegment(contactUuid);
           if (category === "avatar") {
-            const rel = buildContactAvatarPath(companyId!, contactUuid);
+            const rel = buildContactAvatarPath(companyId!, safeContactUuid);
             folder = path.resolve(publicFolder, rel);
           } else {
             const bucket = getBucketByMime(file.mimetype);
-            const rel = buildContactMediaBucketPath(companyId!, contactUuid, bucket);
+            const rel = buildContactMediaBucketPath(companyId!, safeContactUuid, bucket);
             folder = path.resolve(publicFolder, rel);
           }
           break;
@@ -118,34 +134,34 @@ export default {
           
           if (ticketId) {
             // É upload de mensagem! Buscar contactId do ticket
-            try {
-              const ticket = await Ticket.findByPk(ticketId, { attributes: ['contactId'] });
-              if (ticket?.contactId) {
-                // Salvar em contact{id}/
-                folder = path.resolve(
-                  publicFolder,
-                  `company${companyId}`,
-                  `contact${ticket.contactId}`
-                );
-                break;
-              }
-            } catch (err) {
-              console.error("Erro ao buscar ticket para upload:", err);
+            const ticket = await Ticket.findOne({
+              where: { id: ticketId, companyId },
+              attributes: ['contactId']
+            });
+            if (!ticket?.contactId) {
+              throw new Error("Ticket not found in upload company");
             }
+            folder = path.resolve(
+              publicFolder,
+              `company${companyId}`,
+              `contact${ticket.contactId}`
+            );
+            break;
           }
           
           // Fallback: Compatibilidade com estrutura antiga
           folder = path.resolve(
             publicFolder,
             `company${companyId}`,
-            typeArch || '',
-            fileId || ''
+            typeArch ? safeSegment(typeArch) : '',
+            fileId ? safeSegment(fileId) : ''
           );
         }
       }
 
-      // Criar pasta de forma segura
-      try {
+      // Validate the final path even when a future branch adds new upload types.
+        const isSharedAsset = typeArch === "announcements" || typeArch === "logo";
+        assertInside(isSharedAsset ? publicFolder : path.resolve(publicFolder, `company${companyId}`), folder);
         fs.mkdirSync(folder, { recursive: true });
         // Permissão 755: owner rwx, group/other rx (antes era 777, excessivo).
         fs.chmodSync(folder, 0o755);
@@ -167,6 +183,9 @@ export default {
 
       // Geração do nome do arquivo (timestamp para announcements, original para demais)
       const baseName = sanitizeFileName(file.originalname);
+      if (!baseName || baseName === "." || baseName === ".." || baseName.length > 200) {
+        return cb(new Error("Invalid upload filename"), "");
+      }
       const fileName = typeArch && typeArch !== "announcements"
         ? baseName
         : `${Date.now()}_${baseName}`;

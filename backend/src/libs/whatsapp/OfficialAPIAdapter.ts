@@ -9,11 +9,14 @@ import {
 } from "./IWhatsAppAdapter";
 import logger from "../../utils/logger";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
+import { officialApiVersion } from "./officialApiVersion";
+import { signPublicMediaUrl } from "../../utils/publicMediaAccess";
 
 /**
  * Configuração do adapter oficial
  */
 interface OfficialAPIConfig {
+  companyId: number;
   phoneNumberId: string;
   accessToken: string;
   businessAccountId: string;
@@ -34,6 +37,7 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
   private accessToken: string;
   private businessAccountId: string;
   private apiVersion: string;
+  private companyId: number;
   private status: ConnectionStatus = "disconnected";
   private phoneNumber: string | null = null;
 
@@ -43,10 +47,11 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
 
   constructor(whatsappId: number, config: OfficialAPIConfig) {
     this.whatsappId = whatsappId;
+    this.companyId = config.companyId;
     this.phoneNumberId = config.phoneNumberId;
     this.accessToken = config.accessToken;
     this.businessAccountId = config.businessAccountId;
-    this.apiVersion = config.apiVersion || "v18.0";
+    this.apiVersion = config.apiVersion || officialApiVersion();
 
     const apiVersion = this.apiVersion;
 
@@ -70,6 +75,21 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
         return Promise.reject(error);
       }
     );
+  }
+
+  private accessibleMediaUrl(mediaUrl: string): string {
+    const backendOrigin = new URL(process.env.BACKEND_URL || "http://localhost:8080").origin;
+    const parsed = new URL(mediaUrl, backendOrigin);
+    if (!/^https?:$/.test(parsed.protocol)) {
+      throw new Error("Protocolo de mídia inválido");
+    }
+    if (parsed.origin === backendOrigin) {
+      if (!parsed.pathname.startsWith(`/public/company${this.companyId}/`)) {
+        throw new Error("Mídia local fora da empresa da conexão");
+      }
+      return signPublicMediaUrl(parsed.toString(), this.companyId);
+    }
+    return parsed.toString();
   }
 
   /**
@@ -262,11 +282,12 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
       }
       // Mensagem com mídia (imagem, vídeo, documento, áudio)
       else if (mediaUrl) {
+        const accessibleUrl = this.accessibleMediaUrl(mediaUrl);
         switch (mediaType) {
           case "image":
             payload.type = "image";
             payload.image = {
-              link: mediaUrl,
+              link: accessibleUrl,
               caption: caption?.substring(0, 1024)  // Max 1024 chars
             };
             break;
@@ -274,7 +295,7 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
           case "video":
             payload.type = "video";
             payload.video = {
-              link: mediaUrl,
+              link: accessibleUrl,
               caption: caption?.substring(0, 1024)
             };
             break;
@@ -283,14 +304,14 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
           case "ptt":
             payload.type = "audio";
             payload.audio = {
-              link: mediaUrl
+              link: accessibleUrl
             };
             break;
 
           case "document":
             payload.type = "document";
             payload.document = {
-              link: mediaUrl,
+              link: accessibleUrl,
               filename: caption || "documento.pdf"
             };
             break;
@@ -964,9 +985,11 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
       logger.info(`[OfficialAPI] Fazendo upload de ${mediaType} via Media API`);
 
       // 1. Baixar o arquivo do link
-      const response = await axios.get(mediaUrl, {
+      const response = await axios.get(this.accessibleMediaUrl(mediaUrl), {
         responseType: "arraybuffer",
         timeout: 60000, // 60s para download
+        maxContentLength: 50 * 1024 * 1024,
+        maxRedirects: 0,
         headers: {
           "User-Agent": "WhatsApp-Adapter/1.0"
         }

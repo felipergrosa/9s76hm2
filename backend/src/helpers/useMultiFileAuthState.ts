@@ -16,11 +16,20 @@ import * as crypto from "crypto";
 
 // Mutex por arquivo para evitar race conditions em operações de I/O concorrentes
 // Ref: https://github.com/WhiskeySockets/Baileys/issues/794
+// Bounded: um mutex por chave Signal (pre-keys/sender-keys por contato) cresceria
+// sem limite — evita leak evitando locks ociosos além do teto.
+const FILE_LOCKS_MAX = 5000;
 const fileLocks = new Map<string, Mutex>();
 
 const getFileLock = (filePath: string): Mutex => {
   let mutex = fileLocks.get(filePath);
   if (!mutex) {
+    if (fileLocks.size >= FILE_LOCKS_MAX) {
+      for (const [key, m] of fileLocks) {
+        if (!m.isLocked()) fileLocks.delete(key);
+        if (fileLocks.size < FILE_LOCKS_MAX) break;
+      }
+    }
     mutex = new Mutex();
     fileLocks.set(filePath, mutex);
   }
@@ -50,7 +59,7 @@ export const useMultiFileAuthState = async (
 
   const ensureDir = async () => {
     if (driver === "fs") {
-      await fs.promises.mkdir(baseDir, { recursive: true }).catch(() => { });
+      await fs.promises.mkdir(baseDir, { recursive: true });
     }
   };
 
@@ -88,7 +97,7 @@ export const useMultiFileAuthState = async (
               console.error(`[BaileysAuth] Executando callback onZombie para matar conexão de whatsappId=${whatsapp.id}`);
               onZombie();
             }
-            return null;
+            throw new Error(`Baileys auth write fenced for whatsappId=${whatsapp.id}`);
           }
 
           await cacheLayer.set(
@@ -101,8 +110,8 @@ export const useMultiFileAuthState = async (
           await fs.promises.writeFile(p, JSON.stringify(data, BufferJSON.replacer), "utf-8");
         }
       } catch (error) {
-        console.log("writeData error", error);
-        return null;
+        console.error(`[BaileysAuth] Falha ao gravar ${file} para whatsappId=${whatsapp.id}`, error);
+        throw error;
       }
     });
   };
@@ -123,12 +132,14 @@ export const useMultiFileAuthState = async (
           try {
             const raw = await fs.promises.readFile(p, "utf-8");
             return JSON.parse(raw, BufferJSON.reviver);
-          } catch {
-            return null;
+          } catch (error: any) {
+            if (error?.code === "ENOENT") return null;
+            throw error;
           }
         }
       } catch (error) {
-        return null;
+        console.error(`[BaileysAuth] Falha ao ler ${file} para whatsappId=${whatsapp.id}`, error);
+        throw error;
       }
     });
   };
@@ -145,9 +156,14 @@ export const useMultiFileAuthState = async (
           await cacheLayer.del(`sessions:${whatsapp.id}:${file}`);
         } else {
           const p = fsPathFor(file);
-          await fs.promises.unlink(p).catch(() => { });
+          await fs.promises.unlink(p).catch((error: any) => {
+            if (error?.code !== "ENOENT") throw error;
+          });
         }
-      } catch { }
+      } catch (error) {
+        console.error(`[BaileysAuth] Falha ao remover ${file} para whatsappId=${whatsapp.id}`, error);
+        throw error;
+      }
     });
   };
 

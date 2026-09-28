@@ -169,6 +169,7 @@ graphify-out/
 !*.md
 
 backend/private/sessions/
+backend/private/baileys-inbound/
 
 # Pastas de backup
 back-up-limpo/

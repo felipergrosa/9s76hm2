@@ -7,6 +7,7 @@ import { InstagramAdapter } from "./InstagramAdapter";
 import { WebChatAdapter } from "./WebChatAdapter";
 import AppError from "../../errors/AppError";
 import logger from "../../utils/logger";
+import { officialApiVersion } from "./officialApiVersion";
 
 /**
  * Factory para criar adapters de mensageria
@@ -21,7 +22,9 @@ export class WhatsAppFactory {
    */
   static async createAdapter(whatsapp: Whatsapp): Promise<IWhatsAppAdapter> {
     const whatsappId = whatsapp.id;
-    const channelType = whatsapp.channelType || whatsapp.channel || "baileys";
+    // legado: rows antigas usam channel="whatsapp" para Baileys
+    const rawType = whatsapp.channelType || whatsapp.channel || "baileys";
+    const channelType = rawType === "whatsapp" ? "baileys" : rawType;
 
     // Verificar se já existe adapter ativo
     const existingAdapter = this.adapters.get(whatsappId);
@@ -55,10 +58,12 @@ export class WhatsAppFactory {
         }
 
         adapter = new OfficialAPIAdapter(whatsappId, {
+          companyId: whatsapp.companyId,
           phoneNumberId: whatsapp.wabaPhoneNumberId,
           accessToken: whatsapp.wabaAccessToken,
           businessAccountId: whatsapp.wabaBusinessAccountId || "",
-          webhookVerifyToken: whatsapp.wabaWebhookVerifyToken
+          webhookVerifyToken: whatsapp.wabaWebhookVerifyToken,
+          apiVersion: officialApiVersion()
         });
         break;
 
