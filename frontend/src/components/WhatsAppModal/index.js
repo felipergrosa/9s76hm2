@@ -465,7 +465,6 @@ const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
       contactTagId: values.contactTagId || null
     };
 
-    console.dir(whatsappData)
 
     delete whatsappData["queues"];
     delete whatsappData["session"];

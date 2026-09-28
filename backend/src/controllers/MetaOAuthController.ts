@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { buildOAuthUrl, verifyOAuthState, exchangeCodeForPages, subscribePageWebhook } from "../services/MetaOAuthService";
 import CreateWhatsAppService from "../services/WhatsappService/CreateWhatsAppService";
+import Whatsapp from "../models/Whatsapp";
 import logger from "../utils/logger";
 
 // GET /meta-oauth/start?channel=facebook|instagram — generates Meta OAuth URL
@@ -35,26 +36,53 @@ export const oauthCallback = async (req: Request, res: Response): Promise<void> 
   }
 
   try {
-    const pages = await exchangeCodeForPages(code, stateData.channel);
-    const created = [];
+    const { userId, userToken, pages } = await exchangeCodeForPages(code, stateData.channel);
+    const processed = [];
 
     for (const page of pages) {
       await subscribePageWebhook(page.pageId, page.pageToken);
-      const whatsapp = await CreateWhatsAppService({
+
+      // facebookPageUserId é a chave usada por webhook/factory:
+      // facebook → Page ID; instagram → Instagram Business Account ID
+      const connectionKey = stateData.channel === "instagram"
+        ? page.instagramAccountId
+        : page.pageId;
+
+      const connectionData = {
         name: `${page.pageName} (${stateData.channel === "instagram" ? "Instagram" : "Facebook"})`,
         channel: stateData.channel,
+        channelType: stateData.channel,
         companyId: stateData.companyId,
-        facebookUserId: page.pageId,
+        status: "CONNECTED",
+        facebookUserId: userId,
+        facebookPageUserId: connectionKey,
         facebookUserToken: page.pageToken,
+        tokenMeta: userToken,
         metaPageId: page.pageId,
         metaPageAccessToken: page.pageToken,
         ...(page.instagramAccountId ? { instagramAccountId: page.instagramAccountId } : {})
-      } as any);
-      created.push((whatsapp as any).id);
+      };
+
+      // Re-autorização atualiza tokens em vez de duplicar a conexão
+      const existing = await Whatsapp.findOne({
+        where: {
+          companyId: stateData.companyId,
+          facebookPageUserId: connectionKey,
+          channel: stateData.channel
+        }
+      });
+
+      if (existing) {
+        await existing.update(connectionData);
+        processed.push(existing.id);
+      } else {
+        const { whatsapp } = await CreateWhatsAppService(connectionData as any);
+        processed.push(whatsapp.id);
+      }
     }
 
-    logger.info(`[MetaOAuth] companyId=${stateData.companyId} channel=${stateData.channel} created ${created.length} connections`);
-    res.redirect(`${frontendUrl}/connections?meta_success=${created.length}`);
+    logger.info(`[MetaOAuth] companyId=${stateData.companyId} channel=${stateData.channel} processed ${processed.length} connections`);
+    res.redirect(`${frontendUrl}/connections?meta_success=${processed.length}`);
   } catch (err: any) {
     logger.error(`[MetaOAuth] callback error: ${err.message}`);
     res.redirect(`${frontendUrl}/connections?meta_error=${encodeURIComponent(err.message)}`);

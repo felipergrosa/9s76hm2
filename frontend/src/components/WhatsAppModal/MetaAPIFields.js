@@ -127,7 +127,7 @@ const MetaAPIFields = ({ values, errors, touched, channelType }) => {
             helperText={
               touched.metaAppId && errors.metaAppId
                 ? errors.metaAppId
-                : <span className={classes.envFallback}>Fallback: REACT_APP_FACEBOOK_APP_ID</span>
+                : <span className={classes.envFallback}>Fallback: META_APP_ID</span>
             }
             variant="outlined"
             margin="dense"
@@ -149,7 +149,7 @@ const MetaAPIFields = ({ values, errors, touched, channelType }) => {
             helperText={
               touched.metaAppSecret && errors.metaAppSecret
                 ? errors.metaAppSecret
-                : <span className={classes.envFallback}>Fallback: FACEBOOK_APP_SECRET</span>
+                : <span className={classes.envFallback}>Fallback: META_APP_SECRET</span>
             }
             variant="outlined"
             margin="dense"

@@ -37,12 +37,16 @@ export const buildOAuthUrl = (companyId: number, channel: "facebook" | "instagra
 };
 
 // Exchange short-lived code for long-lived page access token and discover pages
-export const exchangeCodeForPages = async (code: string, channel: string): Promise<Array<{
-  pageId: string;
-  pageName: string;
-  pageToken: string;
-  instagramAccountId?: string;
-}>> => {
+export const exchangeCodeForPages = async (code: string, channel: string): Promise<{
+  userId: string;
+  userToken: string;
+  pages: Array<{
+    pageId: string;
+    pageName: string;
+    pageToken: string;
+    instagramAccountId?: string;
+  }>;
+}> => {
   const appId = process.env.META_APP_ID || "";
   const appSecret = process.env.META_APP_SECRET || "";
   const redirectUri = `${process.env.BACKEND_URL}/meta-oauth/callback`;
@@ -58,6 +62,12 @@ export const exchangeCodeForPages = async (code: string, channel: string): Promi
     params: { grant_type: "fb_exchange_token", client_id: appId, client_secret: appSecret, fb_exchange_token: shortToken }
   });
   const longToken = llData.access_token;
+
+  // Step 2b: identidade do usuário autorizante (referência/auditoria)
+  const { data: meData } = await axios.get(`${GRAPH}/me`, {
+    params: { access_token: longToken, fields: "id" }
+  });
+  const userId = meData.id;
 
   // Step 3: list pages
   const { data: pagesData } = await axios.get(`${GRAPH}/me/accounts`, {
@@ -88,7 +98,7 @@ export const exchangeCodeForPages = async (code: string, channel: string): Promi
   }
 
   if (!result.length) throw new Error("Nenhuma página Meta compatível encontrada na conta.");
-  return result;
+  return { userId, userToken: longToken, pages: result };
 };
 
 // Subscribe app to page webhook

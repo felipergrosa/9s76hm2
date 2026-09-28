@@ -39,7 +39,6 @@ export const webHook = async (
 ): Promise<Response> => {
   try {
     const { body } = req;
-    console.log(30, "WebHookController", { body })
 
     const signatureHeader = req.headers["x-hub-signature-256"] as string | undefined;
     const isSignatureValid = await checkMetaWebhookSignature(

@@ -4,6 +4,7 @@ import { Op } from "sequelize";
 import AppError from "../../errors/AppError";
 import Whatsapp from "../../models/Whatsapp";
 import ShowWhatsAppService from "./ShowWhatsAppService";
+import { resolveMetaChannelCredentials } from "./metaChannelCredentials";
 import AssociateWhatsappQueue from "./AssociateWhatsappQueue";
 
 interface WhatsappData {
@@ -45,6 +46,12 @@ interface WhatsappData {
   queueIdImportMessages?: number;
   flowIdNotPhrase?: number;
   flowIdWelcome?: number;
+  channel?: string;
+  channelType?: string;
+  facebookUserId?: string;
+  facebookUserToken?: string;
+  facebookPageUserId?: string;
+  tokenMeta?: string;
   // Campos Meta (Facebook/Instagram)
   metaAppId?: string;
   metaAppSecret?: string;
@@ -136,6 +143,12 @@ const UpdateWhatsAppService = async ({
     metaPageId,
     metaPageAccessToken,
     metaWebhookVerifyToken,
+    channel,
+    channelType,
+    facebookUserId,
+    facebookUserToken,
+    facebookPageUserId,
+    tokenMeta,
     instagramAccountId,
     contactTagId,
     syncOnTicketOpen,
@@ -184,10 +197,21 @@ const UpdateWhatsAppService = async ({
     ? whatsapp.color
     : normalizedColor;
 
+  // Modal grava credenciais Meta em campos meta*; webhook/factory leem
+  // as colunas legadas — resolve a ponte antes de persistir
+  const metaResolved = resolveMetaChannelCredentials({
+    channel: channel || whatsapp.channel,
+    channelType: channelType || whatsapp.channelType,
+    facebookPageUserId: facebookPageUserId || whatsapp.facebookPageUserId,
+    facebookUserToken: facebookUserToken || whatsapp.facebookUserToken,
+    metaPageId,
+    metaPageAccessToken,
+    instagramAccountId
+  });
 
   await whatsapp.update({
     name,
-    status,
+    status: metaResolved.status || status,
     session,
     greetingMessage,
     complationMessage,
@@ -223,6 +247,12 @@ const UpdateWhatsAppService = async ({
     queueIdImportMessages,
     flowIdNotPhrase,
     flowIdWelcome,
+    channel: channel || whatsapp.channel,
+    channelType: channelType || whatsapp.channelType,
+    facebookUserId: facebookUserId || whatsapp.facebookUserId,
+    facebookUserToken: metaResolved.facebookUserToken || whatsapp.facebookUserToken,
+    facebookPageUserId: metaResolved.facebookPageUserId || whatsapp.facebookPageUserId,
+    tokenMeta: tokenMeta || whatsapp.tokenMeta,
     // Campos Meta (Facebook/Instagram)
     metaAppId,
     metaAppSecret,

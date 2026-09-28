@@ -2,6 +2,7 @@ import * as Yup from "yup";
 
 import AppError from "../../errors/AppError";
 import Whatsapp from "../../models/Whatsapp";
+import { resolveMetaChannelCredentials } from "./metaChannelCredentials";
 import Company from "../../models/Company";
 import Plan from "../../models/Plan";
 import AssociateWhatsappQueue from "./AssociateWhatsappQueue";
@@ -237,10 +238,22 @@ const CreateWhatsAppService = async ({
     }
   }
 
+  // Modal grava credenciais Meta em campos meta*; webhook/factory leem
+  // as colunas legadas — resolve a ponte antes de persistir
+  const metaResolved = resolveMetaChannelCredentials({
+    channel,
+    channelType,
+    facebookPageUserId,
+    facebookUserToken,
+    metaPageId,
+    metaPageAccessToken,
+    instagramAccountId
+  });
+
   const whatsapp = await Whatsapp.create(
     {
       name,
-      status,
+      status: metaResolved.status || status,
       greetingMessage,
       complationMessage,
       outOfHoursMessage,
@@ -251,8 +264,8 @@ const CreateWhatsAppService = async ({
       provider,
       channel,
       facebookUserId,
-      facebookUserToken,
-      facebookPageUserId,
+      facebookUserToken: metaResolved.facebookUserToken || facebookUserToken,
+      facebookPageUserId: metaResolved.facebookPageUserId || facebookPageUserId,
       tokenMeta,
       maxUseBotQueues,
       timeUseBotQueues,
