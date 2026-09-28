@@ -47,7 +47,6 @@ import {
   MoreHorizontal, 
   SpellCheck2 
 } from "lucide-react";
-import MicRecorder from "mic-recorder-to-mp3";
 import clsx from "clsx";
 import { ReplyMessageContext } from "../../context/ReplyingMessage/ReplyingMessageContext";
 import { AuthContext } from "../../context/Auth/AuthContext";
@@ -157,7 +156,15 @@ import useTextSelection from "../../hooks/useTextSelection";
 import { expandPlaceholders } from "../../utils/expandPlaceholders";
 
 
-const Mp3Recorder = new MicRecorder({ bitRate: 128 });
+// Lazy: mic-recorder-to-mp3 (~150KB) só é carregado quando o usuário grava áudio
+let mp3RecorderInstance = null;
+const getMp3Recorder = async () => {
+  if (!mp3RecorderInstance) {
+    const MicRecorder = (await import("mic-recorder-to-mp3")).default;
+    mp3RecorderInstance = new MicRecorder({ bitRate: 128 });
+  }
+  return mp3RecorderInstance;
+};
 
 const useStyles = makeStyles((theme) => ({
   mainWrapper: {
@@ -1883,6 +1890,7 @@ const MessageInput = ({
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       startAudioMeter(stream);
+      const Mp3Recorder = await getMp3Recorder();
       await Mp3Recorder.start();
       setRecording(true);
       setLoading(false);
@@ -2005,6 +2013,7 @@ const MessageInput = ({
     setLoading(true);
     try {
       stopAudioMeter(true);
+      const Mp3Recorder = await getMp3Recorder();
       const [, blob] = await Mp3Recorder.stop().getMp3();
       if (blob.size < 10000) {
         setLoading(false);
@@ -2051,6 +2060,7 @@ const MessageInput = ({
   const handleCancelAudio = async () => {
     try {
       stopAudioMeter(true);
+      const Mp3Recorder = await getMp3Recorder();
       await Mp3Recorder.stop().getMp3();
       setRecording(false);
     } catch (err) {

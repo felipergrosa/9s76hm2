@@ -1,6 +1,7 @@
 import Whatsapp from "../../models/Whatsapp";
 import AppError from "../../errors/AppError";
 import logger from "../../utils/logger";
+import { serviceCache } from "../../utils/serviceCache";
 
 const DeleteWhatsAppService = async (id: string): Promise<void> => {
   const whatsapp = await Whatsapp.findOne({
@@ -20,6 +21,11 @@ const DeleteWhatsAppService = async (id: string): Promise<void> => {
   }
 
   await whatsapp.destroy();
+
+  // Invalida o cache token->whatsapp do middleware tokenAuth (chave whatsappToken:{token})
+  if (whatsapp.token) {
+    serviceCache.invalidate(`whatsappToken:${whatsapp.token}`);
+  }
 };
 
 export default DeleteWhatsAppService;

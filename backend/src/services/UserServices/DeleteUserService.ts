@@ -5,6 +5,7 @@ import UpdateDeletedUserOpenTicketsStatus from "../../helpers/UpdateDeletedUserO
 import fs from "fs";
 import path from "path";
 import { buildCompanyBase } from "../../utils/publicPath";
+import { serviceCache } from "../../utils/serviceCache";
 
 const DeleteUserService = async (
   id: string | number,
@@ -41,6 +42,9 @@ const DeleteUserService = async (
   }
 
   await user.destroy();
+
+  // Invalida o cache do usuário usado pelo middleware checkPermission (chave user:{id})
+  serviceCache.invalidate(`user:${id}`);
 };
 
 export default DeleteUserService;

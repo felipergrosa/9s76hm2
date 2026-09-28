@@ -1,5 +1,6 @@
 import AppError from "../../errors/AppError";
 import Setting from "../../models/Setting";
+import { serviceCache } from "../../utils/serviceCache";
 
 interface Request {
     key: string;
@@ -25,6 +26,11 @@ const UpdateOneSettingService = async ({
     }
 
     await setting.update({ value });
+
+    // Invalida caches de settings: este service não recebe companyId,
+    // então limpa todas as listagens por empresa + a chave pública
+    serviceCache.invalidatePattern(/^settings:/);
+    serviceCache.invalidate(`publicSetting:${key}`);
 
     return setting;
 };

@@ -19,6 +19,7 @@ import {
   Button,
   IconButton,
 } from "@material-ui/core";
+import { debounce } from "lodash";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
@@ -332,7 +333,7 @@ const MomentsUser = ({ onPanStart }) => {
         data.action === "update" ||
         data.action === "delete"
       ) {
-        fetchTickets();
+        debouncedFetchTickets();
       }
     };
 
@@ -342,8 +343,9 @@ const MomentsUser = ({ onPanStart }) => {
     return () => {
       socket.off(`company-${companyId}-ticket`, onAppMessage);
       socket.off(`company-${companyId}-appMessage`, onAppMessage);
+      debouncedFetchTickets.cancel();
     };
-  }, [socket, user.companyId]);
+  }, [socket, user.companyId, debouncedFetchTickets]);
 
   const fetchTickets = async () => {
     try {
@@ -355,6 +357,14 @@ const MomentsUser = ({ onPanStart }) => {
       toastError(err);
     }
   };
+
+  // Debounce de 500ms para evitar tempestade de GET /usersMoments
+  // a cada evento de socket (ticket/appMessage)
+  const debouncedFetchTickets = useRef(
+    debounce(() => {
+      fetchTickets();
+    }, 500)
+  ).current;
 
   const { botTickets, campaignTickets, pendingTickets, userTickets } = useMemo(() => {
     const bots = [];

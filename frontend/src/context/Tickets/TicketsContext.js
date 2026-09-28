@@ -1,4 +1,4 @@
-import React, { useState, useEffect, createContext } from "react";
+import React, { useState, useEffect, useMemo, createContext } from "react";
 import { useHistory } from "react-router-dom";
 
 const TicketsContext = createContext();
@@ -15,10 +15,14 @@ const TicketsContextProvider = ({ children }) => {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [currentTicket])
 
+	// Memoiza o value para não re-renderizar todos os consumidores a cada render do provider
+	const value = useMemo(
+		() => ({ currentTicket, setCurrentTicket, tabOpen, setTabOpen }),
+		[currentTicket, tabOpen]
+	);
+
 	return (
-		<TicketsContext.Provider
-			value={{ currentTicket, setCurrentTicket, tabOpen, setTabOpen }}
-		>
+		<TicketsContext.Provider value={value}>
 			{children}
 		</TicketsContext.Provider>
 	);

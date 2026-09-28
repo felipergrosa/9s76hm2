@@ -383,7 +383,9 @@ const ListContactsService = async ({
   if (Array.isArray(tagsIds) && tagsIds.length > 0) {
     const contactTagFilter: any[] | null = [];
     const contactTags = await ContactTag.findAll({
-      where: { tagId: { [Op.in]: tagsIds } }
+      where: { tagId: { [Op.in]: tagsIds } },
+      attributes: ["contactId"],
+      raw: true
     });
     
     if (contactTags) {
@@ -452,49 +454,21 @@ const ListContactsService = async ({
   // Contatos auto-criados a partir de participantes de grupo têm isGroupParticipant=true.
   // Eles só aparecem na listagem quando já possuem ticket individual.
   if (isGroup !== "true") {
-    // Buscar IDs de contatos que têm pelo menos um ticket individual (não-grupo)
-    const contactsWithTicket = await Ticket.findAll({
-      attributes: [[literal('DISTINCT "contactId"'), 'contactId']],
-      where: {
-        companyId,
-        isGroup: false
-      },
-      raw: true
-    });
-    const ticketContactIds = new Set(contactsWithTicket.map((t: any) => Number(t.contactId)).filter(Number.isInteger));
-
-    // Buscar contatos que NÃO têm ticket individual e têm nome igual ao número
-    // (criados automaticamente como participantes de grupo)
-    const hiddenContacts = await Contact.findAll({
-      attributes: ['id'],
-      where: {
-        companyId,
-        isGroup: false,
-        isGroupParticipant: true,
-        id: { [Op.notIn]: Array.from(ticketContactIds) },
-      },
-      raw: true
-    });
-    const hiddenContactIds = hiddenContacts.map((c: any) => c.id);
-
-    // Excluir contatos ocultos da listagem
-    if (hiddenContactIds.length > 0) {
-      const currentIdFilter: any = (whereCondition as any).id;
-      if (currentIdFilter?.[Op.in]) {
-        // Intersecção: remover hidden IDs
-        const allowed = (currentIdFilter[Op.in] as number[]).filter(id => !hiddenContactIds.includes(id));
-        (whereCondition as any).id = { [Op.in]: allowed };
-      } else if (currentIdFilter?.[Op.notIn]) {
-        // Já tem filtro notIn, adicionar mais
-        (whereCondition as any).id = { 
-          ...currentIdFilter,
-          [Op.notIn]: [...(currentIdFilter[Op.notIn] || []), ...hiddenContactIds]
-        };
-      } else {
-        // Adicionar filtro notIn
-        (whereCondition as any).id = { [Op.notIn]: hiddenContactIds };
+    // Contatos auto-criados como participantes de grupo (isGroupParticipant=true)
+    // só aparecem quando já possuem ticket individual (isGroup=false).
+    // Subquery SQL no lugar dos dois findAll full-table que materializavam IDs em memória.
+    // "contactId IS NOT NULL" evita NULLs na cláusula NOT IN.
+    const cid = Number(companyId);
+    additionalWhere.push({
+      id: {
+        [Op.notIn]: Sequelize.literal(
+          `(SELECT "id" FROM "Contacts" WHERE "companyId" = ${cid} ` +
+          `AND "isGroup" = false AND "isGroupParticipant" = true ` +
+          `AND "id" NOT IN (SELECT DISTINCT "contactId" FROM "Tickets" ` +
+          `WHERE "companyId" = ${cid} AND "isGroup" = false AND "contactId" IS NOT NULL))`
+        )
       }
-    }
+    });
   }
 
   // Filtro por conexões WhatsApp

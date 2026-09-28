@@ -1,4 +1,4 @@
-import React, { useContext, useState, useEffect, useRef } from "react";
+import React, { useContext, useState, useEffect, useRef, lazy, Suspense } from "react";
 import { useHistory } from "react-router-dom";
 
 import { Can } from "../Can";
@@ -48,10 +48,12 @@ import ShowTicketOpen from "../ShowTicketOpenModal";
 import { toast } from "react-toastify";
 import useCompanySettings from "../../hooks/useSettings/companySettings";
 import ShowTicketLogModal from "../ShowTicketLogModal";
-import TicketMessagesDialog from "../TicketMessagesDialog";
 import { useTheme } from "@material-ui/styles";
 import ImportHistoryModal from "../ImportHistoryModal";
 import ClearConversationDialog from "../ClearConversationDialog";
+
+// Lazy: TicketMessagesDialog (e a cadeia de deps da exportação PDF) só carrega ao abrir o diálogo
+const TicketMessagesDialog = lazy(() => import("../TicketMessagesDialog"));
 
 const useStyles = makeStyles(theme => ({
     actionButtons: {
@@ -444,11 +446,13 @@ const TicketActionButtonsCustom = ({ ticket, onSearchClick
                 />
             )}
             {openTicketMessageDialog && (
-                <TicketMessagesDialog
-                    open={openTicketMessageDialog}
-                    handleClose={() => setOpenTicketMessageDialog(false)}
-                    ticketId={ticket.id}
-                />
+                <Suspense fallback={null}>
+                    <TicketMessagesDialog
+                        open={openTicketMessageDialog}
+                        handleClose={() => setOpenTicketMessageDialog(false)}
+                        ticketId={ticket.id}
+                    />
+                </Suspense>
             )}
             <div className={classes.actionButtons}>
                 <Hidden smDown>

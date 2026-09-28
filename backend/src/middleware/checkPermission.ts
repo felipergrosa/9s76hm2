@@ -2,6 +2,21 @@ import { Request, Response, NextFunction } from "express";
 import AppError from "../errors/AppError";
 import { hasPermissionAsync, hasAnyPermissionAsync, hasAllPermissionsAsync } from "../helpers/PermissionAdapter";
 import User from "../models/User";
+import { withCache } from "../utils/serviceCache";
+
+// Cache curto (30s) do usuário para evitar um SELECT a cada requisição autenticada.
+// Invalidado nos pontos que alteram o usuário (UpdateUserService, avatar, delete, etc).
+const USER_CACHE_TTL = 30 * 1000;
+const getCachedUser = (id: string) =>
+  withCache(
+    `user:${id}`,
+    async () => {
+      // await dentro do async garante Promise nativa (findByPk retorna Bluebird)
+      const user = await User.findByPk(id);
+      return user;
+    },
+    USER_CACHE_TTL
+  );
 
 interface RequestWithUser extends Request {
   user?: {
@@ -22,7 +37,7 @@ export const checkAdminOrSuper = () => {
         throw new AppError("ERR_SESSION_EXPIRED", 401);
       }
 
-      const user = await User.findByPk(req.user.id);
+      const user = await getCachedUser(req.user.id);
 
       if (!user) {
         throw new AppError("ERR_USER_NOT_FOUND", 404);
@@ -51,7 +66,7 @@ export const checkPermission = (permission: string) => {
       }
 
       // Busca usuário completo do banco
-      const user = await User.findByPk(req.user.id);
+      const user = await getCachedUser(req.user.id);
       
       if (!user) {
         throw new AppError("ERR_USER_NOT_FOUND", 404);
@@ -80,7 +95,7 @@ export const checkAnyPermission = (permissions: string[]) => {
         throw new AppError("ERR_SESSION_EXPIRED", 401);
       }
 
-      const user = await User.findByPk(req.user.id);
+      const user = await getCachedUser(req.user.id);
       
       if (!user) {
         throw new AppError("ERR_USER_NOT_FOUND", 404);
@@ -108,7 +123,7 @@ export const checkAllPermissions = (permissions: string[]) => {
         throw new AppError("ERR_SESSION_EXPIRED", 401);
       }
 
-      const user = await User.findByPk(req.user.id);
+      const user = await getCachedUser(req.user.id);
       
       if (!user) {
         throw new AppError("ERR_USER_NOT_FOUND", 404);
@@ -139,7 +154,7 @@ export const attachUserToRequest = async (
       throw new AppError("ERR_SESSION_EXPIRED", 401);
     }
 
-    const user = await User.findByPk(req.user.id);
+    const user = await getCachedUser(req.user.id);
     
     if (!user) {
       throw new AppError("ERR_USER_NOT_FOUND", 404);

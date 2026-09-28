@@ -65,6 +65,12 @@ class SocketCompatibleAppError extends Error {
 
 let io: SocketIO;
 
+// Throttle em memória do heartbeat: último write no DB por usuário.
+// Evita UPDATE a cada batimento (frontend envia a cada poucos segundos)
+const heartbeatLastWrite = new Map<string, number>();
+const HEARTBEAT_WRITE_INTERVAL_MS = 60 * 1000; // 1 write por minuto por usuário
+const HEARTBEAT_MAP_MAX_SIZE = 1000;
+
 export const initIO = (httpServer: Server): SocketIO => {
   io = new SocketIO(httpServer, {
     cors: {
@@ -412,6 +418,27 @@ export const initIO = (httpServer: Server): SocketIO => {
         if (!companyId) {
           callback?.({ error: "companyId não encontrado" });
           return;
+        }
+
+        // Throttle: se o último write foi há menos de 60s, responde sem ir ao DB.
+        // O lastActivityAt pode ficar até ~1min defasado, o que é aceitável
+        // para o propósito (detecção de presença/inatividade)
+        const heartbeatKey = `${companyId}:${userId}`;
+        const nowMs = Date.now();
+        const lastWrite = heartbeatLastWrite.get(heartbeatKey) || 0;
+        if (nowMs - lastWrite < HEARTBEAT_WRITE_INTERVAL_MS) {
+          callback?.({ success: true, timestamp: new Date(nowMs).toISOString(), throttled: true });
+          return;
+        }
+        heartbeatLastWrite.set(heartbeatKey, nowMs);
+
+        // Limpeza oportunista para não crescer indefinidamente
+        if (heartbeatLastWrite.size > HEARTBEAT_MAP_MAX_SIZE) {
+          for (const [key, ts] of heartbeatLastWrite) {
+            if (nowMs - ts > HEARTBEAT_WRITE_INTERVAL_MS) {
+              heartbeatLastWrite.delete(key);
+            }
+          }
         }
 
         const user = await User.findByPk(userId, {

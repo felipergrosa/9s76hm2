@@ -1,4 +1,5 @@
 const NodePolyfillPlugin = require("node-polyfill-webpack-plugin");
+const webpack = require("webpack");
 
 const getRemoveConsolePlugin = () => {
   if (process.env.NODE_ENV !== "production") return [];
@@ -54,32 +55,28 @@ module.exports = {
         }
       });
 
-      // Otimização de chunks para reduzir tamanho e melhorar cache
+      // Otimização de chunks: deixa o splitChunks padrão do webpack dividir por rota.
+      // REMOVIDO: cacheGroups "vendor"/"materialUI" que forçavam TODO node_modules
+      // (xlsx, jspdf, react-pdf, reactflow, leaflet, chart.js, kbar, jssip...) em um
+      // único chunk 'vendors' carregado antes mesmo do login, anulando o React.lazy.
       if (env === 'production') {
         webpackConfig.optimization = {
           ...webpackConfig.optimization,
           splitChunks: {
             chunks: 'all',
-            cacheGroups: {
-              vendor: {
-                test: /[\\/]node_modules[\\/]/,
-                name: 'vendors',
-                chunks: 'all',
-              },
-              materialUI: {
-                test: /[\\/]node_modules[\\/](@material-ui|@mui)[\\/]/,
-                name: 'material-ui',
-                chunks: 'all',
-                priority: 20,
-              },
-            },
           },
         };
       }
 
       webpackConfig.plugins = [
         ...(webpackConfig.plugins || []),
-        new NodePolyfillPlugin()
+        new NodePolyfillPlugin(),
+        // Remove todos os locales do moment (~250KB); o pt-br é importado
+        // explicitamente em src/hooks/useAuth.js (onde moment.locale('pt-br') é usado)
+        new webpack.IgnorePlugin({
+          resourceRegExp: /^\.\/locale$/,
+          contextRegExp: /moment$/,
+        })
       ];
 
       // Exclui html2pdf.js do source-map-loader para evitar WARNING de es6-promise.map ausente

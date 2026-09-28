@@ -12,7 +12,6 @@ import TableRow from "@material-ui/core/TableRow";
 import Paper from "@material-ui/core/Paper";
 import Button from "@material-ui/core/Button";
 import Pagination from "@material-ui/lab/Pagination";
-import * as XLSX from 'xlsx';
 
 import api from "../../services/api";
 import TableRowSkeleton from "../../components/TableRowSkeleton";
@@ -197,6 +196,8 @@ const Reports = () => {
       });
 
       console.log(ticketsData)
+      // Import dinâmico: xlsx (~1MB) só é baixado quando o usuário exporta
+      const XLSX = await import('xlsx');
       const ws = XLSX.utils.json_to_sheet(ticketsData);
       const wb = XLSX.utils.book_new();
 

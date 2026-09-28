@@ -55,7 +55,6 @@ import UserLanguageSelector from "../components/UserLanguageSelector";
 
 import ColorModeContext from "./themeContext";
 import { getBackendUrl } from "../config";
-import useSettings from "../hooks/useSettings";
 import useVersion from "../hooks/useVersion";
 import pkg from "../../package.json";
 import ImportProgressBar from "../components/ImportProgressBar";
@@ -401,27 +400,7 @@ const LoggedInLayout = ({ children, themeToggle }) => {
     [user, drawerOpen]
   );
 
-  const settings = useSettings();
   const { setVersion } = useVersion();
-
-  useEffect(() => {
-    const getSetting = async () => {
-      const response = await settings.get("wtV");
-
-
-      if (response) {
-
-        setUserToken("disabled");
-
-      } else {
-        setUserToken("disabled");
-      }
-    };
-
-    getSetting();
-  });
-
-
 
   useEffect(() => {
     // Envia a versão do frontend para o backend (/version)
@@ -732,12 +711,15 @@ const LoggedInLayout = ({ children, themeToggle }) => {
               />
             </StyledBadge>
 
-            <UserModal
-              open={userModalOpen}
-              onClose={() => setUserModalOpen(false)}
-              onImageUpdate={(newProfileUrl) => setProfileUrl(newProfileUrl)}
-              userId={user?.id}
-            />
+            {/* Monta o UserModal apenas quando aberto: evita fetches e listeners de socket no boot */}
+            {userModalOpen && (
+              <UserModal
+                open={userModalOpen}
+                onClose={() => setUserModalOpen(false)}
+                onImageUpdate={(newProfileUrl) => setProfileUrl(newProfileUrl)}
+                userId={user?.id}
+              />
+            )}
 
             <Menu
               id="menu-appbar"

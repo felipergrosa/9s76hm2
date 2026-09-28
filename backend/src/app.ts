@@ -20,7 +20,6 @@ import { importContactsQueue } from "./queues/ImportContactsQueue";
 import BullQueue from "./libs/queue"
 import BullBoard from 'bull-board';
 import basicAuth from 'basic-auth';
-import trackUserActivity from "./middleware/trackUserActivity";
 import { authorizePublicMedia, issuePublicMediaCookie } from "./utils/publicMediaAccess";
 
 // Função de middleware para autenticação básica
@@ -168,9 +167,6 @@ app.use((req, res, next) => {
   res.setHeader('Connection', 'keep-alive');
   next();
 });
-
-// Middleware de tracking de atividade do usuário
-app.use(trackUserActivity);
 
 // Rotas
 app.use(routes);

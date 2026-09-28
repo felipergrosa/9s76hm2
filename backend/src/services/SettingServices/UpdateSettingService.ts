@@ -1,5 +1,6 @@
 import AppError from "../../errors/AppError";
 import Setting from "../../models/Setting";
+import { serviceCache } from "../../utils/serviceCache";
 
 interface Request {
   key: string;
@@ -39,6 +40,10 @@ const UpdateSettingService = async ({
   }
 
   await setting.update({ value });
+
+  // Invalida caches de settings (listagem por empresa e chave pública)
+  serviceCache.invalidate(`settings:${companyId}`);
+  serviceCache.invalidate(`publicSetting:${key}`);
 
   return setting;
 };

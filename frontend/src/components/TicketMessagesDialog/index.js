@@ -20,8 +20,6 @@ import { ForwardMessageProvider } from "../../context/ForwarMessage/ForwardMessa
 import TicketHeader from "../TicketHeader";
 import TicketInfo from "../TicketInfo";
 
-import html2pdf from "html2pdf.js";
-
 const drawerWidth = 320;
 
 const useStyles = makeStyles((theme) => ({
@@ -73,7 +71,9 @@ export default function TicketMessagesDialog({ open, handleClose, ticketId }) {
   const [exportedToPDF, setExportedToPDF] = useState(false);
 
   
-  const handleExportToPDF = () => {
+  const handleExportToPDF = async () => {
+    // Import dinâmico: html2pdf.js (~750KB) só é baixado ao exportar PDF
+    const html2pdf = (await import("html2pdf.js")).default;
     const messagesListElement = document.getElementById("messagesList"); // Id do elemento que você deseja exportar para PDF
     const headerElement = document.getElementById("TicketHeader"); // Id do elemento de cabeçalho que você deseja exportar
 

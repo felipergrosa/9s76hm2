@@ -6,7 +6,6 @@ import api from "../../services/api";
 import { Can } from "../Can";
 
 import { AuthContext } from "../../context/Auth/AuthContext";
-import * as XLSX from "xlsx";
 // import { useHistory } from 'react-router-dom/cjs/react-router-dom.min';
 // import toastError from '../../errors/toastError';
 const useStyles = makeStyles((theme) => ({
@@ -152,6 +151,8 @@ const ContactImportWpModal = ({ isOpen, handleClose, selectedTags, hideNum, user
       };
     });
     //console.log({ allDatas });
+    // Import dinâmico: xlsx (~1MB) só é baixado quando o usuário exporta
+    const XLSX = await import("xlsx");
     let wb = XLSX.utils.book_new();
     let ws = XLSX.utils.json_to_sheet(exportData);
     XLSX.utils.book_append_sheet(wb, ws, "Contatos");
@@ -162,8 +163,10 @@ const ContactImportWpModal = ({ isOpen, handleClose, selectedTags, hideNum, user
     const [file] = e.target.files;
     const reader = new FileReader();
 
-    reader.onload = (evt) => {
+    reader.onload = async (evt) => {
       try {
+        // Import dinâmico: xlsx (~1MB) só é baixado ao importar um arquivo
+        const XLSX = await import("xlsx");
         const bstr = evt.target.result;
         const wb = XLSX.read(bstr, { type: "binary" });
         const wsname = wb.SheetNames[0];

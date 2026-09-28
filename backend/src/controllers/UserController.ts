@@ -34,6 +34,7 @@ import {
   buildUserAvatarRelativePath,
   sanitizeFileName
 } from "../utils/publicPath";
+import { serviceCache } from "../utils/serviceCache";
 
 type IndexQuery = {
   searchParam: string;
@@ -440,6 +441,9 @@ export const mediaUpload = async (
     user.profileImage = path.posix.join("users", username, targetFileName);
     await user.save();
 
+    // Invalida o cache do usuário usado pelo middleware checkPermission (chave user:{id})
+    serviceCache.invalidate(`user:${user.id}`);
+
     user = await ShowUserService(userId, companyId);
 
     const io = getIO();
@@ -515,6 +519,9 @@ export const uploadAvatar = async (req: Request, res: Response): Promise<Respons
     user.profileImage = path.posix.join("users", username, targetFileName);
     await user.save();
 
+    // Invalida o cache do usuário usado pelo middleware checkPermission (chave user:{id})
+    serviceCache.invalidate(`user:${user.id}`);
+
     return res.status(200).json({ success: true, profileImage: user.profileImage });
   } catch (err) {
     return res.status(500).json({ error: "Erro ao salvar imagem." });
@@ -585,6 +592,10 @@ export const updateLanguage = async (req: Request, res: Response): Promise<Respo
     }
 
     await user.update({ language });
+
+    // Invalida o cache do usuário usado pelo middleware checkPermission (chave user:{id})
+    serviceCache.invalidate(`user:${user.id}`);
+
     return res.status(200).json({ id: user.id, language: user.language });
   } catch (error) {
     return res.status(500).json({ error: error.message });

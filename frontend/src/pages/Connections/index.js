@@ -274,7 +274,8 @@ const Connections = () => {
   }, []);
 
   useEffect(() => {
-    socket.on(`importMessages-${user.companyId}`, (data) => {
+    // Handler nomeado para permitir remocao correta do listener no cleanup
+    const onImportMessages = (data) => {
       if (data.action === "refresh") {
         setStatusImport([]);
         history.go(0);
@@ -282,12 +283,14 @@ const Connections = () => {
       if (data.action === "update") {
         setStatusImport(data.status);
       }
-    });
+    };
 
-    /* return () => {
-      socket.disconnect();
-    }; */
-  }, [whatsApps, socket, user.companyId, history]);
+    socket.on(`importMessages-${user.companyId}`, onImportMessages);
+
+    return () => {
+      socket.off(`importMessages-${user.companyId}`, onImportMessages);
+    };
+  }, [socket, user.companyId, history]);
 
   const handleStartWhatsAppSession = async (whatsAppId) => {
     if (!whatsAppId) {

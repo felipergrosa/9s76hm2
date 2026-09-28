@@ -1,6 +1,7 @@
 import AppError from "../../errors/AppError";
 import Contact from "../../models/Contact";
 import User from "../../models/User";
+import { serviceCache } from "../../utils/serviceCache";
 
 interface Request {
   userId: string;
@@ -24,6 +25,9 @@ const ToggleChangeWidthService = async ({
   await user.update({
     defaultTicketsManagerWidth: Number(defaultTicketsManagerWidth)
   });
+
+  // Invalida o cache do usuário usado pelo middleware checkPermission (chave user:{id})
+  serviceCache.invalidate(`user:${userId}`);
 
   await user.reload({
     include: ["queues", "whatsapp", "company"]

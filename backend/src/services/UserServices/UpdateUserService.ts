@@ -6,6 +6,7 @@ import AppError from "../../errors/AppError";
 import ShowUserService from "./ShowUserService";
 import Company from "../../models/Company";
 import User from "../../models/User";
+import { serviceCache } from "../../utils/serviceCache";
 
 interface UserData {
   email?: string;
@@ -151,6 +152,9 @@ const UpdateUserService = async ({
   }
 
   await user.update(dataToUpdate);
+
+  // Invalida o cache do usuário usado pelo middleware checkPermission (chave user:{id})
+  serviceCache.invalidate(`user:${user.id}`);
 
   if (queueIds !== undefined) {
     await user.$set("queues", queueIds);

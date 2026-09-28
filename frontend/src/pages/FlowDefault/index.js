@@ -195,7 +195,8 @@ const FlowDefault = () => {
     })
     
     return () => {
-      socket.disconnect();
+      // Remove apenas o listener deste evento; nao desconectar o socket compartilhado
+      socket.off(`company-${companyId}-contact`, onContact);
     };
   }, []);
 

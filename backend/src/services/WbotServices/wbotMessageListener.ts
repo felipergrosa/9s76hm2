@@ -108,6 +108,7 @@ import MarkDeleteWhatsAppMessage from "./MarkDeleteWhatsAppMessage";
 import UpdateMessageService from "../MessageServices/UpdateMessageService";
 import ListUserQueueServices from "../UserQueueServices/ListUserQueueServices";
 import cacheLayer from "../../libs/cache";
+import { withCache } from "../../utils/serviceCache";
 import { addLogs } from "../../helpers/addLogs";
 import SendWhatsAppMedia, { getMessageOptions } from "./SendWhatsAppMedia";
 import QueueRAGService from "../QueueServices/QueueRAGService";
@@ -188,6 +189,13 @@ interface SessionOpenAi extends OpenAI {
   id?: number;
 }
 const sessionsOpenAi: SessionOpenAi[] = [];
+
+// Throttle de presence.update: guarda o último emit por chat/participante/tipo
+// para evitar flood de eventos de "digitando..." no namespace
+const presenceLastEmit = new Map<string, number>();
+const PRESENCE_THROTTLE_MS = 500;
+const PRESENCE_MAP_MAX_SIZE = 500;
+const PRESENCE_ENTRY_MAX_AGE_MS = 10 * 1000;
 
 const writeFileAsync = promisify(writeFile);
 
@@ -3140,17 +3148,18 @@ const verifyQueue = async (
       });
     }
 
-    const count = await Ticket.findAndCountAll({
-      where: {
-        userId: null,
-        status: "pending",
-        companyId,
-        queueId: queues[0].id,
-        isGroup: false
-      }
-    });
-
     if (enableQueuePosition) {
+      // Conta a posição na fila somente quando o recurso está habilitado
+      const count = await Ticket.findAndCountAll({
+        where: {
+          userId: null,
+          status: "pending",
+          companyId,
+          queueId: queues[0].id,
+          isGroup: false
+        }
+      });
+
       // Lógica para enviar posição da fila de atendimento
       const qtd = count.count === 0 ? 1 : count.count;
       const msgFila = `${settings.sendQueuePositionMessage} *${qtd}*`;
@@ -3500,18 +3509,6 @@ const verifyQueue = async (
         return;
       }
 
-      const count = await Ticket.findAndCountAll({
-        where: {
-          userId: null,
-          status: "pending",
-          companyId,
-          queueId: choosenQueue.id,
-          whatsappId: wbot.id,
-          isGroup: false
-        }
-      });
-
-
       await CreateLogTicketService({
         ticketId: ticket.id,
         type: "queue",
@@ -3519,6 +3516,18 @@ const verifyQueue = async (
       });
 
       if (enableQueuePosition && !choosenQueue.chatbots.length) {
+        // Conta a posição na fila somente quando o recurso está habilitado
+        const count = await Ticket.findAndCountAll({
+          where: {
+            userId: null,
+            status: "pending",
+            companyId,
+            queueId: choosenQueue.id,
+            whatsappId: wbot.id,
+            isGroup: false
+          }
+        });
+
         // Lógica para enviar posição da fila de atendimento
         const qtd = count.count === 0 ? 1 : count.count;
         const msgFila = `${settings.sendQueuePositionMessage} *${qtd}*`;
@@ -3964,17 +3973,6 @@ const verifyQueue = async (
         return;
       }
 
-      const count = await Ticket.findAndCountAll({
-        where: {
-          userId: null,
-          status: "pending",
-          companyId,
-          queueId: choosenQueue.id,
-          whatsappId: wbot.id,
-          isGroup: false
-        }
-      });
-
       console.log("======== choose queue ========")
       await CreateLogTicketService({
         ticketId: ticket.id,
@@ -3983,6 +3981,18 @@ const verifyQueue = async (
       });
 
       if (enableQueuePosition && !choosenQueue.chatbots.length) {
+        // Conta a posição na fila somente quando o recurso está habilitado
+        const count = await Ticket.findAndCountAll({
+          where: {
+            userId: null,
+            status: "pending",
+            companyId,
+            queueId: choosenQueue.id,
+            whatsappId: wbot.id,
+            isGroup: false
+          }
+        });
+
         // Lógica para enviar posição da fila de atendimento
         const qtd = count.count === 0 ? 1 : count.count;
         const msgFila = `${settings.sendQueuePositionMessage} *${qtd}*`;
@@ -4559,17 +4569,6 @@ const verifyQueue = async (
         return;
       }
 
-      const count = await Ticket.findAndCountAll({
-        where: {
-          userId: null,
-          status: "pending",
-          companyId,
-          queueId: choosenQueue.id,
-          whatsappId: wbot.id,
-          isGroup: false
-        }
-      });
-
       console.log("======== choose queue ========")
       await CreateLogTicketService({
         ticketId: ticket.id,
@@ -4578,6 +4577,18 @@ const verifyQueue = async (
       });
 
       if (enableQueuePosition && !choosenQueue.chatbots.length) {
+        // Conta a posição na fila somente quando o recurso está habilitado
+        const count = await Ticket.findAndCountAll({
+          where: {
+            userId: null,
+            status: "pending",
+            companyId,
+            queueId: choosenQueue.id,
+            whatsappId: wbot.id,
+            isGroup: false
+          }
+        });
+
         // Lógica para enviar posição da fila de atendimento
         const qtd = count.count === 0 ? 1 : count.count
         const msgFila = `${settings.sendQueuePositionMessage} *${qtd}*`;
@@ -6172,10 +6183,13 @@ const handleMessage = async (
     }
 
     // Atualiza o ticket se a ultima mensagem foi enviada por mim, para que possa ser finalizado.
+    // Só escreve no banco quando o valor realmente mudou (hot path)
     try {
-      await ticket.update({
-        fromMe: msg.key.fromMe
-      });
+      if (typeof msg.key.fromMe === "boolean" && ticket.fromMe !== msg.key.fromMe) {
+        await ticket.update({
+          fromMe: msg.key.fromMe
+        });
+      }
     } catch (e) {
       Sentry.captureException(e);
       console.log(e);
@@ -6271,11 +6285,16 @@ const handleMessage = async (
 
 
 
-    const flow = await FlowBuilderModel.findOne({
-      where: {
-        id: ticket.flowStopped
-      }
-    });
+    // Só consulta o flow quando o ticket está dentro de um fluxo
+    // (flowStopped preenchido) — evita query desnecessária por mensagem
+    let flow: FlowBuilderModel | null = null;
+    if (ticket.flowStopped) {
+      flow = await FlowBuilderModel.findOne({
+        where: {
+          id: ticket.flowStopped
+        }
+      });
+    }
 
     let isMenu = false;
     let isOpenai = false;
@@ -6734,69 +6753,43 @@ const handleMsgAck = async (
   chat: number | null | undefined,
   companyId: number
 ) => {
-  await new Promise(r => setTimeout(r, 500));
   const io = getIO();
 
   try {
+    // Query enxuta: apenas os campos usados para atualizar o ack e rotear
+    // o evento no frontend (os includes profundos eram desnecessários aqui)
     const messageToUpdate = await Message.findOne({
       where: {
         wid: msg.key.id,
         companyId
       },
-      include: [
-        "contact",
-        {
-          model: Ticket,
-          as: "ticket",
-          include: [
-            {
-              model: Contact,
-              attributes: [
-                "id",
-                "name",
-                "number",
-                "email",
-                "profilePicUrl",
-                "acceptAudioMessage",
-                "active",
-                "urlPicture",
-                "companyId"
-              ],
-              include: ["extraInfo", "tags"]
-            },
-            {
-              model: Queue,
-              attributes: ["id", "name", "color"]
-            },
-            {
-              model: Whatsapp,
-              attributes: ["id", "name", "groupAsTicket"]
-            },
-            {
-              model: User,
-              attributes: ["id", "name"]
-            },
-            {
-              model: Tag,
-              as: "tags",
-              attributes: ["id", "name", "color", "kanban"]
-            }
-          ]
-        },
-        {
-          model: Message,
-          as: "quotedMsg",
-          include: ["contact"]
-        }
-      ]
+      attributes: ["id", "wid", "ack", "ticketId", "companyId"]
     });
     if (!messageToUpdate || messageToUpdate.ack > chat) return;
 
     await messageToUpdate.update({ ack: chat });
-    io.of(`/workspace-${messageToUpdate.companyId}`)
-      .emit(`company-${messageToUpdate.companyId}-appMessage`, {
+
+    // Busca leve do uuid do ticket para o frontend rotear o evento pela sala
+    const ticket = messageToUpdate.ticketId
+      ? await Ticket.findByPk(messageToUpdate.ticketId, {
+          attributes: ["id", "uuid", "companyId", "status", "userId", "queueId"]
+        })
+      : null;
+
+    // O frontend faz merge parcial da mensagem (por wid/id), então basta
+    // enviar os campos alterados + identificadores
+    io.of(`/workspace-${companyId}`)
+      .emit(`company-${companyId}-appMessage`, {
         action: "update",
-        message: messageToUpdate
+        message: {
+          id: messageToUpdate.id,
+          wid: messageToUpdate.wid,
+          ack: chat,
+          ticketId: messageToUpdate.ticketId
+        },
+        ticket: ticket
+          ? { id: ticket.id, uuid: ticket.uuid }
+          : { id: messageToUpdate.ticketId }
       });
   } catch (err) {
     Sentry.captureException(err);
@@ -6813,10 +6806,17 @@ const verifyRecentCampaign = async (
   }
   if (!message.key.fromMe) {
     const number = message.key.remoteJid.replace(/\D/g, "");
-    const campaigns = await Campaign.findAll({
-      where: { companyId, status: "EM_ANDAMENTO", confirmation: true }
-    });
-    if (campaigns) {
+    // Cache curto (10s) das campanhas ativas: evita query por mensagem recebida
+    const campaigns = await withCache(
+      `activeConfirmationCampaigns:${companyId}`,
+      async () =>
+        Campaign.findAll({
+          where: { companyId, status: "EM_ANDAMENTO", confirmation: true },
+          attributes: ["id"]
+        }),
+      10 * 1000
+    );
+    if (campaigns && campaigns.length > 0) {
       const ids = campaigns.map(c => c.id);
       const campaignShipping = await CampaignShipping.findOne({
         where: {
@@ -7159,6 +7159,23 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
       for (const [participantJid, info] of Object.entries(presences)) {
         const presence = (info as any)?.lastKnownPresence;
         if (!presence) continue;
+
+        // Throttle: descarta repetições do mesmo presence para o mesmo
+        // chat/participante em menos de 500ms
+        const nowPresence = Date.now();
+        const throttleKey = `${jid}:${participantJid}:${presence}`;
+        const lastEmit = presenceLastEmit.get(throttleKey) || 0;
+        if (nowPresence - lastEmit < PRESENCE_THROTTLE_MS) continue;
+        presenceLastEmit.set(throttleKey, nowPresence);
+
+        // Limpeza oportunista: quando o mapa cresce, remove entradas antigas
+        if (presenceLastEmit.size > PRESENCE_MAP_MAX_SIZE) {
+          for (const [key, ts] of presenceLastEmit) {
+            if (nowPresence - ts > PRESENCE_ENTRY_MAX_AGE_MS) {
+              presenceLastEmit.delete(key);
+            }
+          }
+        }
 
         // Emitir para o frontend: composing, recording, paused, available, unavailable
         io.of(`/workspace-${companyId}`).emit(`company-${companyId}-presence`, {

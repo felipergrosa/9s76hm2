@@ -682,16 +682,22 @@ export const markAllNotificationsAsRead = async (
     }
   });
 
-  // Marcar cada ticket como lido
-  for (const ticket of tickets) {
-    if (ticket.channel === "whatsapp" && ticket.whatsappId && ticket.unreadMessages > 0) {
-      try {
-        await SetTicketMessagesAsRead(ticket);
-      } catch (err) {
-        // Continua mesmo se falhar para um ticket específico
-        console.error(`Erro ao marcar ticket ${ticket.id} como lido:`, err);
+  // Filtra apenas tickets elegíveis (mesmas condições do loop serial anterior)
+  const eligibleTickets = tickets.filter(
+    ticket => ticket.channel === "whatsapp" && ticket.whatsappId && ticket.unreadMessages > 0
+  );
+
+  // Marcar tickets como lidos em paralelo, em lotes de 5 para não sobrecarregar
+  // a sessão do WhatsApp. allSettled garante que falhas individuais não abortem o resto.
+  const BATCH_SIZE = 5;
+  for (let i = 0; i < eligibleTickets.length; i += BATCH_SIZE) {
+    const batch = eligibleTickets.slice(i, i + BATCH_SIZE);
+    const results = await Promise.allSettled(batch.map(t => SetTicketMessagesAsRead(t)));
+    results.forEach((result, idx) => {
+      if (result.status === "rejected") {
+        console.error(`Erro ao marcar ticket ${batch[idx].id} como lido:`, result.reason);
       }
-    }
+    });
   }
 
   return res.status(200).json({ success: true, count: tickets.length });

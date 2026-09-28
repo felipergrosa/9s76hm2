@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { unstable_batchedUpdates } from "react-dom";
 import api from "./services/api";
 import "react-toastify/dist/ReactToastify.css";
 import { QueryClient, QueryClientProvider } from "react-query";
@@ -335,65 +336,36 @@ const App = () => {
   }, [mode]);
 
   useEffect(() => {
-    // Removido logs de debug
+    // Busca todas as configurações públicas em paralelo.
+    // Cada setting tem fallback individual: uma falha não bloqueia as demais.
+    const load = (key) =>
+      getPublicSetting(key).catch((error) => {
+        console.log("Error reading setting", error);
+        return undefined;
+      });
 
-    getPublicSetting("primaryColorLight")
-      .then((color) => {
-        setPrimaryColorLight(color || "#0000FF");
-      })
-      .catch((error) => {
-        console.log("Error reading setting", error);
-      });
-    getPublicSetting("primaryColorDark")
-      .then((color) => {
-        setPrimaryColorDark(color || "#39ACE7");
-      })
-      .catch((error) => {
-        console.log("Error reading setting", error);
-      });
-    getPublicSetting("appLogoLight")
-      .then((file) => {
-        setAppLogoLight(file ? getBackendUrl() + "/public/" + file : defaultLogoLight);
-      })
-      .catch((error) => {
-        console.log("Error reading setting", error);
-      });
-    getPublicSetting("appLogoDark")
-      .then((file) => {
-        setAppLogoDark(file ? getBackendUrl() + "/public/" + file : defaultLogoDark);
-      })
-      .catch((error) => {
-        console.log("Error reading setting", error);
-      });
-    getPublicSetting("appLogoFavicon")
-      .then((file) => {
-        setAppLogoFavicon(file ? getBackendUrl() + "/public/" + file : defaultLogoFavicon);
-      })
-      .catch((error) => {
-        console.log("Error reading setting", error);
-      });
-    getPublicSetting("appName")
-      .then((name) => {
+    // React 17 não faz batching automático em promises: agrupa os setStates
+    // em um único unstable_batchedUpdates para evitar ~7 recriações do tema MUI/JSS no boot
+    Promise.all([
+      load("primaryColorLight"),
+      load("primaryColorDark"),
+      load("appLogoLight"),
+      load("appLogoDark"),
+      load("appLogoFavicon"),
+      load("appName"),
+      load("viewMode"),
+    ]).then(([colorLight, colorDark, logoLight, logoDark, favicon, name, view]) => {
+      unstable_batchedUpdates(() => {
+        setPrimaryColorLight(colorLight || "#0000FF");
+        setPrimaryColorDark(colorDark || "#39ACE7");
+        setAppLogoLight(logoLight ? getBackendUrl() + "/public/" + logoLight : defaultLogoLight);
+        setAppLogoDark(logoDark ? getBackendUrl() + "/public/" + logoDark : defaultLogoDark);
+        setAppLogoFavicon(favicon ? getBackendUrl() + "/public/" + favicon : defaultLogoFavicon);
         setAppName(name || "Whaticket_Flow");
-      })
-      .catch((error) => {
-        console.log("!==== Erro ao carregar temas: ====!", error);
-        setAppName("Whaticket_Flow");
-      });
-
-    getPublicSetting("viewMode")
-      .then((view) => {
         // Força o modo moderno se não estiver definido ou se for "classic" para garantir paridade
-        if (!view || view === "classic") {
-          setViewMode("modern");
-        } else {
-          setViewMode(view);
-        }
-      })
-      .catch((error) => {
-        console.log("Error reading setting viewMode", error);
-        setViewMode("modern"); // Fallback seguro
+        setViewMode(!view || view === "classic" ? "modern" : view);
       });
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

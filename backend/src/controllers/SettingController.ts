@@ -51,11 +51,6 @@ export const showOne = async (req: Request, res: Response): Promise<Response> =>
   const { companyId } = req.user;
   const { settingKey: key } = req.params;
 
-  console.log("|======== GetPublicSettingService ========|")
-  console.log("key", key)
-  console.log("|=========================================|")
-
-  
   const settingsTransfTicket = await ListSettingsServiceOne({ companyId: companyId, key: key });
 
   return res.status(200).json(settingsTransfTicket);

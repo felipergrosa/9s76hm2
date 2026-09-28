@@ -7,7 +7,6 @@ import { TicketsContextProvider } from "../context/Tickets/TicketsContext";
 import { WhatsAppsProvider } from "../context/WhatsApp/WhatsAppsContext";
 import Route from "./Route";
 import PrivateRoute from "./PrivateRoute";
-import CommandPaletteActions from "../components/CommandPalette";
 
 // Componente de loading para lazy loading
 const PageLoader = () => (
@@ -29,6 +28,9 @@ const PageLoader = () => (
     <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
   </div>
 );
+
+// CommandPalette (kbar) carregado de forma lazy - não vai para o bundle inicial
+const CommandPaletteActions = lazy(() => import("../components/CommandPalette"));
 
 // LAZY LOADING: Páginas carregadas sob demanda (reduz bundle inicial em ~80%)
 // Páginas principais (mais acessadas - prefetch)
@@ -142,7 +144,12 @@ const Routes = () => {
               <Route exact path="/forgot-password" component={ForgotPassword} />
               <Route exact path="/reset-password" component={ResetPassword} />
               <WhatsAppsProvider>
-                <CommandPaletteActions>
+                {/* CommandPalette renderizado como irmão: KBarProvider só é
+                    necessário para o portal do kbar (nenhum filho usa useKBar),
+                    assim a árvore privada não espera o chunk do kbar */}
+                <Suspense fallback={null}>
+                  <CommandPaletteActions />
+                </Suspense>
                 <LoggedInLayout>
                 <Route exact path="/financeiro" component={Financeiro} isPrivate />
 
@@ -237,7 +244,6 @@ const Routes = () => {
                   </>
                 )}
               </LoggedInLayout>
-                </CommandPaletteActions>
             </WhatsAppsProvider>
             </Switch>
           </Suspense>

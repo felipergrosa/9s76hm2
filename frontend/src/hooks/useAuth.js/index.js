@@ -10,6 +10,9 @@ import toastError from "../../errors/toastError";
 import { socketConnection } from "../../services/socket";
 // import { useDate } from "../../hooks/useDate";
 import moment from "moment";
+// Import explícito do locale pt-br: o webpack IgnorePlugin remove todos os
+// locales do moment do bundle; este arquivo usa moment.locale('pt-br')
+import "moment/locale/pt-br";
 
 const useAuth = () => {
   const history = useHistory();
@@ -18,64 +21,73 @@ const useAuth = () => {
   const [user, setUser] = useState({});
   const [socket, setSocket] = useState({});
 
-  api.interceptors.request.use(
-    (config) => {
-      const token = localStorage.getItem("token");
-      if (token) {
-        config.headers["Authorization"] = `Bearer ${JSON.parse(token)}`;
-        setIsAuth(true);
+  // Registra os interceptors do axios uma única vez no mount (evita acúmulo a cada render)
+  // e faz eject no unmount para não deixar handlers órfãos
+  useEffect(() => {
+    const reqId = api.interceptors.request.use(
+      (config) => {
+        const token = localStorage.getItem("token");
+        if (token) {
+          config.headers["Authorization"] = `Bearer ${JSON.parse(token)}`;
+          setIsAuth(true);
+        }
+        return config;
+      },
+      (error) => {
+        Promise.reject(error);
       }
-      return config;
-    },
-    (error) => {
-      Promise.reject(error);
-    }
-  );
+    );
 
-  api.interceptors.response.use(
-    (response) => {
-      return response;
-    },
-    async (error) => {
-      const originalRequest = error.config;
-      const status = error?.response?.status;
-      const isAuthRefreshCall = originalRequest?.url?.includes("/auth/refresh_token");
-      
-      // Evita múltiplas tentativas de refresh simultâneas
-      if (status === 401 && !originalRequest._retry && !isAuthRefreshCall && !window._isRefreshing) {
-        originalRequest._retry = true;
-        window._isRefreshing = true;
-        
-        try {
-          const { data } = await api.post("/auth/refresh_token");
-          if (data?.token) {
-            localStorage.setItem("token", JSON.stringify(data.token));
-            api.defaults.headers.Authorization = `Bearer ${data.token}`;
+    const resId = api.interceptors.response.use(
+      (response) => {
+        return response;
+      },
+      async (error) => {
+        const originalRequest = error.config;
+        const status = error?.response?.status;
+        const isAuthRefreshCall = originalRequest?.url?.includes("/auth/refresh_token");
+
+        // Evita múltiplas tentativas de refresh simultâneas
+        if (status === 401 && !originalRequest._retry && !isAuthRefreshCall && !window._isRefreshing) {
+          originalRequest._retry = true;
+          window._isRefreshing = true;
+
+          try {
+            const { data } = await api.post("/auth/refresh_token");
+            if (data?.token) {
+              localStorage.setItem("token", JSON.stringify(data.token));
+              api.defaults.headers.Authorization = `Bearer ${data.token}`;
+              window._isRefreshing = false;
+              return api(originalRequest);
+            }
+          } catch (e) {
+            console.error("[useAuth] Falha no refresh token:", e);
             window._isRefreshing = false;
-            return api(originalRequest);
           }
-        } catch (e) {
-          console.error("[useAuth] Falha no refresh token:", e);
-          window._isRefreshing = false;
         }
-      }
-      
-      if (status === 401) {
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
-        api.defaults.headers.Authorization = undefined;
-        setIsAuth(false);
-        setUser({});
-        
-        // Redireciona para login apenas se não estiver já na página de login
-        if (window.location.pathname !== "/login") {
-          window.location.href = "/login";
+
+        if (status === 401) {
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
+          api.defaults.headers.Authorization = undefined;
+          setIsAuth(false);
+          setUser({});
+
+          // Redireciona para login apenas se não estiver já na página de login
+          if (window.location.pathname !== "/login") {
+            window.location.href = "/login";
+          }
         }
+
+        return Promise.reject(error);
       }
-      
-      return Promise.reject(error);
-    }
-  );
+    );
+
+    return () => {
+      api.interceptors.request.eject(reqId);
+      api.interceptors.response.eject(resId);
+    };
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -109,16 +121,18 @@ const useAuth = () => {
       } else {
         io = socket
       }
-      io.on(`company-${user.companyId}-user`, (data) => {
+      const handleCompanyUser = (data) => {
         if (data.action === "update" && data.user.id === user.id) {
           setUser(data.user);
           localStorage.setItem("user", JSON.stringify(data.user));
         }
-      });
+      };
+      io.on(`company-${user.companyId}-user`, handleCompanyUser);
 
       return () => {
         // console.log("desconectou o company user ", user.id)
-        io.off(`company-${user.companyId}-user`);
+        // Remove apenas este listener, preservando listeners de outros componentes
+        io.off(`company-${user.companyId}-user`, handleCompanyUser);
         // io.disconnect();
       };
       // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -5,7 +5,6 @@ import Message from "../../models/Message";
 import Ticket from "../../models/Ticket";
 import logger from "../../utils/logger";
 import { getIO } from "../../libs/socket";
-import ShowTicketService from "../TicketServices/ShowTicketService";
 
 interface Request {
   messageId: string | number;
@@ -78,15 +77,17 @@ const DeleteWhatsAppMessageUnified = async ({
     // ===== EMITIR SOCKET PARA ATUALIZAR FRONTEND =====
     try {
       const io = getIO();
-      const ticketData = await ShowTicketService(ticket.id, ticket.companyId);
-      
-      // Emitir para a sala do ticket
-      io.to(`ticket-${ticket.uuid}`).emit(`company-${ticket.companyId}-appMessage`, {
-        action: "delete",
-        messageId: Number(messageId),
-        ticketId: ticket.id
-      });
-      
+
+      // Namespace correto (/workspace-{companyId}) e sala do ticket pelo uuid
+      // (joinChatBox). O filtro do frontend usa data.ticket.{id,uuid}
+      io.of(`/workspace-${ticket.companyId}`)
+        .to(ticket.uuid)
+        .emit(`company-${ticket.companyId}-appMessage`, {
+          action: "delete",
+          messageId: Number(messageId),
+          ticket: { id: ticket.id, uuid: ticket.uuid }
+        });
+
       logger.info(`[DeleteMessageUnified] Socket emitido para ticket-${ticket.uuid}`);
     } catch (socketError) {
       logger.error(`[DeleteMessageUnified] Erro ao emitir socket: ${socketError.message}`);

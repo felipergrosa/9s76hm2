@@ -201,7 +201,8 @@ const Contacts = () => {
     const [hideNum, setHideNum] = useState(false);
     const [enableLGPD, setEnableLGPD] = useState(false);
 
-    // Carregar configurações da empresa apenas se tiver permissão
+    // Carregar configurações da empresa apenas se tiver permissão.
+    // Único efeito de mount: getAllSettings é instável e não deve ser dependência.
     useEffect(() => {
       const loadSettings = async () => {
         try {
@@ -209,6 +210,10 @@ const Contacts = () => {
           if (settings) {
             setHideNum(settings.hideNumber === "enabled");
             setEnableLGPD(settings.enableLGPD === "enabled");
+            // "lgpdHideNumber" sobrescreve "hideNumber" quando presente (lógica legada)
+            if (Object.prototype.hasOwnProperty.call(settings, "lgpdHideNumber")) {
+              setHideNum(settings.lgpdHideNumber === "enabled");
+            }
           }
         } catch (err) {
           // Silenciosamente ignora erro para usuários sem permissão
@@ -216,7 +221,8 @@ const Contacts = () => {
       };
 
       loadSettings();
-    }, [getAllSettings, user.companyId]);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user.companyId]);
 
     const currencyFormatter = useMemo(() => new Intl.NumberFormat("pt-BR", {
         style: "currency",
@@ -372,19 +378,6 @@ const Contacts = () => {
         const value = parseInt(e.target.value, 10) || 25;
         handleChangePerPage(value);
     };
-
-    useEffect(() => {
-        async function fetchData() {
-            const settingList = await getAllSettings(user.companyId);
-            if (settingList) {
-                for (const [key, value] of Object.entries(settingList)) {
-                    if (key === "enableLGPD") setEnableLGPD(value === "enabled");
-                    if (key === "lgpdHideNumber") setHideNum(value === "enabled");
-                }
-            }
-        }
-        fetchData();
-    }, []);
 
     const handleImportExcel = async () => {
         try {

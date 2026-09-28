@@ -4,6 +4,7 @@ import { Op } from "sequelize";
 import AppError from "../../errors/AppError";
 import Whatsapp from "../../models/Whatsapp";
 import ShowWhatsAppService from "./ShowWhatsAppService";
+import { serviceCache } from "../../utils/serviceCache";
 import { resolveMetaChannelCredentials } from "./metaChannelCredentials";
 import AssociateWhatsappQueue from "./AssociateWhatsappQueue";
 
@@ -193,6 +194,9 @@ const UpdateWhatsAppService = async ({
   // console.log("GETTING WHATSAPP SHOW WHATSAPP 1", whatsappId, companyId)
   const whatsapp = await ShowWhatsAppService(whatsappId, companyId);
 
+  // Guarda o token anterior para invalidar o cache do middleware tokenAuth
+  const oldWhatsappToken = whatsapp.token;
+
   const finalColor = typeof color === "undefined"
     ? whatsapp.color
     : normalizedColor;
@@ -272,6 +276,14 @@ const UpdateWhatsAppService = async ({
     // Plataforma do dispositivo
     devicePlatform
   });
+
+  // Invalida o cache token->whatsapp do middleware tokenAuth (chave whatsappToken:{token})
+  if (oldWhatsappToken) {
+    serviceCache.invalidate(`whatsappToken:${oldWhatsappToken}`);
+  }
+  if (token && token !== oldWhatsappToken) {
+    serviceCache.invalidate(`whatsappToken:${token}`);
+  }
 
   if (!requestQR) {
     await AssociateWhatsappQueue(whatsapp, queueIds);

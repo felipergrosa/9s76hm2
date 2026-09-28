@@ -110,11 +110,15 @@ const UpdateMessageService = async ({
     const ticket = message.ticket;
 
     if (ticket) {
-      io.of(String(companyId))
+      // Namespace e nome de evento corretos: o frontend escuta
+      // "company-{id}-appMessage" no namespace /workspace-{companyId}.
+      // A sala do ticket é o uuid (joinChatBox), não o id numérico.
+      io.of(`/workspace-${companyId}`)
+        .to(ticket.uuid)
         .to(ticket.id.toString())
         .to(ticket.status)
         .to("notification")
-        .emit("appMessage", {
+        .emit(`company-${companyId}-appMessage`, {
           action: "update",
           message,
           ticket

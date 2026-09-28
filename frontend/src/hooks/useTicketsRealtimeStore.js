@@ -366,6 +366,9 @@ const useTicketsRealtimeStore = ({
   const showTicketWithoutQueueRef = useRef(showTicketWithoutQueue);
   const eventBufferRef = useRef([]);
   const bufferTimeoutRef = useRef(null);
+  // Guarda de primeira execução: evita burst duplicado de GET /tickets no mount
+  // (o refreshAll do mount já cobre a carga inicial)
+  const didInitSortRef = useRef(false);
 
   const flushBuffer = useCallback(() => {
     if (eventBufferRef.current.length === 0) return;
@@ -491,6 +494,12 @@ const useTicketsRealtimeStore = ({
 
   // Recarregar tickets quando a ordenação mudar
   useEffect(() => {
+    // Pula a execução inicial (mount) — só reage a mudanças reais de sortTickets
+    if (!didInitSortRef.current) {
+      didInitSortRef.current = true;
+      return;
+    }
+
     requestVersionRef.current += 1;
     const version = requestVersionRef.current;
 

@@ -1236,6 +1236,10 @@ const MessagesList = ({
     message: null
   });
   const messagesListRef = useRef(null);
+  // Ref com a lista atual de mensagens para uso em efeitos/handlers estáveis
+  // (evita recriar intervalos e listeners de socket a cada nova mensagem)
+  const messagesListDataRef = useRef(messagesList);
+  messagesListDataRef.current = messagesList;
 
   // Função para obter todas as mídias (imagens e vídeos) da conversa
   const getAllMediaFromConversation = useCallback(() => {
@@ -1823,9 +1827,10 @@ const MessagesList = ({
         }
         
         // Só faz polling se temos mensagens carregadas (para comparar)
-        if (!messagesList || messagesList.length === 0) return;
+        const currentMessages = messagesListDataRef.current;
+        if (!currentMessages || currentMessages.length === 0) return;
 
-        const lastKnownId = lastMessageIdRef.current || messagesList[messagesList.length - 1]?.id;
+        const lastKnownId = lastMessageIdRef.current || currentMessages[currentMessages.length - 1]?.id;
 
         const { data } = await api.get(`/messages/${activeTicketId}`, {
           params: {
@@ -1838,7 +1843,7 @@ const MessagesList = ({
         if (data?.messages?.length) {
           // Verificar se há mensagens novas que não temos
           const newMessages = data.messages.filter(
-            (msg) => !messagesList.some((m) => m.id === msg.id)
+            (msg) => !messagesListDataRef.current.some((m) => m.id === msg.id)
           );
 
           if (newMessages.length > 0) {
@@ -1909,7 +1914,7 @@ const MessagesList = ({
       socket?.off("connect", onConnect);
       socket?.off("disconnect", onDisconnect);
     };
-  }, [activeTicketId, selectedQueuesMessage, messagesList, socket, readOnly]);
+  }, [activeTicketId, selectedQueuesMessage, socket, readOnly]);
 
   const loadMore = () => {
     if (loadingMore) return;

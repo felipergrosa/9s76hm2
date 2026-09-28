@@ -338,23 +338,27 @@ const Ticket = () => {
     socket.on(`company-${companyId}-contact`, onCompanyContactTicket);
 
     // Se já estiver conectado, entra na sala imediatamente (mas com debounce)
+    let connectTimeout = null;
     if (socket.connected) {
       // Debounce de 50ms para evitar joins simultâneos
-      const connectTimeout = setTimeout(() => {
+      connectTimeout = setTimeout(() => {
         onConnectTicket();
       }, 50);
-      
-      return () => {
-        clearTimeout(connectTimeout);
-        const candidate = (ticketUuidRef.current || ticketId || "").toString().trim();
-        doLeave(candidate);
-        socket.off("connect", onConnectTicket);
-        socket.off(`company-${companyId}-ticket`, onCompanyTicket);
-        socket.off(`company-${companyId}-contact`, onCompanyContactTicket);
-      };
     }
 
-    // Cleanup já feito no if acima
+    // Cleanup SEMPRE retornado: remove os listeners mesmo se o socket
+    // estava desconectado no mount (evita handlers duplicados)
+    return () => {
+      if (connectTimeout) clearTimeout(connectTimeout);
+      // Só sai da sala se realmente entrou (evita emit desnecessário)
+      if (joinedRoomRef.current) {
+        const candidate = (ticketUuidRef.current || ticketId || "").toString().trim();
+        doLeave(candidate);
+      }
+      socket.off("connect", onConnectTicket);
+      socket.off(`company-${companyId}-ticket`, onCompanyTicket);
+      socket.off(`company-${companyId}-contact`, onCompanyContactTicket);
+    };
     // IMPORTANTE: NÃO incluir `ticket` nas dependências!
     // O ticket é atualizado via setTicket dentro do handler, não precisa re-montar o effect.
     // eslint-disable-next-line react-hooks/exhaustive-deps

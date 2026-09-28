@@ -108,9 +108,10 @@ export const show = async (req: Request, res: Response): Promise<Response> => {
 export const count = async (req: Request, res: Response): Promise<Response> => {
   const { companyId } = req.body as IndexQuery;
 
-  const contacts = await FindAllContactService({ companyId });
+  // COUNT direto no banco: antes carregava a tabela inteira com includes só para fazer .length
+  const total = await Contact.count({ where: { companyId } });
 
-  return res.json({ count: contacts.length });
+  return res.json({ count: total });
 }
 
 export const sync = async (req: Request, res: Response): Promise<Response> => {

@@ -6,6 +6,7 @@ import Whatsapp from "../../models/Whatsapp";
 import ShowWhatsAppService from "./ShowWhatsAppService";
 import AssociateWhatsappQueue from "./AssociateWhatsappQueue";
 import ShowWhatsAppServiceAdmin from "./ShowWhatsAppServiceAdmin";
+import { serviceCache } from "../../utils/serviceCache";
 
 interface WhatsappData {
   name?: string;
@@ -131,6 +132,9 @@ const UpdateWhatsAppServiceAdmin = async ({
 
   const whatsapp = await ShowWhatsAppServiceAdmin(whatsappId);
 
+  // Guarda o token anterior para invalidar o cache do middleware tokenAuth
+  const oldWhatsappToken = whatsapp.token;
+
   await whatsapp.update({
     name,
     status,
@@ -167,6 +171,14 @@ const UpdateWhatsAppServiceAdmin = async ({
     // Templates permitidos para API Oficial
     allowedTemplates
   });
+
+  // Invalida o cache token->whatsapp do middleware tokenAuth (chave whatsappToken:{token})
+  if (oldWhatsappToken) {
+    serviceCache.invalidate(`whatsappToken:${oldWhatsappToken}`);
+  }
+  if (token && token !== oldWhatsappToken) {
+    serviceCache.invalidate(`whatsappToken:${token}`);
+  }
 
   if (!requestQR) {
     await AssociateWhatsappQueue(whatsapp, queueIds);
