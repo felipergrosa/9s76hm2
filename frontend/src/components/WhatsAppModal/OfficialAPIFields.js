@@ -241,6 +241,26 @@ const OfficialAPIFields = ({ values, errors, touched, setFieldValue, whatsAppId 
             placeholder="EAAxxxxxxxxxxxxxxxxxxxxxxxxxx"
           />
         </Grid>
+
+        {/* Linha 3: Meta App Secret — validação da assinatura do webhook */}
+        <Grid item xs={12} md={6}>
+          <Field
+            as={TextField}
+            label="Meta App Secret"
+            name="metaAppSecret"
+            type="password"
+            error={touched.metaAppSecret && Boolean(errors.metaAppSecret)}
+            helperText={
+              touched.metaAppSecret && errors.metaAppSecret
+                ? errors.metaAppSecret
+                : "Chave secreta do app (Meta for Developers > Configurações > Básico). Valida a assinatura do webhook. Vazio = verificação desativada. Fallback: META_APP_SECRET"
+            }
+            variant="outlined"
+            margin="dense"
+            fullWidth
+            placeholder="ex: 8f7d6c5b4a..."
+          />
+        </Grid>
       </Grid>
 
       <Divider className={classes.divider} />
