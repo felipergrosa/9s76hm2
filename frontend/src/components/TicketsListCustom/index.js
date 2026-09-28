@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useReducer, useMemo, useRef, useCallback } from "react";
+import { useParams } from "react-router-dom";
 
 import { makeStyles } from "@material-ui/core/styles";
 import Paper from "@material-ui/core/Paper";
@@ -133,6 +134,9 @@ const TicketsListViewport = ({
     resetScrollKey,
 }) => {
     const classes = useStyles();
+    // Lido uma única vez aqui na lista: antes ficava em useParams dentro de cada
+    // linha, fazendo todas as linhas re-renderizarem a cada mudança de rota.
+    const { ticketId: selectedTicketUuid } = useParams();
     const [listHeight, setListHeight] = useState(0);
     const listContainerRef = useRef(null);
     const virtualListRef = useRef(null);
@@ -188,7 +192,8 @@ const TicketsListViewport = ({
         tickets,
         setTabOpen,
         classes,
-    }), [tickets, setTabOpen, classes]);
+        selectedTicketUuid,
+    }), [tickets, setTabOpen, classes, selectedTicketUuid]);
 
     const Row = useCallback(({ index, style: rowStyle, data }) => {
         const ticket = data.tickets[index];
@@ -198,6 +203,7 @@ const TicketsListViewport = ({
                 <TicketListItem
                     ticket={ticket}
                     setTabOpen={data.setTabOpen}
+                    isSelected={Boolean(data.selectedTicketUuid) && data.selectedTicketUuid === ticket.uuid}
                 />
             </div>
         );

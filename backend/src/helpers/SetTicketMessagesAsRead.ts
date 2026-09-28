@@ -82,6 +82,8 @@ const SetTicketMessagesAsRead = async (ticket: Ticket): Promise<void> => {
                   fromMe: false,
                   read: false
                 },
+                // Só dataJson é consumido (parse da key) — evita trazer colunas pesadas
+                attributes: ["id", "dataJson"],
                 order: [["createdAt", "DESC"]]
               });
 

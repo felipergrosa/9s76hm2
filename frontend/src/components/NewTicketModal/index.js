@@ -18,6 +18,7 @@ import ButtonWithSpinner from "../ButtonWithSpinner";
 const ContactModal = lazy(() => import("../ContactModal"));
 import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
+import useWhatsApps from "../../hooks/useWhatsApps";
 import { Grid, ListItemText, MenuItem, Select } from "@material-ui/core";
 import { toast } from "react-toastify";
 import { Facebook, Instagram, WhatsApp } from "@material-ui/icons";
@@ -42,7 +43,6 @@ const filter = createFilterOptions({
 const NewTicketModal = ({ modalOpen, onClose, initialContact }) => {
   const classes = useStyles();
   const [options, setOptions] = useState([]);
-  const [channelFilter, setChannelFilter] = useState(null);
 
   const [loading, setLoading] = useState(false);
   const [searchParam, setSearchParam] = useState("");
@@ -50,10 +50,11 @@ const NewTicketModal = ({ modalOpen, onClose, initialContact }) => {
   const [selectedQueue, setSelectedQueue] = useState("");
   const [selectedWhatsapp, setSelectedWhatsapp] = useState("");
   const [newContact, setNewContact] = useState({});
-  const [whatsapps, setWhatsapps] = useState([]);
+  // Conexões vêm do hook compartilhado (busca /whatsapp?session=0 e atualiza status via socket)
+  const { whatsApps: whatsapps } = useWhatsApps();
   const [contactModalOpen, setContactModalOpen] = useState(false);
   const { user } = useContext(AuthContext);
-  const { companyId, whatsappId } = user;
+  const { whatsappId } = user;
 
   const [openAlert, setOpenAlert] = useState(false);
   const [userTicketOpen, setUserTicketOpen] = useState("");
@@ -69,46 +70,18 @@ const NewTicketModal = ({ modalOpen, onClose, initialContact }) => {
     }
   }, [initialContact]);
 
+  // Define fila/conexão padrão uma única vez ao montar
+  // (antes refazia fetch de /whatsapp a cada mudança de selectedContact — dep incorreta)
   useEffect(() => {
-    setLoading(true);
-    const delayDebounceFn = setTimeout(() => {
-      const fetchContacts = async () => {
-        api
-          // .get(`/whatsapp/filter`, { params: { companyId, session: 0, channel: channelFilter } })
-          .get(`/whatsapp`, { params: { companyId, session: 0 } })
-          .then(({ data }) => setWhatsapps(data))
-          .catch((err) => {
-            // 403 = sem permissão connections.view (admin)
-            // Silencia o erro, lista de conexões fica vazia
-            if (err?.response?.status !== 403) {
-              console.error("Erro ao buscar WhatsApps:", err);
-            }
-          });
+    if (whatsappId !== null && whatsappId !== undefined) {
+      setSelectedWhatsapp(whatsappId)
+    }
 
-        // .then(({ data }) => {
-        //   const mappedWhatsapps = data.map((whatsapp) => ({
-        //     ...whatsapp,
-        //     selected: false,
-        //   }));
-        //   setWhatsapps(mappedWhatsapps);
-        //   if (channelFilter && mappedWhatsapps.length && mappedWhatsapps?.length === 1 && (user.whatsappId === null || user?.whatsapp?.channel !== channelFilter)) {
-        //     setSelectedWhatsapp(mappedWhatsapps[0].id)
-        //   }
-        // });
-      };
-
-      if (whatsappId !== null && whatsappId !== undefined) {
-        setSelectedWhatsapp(whatsappId)
-      }
-
-      if (user.queues.length === 1) {
-        setSelectedQueue(user.queues[0].id)
-      }
-      fetchContacts();
-      setLoading(false);
-    }, 500);
-    return () => clearTimeout(delayDebounceFn);
-  }, [selectedContact, channelFilter])
+    if (user.queues.length === 1) {
+      setSelectedQueue(user.queues[0].id)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     if (!modalOpen || searchParam.length < 3) {
@@ -372,7 +345,6 @@ const NewTicketModal = ({ modalOpen, onClose, initialContact }) => {
             renderOption={renderOption}
             filterOptions={createAddContactOption}
             onChange={(e, newValue) => {
-              setChannelFilter(newValue ? newValue.channel : "whatsapp");
               handleSelectOption(e, newValue)
             }}
             renderInput={params => (

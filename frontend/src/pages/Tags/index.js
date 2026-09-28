@@ -131,6 +131,9 @@ const Tags = () => {
     setLoading(true);
     const fetchTags = async () => {
       try {
+        // NOTA: o backend pagina /tags em blocos de 20 (pageNumber/limit fixos em ListService).
+        // A UI categoriza a lista completa sem paginação; se houver mais de 20 tags,
+        // será necessário buscar todas as páginas via hasMore (limitação conhecida).
         const { data } = await api.get("/tags/", {
           params: { searchParam, kanban: 0 },
         });

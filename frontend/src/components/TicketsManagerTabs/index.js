@@ -362,6 +362,451 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
+// Barra de ações isolada em componente próprio: os estados de hover vivem
+// aqui dentro, então mouseenter/mouseleave re-renderiza apenas estes botões
+// e não derruba as listas de tickets montadas no componente pai.
+const ToolbarActions = React.memo(({
+  user,
+  classes,
+  theme,
+  tab,
+  snackbarOpen,
+  showAllTickets,
+  sortTickets,
+  withUnreadMessages,
+  hasPermission,
+  setShowAllTickets,
+  setNewTicketModalOpen,
+  setBulkProcessModalOpen,
+  setSortTickets,
+  setWithUnreadMessages,
+  handleChangeTab,
+  handleSnackbarOpen,
+  handleSnackbarClose,
+  CloseAllTicket,
+}) => {
+  const [isHoveredAll, setIsHoveredAll] = useState(false);
+  const [isHoveredNew, setIsHoveredNew] = useState(false);
+  const [isHoveredResolve, setIsHoveredResolve] = useState(false);
+  const [isHoveredOpen, setIsHoveredOpen] = useState(false);
+  const [isHoveredClosed, setIsHoveredClosed] = useState(false);
+  const [isHoveredSort, setIsHoveredSort] = useState(false);
+  const [isHoveredBulk, setIsHoveredBulk] = useState(false);
+  const [isHoveredUnread, setIsHoveredUnread] = useState(false);
+
+  const resetHovers = () => {
+    setIsHoveredAll(false);
+    setIsHoveredNew(false);
+    setIsHoveredResolve(false);
+    setIsHoveredOpen(false);
+    setIsHoveredClosed(false);
+    setIsHoveredSort(false);
+    setIsHoveredBulk(false);
+    setIsHoveredUnread(false);
+  };
+
+  const handleHover = (name) => {
+    resetHovers();
+    switch (name) {
+      case "all":
+        setIsHoveredAll(true);
+        break;
+      case "new":
+        setIsHoveredNew(true);
+        break;
+      case "resolve":
+        setIsHoveredResolve(true);
+        break;
+      case "open":
+        setIsHoveredOpen(true);
+        break;
+      case "closed":
+        setIsHoveredClosed(true);
+        break;
+      case "sort":
+        setIsHoveredSort(true);
+        break;
+      case "bulk":
+        setIsHoveredBulk(true);
+        break;
+      case "unread":
+        setIsHoveredUnread(true);
+        break;
+      default:
+        break;
+    }
+  };
+
+  return (
+    <>
+      <Can
+        user={user}
+        perform="tickets.view-all"
+        yes={() => (
+          <Badge
+            color="primary"
+            invisible={
+              !isHoveredAll ||
+              isHoveredNew ||
+              isHoveredResolve ||
+              isHoveredOpen ||
+              isHoveredClosed
+            }
+            badgeContent={"Todos"}
+            classes={{ badge: classes.tabsBadge }}
+            overlap="rectangular"
+          >
+            <ToggleButton
+              onMouseEnter={() => setIsHoveredAll(true)}
+              onMouseLeave={() => setIsHoveredAll(false)}
+              className={classes.button}
+              value="uncheck"
+              selected={showAllTickets}
+              onChange={() =>
+                setShowAllTickets((prevState) => !prevState)
+              }
+            >
+              {showAllTickets ? (
+                <VisibilityIcon className={classes.icon} />
+              ) : (
+                <VisibilityOffIcon className={classes.icon} />
+              )}
+            </ToggleButton>
+          </Badge>
+        )}
+      />
+      <Snackbar
+        open={snackbarOpen}
+        onClose={handleSnackbarClose}
+        message={i18n.t("tickets.inbox.closedAllTickets")}
+        ContentProps={{
+          className: classes.snackbar,
+        }}
+        action={
+          <>
+            <Button
+              className={classes.yesButton}
+              size="small"
+              onClick={CloseAllTicket}
+            >
+              {i18n.t("tickets.inbox.yes")}
+            </Button>
+            <Button
+              className={classes.noButton}
+              size="small"
+              onClick={handleSnackbarClose}
+            >
+              {i18n.t("tickets.inbox.no")}
+            </Button>
+          </>
+        }
+      />
+      <Badge
+        color="primary"
+        invisible={
+          isHoveredAll ||
+          isHoveredBulk ||
+          isHoveredSort ||
+          !isHoveredNew ||
+          isHoveredResolve ||
+          isHoveredOpen ||
+          isHoveredClosed
+        }
+        badgeContent={i18n.t("tickets.inbox.newTicket")}
+        classes={{ badge: classes.tabsBadge }}
+        overlap="rectangular"
+      >
+        <IconButton
+          onMouseEnter={() => handleHover("new")}
+          onMouseLeave={resetHovers}
+          className={classes.button}
+          onClick={() => {
+            setNewTicketModalOpen(true);
+          }}
+        >
+          <AddIcon className={classes.icon} />
+        </IconButton>
+      </Badge>
+      {/* Processar Tickets em Massa - só exibe se tiver permissão */}
+      {hasPermission("tickets.bulk-process") && (
+        <Badge
+          color="primary"
+          invisible={
+            !isHoveredBulk ||
+            isHoveredAll ||
+            isHoveredNew ||
+            isHoveredResolve ||
+            isHoveredOpen ||
+            isHoveredClosed ||
+            isHoveredSort
+          }
+          badgeContent={i18n.t("tickets.inbox.bulkProcess")}
+          classes={{ badge: classes.tabsBadge }}
+          overlap="rectangular"
+        >
+          <IconButton
+            onMouseEnter={() => handleHover("bulk")}
+            onMouseLeave={resetHovers}
+            className={classes.button}
+            onClick={() => {
+              setBulkProcessModalOpen(true);
+            }}
+          >
+            <PlaylistAddCheckOutlined className={classes.icon} />
+          </IconButton>
+        </Badge>
+      )}
+      {user.profile === "admin" && (
+        <Badge
+          color="primary"
+          invisible={
+            isHoveredAll ||
+            isHoveredNew ||
+            isHoveredBulk ||
+            isHoveredSort ||
+            !isHoveredResolve ||
+            isHoveredOpen ||
+            isHoveredClosed
+          }
+          badgeContent={i18n.t("tickets.inbox.closedAll")}
+          classes={{ badge: classes.tabsBadge }}
+          overlap="rectangular"
+        >
+          <IconButton
+            onMouseEnter={() => handleHover("resolve")}
+            onMouseLeave={resetHovers}
+            className={classes.button}
+            onClick={handleSnackbarOpen}
+          >
+            <HighlightOff style={{ color: "red" }} />
+          </IconButton>
+        </Badge>
+      )}
+      <Badge
+        // color="primary"
+        invisible={
+          !(
+            tab === "open" &&
+            !isHoveredAll &&
+            !isHoveredNew &&
+            !isHoveredResolve &&
+            !isHoveredBulk &&
+            !isHoveredClosed &&
+            !isHoveredSort
+          ) && !isHoveredOpen
+        }
+        badgeContent={i18n.t("tickets.inbox.open")}
+        classes={{ badge: classes.tabsBadge }}
+        overlap="rectangular"
+      >
+        <IconButton
+          onMouseEnter={() => {
+            handleHover("open");
+          }}
+          onMouseLeave={() => {
+            resetHovers();
+          }}
+          style={{
+            height: 30,
+            width: 30,
+            border: isHoveredOpen
+              ? theme.mode === "light"
+                ? "3px solid " + theme.palette.primary.main
+                : "3px solid #FFF"
+              : tab === "open"
+                ? theme.mode === "light"
+                  ? "3px solid " + theme.palette.primary.main
+                  : "3px solid #FFF"
+                : theme.mode === "light"
+                  ? "2px solid #aaa"
+                  : "2px solid #aaa",
+            borderRadius: 8,
+            marginRight: 8,
+          }}
+          onClick={() => handleChangeTab(null, "open")}
+        >
+          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Inbox
+              size={20}
+              strokeWidth={2}
+              color={
+                isHoveredOpen
+                  ? theme.mode === "light"
+                    ? theme.palette.primary.main
+                    : "#FFF"
+                  : tab === "open"
+                    ? theme.mode === "light"
+                      ? theme.palette.primary.main
+                      : "#FFF"
+                    : "#888888"
+              }
+            />
+          </span>
+        </IconButton>
+      </Badge>
+
+      <Badge
+        color="primary"
+        invisible={
+          !(
+            tab === "closed" &&
+            !isHoveredAll &&
+            !isHoveredNew &&
+            !isHoveredResolve &&
+            !isHoveredOpen &&
+            !isHoveredBulk &&
+            !isHoveredSort
+          ) && !isHoveredClosed
+        }
+        badgeContent={i18n.t("tickets.inbox.resolverd")}
+        classes={{ badge: classes.tabsBadge }}
+        overlap="rectangular"
+      >
+        <IconButton
+          onMouseEnter={() => {
+            handleHover("closed");
+          }}
+          onMouseLeave={() => {
+            resetHovers();
+          }}
+          style={{
+            height: 30,
+            width: 30,
+            border: isHoveredClosed
+              ? theme.mode === "light"
+                ? "3px solid " + theme.palette.primary.main
+                : "3px solid #FFF"
+              : tab === "closed"
+                ? theme.mode === "light"
+                  ? "3px solid " + theme.palette.primary.main
+                  : "3px solid #FFF"
+                : theme.mode === "light"
+                  ? "2px solid #aaa"
+                  : "2px solid #aaa",
+            borderRadius: 8,
+            marginRight: 8,
+          }}
+          onClick={() => handleChangeTab(null, "closed")}
+        >
+          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <CheckCheck
+              size={20}
+              strokeWidth={2}
+              color={
+                isHoveredClosed
+                  ? theme.mode === "light"
+                    ? theme.palette.primary.main
+                    : "#FFF"
+                  : tab === "closed"
+                    ? theme.mode === "light"
+                      ? theme.palette.primary.main
+                      : "#FFF"
+                    : "#888888"
+              }
+            />
+          </span>
+        </IconButton>
+      </Badge>
+      {tab !== "closed" && tab !== "search" && (
+        <Badge
+          color="primary"
+          invisible={
+            !isHoveredSort ||
+            isHoveredAll ||
+            isHoveredNew ||
+            isHoveredResolve ||
+            isHoveredOpen ||
+            isHoveredClosed ||
+            isHoveredBulk
+          }
+          badgeContent={!sortTickets ? "Crescente" : "Decrescente"}
+          classes={{ badge: classes.tabsBadge }}
+          overlap="rectangular"
+        >
+          <ToggleButton
+            onMouseEnter={() => handleHover("sort")}
+            onMouseLeave={resetHovers}
+            className={classes.button}
+            value="uncheck"
+            selected={sortTickets}
+            onChange={() =>
+              setSortTickets((prevState) => !prevState)
+            }
+          >
+            {!sortTickets ? (
+              <TextRotateUp style={{
+                color: sortTickets
+                  ? theme.mode === "light"
+                    ? theme.palette.primary.main
+                    : "#FFF"
+                  : "#aaa",
+              }} />
+            ) : (
+              <TextRotationDown style={{
+                color: sortTickets
+                  ? theme.mode === "light"
+                    ? theme.palette.primary.main
+                    : "#FFF"
+                  : "#aaa",
+              }} />
+            )}
+          </ToggleButton>
+        </Badge>
+      )}
+      {/* Botão de filtro não lidas */}
+      {tab !== "closed" && tab !== "search" && (
+        <Badge
+          color="primary"
+          invisible={
+            !isHoveredUnread ||
+            isHoveredAll ||
+            isHoveredNew ||
+            isHoveredResolve ||
+            isHoveredOpen ||
+            isHoveredClosed ||
+            isHoveredBulk ||
+            isHoveredSort
+          }
+          badgeContent={withUnreadMessages ? "Todos" : "Não lidas"}
+          classes={{ badge: classes.tabsBadge }}
+          overlap="rectangular"
+        >
+          <ToggleButton
+            onMouseEnter={() => handleHover("unread")}
+            onMouseLeave={resetHovers}
+            className={classes.button}
+            value="uncheck"
+            selected={withUnreadMessages}
+            onChange={() =>
+              setWithUnreadMessages((prevState) => !prevState)
+            }
+          >
+            {withUnreadMessages ? (
+              <UnreadIcon style={{
+                color: withUnreadMessages
+                  ? theme.mode === "light"
+                    ? theme.palette.primary.main
+                    : "#FFF"
+                  : "#aaa",
+              }} />
+            ) : (
+              <ReadIcon style={{
+                color: withUnreadMessages
+                  ? theme.mode === "light"
+                    ? theme.palette.primary.main
+                    : "#FFF"
+                  : "#aaa",
+              }} />
+            )}
+          </ToggleButton>
+        </Badge>
+      )}
+    </>
+  );
+});
+
+ToolbarActions.displayName = "ToolbarActions";
+
 const TicketsManagerTabs = () => {
   const theme = useTheme();
   const classes = useStyles();
@@ -400,15 +845,6 @@ const TicketsManagerTabs = () => {
   const [selectedStatus, setSelectedStatus] = useState([]);
   const [filter, setFilter] = useState(false);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
-  const [hoveredButton, setHoveredButton] = useState(null);
-  const [isHoveredAll, setIsHoveredAll] = useState(false);
-  const [isHoveredNew, setIsHoveredNew] = useState(false);
-  const [isHoveredResolve, setIsHoveredResolve] = useState(false);
-  const [isHoveredOpen, setIsHoveredOpen] = useState(false);
-  const [isHoveredClosed, setIsHoveredClosed] = useState(false);
-  const [isHoveredSort, setIsHoveredSort] = useState(false);
-  const [isHoveredBulk, setIsHoveredBulk] = useState(false);
-  const [isHoveredUnread, setIsHoveredUnread] = useState(false);
 
   const sortDirection = sortTickets ? "ASC" : "DESC";
   const listResetKeyBase = useMemo(() => JSON.stringify({
@@ -477,49 +913,6 @@ const TicketsManagerTabs = () => {
   const botCount = ticketsByStatus.bot.reduce((sum, t) => sum + (t.unreadMessages || 0), 0);
   // Para campanhas: mostrar quantidade de tickets (não apenas unread)
   const campaignCount = ticketsByStatus.campaign.length;
-
-  const resetHovers = () => {
-    setIsHoveredAll(false);
-    setIsHoveredNew(false);
-    setIsHoveredResolve(false);
-    setIsHoveredOpen(false);
-    setIsHoveredClosed(false);
-    setIsHoveredSort(false);
-    setIsHoveredBulk(false);
-    setIsHoveredUnread(false);
-  };
-
-  const handleHover = (name) => {
-    resetHovers();
-    switch (name) {
-      case "all":
-        setIsHoveredAll(true);
-        break;
-      case "new":
-        setIsHoveredNew(true);
-        break;
-      case "resolve":
-        setIsHoveredResolve(true);
-        break;
-      case "open":
-        setIsHoveredOpen(true);
-        break;
-      case "closed":
-        setIsHoveredClosed(true);
-        break;
-      case "sort":
-        setIsHoveredSort(true);
-        break;
-      case "bulk":
-        setIsHoveredBulk(true);
-        break;
-      case "unread":
-        setIsHoveredUnread(true);
-        break;
-      default:
-        break;
-    }
-  };
 
   const [isFilterActive, setIsFilterActive] = useState(false);
 
@@ -828,372 +1221,26 @@ const TicketsManagerTabs = () => {
         <Paper square elevation={0} className={`${classes.ticketOptionsBox} ticket-options-box`}>
           <Grid container alignItems="center" justifyContent="space-between" wrap="nowrap">
             <Grid item>
-              <Can
+              <ToolbarActions
                 user={user}
-                perform="tickets.view-all"
-                yes={() => (
-                  <Badge
-                    color="primary"
-                    invisible={
-                      !isHoveredAll ||
-                      isHoveredNew ||
-                      isHoveredResolve ||
-                      isHoveredOpen ||
-                      isHoveredClosed
-                    }
-                    badgeContent={"Todos"}
-                    classes={{ badge: classes.tabsBadge }}
-                    overlap="rectangular"
-                  >
-                    <ToggleButton
-                      onMouseEnter={() => setIsHoveredAll(true)}
-                      onMouseLeave={() => setIsHoveredAll(false)}
-                      className={classes.button}
-                      value="uncheck"
-                      selected={showAllTickets}
-                      onChange={() =>
-                        setShowAllTickets((prevState) => !prevState)
-                      }
-                    >
-                      {showAllTickets ? (
-                        <VisibilityIcon className={classes.icon} />
-                      ) : (
-                        <VisibilityOffIcon className={classes.icon} />
-                      )}
-                    </ToggleButton>
-                  </Badge>
-                )}
+                classes={classes}
+                theme={theme}
+                tab={tab}
+                snackbarOpen={snackbarOpen}
+                showAllTickets={showAllTickets}
+                sortTickets={sortTickets}
+                withUnreadMessages={withUnreadMessages}
+                hasPermission={hasPermission}
+                setShowAllTickets={setShowAllTickets}
+                setNewTicketModalOpen={setNewTicketModalOpen}
+                setBulkProcessModalOpen={setBulkProcessModalOpen}
+                setSortTickets={setSortTickets}
+                setWithUnreadMessages={setWithUnreadMessages}
+                handleChangeTab={handleChangeTab}
+                handleSnackbarOpen={handleSnackbarOpen}
+                handleSnackbarClose={handleSnackbarClose}
+                CloseAllTicket={CloseAllTicket}
               />
-              <Snackbar
-                open={snackbarOpen}
-                onClose={handleSnackbarClose}
-                message={i18n.t("tickets.inbox.closedAllTickets")}
-                ContentProps={{
-                  className: classes.snackbar,
-                }}
-                action={
-                  <>
-                    <Button
-                      className={classes.yesButton}
-                      size="small"
-                      onClick={CloseAllTicket}
-                    >
-                      {i18n.t("tickets.inbox.yes")}
-                    </Button>
-                    <Button
-                      className={classes.noButton}
-                      size="small"
-                      onClick={handleSnackbarClose}
-                    >
-                      {i18n.t("tickets.inbox.no")}
-                    </Button>
-                  </>
-                }
-              />
-              <Badge
-                color="primary"
-                invisible={
-                  isHoveredAll ||
-                  isHoveredBulk ||
-                  isHoveredSort ||
-                  !isHoveredNew ||
-                  isHoveredResolve ||
-                  isHoveredOpen ||
-                  isHoveredClosed
-                }
-                badgeContent={i18n.t("tickets.inbox.newTicket")}
-                classes={{ badge: classes.tabsBadge }}
-                overlap="rectangular"
-              >
-                <IconButton
-                  onMouseEnter={() => handleHover("new")}
-                  onMouseLeave={resetHovers}
-                  className={classes.button}
-                  onClick={() => {
-                    setNewTicketModalOpen(true);
-                  }}
-                >
-                  <AddIcon className={classes.icon} />
-                </IconButton>
-              </Badge>
-              {/* Processar Tickets em Massa - só exibe se tiver permissão */}
-              {hasPermission("tickets.bulk-process") && (
-                <Badge
-                  color="primary"
-                  invisible={
-                    !isHoveredBulk ||
-                    isHoveredAll ||
-                    isHoveredNew ||
-                    isHoveredResolve ||
-                    isHoveredOpen ||
-                    isHoveredClosed ||
-                    isHoveredSort
-                  }
-                  badgeContent={i18n.t("tickets.inbox.bulkProcess")}
-                  classes={{ badge: classes.tabsBadge }}
-                  overlap="rectangular"
-                >
-                  <IconButton
-                    onMouseEnter={() => handleHover("bulk")}
-                    onMouseLeave={resetHovers}
-                    className={classes.button}
-                    onClick={() => {
-                      setBulkProcessModalOpen(true);
-                    }}
-                  >
-                    <PlaylistAddCheckOutlined className={classes.icon} />
-                  </IconButton>
-                </Badge>
-              )}
-              {user.profile === "admin" && (
-                <Badge
-                  color="primary"
-                  invisible={
-                    isHoveredAll ||
-                    isHoveredNew ||
-                    isHoveredBulk ||
-                    isHoveredSort ||
-                    !isHoveredResolve ||
-                    isHoveredOpen ||
-                    isHoveredClosed
-                  }
-                  badgeContent={i18n.t("tickets.inbox.closedAll")}
-                  classes={{ badge: classes.tabsBadge }}
-                  overlap="rectangular"
-                >
-                  <IconButton
-                    onMouseEnter={() => handleHover("resolve")}
-                    onMouseLeave={resetHovers}
-                    className={classes.button}
-                    onClick={handleSnackbarOpen}
-                  >
-                    <HighlightOff style={{ color: "red" }} />
-                  </IconButton>
-                </Badge>
-              )}
-              <Badge
-                // color="primary"
-                invisible={
-                  !(
-                    tab === "open" &&
-                    !isHoveredAll &&
-                    !isHoveredNew &&
-                    !isHoveredResolve &&
-                    !isHoveredBulk &&
-                    !isHoveredClosed &&
-                    !isHoveredSort
-                  ) && !isHoveredOpen
-                }
-                badgeContent={i18n.t("tickets.inbox.open")}
-                classes={{ badge: classes.tabsBadge }}
-                overlap="rectangular"
-              >
-                <IconButton
-                  onMouseEnter={() => {
-                    handleHover("open");
-                    setHoveredButton("open");
-                  }}
-                  onMouseLeave={() => {
-                    resetHovers();
-                    setHoveredButton(null);
-                  }}
-                  style={{
-                    height: 30,
-                    width: 30,
-                    border: isHoveredOpen
-                      ? theme.mode === "light"
-                        ? "3px solid " + theme.palette.primary.main
-                        : "3px solid #FFF"
-                      : tab === "open"
-                        ? theme.mode === "light"
-                          ? "3px solid " + theme.palette.primary.main
-                          : "3px solid #FFF"
-                        : theme.mode === "light"
-                          ? "2px solid #aaa"
-                          : "2px solid #aaa",
-                    borderRadius: 8,
-                    marginRight: 8,
-                  }}
-                  onClick={() => handleChangeTab(null, "open")}
-                >
-                  <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Inbox
-                      size={20}
-                      strokeWidth={2}
-                      color={
-                        isHoveredOpen
-                          ? theme.mode === "light"
-                            ? theme.palette.primary.main
-                            : "#FFF"
-                          : tab === "open"
-                            ? theme.mode === "light"
-                              ? theme.palette.primary.main
-                              : "#FFF"
-                            : "#888888"
-                      }
-                    />
-                  </span>
-                </IconButton>
-              </Badge>
-
-              <Badge
-                color="primary"
-                invisible={
-                  !(
-                    tab === "closed" &&
-                    !isHoveredAll &&
-                    !isHoveredNew &&
-                    !isHoveredResolve &&
-                    !isHoveredOpen &&
-                    !isHoveredBulk &&
-                    !isHoveredSort
-                  ) && !isHoveredClosed
-                }
-                badgeContent={i18n.t("tickets.inbox.resolverd")}
-                classes={{ badge: classes.tabsBadge }}
-                overlap="rectangular"
-              >
-                <IconButton
-                  onMouseEnter={() => {
-                    handleHover("closed");
-                    setHoveredButton("closed");
-                  }}
-                  onMouseLeave={() => {
-                    resetHovers();
-                    setHoveredButton(null);
-                  }}
-                  style={{
-                    height: 30,
-                    width: 30,
-                    border: isHoveredClosed
-                      ? theme.mode === "light"
-                        ? "3px solid " + theme.palette.primary.main
-                        : "3px solid #FFF"
-                      : tab === "closed"
-                        ? theme.mode === "light"
-                          ? "3px solid " + theme.palette.primary.main
-                          : "3px solid #FFF"
-                        : theme.mode === "light"
-                          ? "2px solid #aaa"
-                          : "2px solid #aaa",
-                    borderRadius: 8,
-                    marginRight: 8,
-                  }}
-                  onClick={() => handleChangeTab(null, "closed")}
-                >
-                  <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <CheckCheck
-                      size={20}
-                      strokeWidth={2}
-                      color={
-                        isHoveredClosed
-                          ? theme.mode === "light"
-                            ? theme.palette.primary.main
-                            : "#FFF"
-                          : tab === "closed"
-                            ? theme.mode === "light"
-                              ? theme.palette.primary.main
-                              : "#FFF"
-                            : "#888888"
-                      }
-                    />
-                  </span>
-                </IconButton>
-              </Badge>
-              {tab !== "closed" && tab !== "search" && (
-                <Badge
-                  color="primary"
-                  invisible={
-                    !isHoveredSort ||
-                    isHoveredAll ||
-                    isHoveredNew ||
-                    isHoveredResolve ||
-                    isHoveredOpen ||
-                    isHoveredClosed ||
-                    isHoveredBulk
-                  }
-                  badgeContent={!sortTickets ? "Crescente" : "Decrescente"}
-                  classes={{ badge: classes.tabsBadge }}
-                  overlap="rectangular"
-                >
-                  <ToggleButton
-                    onMouseEnter={() => handleHover("sort")}
-                    onMouseLeave={resetHovers}
-                    className={classes.button}
-                    value="uncheck"
-                    selected={sortTickets}
-                    onChange={() =>
-                      setSortTickets((prevState) => !prevState)
-                    }
-                  >
-                    {!sortTickets ? (
-                      <TextRotateUp style={{
-                        color: sortTickets
-                          ? theme.mode === "light"
-                            ? theme.palette.primary.main
-                            : "#FFF"
-                          : "#aaa",
-                      }} />
-                    ) : (
-                      <TextRotationDown style={{
-                        color: sortTickets
-                          ? theme.mode === "light"
-                            ? theme.palette.primary.main
-                            : "#FFF"
-                          : "#aaa",
-                      }} />
-                    )}
-                  </ToggleButton>
-                </Badge>
-              )}
-              {/* Botão de filtro não lidas */}
-              {tab !== "closed" && tab !== "search" && (
-                <Badge
-                  color="primary"
-                  invisible={
-                    !isHoveredUnread ||
-                    isHoveredAll ||
-                    isHoveredNew ||
-                    isHoveredResolve ||
-                    isHoveredOpen ||
-                    isHoveredClosed ||
-                    isHoveredBulk ||
-                    isHoveredSort
-                  }
-                  badgeContent={withUnreadMessages ? "Todos" : "Não lidas"}
-                  classes={{ badge: classes.tabsBadge }}
-                  overlap="rectangular"
-                >
-                  <ToggleButton
-                    onMouseEnter={() => handleHover("unread")}
-                    onMouseLeave={resetHovers}
-                    className={classes.button}
-                    value="uncheck"
-                    selected={withUnreadMessages}
-                    onChange={() =>
-                      setWithUnreadMessages((prevState) => !prevState)
-                    }
-                  >
-                    {withUnreadMessages ? (
-                      <UnreadIcon style={{
-                        color: withUnreadMessages
-                          ? theme.mode === "light"
-                            ? theme.palette.primary.main
-                            : "#FFF"
-                          : "#aaa",
-                      }} />
-                    ) : (
-                      <ReadIcon style={{
-                        color: withUnreadMessages
-                          ? theme.mode === "light"
-                            ? theme.palette.primary.main
-                            : "#FFF"
-                          : "#aaa",
-                      }} />
-                    )}
-                  </ToggleButton>
-                </Badge>
-              )}
             </Grid>
             <Grid item>
               <TicketsQueueSelect

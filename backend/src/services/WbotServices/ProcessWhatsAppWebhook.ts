@@ -10,6 +10,7 @@ import CreateOrUpdateContactService from "../ContactServices/CreateOrUpdateConta
 import FindOrCreateTicketService from "../TicketServices/FindOrCreateTicketService";
 import CreateMessageService from "../MessageServices/CreateMessageService";
 import { getIO } from "../../libs/socket";
+import { emitToCompanyRoom } from "../../libs/socketEmit";
 import DownloadOfficialMediaService from "./DownloadOfficialMediaService";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
 import { UpdateSessionWindow } from "../TicketServices/UpdateSessionWindowService";
@@ -369,23 +370,16 @@ async function processMessageWithExistingContact(
   await UpdateSessionWindow(ticket.id, whatsapp.id, timestamp);
 
   // Emitir evento via Socket.IO
+  // Emissão única: o helper envia para a sala do ticket e, via except(room),
+  // para os demais sockets do namespace — evita a dupla entrega anterior
+  // (emit na sala + broadcast no namespace atingia quem estava na sala 2x).
   const realtimeTicket = await loadRealtimeTicketPayload(ticket.id);
-  const io = getIO();
-  io.of(`/workspace-${companyId}`)
-    .to(ticket.uuid)
-    .emit(`company-${companyId}-appMessage`, {
-      action: "create",
-      message: createdMessage,
-      ticket: realtimeTicket || ticket,
-      contact,
-    });
-
-  io.of(`/workspace-${companyId}`)
-    .emit(`company-${companyId}-appMessage`, {
-      action: "create",
-      message: createdMessage,
-      contact
-    });
+  await emitToCompanyRoom(companyId, ticket.uuid, `company-${companyId}-appMessage`, {
+    action: "create",
+    message: createdMessage,
+    ticket: realtimeTicket || ticket,
+    contact,
+  });
 }
 
 /**
@@ -778,23 +772,15 @@ async function processIncomingMessage(
     }
 
     // Emitir evento via Socket.IO
+    // Emissão única: helper envia para a sala do ticket e, via except(room),
+    // para os demais sockets do namespace — evita a dupla entrega anterior.
     const io = getIO();
-    io.of(`/workspace-${companyId}`)
-      .to(ticket.uuid)
-      .emit(`company-${companyId}-appMessage`, {
-        action: "create",
-        message: createdMessage,
-        ticket,
-        contact
-      });
-
-    io.of(`/workspace-${companyId}`)
-      .emit(`company-${companyId}-appMessage`, {
-        action: "create",
-        message: createdMessage,
-        ticket,
-        contact
-      });
+    await emitToCompanyRoom(companyId, ticket.uuid, `company-${companyId}-appMessage`, {
+      action: "create",
+      message: createdMessage,
+      ticket,
+      contact
+    });
 
     io.of(`/workspace-${companyId}`)
       .emit(`company-${companyId}-ticket`, {

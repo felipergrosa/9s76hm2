@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useContext, useCallback, useMemo } from "react";
 import { parseISO, format, isSameDay, isYesterday } from "date-fns";
 import clsx from "clsx";
-import { useHistory, useParams } from "react-router-dom";
+import { useHistory } from "react-router-dom";
 
 import {
     ListItem,
@@ -429,7 +429,7 @@ const useStyles = makeStyles((theme) => ({
     }
 }));
 
-const TicketListItemCustom = ({ setTabOpen, ticket }) => {
+const TicketListItemCustom = ({ setTabOpen, ticket, isSelected = false }) => {
     const classes = useStyles();
     const theme = useTheme();
     const history = useHistory();
@@ -442,7 +442,8 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
     const [queueTicketOpen, setQueueTicketOpen] = useState("");
     const [openTicketMessageDialog, setOpenTicketMessageDialog] = useState(false);
 
-    const { ticketId } = useParams();
+    // ticketId da rota não é mais lido aqui via useParams: a lista pai passa
+    // isSelected via prop para que mudanças de rota não re-renderizem todas as linhas
     const isMounted = useRef(true);
     const { setCurrentTicket } = useContext(TicketsContext);
     const { user } = useContext(AuthContext);
@@ -736,7 +737,7 @@ const handleCloseTicket = async (id) => {
 
                     handleSelectTicket(ticket);
                 }}
-                selected={ticketId && ticketId === ticket.uuid}
+                selected={isSelected}
                 className={clsx(classes.ticket, "ticket-list-item-core", {
                     [classes.pendingTicket]: ticket.status === "pending",
                 })}
@@ -1029,7 +1030,8 @@ const handleCloseTicket = async (id) => {
 };
 
 export default React.memo(TicketListItemCustom, (prevProps, nextProps) => {
-    return prevProps.ticket.id === nextProps.ticket.id && 
+    return prevProps.isSelected === nextProps.isSelected &&
+           prevProps.ticket.id === nextProps.ticket.id && 
            prevProps.ticket.updatedAt === nextProps.ticket.updatedAt &&
            prevProps.ticket.unreadMessages === nextProps.ticket.unreadMessages &&
            prevProps.ticket.status === nextProps.ticket.status &&

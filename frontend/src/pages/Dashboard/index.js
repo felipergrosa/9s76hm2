@@ -32,8 +32,6 @@ import moment from "moment";
 import TableAttendantsStatus from "../../components/Dashboard/TableAttendantsStatus";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import useDashboard from "../../hooks/useDashboard";
-import useContacts from "../../hooks/useContacts";
-import useMessages from "../../hooks/useMessages";
 import { ChatsUser } from "./ChartsUser";
 import ChartDonut from "./ChartDonut";
 import Filters from "./Filters";
@@ -69,12 +67,9 @@ const Dashboard = () => {
   let now = `${year}-${month < 10 ? `0${month}` : `${month}`}-${date < 10 ? `0${date}` : `${date}`}`;
 
   useEffect(() => {
-    async function firstLoad() {
-      await fetchData();
-    }
-    setTimeout(() => {
-      firstLoad();
-    }, 1000);
+    // Sem delay artificial: dispara o fetch direto ao montar/mudar o filtro
+    fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchDataFilter]);
 
   useEffect(() => {
@@ -146,20 +141,6 @@ const Dashboard = () => {
       }
     });
     return userOnline;
-  };
-
-  const GetContacts = (all) => {
-    let props = all ? {} : { dateStart: dateStartTicket, dateEnd: dateEndTicket };
-    const { count } = useContacts(props);
-    return count;
-  };
-
-  const GetMessages = (all, fromMe) => {
-    let props = all
-      ? { fromMe }
-      : { fromMe, dateStart: dateStartTicket, dateEnd: dateEndTicket };
-    const { count } = useMessages(props);
-    return count;
   };
 
   function toggleShowFilter() {

@@ -6,12 +6,10 @@ import Ticket from "../../models/Ticket";
 import ShowTicketService from "../TicketServices/ShowTicketService";
 import Queue from "../../models/Queue";
 
-import { Sequelize } from "sequelize-typescript";
 import { QueryTypes } from "sequelize";
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const dbConfig = require("../../config/database");
-const sequelize = new Sequelize(dbConfig);
+// Pool compartilhado: evita criar uma segunda instância Sequelize (segundo pool de conexões)
+import sequelize from "../../database";
 
 interface Request {
   companyId: number;

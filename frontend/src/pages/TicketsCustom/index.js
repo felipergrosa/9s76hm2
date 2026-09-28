@@ -81,6 +81,15 @@ const TicketsCustom = () => {
 
 	const [ticketsManagerWidth, setTicketsManagerWidth] = useState(0);
 	const ticketsManagerWidthRef = useRef(ticketsManagerWidth);
+	// Ref do container para aplicar a largura direto no DOM durante o drag,
+	// sem re-renderizar a página a cada mousemove
+	const contactsWrapperRef = useRef(null);
+
+	// Mantém a ref sincronizada com o estado (evita salvar largura errada
+	// caso o usuário clique no dragger sem arrastar)
+	useEffect(() => {
+		ticketsManagerWidthRef.current = ticketsManagerWidth;
+	}, [ticketsManagerWidth]);
 
 	useEffect(() => {
 		PerformanceMonitor.start('TicketsScreen:Mount');
@@ -118,7 +127,10 @@ const TicketsCustom = () => {
 				newWidth < maxTicketsManagerWidth
 			) {
 				ticketsManagerWidthRef.current = newWidth;
-				setTicketsManagerWidth(newWidth);
+				// Aplica a largura direto no DOM; o estado só é commitado no mouseup
+				if (contactsWrapperRef.current) {
+					contactsWrapperRef.current.style.width = `${newWidth}px`;
+				}
 			}
 		},
 		[]
@@ -131,6 +143,8 @@ const TicketsCustom = () => {
 		const newWidth = ticketsManagerWidthRef.current;
 
 		if (newWidth !== ticketsManagerWidth) {
+			// Commita a largura no estado apenas no fim do drag
+			setTicketsManagerWidth(newWidth);
 			await handleSaveContact(newWidth);
 		}
 	};
@@ -140,6 +154,7 @@ const TicketsCustom = () => {
 			<div className={classes.chatContainer}>
 				<div className={classes.chatPapper}>
 					<div
+						ref={contactsWrapperRef}
 						className={`${classes.contactsWrapper} contacts-wrapper`}
 						style={{ width: ticketsManagerWidth }}
 					>

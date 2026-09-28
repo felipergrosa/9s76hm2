@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef, useContext } from "react";
-import logger from "../../utils/logger";
 
 import { useHistory, useParams } from "react-router-dom";
 import { parseISO, format, isSameDay } from "date-fns";
@@ -305,13 +304,6 @@ const TicketListItem = ({ ticket, isNotification }) => {
     const { user } = useContext(AuthContext);
     const { hasPermission } = usePermissions();
     const { setCurrentTicket, setTabOpen } = useContext(TicketsContext);
-
-    useEffect(() => {
-        logger.log("======== TicketListItemCustom ===========")
-        logger.log(ticket)
-        logger.log("=========================================")
-    }, [ticket])
-
 
     useEffect(() => {
         return () => {

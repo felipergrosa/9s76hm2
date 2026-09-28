@@ -13,7 +13,6 @@ import useContactSort from "../../hooks/useContactSort";
 import useDebounce from "../../hooks/useDebounce";
 import { toast } from "react-toastify";
 import { useHistory, useLocation } from "react-router-dom";
-import useContactUpdates from "../../hooks/useContactUpdates";
 import { debounce } from 'lodash';
 
 import {
@@ -68,6 +67,7 @@ import BulkEditContactsModal from "../../components/BulkEditContactsModal";
 import DuplicateContactsModal from "../../components/DuplicateContactsModal";
 import usePermissions from "../../hooks/usePermissions";
 import useAvatarPrefetch from "../../hooks/useAvatarPrefetch";
+import avatarCache from "../../utils/avatarCache";
 
 const CustomTooltipProps = {
     arrow: true,
@@ -342,7 +342,8 @@ const Contacts = () => {
     const filterIconClass = hasActiveFilters ? "w-5 h-5 text-green-600" : "w-5 h-5";
 
     // Estados para seleção avançada
-    const [lastSelectedIndex, setLastSelectedIndex] = useState(null); // Desktop: shift-select
+    // Ref ao invés de state: não dispara re-render e mantém handleToggleSelectContact estável
+    const lastSelectedIndexRef = useRef(null); // Desktop: shift-select
     const [isSelectionMode, setIsSelectionMode] = useState(false); // Mobile: long-press
     const longPressTimerRef = useRef(null);
 
@@ -540,11 +541,6 @@ const Contacts = () => {
         refreshTick,
     ]);
 
-    // Hook para atualização em tempo real de avatares
-    useContactUpdates((updatedContact) => {
-        dispatch({ type: "UPDATE_CONTACTS", payload: updatedContact });
-    });
-
     // Debounce para evitar múltiplas atualizações rápidas de contatos
     const debouncedContactUpdate = useRef(
         debounce((contact) => {
@@ -556,6 +552,10 @@ const Contacts = () => {
         const companyId = user.companyId;
         const onContactEvent = (data) => {
             if (data.action === "update" || data.action === "create") {
+                // Invalida o avatar em cache quando o contato é atualizado
+                if (data.action === "update" && data.contact?.id) {
+                    avatarCache.invalidate(data.contact.id);
+                }
                 // Usar debounce para evitar múltiplas atualizações rápidas
                 debouncedContactUpdate(data.contact);
             }
@@ -640,9 +640,9 @@ const Contacts = () => {
         setSelectedContactIds((prevSelected) => {
             const hasShift = !!(evt && evt.shiftKey);
             // Shift-select (desktop)
-            if (hasShift && lastSelectedIndex !== null && rowIndex !== null) {
-                const start = Math.min(lastSelectedIndex, rowIndex);
-                const end = Math.max(lastSelectedIndex, rowIndex);
+            if (hasShift && lastSelectedIndexRef.current !== null && rowIndex !== null) {
+                const start = Math.min(lastSelectedIndexRef.current, rowIndex);
+                const end = Math.max(lastSelectedIndexRef.current, rowIndex);
                 const rangeIds = sortedContacts.slice(start, end + 1).map(c => c.id);
                 const setIds = new Set([...prevSelected, ...rangeIds]);
                 if (isSelectAllChecked) setIsSelectAllChecked(false);
@@ -651,12 +651,12 @@ const Contacts = () => {
             // Toggle simples
             const already = prevSelected.includes(contactId);
             const next = already ? prevSelected.filter(id => id !== contactId) : [...prevSelected, contactId];
-            if (!already) setLastSelectedIndex(rowIndex);
+            if (!already) lastSelectedIndexRef.current = rowIndex;
             if (isSelectAllChecked && already) setIsSelectAllChecked(false);
             return next;
         });
-        if (rowIndex !== null && !(evt && evt.shiftKey)) setLastSelectedIndex(rowIndex);
-    }, [lastSelectedIndex, sortedContacts, isSelectAllChecked]);
+        if (rowIndex !== null && !(evt && evt.shiftKey)) lastSelectedIndexRef.current = rowIndex;
+    }, [sortedContacts, isSelectAllChecked]);
 
     // Mobile: toque longo para entrar em modo seleção
     const handleCardLongPressStart = useCallback((contactId) => {
@@ -770,61 +770,6 @@ const Contacts = () => {
     const loadMore = () => {
         setPageNumber((prevState) => prevState + 1);
     };
-
-    const modalElements = (
-        <>
-            <NewTicketModal
-                modalOpen={newTicketModalOpen}
-                initialContact={contactTicket}
-                onClose={(ticket) => {
-                    handleCloseOrOpenTicket(ticket);
-                }}
-            />
-
-            <ContactModal
-                open={contactModalOpen}
-                onClose={handleCloseContactModal}
-                aria-labelledby="form-dialog-title"
-                contactId={selectedContactId}
-            />
-
-            <ContactImportWpModal
-                isOpen={importContactModalOpen}
-                handleClose={() => setImportContactModalOpen(false)}
-                onSave={onSave}
-                onConfirm={handleimportContact}
-            />
-
-            <ContactImportTagsModal
-                isOpen={importTagsModalOpen}
-                handleClose={() => setImportTagsModalOpen(false)}
-                onImport={handleImportWithTags}
-            />
-
-            <FilterContactModal
-                isOpen={filterContactModalOpen}
-                onClose={handleCloseFilterContactModal}
-                onFiltered={handleApplyFiltersFromModal}
-                initialFilter={appliedFilters}
-            />
-
-            <BulkEditContactsModal
-                open={bulkEditOpen}
-                onClose={() => setBulkEditOpen(false)}
-                selectedContactIds={selectedContactIds}
-                onSuccess={() => setRefreshTick(prev => prev + 1)}
-            />
-
-            <DuplicateContactsModal
-                open={duplicateModalOpen}
-                onClose={() => setDuplicateModalOpen(false)}
-                onActionCompleted={() => {
-                    setRefreshTick(prev => prev + 1);
-                    setDuplicateModalOpen(false);
-                }}
-            />
-        </>
-    );
 
     // Removido infinite scroll para manter paginação fixa por página
 
@@ -1319,8 +1264,8 @@ const Contacts = () => {
                                         <ContactRow
                                             key={contact.id}
                                             contact={contact}
-                                            selectedContactIds={selectedContactIds}
-                                            onToggleSelect={(id, _i, e) => handleToggleSelectContact(id, rowIndex, e)}
+                                            isSelected={selectedContactIds.includes(contact.id)}
+                                            onToggleSelect={handleToggleSelectContact}
                                             onEdit={handleEditContact}
                                             onSendMessage={handleStartNewTicket}
                                             onDelete={handleShowDeleteConfirm}

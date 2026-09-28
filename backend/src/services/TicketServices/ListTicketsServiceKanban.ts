@@ -9,7 +9,6 @@ import User from "../../models/User";
 import ShowUserService from "../UserServices/ShowUserService";
 import Tag from "../../models/Tag";
 import TicketTag from "../../models/TicketTag";
-import { intersection } from "lodash";
 import Whatsapp from "../../models/Whatsapp";
 import ContactTag from "../../models/ContactTag";
 import GetUserPersonalTagContactIds from "../../helpers/GetUserPersonalTagContactIds";
@@ -164,9 +163,12 @@ const ListTicketsServiceKanban = async ({
     };
   }
 
+  // Reuso: evita chamar ShowUserService duas vezes na mesma requisição
+  let requestUser: User | null = null;
+
   if (userId && withUnreadMessages === "true") {
-    const user = await ShowUserService(userId, companyId);
-    const userQueueIds = user.queues.map(queue => queue.id);
+    requestUser = await ShowUserService(userId, companyId);
+    const userQueueIds = requestUser.queues.map(queue => queue.id);
 
     whereCondition = {
       [Op.or]: [{ userId }, { status: "pending" }],
@@ -176,17 +178,25 @@ const ListTicketsServiceKanban = async ({
   }
 
   if (Array.isArray(tags) && tags.length > 0) {
-    const ticketsTagFilter: any[] | null = [];
-    for (let tag of tags) {
-      const ticketTags = await TicketTag.findAll({
-        where: { tagId: tag }
-      });
-      if (ticketTags) {
-        ticketsTagFilter.push(ticketTags.map(t => t.ticketId));
+    // Otimização: uma única query + interseção em JS.
+    // Semântica original: ticket precisa ter TODAS as tags (AND/interseção).
+    const ticketTags = await TicketTag.findAll({
+      where: { tagId: { [Op.in]: tags } },
+      attributes: ["ticketId", "tagId"],
+      raw: true
+    });
+
+    const tagIdsByTicket = new Map<number, Set<number>>();
+    for (const tt of ticketTags as any[]) {
+      if (!tagIdsByTicket.has(tt.ticketId)) {
+        tagIdsByTicket.set(tt.ticketId, new Set());
       }
+      tagIdsByTicket.get(tt.ticketId)!.add(tt.tagId);
     }
 
-    const ticketsIntersection: number[] = intersection(...ticketsTagFilter);
+    const ticketsIntersection: number[] = [...tagIdsByTicket.entries()]
+      .filter(([, tagSet]) => tags.every(tag => tagSet.has(tag)))
+      .map(([ticketId]) => ticketId);
 
     whereCondition = {
       ...whereCondition,
@@ -197,17 +207,19 @@ const ListTicketsServiceKanban = async ({
   }
 
   if (Array.isArray(users) && users.length > 0) {
-    const ticketsUserFilter: any[] | null = [];
-    for (let user of users) {
+    // Semântica original: interseção das listas de ticketIds por userId.
+    // Como Ticket.userId é escalar, a interseção só é não-vazia quando todos
+    // os valores de `users` são iguais (ou a lista tem um único usuário).
+    const uniqueUsers = [...new Set(users)];
+    let ticketsIntersection: number[] = [];
+    if (uniqueUsers.length === 1) {
       const ticketUsers = await Ticket.findAll({
-        where: { userId: user }
+        where: { userId: uniqueUsers[0] },
+        attributes: ["id"],
+        raw: true
       });
-      if (ticketUsers) {
-        ticketsUserFilter.push(ticketUsers.map(t => t.id));
-      }
+      ticketsIntersection = (ticketUsers as any[]).map(t => t.id);
     }
-
-    const ticketsIntersection: number[] = intersection(...ticketsUserFilter);
 
     whereCondition = {
       ...whereCondition,
@@ -227,7 +239,7 @@ const ListTicketsServiceKanban = async ({
 
   // Filtro de Hierarquia (Conexões): Super Admin vê tudo, demais respeitam allowedConnectionIds
   if (userId) {
-    const user = await ShowUserService(userId, companyId);
+    const user = requestUser || await ShowUserService(userId, companyId);
     if (!user.super) {
       const allowedConnectionIds = user.allowedConnectionIds || [];
       if (allowedConnectionIds.length > 0) {
@@ -242,10 +254,15 @@ const ListTicketsServiceKanban = async ({
 
     // Filtro de Ghost Mode - Aplicado a TODOS (Strict Mode)
     // Oculta tickets de usuários marcados como isPrivate, EXCETO se o usuário for o próprio dono.
-    const privateUsers = await User.findAll({
-      where: { isPrivate: true },
-      attributes: ["id"]
-    });
+    // Cache + filtro por companyId (mesmo padrão do ListTicketsService)
+    const privateUsers = await withCache(
+      `privateUsers:${companyId}`,
+      async () => User.findAll({
+        where: { companyId, isPrivate: true },
+        attributes: ["id"]
+      }),
+      60000 // 1 minuto
+    );
     const privateUserIds = privateUsers.map(u => u.id);
 
     if (privateUserIds.length > 0) {

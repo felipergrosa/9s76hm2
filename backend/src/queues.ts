@@ -76,6 +76,79 @@ const backoffMap: Map<number, BackoffState> = new Map();
 type PacingState = { lastSentAt?: number; blockedUntil?: number; sentSinceLonger: number };
 const pacingMap: Map<number, PacingState> = new Map();
 
+// =============================================================================
+// Throttle de eventos Socket.IO "company-X-campaign"
+// Antes: cada DispatchCampaign fazia broadcast do registro completo da campanha
+// por mensagem enviada (1 job = 1 contato = 1 emit) → rajada de emits por segundo.
+// Agora: no máximo 1 emit a cada 500ms por campanha (leading + trailing).
+// Emissões suprimidas são reenviadas ao fim da janela com o payload mais recente,
+// garantindo que estados finais (ex.: FINALIZADA) sempre cheguem ao frontend.
+// =============================================================================
+const CAMPAIGN_EMIT_INTERVAL_MS = 500;
+interface CampaignEmitState {
+  lastEmit: number;
+  timer: NodeJS.Timeout | null;
+  companyId: number;
+  campaign: any;
+}
+const campaignEmitState = new Map<number, CampaignEmitState>();
+
+// Limpeza periódica: remove entradas de campanhas inativas (sem timer pendente)
+const campaignEmitSweep = setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of campaignEmitState.entries()) {
+    if (!entry.timer && now - entry.lastEmit > 60000) {
+      campaignEmitState.delete(key);
+    }
+  }
+}, 60000);
+campaignEmitSweep.unref?.();
+
+function emitCampaignUpdateThrottled(companyId: number, campaign: any): void {
+  const campaignId = Number(campaign?.id);
+  if (!campaignId) return;
+
+  const now = Date.now();
+  let entry = campaignEmitState.get(campaignId);
+  if (!entry) {
+    entry = { lastEmit: 0, timer: null, companyId, campaign };
+    campaignEmitState.set(campaignId, entry);
+  }
+  // Guarda sempre a referência mais recente: emit usa o estado atualizado da campanha
+  entry.companyId = companyId;
+  entry.campaign = campaign;
+
+  // Leading: fora da janela → emite imediatamente
+  if (now - entry.lastEmit >= CAMPAIGN_EMIT_INTERVAL_MS) {
+    entry.lastEmit = now;
+    getIO()
+      .of(`/workspace-${entry.companyId}`)
+      .emit(`company-${entry.companyId}-campaign`, {
+        action: "update",
+        record: entry.campaign
+      });
+    return;
+  }
+
+  // Trailing: dentro da janela → agenda uma emissão com o payload mais recente
+  if (!entry.timer) {
+    const delay = CAMPAIGN_EMIT_INTERVAL_MS - (now - entry.lastEmit);
+    entry.timer = setTimeout(() => {
+      const e = campaignEmitState.get(campaignId);
+      if (!e) return;
+      e.timer = null;
+      e.lastEmit = Date.now();
+      getIO()
+        .of(`/workspace-${e.companyId}`)
+        .emit(`company-${e.companyId}-campaign`, {
+          action: "update",
+          record: e.campaign
+        });
+    }, delay);
+    entry.timer.unref?.();
+  }
+}
+
 interface ProcessCampaignData {
   id: number;
   delay: number;
@@ -1613,12 +1686,8 @@ async function verifyAndFinalizeCampaign(campaign) {
     }
   }
 
-  const io = getIO();
-  io.of(`/workspace-${companyId}`)
-    .emit(`company-${companyId}-campaign`, {
-      action: "update",
-      record: campaign
-    });
+  // Throttled: evita 1 broadcast completo por mensagem despachada
+  emitCampaignUpdateThrottled(companyId, campaign);
 }
 
 async function handleProcessCampaign(job) {
@@ -2545,12 +2614,8 @@ async function handleDispatchCampaign(job) {
     }
     await verifyAndFinalizeCampaign(campaign);
 
-    const io = getIO();
-    io.of(`/workspace-${campaign.companyId}`)
-      .emit(`company-${campaign.companyId}-campaign`, {
-        action: "update",
-        record: campaign
-      });
+    // Throttled: evita 1 broadcast completo por mensagem despachada
+    emitCampaignUpdateThrottled(campaign.companyId, campaign);
 
     // Log de monitoramento anti-ban
     const now = moment();
@@ -2685,8 +2750,11 @@ async function handleResumeTicketsOutOfHour(job) {
               const tempoPassado = moment().subtract(timeQueue, "minutes").utc().format();
               // const tempoAgora = moment().utc().format();
 
+              // Carrega o ticket completo de uma vez (sem attributes:["id"]):
+              // o payload emitido era o resultado de reload() com os mesmos
+              // includes — assim a instância já sai pronta e elimina 1 SELECT
+              // por ticket.
               const { count, rows: tickets } = await Ticket.findAndCountAll({
-                attributes: ["id"],
                 where: {
                   status: "pending",
                   queueId: null,
@@ -2718,37 +2786,43 @@ async function handleResumeTicketsOutOfHour(job) {
               });
 
               if (count > 0) {
-                tickets.map(async ticket => {
-                  await ticket.update({
-                    queueId: idQueue
-                  });
-
-                  await CreateLogTicketService({
-                    userId: null,
-                    queueId: idQueue,
-                    ticketId: ticket.id,
-                    type: "redirect"
-                  });
-
-                  await ticket.reload();
-
-                  const io = getIO();
-                  io.of(`/workspace-${companyId}`)
-                    // .to("notification")
-                    // .to(ticket.id.toString())
-                    .emit(`company-${companyId}-ticket`, {
-                      action: "update",
-                      ticket,
-                      ticketId: ticket.id
+                const io = getIO();
+                // Promise.all: antes o map era fire-and-forget (sem await) e
+                // cada ticket fazia update + reload. Agora: update mantém a
+                // instância em memória já atualizada → emit direto, sem reload.
+                await Promise.all(tickets.map(async ticket => {
+                  try {
+                    await ticket.update({
+                      queueId: idQueue
                     });
 
-                  // io.to("pending").emit(`company-${companyId}-ticket`, {
-                  //   action: "update",
-                  //   ticket,
-                  // });
+                    await CreateLogTicketService({
+                      userId: null,
+                      queueId: idQueue,
+                      ticketId: ticket.id,
+                      type: "redirect"
+                    });
 
-                  logger.info(`Atendimento Perdido: ${ticket.id} - Empresa: ${companyId}`);
-                });
+                    io.of(`/workspace-${companyId}`)
+                      // .to("notification")
+                      // .to(ticket.id.toString())
+                      .emit(`company-${companyId}-ticket`, {
+                        action: "update",
+                        ticket,
+                        ticketId: ticket.id
+                      });
+
+                    // io.to("pending").emit(`company-${companyId}-ticket`, {
+                    //   action: "update",
+                    //   ticket,
+                    // });
+
+                    logger.info(`Atendimento Perdido: ${ticket.id} - Empresa: ${companyId}`);
+                  } catch (ticketErr: any) {
+                    // Falha em um ticket não pode abortar os demais
+                    logger.error(`Atendimento Perdido: erro ao redirecionar ticket ${ticket.id} - Empresa: ${companyId}: ${ticketErr?.message}`);
+                  }
+                }));
               }
             } else {
               logger.info(`Condição não respeitada - Empresa: ${companyId}`);
@@ -2800,8 +2874,11 @@ async function handleVerifyQueue(job) {
               const tempoPassado = moment().subtract(timeQueue, "minutes").utc().format();
               // const tempoAgora = moment().utc().format();
 
+              // Carrega o ticket completo de uma vez (sem attributes:["id"]):
+              // o payload emitido era o resultado de reload() com os mesmos
+              // includes — assim a instância já sai pronta e elimina 1 SELECT
+              // por ticket.
               const { count, rows: tickets } = await Ticket.findAndCountAll({
-                attributes: ["id"],
                 where: {
                   status: "pending",
                   queueId: null,
@@ -2833,37 +2910,43 @@ async function handleVerifyQueue(job) {
               });
 
               if (count > 0) {
-                tickets.map(async ticket => {
-                  await ticket.update({
-                    queueId: idQueue
-                  });
-
-                  await CreateLogTicketService({
-                    userId: null,
-                    queueId: idQueue,
-                    ticketId: ticket.id,
-                    type: "redirect"
-                  });
-
-                  await ticket.reload();
-
-                  const io = getIO();
-                  io.of(`/workspace-${companyId}`)
-                    // .to("notification")
-                    // .to(ticket.id.toString())
-                    .emit(`company-${companyId}-ticket`, {
-                      action: "update",
-                      ticket,
-                      ticketId: ticket.id
+                const io = getIO();
+                // Promise.all: antes o map era fire-and-forget (sem await) e
+                // cada ticket fazia update + reload. Agora: update mantém a
+                // instância em memória já atualizada → emit direto, sem reload.
+                await Promise.all(tickets.map(async ticket => {
+                  try {
+                    await ticket.update({
+                      queueId: idQueue
                     });
 
-                  // io.to("pending").emit(`company-${companyId}-ticket`, {
-                  //   action: "update",
-                  //   ticket,
-                  // });
+                    await CreateLogTicketService({
+                      userId: null,
+                      queueId: idQueue,
+                      ticketId: ticket.id,
+                      type: "redirect"
+                    });
 
-                  logger.info(`Atendimento Perdido: ${ticket.id} - Empresa: ${companyId}`);
-                });
+                    io.of(`/workspace-${companyId}`)
+                      // .to("notification")
+                      // .to(ticket.id.toString())
+                      .emit(`company-${companyId}-ticket`, {
+                        action: "update",
+                        ticket,
+                        ticketId: ticket.id
+                      });
+
+                    // io.to("pending").emit(`company-${companyId}-ticket`, {
+                    //   action: "update",
+                    //   ticket,
+                    // });
+
+                    logger.info(`Atendimento Perdido: ${ticket.id} - Empresa: ${companyId}`);
+                  } catch (ticketErr: any) {
+                    // Falha em um ticket não pode abortar os demais
+                    logger.error(`Atendimento Perdido: erro ao redirecionar ticket ${ticket.id} - Empresa: ${companyId}: ${ticketErr?.message}`);
+                  }
+                }));
               }
             } else {
               logger.info(`Condição não respeitada - Empresa: ${companyId}`);
@@ -2905,8 +2988,8 @@ async function handleRandomUser() {
       });
 
       if (companies) {
-        companies.map(async c => {
-          c.queues.map(async q => {
+        await Promise.all(companies.map(async c => {
+          await Promise.all(c.queues.map(async q => {
             const { count, rows: tickets } = await Ticket.findAndCountAll({
               where: {
                 companyId: c.id,
@@ -2952,30 +3035,30 @@ async function handleRandomUser() {
             };
 
             if (count > 0) {
+              // Hoist: queueId e companyId são fixos para todos os tickets desta fila/empresa
+              const userQueues = await UserQueue.findAll({
+                where: {
+                  queueId: q.id,
+                },
+              });
+              // Extract the userIds from the UserQueue records
+              const userIds = userQueues.map((userQueue) => userQueue.userId);
+
+              let settings = await CompaniesSettings.findOne({
+                where: {
+                  companyId: c.id
+                }
+              });
+              const sendGreetingMessageOneQueues = settings.sendGreetingMessageOneQueues === "enabled" || false;
+
               for (const ticket of tickets) {
-                const { queueId, userId } = ticket;
+                const { userId } = ticket;
                 const tempoRoteador = q.tempoRoteador;
-                // Find all UserQueue records with the specific queueId
-                const userQueues = await UserQueue.findAll({
-                  where: {
-                    queueId: queueId,
-                  },
-                });
 
                 const contact = await ShowContactService(ticket.contactId, ticket.companyId);
 
-                // Extract the userIds from the UserQueue records
-                const userIds = userQueues.map((userQueue) => userQueue.userId);
-
                 const tempoPassadoB = moment().subtract(tempoRoteador, "minutes").utc().toDate();
                 const updatedAtV = new Date(ticket.updatedAt);
-
-                let settings = await CompaniesSettings.findOne({
-                  where: {
-                    companyId: ticket.companyId
-                  }
-                });
-                const sendGreetingMessageOneQueues = settings.sendGreetingMessageOneQueues === "enabled" || false;
 
                 if (!userId) {
                   // ticket.userId is null, randomly select one of the provided userIds
@@ -3045,8 +3128,8 @@ async function handleRandomUser() {
 
               }
             }
-          })
-        })
+          }));
+        }));
       }
     } catch (e) {
       Sentry.captureException(e);
@@ -3073,7 +3156,7 @@ async function handleProcessLanes() {
         },
       ]
     });
-    companies.map(async c => {
+    await Promise.all(companies.map(async c => {
 
       try {
         const companyId = c.id;
@@ -3099,9 +3182,20 @@ async function handleProcessLanes() {
         })
 
         if (ticketTags.length > 0) {
-          ticketTags.map(async t => {
+          // Pré-carrega as próximas lanes em uma única query (evita N+1 no loop)
+          const nextLaneIds = [...new Set(
+            ticketTags
+              .map(t => t?.tag?.nextLaneId)
+              .filter((id): id is number => !isNil(id) && id > 0)
+          )];
+          const nextTags = nextLaneIds.length > 0
+            ? await Tag.findAll({ where: { id: { [Op.in]: nextLaneIds } } })
+            : [];
+          const nextTagById = new Map(nextTags.map(tg => [tg.id, tg]));
+
+          await Promise.all(ticketTags.map(async t => {
             if (!isNil(t?.tag.nextLaneId) && t?.tag.nextLaneId > 0 && t?.tag.timeLane > 0) {
-              const nextTag = await Tag.findByPk(t?.tag.nextLaneId);
+              const nextTag = nextTagById.get(t.tag.nextLaneId);
 
               const dataLimite = new Date();
               dataLimite.setHours(dataLimite.getHours() - Number(t.tag.timeLane));
@@ -3130,7 +3224,7 @@ async function handleProcessLanes() {
                 }
               }
             }
-          })
+          }));
         }
       } catch (e: any) {
         Sentry.captureException(e);
@@ -3138,7 +3232,7 @@ async function handleProcessLanes() {
         throw e;
       }
 
-    });
+    }));
   });
   job.start()
 }

@@ -447,7 +447,8 @@ const NotificationsPopOver = ({ volume = 1 }) => {
     }, 800);
   };
 
-  const browserNotification = () => {
+  // Atualiza o título da aba com o contador de notificações (efeito colateral fora do render)
+  useEffect(() => {
     const numbers = "⓿➊➋➌➍➎➏➐➑➒➓⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴";
     if (notifications.length > 0) {
       if (notifications.length < 21) {
@@ -458,21 +459,16 @@ const NotificationsPopOver = ({ volume = 1 }) => {
     } else {
       document.title = theme.appName || "...";
     }
-    return (
-      <>
-        <Favicon
-          animated={true}
-          url={(theme?.appLogoFavicon) ? theme.appLogoFavicon : defaultLogoFavicon}
-          alertCount={notifications.length}
-          iconSize={195}
-        />
-      </>
-    );
-  };
+  }, [notifications.length, theme.appName]);
 
   return (
     <>
-      {browserNotification()}
+      <Favicon
+        animated={true}
+        url={(theme?.appLogoFavicon) ? theme.appLogoFavicon : defaultLogoFavicon}
+        alertCount={notifications.length}
+        iconSize={195}
+      />
 
       <Tooltip title={i18n.t("dashboard.buttons.notifications")} arrow>
         <IconButton

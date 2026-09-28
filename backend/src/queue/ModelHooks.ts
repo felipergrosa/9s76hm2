@@ -231,10 +231,17 @@ export function initModelHooks(sequelize: Sequelize): void {
         
         // Se mensagem é do cliente (fromMe=false), agendar jobs relacionados
         if (!instance.fromMe && instance.ticketId) {
+          // Busca enxuta: somente os campos necessários para decidir os
+          // agendamentos. Antes trazia Queue + AIAgent aninhados em TODA
+          // mensagem inbound, mesmo quando o ticket não estava em "bot".
           const ticket = await sequelize.models.Ticket.findByPk(instance.ticketId, {
+            attributes: ["id", "companyId", "status", "queueId", "whatsappId"],
             include: [
-              { model: sequelize.models.Whatsapp, as: "whatsapp" },
-              { model: sequelize.models.Queue, as: "queue", include: [{ model: sequelize.models.AIAgent, as: "aiAgent" }] }
+              {
+                model: sequelize.models.Whatsapp,
+                as: "whatsapp",
+                attributes: ["id", "channelType", "sessionWindowRenewalMessage", "sessionWindowRenewalMinutes"]
+              }
             ]
           });
           
@@ -257,9 +264,21 @@ export function initModelHooks(sequelize: Sequelize): void {
             }
             
             // 2. InactivityTimeout (se ticket em status bot)
-            if ((ticket as any).status === "bot" && (ticket as any).queue?.aiAgent) {
-              const agent = (ticket as any).queue.aiAgent;
-              if (agent.status === "active" && agent.inactivityTimeoutMinutes > 0) {
+            // Queue + AIAgent carregados sob demanda — só quando o ticket
+            // realmente está em "bot" e tem fila (condição necessária).
+            if ((ticket as any).status === "bot" && (ticket as any).queueId) {
+              const queue = await sequelize.models.Queue.findByPk((ticket as any).queueId, {
+                attributes: ["id"],
+                include: [
+                  {
+                    model: sequelize.models.AIAgent,
+                    as: "aiAgent",
+                    attributes: ["id", "status", "inactivityTimeoutMinutes"]
+                  }
+                ]
+              });
+              const agent = (queue as any)?.aiAgent;
+              if (agent && agent.status === "active" && agent.inactivityTimeoutMinutes > 0) {
                 const delay = agent.inactivityTimeoutMinutes * 60 * 1000;
                 
                 await BullScheduler.reschedule(

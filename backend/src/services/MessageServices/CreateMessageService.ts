@@ -86,7 +86,13 @@ const CreateMessageService = async ({
       ticketId: messageData.ticketId
     },
     include: [
-      "contact",
+      // Apenas os campos usados pelo frontend no payload do socket
+      // (nome/avatar/id). Evita puxar todas as colunas do contato por mensagem.
+      {
+        model: Contact,
+        as: "contact",
+        attributes: ["id", "name", "number", "profilePicUrl", "urlPicture", "isGroup", "companyId"]
+      },
       {
         model: Ticket,
         as: "ticket",
@@ -94,7 +100,10 @@ const CreateMessageService = async ({
           {
             model: Contact,
             attributes: ["id", "name", "number", "email", "profilePicUrl", "acceptAudioMessage", "active", "urlPicture", "companyId"],
-            include: ["extraInfo", "tags"]
+            // "extraInfo" removido: não é consumido nos eventos de socket
+            // (ContactDrawer rebusca o contato via REST). "tags" é usado
+            // pelo store de tickets em tempo real.
+            include: ["tags"]
           },
           {
             model: Queue,
@@ -121,7 +130,14 @@ const CreateMessageService = async ({
       {
         model: Message,
         as: "quotedMsg",
-        include: ["contact"]
+        // Frontend usa apenas nome/avatar/id do contato da mensagem citada
+        include: [
+          {
+            model: Contact,
+            as: "contact",
+            attributes: ["id", "name", "number", "profilePicUrl", "urlPicture", "isGroup"]
+          }
+        ]
       }
     ],
     // CRÍTICO: Incluir quotedMsgId para reações poderem ser associadas à mensagem correta
@@ -158,12 +174,11 @@ const CreateMessageService = async ({
     });
   }
 
-  // Recarregar ticket para garantir unreadMessages atualizado
-  // CRÍTICO: FindOrCreateTicketService atualizou unreadMessages, mas o ticket
-  // no payload do evento precisa ter o valor correto para notificações funcionarem
-  await message.ticket.reload({
-    attributes: ["id", "uuid", "status", "unreadMessages", "userId", "queueId", "isGroup", "lastMessage", "companyId", "whatsappId"]
-  });
+  // NOTA: reload() removido — era um SELECT redundante por mensagem.
+  // A instância já reflete os campos atualizados acima (lastMessage/updatedAt)
+  // e unreadMessages já vinha fresco do findOne pós-upsert: FindOrCreateTicketService
+  // comita o incremento ANTES desta consulta. Manter reload não eliminava a race
+  // com mensagens concorrentes (o SELECT tinha a mesma janela).
 
   const io = getIO();
 

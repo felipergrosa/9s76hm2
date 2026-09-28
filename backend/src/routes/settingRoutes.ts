@@ -5,7 +5,6 @@ import envTokenAuth from "../middleware/envTokenAuth";
 import multer from "multer";
 
 import * as SettingController from "../controllers/SettingController";
-import isSuper from "../middleware/isSuper";
 import { createUpload } from "../config/uploadFactory";
 import validateUploadedFiles from "../middleware/validateUploadedFiles";
 

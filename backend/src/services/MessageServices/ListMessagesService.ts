@@ -5,7 +5,7 @@ import ShowTicketService from "../TicketServices/ShowTicketService";
 import { Op } from "sequelize";
 import { intersection } from "lodash";
 import User from "../../models/User";
-import isQueueIdHistoryBlocked from "../UserServices/isQueueIdHistoryBlocked";
+
 import Contact from "../../models/Contact";
 import Queue from "../../models/Queue";
 import Whatsapp from "../../models/Whatsapp";
@@ -128,20 +128,16 @@ const ListMessagesService = async ({
 }: Request): Promise<Response> => {
 
 
-  if (!isNaN(Number(ticketId))) {
-    const uuid = await Ticket.findOne({
-      where: {
-        id: ticketId,
-        companyId
-      },
-      attributes: ["uuid"]
-    });
-    ticketId = uuid.uuid;
-  }
+  // Uma única query: ticketId pode ser id numérico ou uuid
+  // (id numérico -> uuid -> ticket equivale a buscar pelo próprio id)
+  const isNumericId = !isNaN(Number(ticketId));
   const ticket = await Ticket.findOne({
     where: {
-      uuid: ticketId,
-      companyId
+      companyId,
+      [Op.or]: [
+        { uuid: ticketId },
+        ...(isNumericId ? [{ id: Number(ticketId) }] : [])
+      ]
     }
   });
 
@@ -172,7 +168,8 @@ const ListMessagesService = async ({
   } else {
     // Histórico unificado: buscar mensagens de TODOS os tickets do mesmo contato
     // CORREÇÃO: Buscar TODOS os tickets do contato (não apenas anteriores)
-    const isAllHistoricEnabled = await isQueueIdHistoryBlocked({ userRequest: user.id });
+    // Reuso: o caller já passa a instância completa do User — evita o findByPk extra de isQueueIdHistoryBlocked
+    const isAllHistoricEnabled = user.allHistoric === "enabled";
     
     let ticketIds = [];
     if (!isAllHistoricEnabled && queues && queues.length > 0) {

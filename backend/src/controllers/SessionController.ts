@@ -12,6 +12,25 @@ import FindUserFromToken from "../services/AuthServices/FindUserFromToken";
 import User from "../models/User";
 import UpdateUserOnlineStatusService from "../services/UserServices/UpdateUserOnlineStatusService";
 
+// Transporter SMTP criado sob demanda (lazy) e reutilizado entre requests,
+// preservando a ordem de carregamento das variáveis de ambiente.
+let mailTransporter: nodemailer.Transporter | null = null;
+
+const getMailTransporter = (): nodemailer.Transporter => {
+  if (!mailTransporter) {
+    mailTransporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: Number(process.env.SMTP_PORT) || 587,
+      secure: process.env.SMTP_SECURE === 'true',
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    });
+  }
+  return mailTransporter;
+};
+
 export const forgotPassword = async (req: Request, res: Response): Promise<Response> => {
   const { email } = req.body;
 
@@ -31,15 +50,7 @@ export const forgotPassword = async (req: Request, res: Response): Promise<Respo
   // Log apenas o userId; nunca logar token ou email completo.
   // Token expõe reset de senha, email permite enumeração.
 
-  const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT) || 587,
-    secure: process.env.SMTP_SECURE === 'true',
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  });
+  const transporter = getMailTransporter();
 
   try {
     await transporter.sendMail({

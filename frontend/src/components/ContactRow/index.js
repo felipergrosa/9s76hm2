@@ -16,7 +16,7 @@ import { Can } from "../Can";
 // Componente de linha de contato memoizado para evitar re-renderizações desnecessárias
 const ContactRow = memo(({
   contact,
-  selectedContactIds,
+  isSelected,
   onToggleSelect,
   onEdit,
   onSendMessage,
@@ -31,9 +31,8 @@ const ContactRow = memo(({
   userProfile
 }) => {
 
-  // Determina se o contato está selecionado
-  const isSelected = selectedContactIds.includes(contact.id);
-
+  // isSelected chega via prop (boolean) para manter o memo estável:
+  // antes recebia o array selectedContactIds, que mudava a cada seleção
   const rowClasses = `border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 ${isSelected ? 'bg-blue-50 dark:bg-blue-900/30' : 'bg-white dark:bg-gray-800'
     }`;
 

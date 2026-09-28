@@ -90,42 +90,54 @@ const MergeDuplicateTicketsService = async ({
       const mergedTicketIds: number[] = [];
       let messagesMoved = 0;
 
-      for (const dup of duplicates) {
-        if (dryRun) {
-          // Só contar mensagens que seriam movidas
-          const count = await Message.count({
-            where: { ticketId: dup.id, companyId }
-          });
+      const dupIds = duplicates.map(d => d.id);
+
+      if (dryRun) {
+        // Só contar mensagens que seriam movidas — uma query com GROUP BY por ticket
+        const countRows = await Message.count({
+          where: { ticketId: { [Op.in]: dupIds }, companyId },
+          group: ["ticketId"]
+        }) as unknown as Array<{ ticketId: number; count: number }>;
+        const countByTicket = new Map<number, number>();
+        for (const row of countRows) {
+          countByTicket.set(Number(row.ticketId), Number(row.count));
+        }
+
+        for (const dup of duplicates) {
+          const count = countByTicket.get(dup.id) || 0;
           messagesMoved += count;
           mergedTicketIds.push(dup.id);
           totalMessagesMoved += count;
           logger.info(`[MergeDuplicateTickets] [DRY RUN] Ticket ${dup.id}: ${count} mensagens seriam movidas para ${keptTicket.id}`);
-        } else {
-          // Mover mensagens
-          const [updatedCount] = await Message.update(
-            { ticketId: keptTicket.id },
-            { where: { ticketId: dup.id, companyId } }
-          );
-          messagesMoved += updatedCount;
-          totalMessagesMoved += updatedCount;
+        }
+      } else {
+        // Mover mensagens de todos os duplicados em uma única query
+        const [updatedCount] = await Message.update(
+          { ticketId: keptTicket.id },
+          { where: { ticketId: { [Op.in]: dupIds }, companyId } }
+        );
+        messagesMoved += updatedCount;
+        totalMessagesMoved += updatedCount;
 
-          logger.info(`[MergeDuplicateTickets] Movidas ${updatedCount} mensagens do ticket ${dup.id} para ${keptTicket.id}`);
+        logger.info(`[MergeDuplicateTickets] Movidas ${updatedCount} mensagens dos tickets [${dupIds.join(', ')}] para ${keptTicket.id}`);
 
-          // Atualizar TicketTraking se existir
-          await TicketTraking.update(
-            { ticketId: keptTicket.id },
-            { where: { ticketId: dup.id, companyId } }
-          );
+        // Atualizar TicketTraking em lote
+        await TicketTraking.update(
+          { ticketId: keptTicket.id },
+          { where: { ticketId: { [Op.in]: dupIds }, companyId } }
+        );
 
-          // Fechar ticket duplicado
-          await dup.update({
+        // Fechar todos os tickets duplicados em lote
+        await Ticket.update(
+          {
             status: "closed",
             lastMessage: `Mesclado com ticket #${keptTicket.id}`
-          });
+          },
+          { where: { id: { [Op.in]: dupIds } } }
+        );
 
-          mergedTicketIds.push(dup.id);
-          totalMerged++;
-        }
+        mergedTicketIds.push(...dupIds);
+        totalMerged += dupIds.length;
       }
 
       if (!dryRun && messagesMoved > 0) {

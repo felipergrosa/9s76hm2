@@ -82,23 +82,24 @@ const ListTicketsService = async ({
   // BackendPerfMonitor.mark('ListTicketsService:Start', { searchParam, status, pageNumber });
   
   // Cache removido temporariamente para investigar erro de permissão
-  const user = await ShowUserService(userId, companyId);
+  // Paraleliza as consultas independentes iniciais (usuário + settings da empresa)
+  const [user, showPendingNotification, settingsLGPD] = await Promise.all([
+    ShowUserService(userId, companyId),
+    withUnreadMessages === "true"
+      ? FindCompanySettingOneService({
+        companyId,
+        column: "showNotificationPending"
+      })
+      : Promise.resolve(null),
+    FindCompanySettingOneService({ companyId, column: "enableLGPD" })
+  ]);
 
   const showTicketAllQueues = user.allHistoric === "enabled";
   const showTicketWithoutQueue = user.allTicket === "enable";
   const showGroups = user.allowGroup === true;
-  let showNotificationPendingValue = "disabled";
+  const showNotificationPendingValue = showPendingNotification?.[0]?.showNotificationPending || "disabled";
 
-  if (withUnreadMessages === "true") {
-    const showPendingNotification = await FindCompanySettingOneService({
-      companyId,
-      column: "showNotificationPending"
-    });
-    showNotificationPendingValue = showPendingNotification[0]?.showNotificationPending || "disabled";
-  }
-
-  // Buscar configurações de empresa (LGPD)
-  const settingsLGPD = await FindCompanySettingOneService({ companyId, column: "enableLGPD" });
+  // Configuração de empresa (LGPD)
   const isLGPDEnabled = settingsLGPD[0]?.enableLGPD === "enabled";
 
   let whereCondition: Filterable["where"];
@@ -401,7 +402,9 @@ const ListTicketsService = async ({
   if (Array.isArray(tags) && tags.length > 0) {
     const contactTagFilter: any[] | null = [];
     const contactTags = await ContactTag.findAll({
-      where: { tagId: tags }
+      where: { tagId: tags },
+      attributes: ["contactId"],
+      raw: true
     });
     if (contactTags) {
       contactTagFilter.push(contactTags.map(t => t.contactId));

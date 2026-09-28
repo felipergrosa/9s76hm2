@@ -3973,7 +3973,6 @@ const verifyQueue = async (
         return;
       }
 
-      console.log("======== choose queue ========")
       await CreateLogTicketService({
         ticketId: ticket.id,
         type: "queue",
@@ -4569,7 +4568,6 @@ const verifyQueue = async (
         return;
       }
 
-      console.log("======== choose queue ========")
       await CreateLogTicketService({
         ticketId: ticket.id,
         type: "queue",
