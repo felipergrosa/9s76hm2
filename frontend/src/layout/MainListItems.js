@@ -52,7 +52,6 @@ import {
   Webhook as Webhook,
   Bot as SmartToy,
   ShieldCheck as RolesIcon,
-  UserPlus as LeadsImportIcon,
   ScanSearch as LeadScraperIcon,
   BookOpen as KnowledgeBaseIcon,
   Sliders as CustomFieldsIcon,
@@ -700,15 +699,6 @@ const MainListItems = ({ collapsed, drawerClose }) => {
               />
               {hasPermission("contacts.import") && (
                 <ListItemLink
-                  to="/leads-import"
-                  primary="Importar Leads"
-                  icon={<LeadsImportIcon />}
-                  viewMode={viewMode}
-                  tooltip={collapsed}
-                />
-              )}
-              {hasPermission("contacts.import") && (
-                <ListItemLink
                   to="/lead-scraper"
                   primary="Captador de Leads"
                   icon={<LeadScraperIcon />}
@@ -727,15 +717,6 @@ const MainListItems = ({ collapsed, drawerClose }) => {
                 <ListItemLink
                   to="/email-campaigns"
                   primary="Campanhas de E-mail"
-                  icon={<EventAvailableIcon />}
-                  viewMode={viewMode}
-                  tooltip={collapsed}
-                />
-              )}
-              {hasPermission("drip-sequences.view") && (
-                <ListItemLink
-                  to="/drip-sequences"
-                  primary="Sequências de Drip"
                   icon={<EventAvailableIcon />}
                   viewMode={viewMode}
                   tooltip={collapsed}

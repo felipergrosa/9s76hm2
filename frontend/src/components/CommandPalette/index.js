@@ -118,7 +118,6 @@ const NAV_ITEMS = [
   { id: "nav-connections", name: "Conexões", to: "/connections", permission: "connections.view" },
   { id: "nav-campaigns", name: "Campanhas", to: "/campaigns", permission: "campaigns.view" },
   { id: "nav-email-campaigns", name: "Campanhas de E-mail", to: "/email-campaigns", permission: "email-campaigns.view" },
-  { id: "nav-drip-sequences", name: "Sequências (Drip)", to: "/drip-sequences", permission: "drip-sequences.view" },
   { id: "nav-contact-lists", name: "Listas de Contatos", to: "/contact-lists", permission: "contact-lists.view" },
   { id: "nav-ai-agents", name: "Agentes de IA", to: "/ai-agents", permission: "ai-agents.view" },
   { id: "nav-ai-training", name: "Treinamento de IA", to: "/ai-training", permission: "ai-training.view" },

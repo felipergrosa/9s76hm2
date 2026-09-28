@@ -78,8 +78,6 @@ const CampaignsPhrase = lazy(() => import("../pages/CampaignsPhrase"));
 const ContactLists = lazy(() => import("../pages/ContactLists"));
 const ContactListItems = lazy(() => import("../pages/ContactListItems"));
 const EmailCampaigns = lazy(() => import("../pages/EmailCampaigns"));
-const DripSequences = lazy(() => import("../pages/DripSequences"));
-const LeadsImport = lazy(() => import("../pages/LeadsImport"));
 const LeadScraper = lazy(() => import("../pages/LeadScraper"));
 const KnowledgeBase = lazy(() => import("../pages/KnowledgeBase"));
 const AdminCustomFields = lazy(() => import("../pages/AdminCustomFields"));
@@ -191,7 +189,6 @@ const Routes = () => {
                 <Route exact path="/helps/webchat" component={WebChatTutorial} isPrivate />
                 <Route exact path="/users" component={Users} isPrivate />
                 <PrivateRoute exact path="/roles" component={Roles} permission="roles.view" />
-                <PrivateRoute exact path="/leads-import" component={LeadsImport} permission="contacts.import" />
                 <PrivateRoute exact path="/lead-scraper" component={LeadScraper} permission="contacts.import" />
                 <Route exact path="/knowledge-base" component={KnowledgeBase} isPrivate />
                 <Route exact path="/admin-custom-fields" component={AdminCustomFields} isPrivate />
@@ -239,7 +236,6 @@ const Routes = () => {
                     <Route exact path="/campaign/:campaignId/detailed-report" component={CampaignDetailedReport} isPrivate />
                     <Route exact path="/campaigns-config" component={CampaignsConfig} isPrivate />
                     <PrivateRoute exact path="/email-campaigns" component={EmailCampaigns} permission="email-campaigns.view" />
-                    <PrivateRoute exact path="/drip-sequences" component={DripSequences} permission="drip-sequences.view" />
                   </>
                 )}
               </LoggedInLayout>
