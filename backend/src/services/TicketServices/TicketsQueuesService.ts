@@ -84,9 +84,12 @@ const TicketsQueuesService = async ({
   if (status) {
 
     const maxTicketsFilter: any[] | null = [];
+    // Filtra por companyId: antes o GROUP BY varria tickets abertos de todas
+    // as empresas a cada request (scan desnecessário e mais lento a cada carga)
     const maxTicketIds = await Ticket.findAll({
       where: {       
-        status: "open"
+        status: "open",
+        companyId
       },
       group: ['companyId','contactId','queueId', 'whatsappId'],
       attributes: ['companyId','contactId','queueId', 'whatsappId', [fn('max', col('id')), 'id']],

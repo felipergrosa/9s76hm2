@@ -11,7 +11,8 @@ import Tag from "../models/Tag";
 
 export const updateTicketByRemoteJid = async (remoteJid: string, queue: number, user: number, statusText: string, unread: number): Promise<Response> => {
 
-  const { rows: messages } = await Message.findAndCountAll({
+  // findAll: o count do findAndCountAll era descartado (query extra desnecessária)
+  const messages = await Message.findAll({
     limit: 1,
     order: [["createdAt", "DESC"]],
     where: {

@@ -30,6 +30,14 @@ const TicketsQueuesService = async ({
   const user = await User.findByPk(userId, { include: ["queues"] });
   if (!user) throw new Error("ERR_USER_NOT_FOUND");
 
+  // Consultas independentes em paralelo (antes eram sequenciais)
+  const [isExistsQueues, userQueues, settings, walletResult] = await Promise.all([
+    Queue.count({ where: { companyId } }),
+    UsersQueues.findAll({ where: { userId } }),
+    FindCompanySettingOneService({ companyId, column: "enableLGPD" }),
+    GetUserPersonalTagContactIds(+userId, +companyId)
+  ]);
+
   let whereCondition: Filterable["where"] = {
     // [Op.or]: [{ userId }, { status: "pending" }]
   };
@@ -56,11 +64,9 @@ const TicketsQueuesService = async ({
     }
 
   ];
-  const isExistsQueues = await Queue.count({ where: { companyId } });
   const showTicketWithoutQueue = user.allTicket === "enable";
 
   if (isExistsQueues) {
-    const userQueues = await UsersQueues.findAll({ where: { userId } });
     let allowedQueueIds = userQueues.map(q => q.queueId);
 
     // Se o usuário passou filtros de fila específicos via query
@@ -96,8 +102,6 @@ const TicketsQueuesService = async ({
     }
   }
 
-  // Buscar configurações de empresa (LGPD)
-  const settings = await FindCompanySettingOneService({ companyId, column: "enableLGPD" });
   const isLGPDEnabled = settings[0]?.enableLGPD === "enabled";
 
   whereCondition = {
@@ -123,7 +127,7 @@ const TicketsQueuesService = async ({
   }
 
   // Aplica restrição de carteiras (wallet) - mesmo padrão de ListTicketsService
-  const walletResult = await GetUserPersonalTagContactIds(+userId, +companyId);
+  // walletResult já foi buscado em paralelo no início
 
   // Modo EXCLUDE: admin vê tudo EXCETO tickets dos usuários excluídos
   if (walletResult.excludedUserIds && walletResult.excludedUserIds.length > 0) {
@@ -208,15 +212,14 @@ const TicketsQueuesService = async ({
     } as any;
   }
 
-  const { count, rows: tickets } = await Ticket.findAndCountAll({
+  // findAll no lugar de findAndCountAll: o count era descartado e custava
+  // uma query extra com joins. distinct:true removido — não há includes
+  // to-many que dupliquem linhas. Ordenação por coluna de join ("user"."name")
+  // removida pois impedia uso de índice e o frontend reagrupa os dados.
+  const tickets = await Ticket.findAll({
     where: whereCondition,
     include: includeCondition,
-    distinct: true,
-    subQuery: false,
-    order: [
-      ["user", "name", "ASC"],
-      ["updatedAt", "DESC"],
-    ]
+    order: [["updatedAt", "DESC"]]
   });
   return tickets;
 };
