@@ -132,6 +132,8 @@ const GLOBAL_PRESETS = {
       "loja de lustres", "distribuidora de lustres", "materiais de construção",
     ],
     cnae: ["4742300", "4744001", "4744099"], // mat. elétrico + ferragens + mat. construção
+    // MEI excluído: público-alvo são lojas com escala para comprar no atacado
+    porte: ["MICRO EMPRESA", "PEQUENO PORTE", "DEMAIS"],
     conselhoTipo: "ambos",
     defaultSources: ["google_maps", "cnpj_search"],
   },
@@ -392,6 +394,8 @@ export default function LeadScraper() {
   const [srSituacao, setSrSituacao] = useState(["ATIVA"]);
   const [srUf, setSrUf] = useState([]);
   const [srMunicipio, setSrMunicipio] = useState([]);
+  const [srPorte, setSrPorte] = useState([]);
+  const [srCapitalMin, setSrCapitalMin] = useState("");
   const [srTemTelefone, setSrTemTelefone] = useState(false);
   const [srTemEmail, setSrTemEmail] = useState(false);
   const [srMaxResults, setSrMaxResults] = useState(200);
@@ -533,6 +537,8 @@ export default function LeadScraper() {
         cnae: srCnae?.length ? srCnae.map(o => o.code) : undefined,
         naturezaJuridica: srNj?.length ? srNj.map(o => o.code) : undefined,
         situacao: srSituacao?.length ? srSituacao : undefined,
+        porte: srPorte?.length ? srPorte : undefined,
+        capitalSocialMin: srCapitalMin !== "" ? Number(srCapitalMin) : undefined,
         uf: srUf?.length ? srUf : undefined,
         municipio: srMunicipio?.length ? srMunicipio : undefined,
         temTelefone: srTemTelefone || undefined,
@@ -593,6 +599,7 @@ export default function LeadScraper() {
             keywords: preset.keywords,
             mapQueries: preset.mapQueries,
             cnae: preset.cnae,
+            porte: preset.porte,
             city, state, maxResults,
             sources: globalSources,
             conselho: "cau",
@@ -1110,6 +1117,33 @@ export default function LeadScraper() {
                       <MenuItem value="BAIXADA">Baixada</MenuItem>
                     </Select>
                   </FormControl>
+
+                  <FormControl variant="outlined" size="small">
+                    <InputLabel>Porte</InputLabel>
+                    <Select
+                      multiple
+                      value={srPorte}
+                      onChange={e => setSrPorte(e.target.value)}
+                      label="Porte"
+                      renderValue={sel => sel.join(", ") || "Todos"}
+                    >
+                      <MenuItem value="MEI">MEI</MenuItem>
+                      <MenuItem value="MICRO EMPRESA">Micro Empresa</MenuItem>
+                      <MenuItem value="PEQUENO PORTE">Empresa de Pequeno Porte</MenuItem>
+                      <MenuItem value="DEMAIS">Demais (médio/grande)</MenuItem>
+                    </Select>
+                  </FormControl>
+
+                  <TextField
+                    label="Capital social mínimo (R$)"
+                    type="number"
+                    value={srCapitalMin}
+                    onChange={e => setSrCapitalMin(e.target.value)}
+                    variant="outlined" size="small"
+                    placeholder="ex: 50000"
+                    helperText="Filtra por escala — exclui negócios muito pequenos"
+                    inputProps={{ min: 0 }}
+                  />
 
                   <FormControl variant="outlined" size="small">
                     <InputLabel>UF</InputLabel>

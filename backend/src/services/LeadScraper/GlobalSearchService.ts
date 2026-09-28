@@ -143,6 +143,8 @@ async function scrapeReceitaBranch(
         municipio: filters.city || filters.municipio,
         maxResults: Math.min(perGroup, cap - results.length),
         situacao: filters.situacao,
+        porte: filters.porte,
+        capitalSocialMin: filters.capitalSocialMin,
       } as ScraperFilters,
       async (cur, total) => {
         checkCancelled();

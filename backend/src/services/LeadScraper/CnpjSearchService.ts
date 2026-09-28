@@ -19,6 +19,8 @@ export interface CnpjDiscoveryFilters {
   cnae?: MultiValue;           // post-filter: 7-digit CNAE code
   naturezaJuridica?: MultiValue; // post-filter: e.g. "206-2"
   situacao?: MultiValue;       // post-filter: ATIVA | SUSPENSA | INAPTA | BAIXADA
+  porte?: MultiValue;          // post-filter: MEI | MICRO EMPRESA | EPP | DEMAIS
+  capitalSocialMin?: number;   // post-filter: capital social mínimo em R$
   uf?: MultiValue;
   municipio?: MultiValue;      // post-filter: city name
   temTelefone?: boolean;
@@ -162,6 +164,18 @@ const passesFilters = (lead: EnrichedLead, f: CnpjDiscoveryFilters): boolean => 
       return textMatch || codeMatch;
     });
     if (!matches) return false;
+  }
+  const portes = toArray(f.porte);
+  if (portes.length) {
+    if (!lead.porte || !portes.some(v => norm(lead.porte).includes(norm(v)))) return false;
+  }
+  if (typeof f.capitalSocialMin === "number" && f.capitalSocialMin > 0) {
+    // capitalSocial chega como "1500000", "1500000.00" ou "1.500.000,00" (BR)
+    const raw = String(lead.capitalSocial || "").trim();
+    const capital = raw.includes(",")
+      ? parseFloat(raw.replace(/\./g, "").replace(",", "."))
+      : parseFloat(raw);
+    if (!(capital >= f.capitalSocialMin)) return false;
   }
   if (f.temTelefone && !lead.phone) return false;
   if (f.temEmail && !lead.email) return false;

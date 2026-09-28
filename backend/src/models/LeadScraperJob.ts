@@ -68,6 +68,8 @@ export interface ScraperFilters {
   cnae?: MultiValue;
   naturezaJuridica?: MultiValue;
   situacao?: MultiValue;
+  porte?: MultiValue;        // escala do negócio: MEI | MICRO EMPRESA | EPP | DEMAIS
+  capitalSocialMin?: number; // capital social mínimo em R$ (pós-filtro Receita)
   uf?: MultiValue;
   municipio?: MultiValue;
   regional?: MultiValue;
