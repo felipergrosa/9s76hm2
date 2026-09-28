@@ -287,7 +287,7 @@ const getPriorityFromUnread = (unread) => {
   return { label: "Medium", color: "#f59e0b" };
 };
 
-export default function KanbanCard({ ticket, onClick, allTags = [], onMoveRequest }) {
+export default function KanbanCard({ ticket, onClick, allTags = [], onMoveRequest, onEditDeal, onDeleteDeal }) {
   const classes = useStyles();
   const { user } = useContext(AuthContext);
   const [menuEl, setMenuEl] = useState(null);
@@ -353,10 +353,10 @@ export default function KanbanCard({ ticket, onClick, allTags = [], onMoveReques
   const attachments = Number(ticket?.mediaCount) || 0;
   const schedules = Number(ticket?.schedulesCount || ticket?.appointmentsCount || 0);
 
-  // Iniciais do usuário atribuído
-  const userInitials = ticket?.user?.name
-    ? ticket.user.name.split(" ").map(p => p[0]).slice(0, 2).join("")
-    : "?";
+  // Negócio (deal): ticket manual do pipeline
+  const isDeal = !!ticket?.isDeal;
+  const dealValue = Number(ticket?.value) || 0;
+  const fmtBRL = (val) => Number(val).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
   const canPreviewConversation = useMemo(() => {
     return canViewTicketConversation({ ticket, user });
@@ -427,20 +427,29 @@ export default function KanbanCard({ ticket, onClick, allTags = [], onMoveReques
               </div>
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <Tooltip title={ticket?.contact?.name || "Contato"}>
+                  <Tooltip title={(isDeal && ticket?.dealTitle) || ticket?.contact?.name || "Contato"}>
                     <Typography className={classes.ticketName}>
-                      {ticket?.contact?.name}
+                      {(isDeal && ticket?.dealTitle) || ticket?.contact?.name}
                     </Typography>
                   </Tooltip>
                   <Typography className={classes.ticketId}>
                     #{ticket?.id}
                   </Typography>
                 </div>
-                
+
+                {isDeal && dealValue > 0 && (
+                  <div
+                    className={classes.badge}
+                    style={{ backgroundColor: "#e8f5e9", color: "#2e7d32", marginBottom: 4 }}
+                  >
+                    {fmtBRL(dealValue)}
+                  </div>
+                )}
+
                 {/* Última Mensagem (subida para logo abaixo do ID) */}
-                <Tooltip title={ticket?.lastMessage || "Sem mensagens"}>
+                <Tooltip title={ticket?.lastMessage || (isDeal ? ticket?.dealDescription : "") || "Sem mensagens"}>
                   <Typography className={classes.ticketMessage}>
-                    {ticket?.lastMessage || "Sem mensagens"}
+                    {ticket?.lastMessage || (isDeal ? ticket?.dealDescription : "") || "Sem mensagens"}
                   </Typography>
                 </Tooltip>
               </div>
@@ -462,6 +471,17 @@ export default function KanbanCard({ ticket, onClick, allTags = [], onMoveReques
 
           {/* Tags de Conexão, Fila e Usuário no rodapé */}
           <div className={classes.tagContainer}>
+            {isDeal && (
+              <Tooltip title="Negócio do pipeline">
+                <div
+                  className={classes.badge}
+                  style={{ backgroundColor: "#2e7d32", color: "#fff", textTransform: "uppercase" }}
+                >
+                  Negócio
+                </div>
+              </Tooltip>
+            )}
+
             {ticket.whatsapp && (
               <Tooltip title={`Conexão: ${ticket.whatsapp.name}`}>
                 <div
@@ -537,6 +557,16 @@ export default function KanbanCard({ ticket, onClick, allTags = [], onMoveReques
         <MenuItem onClick={(e) => { setMoveEl(e.currentTarget); }}>
           <ListItemText primary={i18n.t('kanban.moveToTag')} />
         </MenuItem>
+        {isDeal && onEditDeal && (
+          <MenuItem onClick={() => { setMenuEl(null); onEditDeal(ticket); }}>
+            <ListItemText primary="Editar negócio" />
+          </MenuItem>
+        )}
+        {isDeal && onDeleteDeal && (
+          <MenuItem onClick={() => { setMenuEl(null); onDeleteDeal(ticket); }}>
+            <ListItemText primary="Excluir negócio" />
+          </MenuItem>
+        )}
         <MenuItem onClick={() => {
           try {
             const raw = localStorage.getItem(priorityKey);

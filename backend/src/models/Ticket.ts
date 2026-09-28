@@ -201,6 +201,20 @@ class Ticket extends Model<Ticket> {
   // Usado para indicar que template foi enviado quando janela 24h está fechada
   @Column
   lastTemplateSentAt: Date;
+
+  // Campos de negócio (pipeline no Kanban): ticket criado manualmente como "deal"
+  @Default(false)
+  @Column
+  isDeal: boolean;
+
+  @Column({ type: DataType.DECIMAL(15, 2) })
+  value: number;
+
+  @Column
+  dealTitle: string;
+
+  @Column(DataType.TEXT)
+  dealDescription: string;
 }
 
 export default Ticket;

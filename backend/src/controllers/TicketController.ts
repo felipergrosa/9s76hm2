@@ -21,6 +21,10 @@ import ListTicketsServiceReport from "../services/TicketServices/ListTicketsServ
 import SetTicketMessagesAsRead from "../helpers/SetTicketMessagesAsRead";
 import { Mutex } from "async-mutex";
 import Queue from "../models/Queue";
+import Tag from "../models/Tag";
+import TicketTag from "../models/TicketTag";
+import GetDefaultWhatsApp from "../helpers/GetDefaultWhatsApp";
+import ShowContactService from "../services/ContactServices/ShowContactService";
 import Chatbot from "../models/Chatbot";
 import AIAgent from "../models/AIAgent";
 import GetUserPersonalTagContactIds from "../helpers/GetUserPersonalTagContactIds";
@@ -316,6 +320,146 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
   await createAuditLogFromRequest(req, AuditActions.CREATE, AuditEntities.TICKET, ticket.id);
 
   return res.status(200).json(ticket);
+};
+
+// ── Negócios (deals) no Kanban: tickets criados manualmente com isDeal ──────
+
+interface DealData {
+  contactId: number;
+  tagId?: number | null;
+  userId?: number | null;
+  dealTitle?: string;
+  value?: number | string | null;
+  dealDescription?: string;
+}
+
+const parseDealValue = (value: number | string | null | undefined): number => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new AppError("ERR_INVALID_DEAL_VALUE", 400);
+  }
+  return parsed;
+};
+
+export const storeDeal = async (req: Request, res: Response): Promise<Response> => {
+  const { contactId, tagId, userId, dealTitle, value, dealDescription }: DealData = req.body;
+  const { companyId, id: requestUserId } = req.user;
+
+  const contactIdNumber = Number(contactId);
+  if (!Number.isInteger(contactIdNumber) || contactIdNumber <= 0) {
+    throw new AppError("ERR_CONTACT_ID_REQUIRED", 400);
+  }
+
+  const parsedValue = parseDealValue(value);
+
+  // Garante que o contato pertence à empresa
+  const contact = await ShowContactService(contactIdNumber, companyId);
+
+  // Fase (tag kanban) opcional, validada por empresa
+  let laneTag: Tag | null = null;
+  if (tagId) {
+    laneTag = await Tag.findOne({ where: { id: Number(tagId), companyId } });
+    if (!laneTag) {
+      throw new AppError("ERR_NO_TAG_FOUND", 404);
+    }
+  }
+
+  // Conexão é opcional para negócios (coluna aceita null)
+  let whatsappId: number | null = null;
+  try {
+    const defaultWhatsapp = await GetDefaultWhatsApp(undefined, companyId, Number(requestUserId));
+    whatsappId = defaultWhatsapp?.id ?? null;
+  } catch (err) {
+    whatsappId = null;
+  }
+
+  const ticket = await Ticket.create({
+    contactId: contact.id,
+    companyId,
+    whatsappId,
+    userId: userId ? Number(userId) : null,
+    status: "pending",
+    isGroup: !!contact.isGroup,
+    isBot: false,
+    unreadMessages: 0,
+    isDeal: true,
+    value: parsedValue,
+    dealTitle: dealTitle ? String(dealTitle).trim() : null,
+    dealDescription: dealDescription ? String(dealDescription) : null
+  } as any);
+
+  if (laneTag) {
+    await TicketTag.create({ ticketId: ticket.id, tagId: laneTag.id, companyId });
+  }
+
+  const fullTicket = await ShowTicketService(ticket.id, companyId);
+
+  const io = getIO();
+  io.of(`/workspace-${companyId}`)
+    .emit(`company-${companyId}-ticket`, {
+      action: "create",
+      ticket: fullTicket
+    });
+
+  await createAuditLogFromRequest(req, AuditActions.CREATE, AuditEntities.TICKET, ticket.id);
+
+  return res.status(201).json(fullTicket);
+};
+
+export const updateDeal = async (req: Request, res: Response): Promise<Response> => {
+  const { ticketId } = req.params;
+  const { companyId } = req.user;
+  const { dealTitle, value, dealDescription, userId }: DealData = req.body;
+
+  const ticket = await Ticket.findOne({ where: { id: ticketId, companyId, isDeal: true } });
+  if (!ticket) {
+    throw new AppError("ERR_NO_TICKET_FOUND", 404);
+  }
+
+  const updatePayload: any = {};
+  if (dealTitle !== undefined) updatePayload.dealTitle = dealTitle ? String(dealTitle).trim() : null;
+  if (dealDescription !== undefined) updatePayload.dealDescription = dealDescription ? String(dealDescription) : null;
+  if (userId !== undefined) updatePayload.userId = userId ? Number(userId) : null;
+  if (value !== undefined) updatePayload.value = parseDealValue(value);
+
+  await ticket.update(updatePayload);
+
+  const fullTicket = await ShowTicketService(ticket.id, companyId);
+
+  const io = getIO();
+  io.of(`/workspace-${companyId}`)
+    .emit(`company-${companyId}-ticket`, {
+      action: "update",
+      ticket: fullTicket
+    });
+
+  await createAuditLogFromRequest(req, AuditActions.UPDATE, AuditEntities.TICKET, ticketId);
+
+  return res.status(200).json(fullTicket);
+};
+
+export const removeDeal = async (req: Request, res: Response): Promise<Response> => {
+  const { ticketId } = req.params;
+  const { id: userId, companyId } = req.user;
+
+  const ticket = await Ticket.findOne({ where: { id: ticketId, companyId, isDeal: true } });
+  if (!ticket) {
+    throw new AppError("ERR_NO_TICKET_FOUND", 404);
+  }
+
+  await DeleteTicketService(ticketId, userId, companyId);
+
+  const io = getIO();
+  io.of(`/workspace-${companyId}`)
+    .emit(`company-${companyId}-ticket`, {
+      action: "delete",
+      ticketId: +ticketId,
+      oldStatus: ticket.status
+    });
+
+  await createAuditLogFromRequest(req, AuditActions.DELETE, AuditEntities.TICKET, ticketId);
+
+  return res.status(200).json({ message: "deal deleted" });
 };
 
 export const transferToBot = async (req: Request, res: Response): Promise<Response> => {

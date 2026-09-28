@@ -1,5 +1,7 @@
 import React from "react";
 import { makeStyles } from "@material-ui/core/styles";
+import { Button } from "@material-ui/core";
+import { Add as AddIcon } from "@material-ui/icons";
 import { Droppable, Draggable } from "@hello-pangea/dnd";
 import KanbanCard from "./KanbanCard";
 import KanbanLaneHeader from "./KanbanLaneHeader";
@@ -39,9 +41,18 @@ const useStyles = makeStyles(theme => ({
     draggingOver: {
         backgroundColor: "rgba(0, 0, 0, 0.03)",
     },
+    addDealBtn: {
+        margin: "0 8px 8px",
+        justifyContent: "flex-start",
+        textTransform: "none",
+        fontSize: 12,
+        color: "#777",
+        borderRadius: 8,
+        flexShrink: 0,
+    },
 }));
 
-export default function KanbanLane({ lane, onCardClick, allTags, onMoveRequest, innerRef, draggableProps, dragHandleProps, onPanStart }) {
+export default function KanbanLane({ lane, onCardClick, allTags, onMoveRequest, innerRef, draggableProps, dragHandleProps, onPanStart, onAddDeal, onEditLane, onDeleteLane, onEditDeal, onDeleteDeal }) {
     const classes = useStyles();
 
     return (
@@ -57,6 +68,9 @@ export default function KanbanLane({ lane, onCardClick, allTags, onMoveRequest, 
                 label={lane.label}
                 unreadCount={lane.unreadCount}
                 laneColor={lane.laneColor}
+                laneTotal={lane.dealTotal}
+                onEditLane={onEditLane}
+                onDeleteLane={onDeleteLane}
                 dragHandleProps={dragHandleProps}
                 onPanStart={onPanStart}
             />
@@ -93,6 +107,8 @@ export default function KanbanLane({ lane, onCardClick, allTags, onMoveRequest, 
                                             allTags={allTags}
                                             onClick={() => onCardClick(card.ticket)}
                                             onMoveRequest={(tagId) => onMoveRequest && onMoveRequest(card.ticket, tagId)}
+                                            onEditDeal={onEditDeal}
+                                            onDeleteDeal={onDeleteDeal}
                                         />
                                     </div>
                                 )}
@@ -102,6 +118,17 @@ export default function KanbanLane({ lane, onCardClick, allTags, onMoveRequest, 
                     </div>
                 )}
             </Droppable>
+
+            {onAddDeal && (
+                <Button
+                    className={classes.addDealBtn}
+                    startIcon={<AddIcon style={{ fontSize: 14 }} />}
+                    onClick={onAddDeal}
+                    fullWidth
+                >
+                    Adicionar negócio
+                </Button>
+            )}
         </div>
     );
 }

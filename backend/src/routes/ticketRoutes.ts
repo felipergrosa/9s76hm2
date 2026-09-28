@@ -21,6 +21,11 @@ ticketRoutes.get("/tickets/u/:uuid", isAuth, TicketController.showFromUUID);
 
 ticketRoutes.post("/tickets", isAuth, checkPermission("tickets.create"), TicketController.store);
 
+// Negócios (deals) do Kanban: tickets manuais com isDeal
+ticketRoutes.post("/tickets/deal", isAuth, checkPermission("kanban.view"), TicketController.storeDeal);
+ticketRoutes.put("/tickets/:ticketId/deal", isAuth, checkPermission("kanban.view"), TicketController.updateDeal);
+ticketRoutes.delete("/tickets/:ticketId/deal", isAuth, checkPermission("kanban.view"), TicketController.removeDeal);
+
 ticketRoutes.put("/tickets/:ticketId", isAuth, checkPermission("tickets.update"), TicketController.update);
 
 ticketRoutes.post(

@@ -41,12 +41,13 @@ const useStyles = makeStyles(theme => ({
 }));
 
 export default function KanbanLaneHeader(props) {
-  const { title, label, unreadCount } = props;
+  const { title, label, unreadCount, laneTotal, onEditLane, onDeleteLane } = props;
   const color = props.color || props.laneColor;
   const classes = useStyles();
   const [anchorEl, setAnchorEl] = useState(null);
 
-
+  const isDefaultLane = String(props?.id) === 'lane0';
+  const fmtBRL = (val) => Number(val).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
   const handleOpen = (e) => setAnchorEl(e.currentTarget);
   const handleClose = () => setAnchorEl(null);
@@ -96,6 +97,11 @@ export default function KanbanLaneHeader(props) {
         {typeof unreadCount === 'number' && unreadCount > 0 && (
           <Chip size="small" color="secondary" label={`${unreadCount}`} style={{ height: 20, fontSize: "0.7rem", marginLeft: 4 }} />
         )}
+        {Number(laneTotal) > 0 && (
+          <Tooltip title="Total de negócios na fase">
+            <Chip size="small" label={fmtBRL(laneTotal)} style={{ height: 20, fontSize: "0.7rem", marginLeft: 4, background: "#e8f5e9", color: "#2e7d32", fontWeight: 700 }} />
+          </Tooltip>
+        )}
       </div>
       <Tooltip title={i18n.t('kanban.options')}>
         <IconButton
@@ -117,6 +123,12 @@ export default function KanbanLaneHeader(props) {
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
       >
         <MenuItem onClick={(e) => { e.stopPropagation(); handleHide(); }}><ListItemText primary={i18n.t('kanban.hideColumn')} /></MenuItem>
+        {!isDefaultLane && onEditLane && (
+          <MenuItem onClick={(e) => { e.stopPropagation(); handleClose(); onEditLane(); }}><ListItemText primary="Editar fase" /></MenuItem>
+        )}
+        {!isDefaultLane && onDeleteLane && (
+          <MenuItem onClick={(e) => { e.stopPropagation(); handleClose(); onDeleteLane(); }}><ListItemText primary="Excluir fase" /></MenuItem>
+        )}
         <MenuItem onClick={(e) => { e.stopPropagation(); handleManage(); }}><ListItemText primary={i18n.t('kanban.manageColumns')} /></MenuItem>
         <MenuItem onClick={(e) => { e.stopPropagation(); handleCopyLink(); }}><ListItemText primary={i18n.t('kanban.copyLink')} /></MenuItem>
       </Menu>

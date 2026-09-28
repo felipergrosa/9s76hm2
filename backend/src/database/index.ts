@@ -82,9 +82,6 @@ import UserRole from "../models/UserRole";
 import TicketFunnelState from "../models/TicketFunnelState";
 import LeadScraperJob from "../models/LeadScraperJob";
 import CustomFieldConfig from "../models/CustomFieldConfig";
-import DealStage from "../models/DealStage";
-import Deal from "../models/Deal";
-
 
 // eslint-disable-next-line
 const dbConfig = require("../config/database");
@@ -246,9 +243,7 @@ const models = [
   UserRole,
   TicketFunnelState,
   LeadScraperJob,
-  CustomFieldConfig,
-  DealStage,
-  Deal
+  CustomFieldConfig
 ];
 
 sequelize.addModels(models);

@@ -9,10 +9,14 @@ import { debounce } from 'lodash';
 import ColorModeContext from "../../layout/themeContext";
 import { i18n } from "../../translate/i18n";
 import { useHistory } from 'react-router-dom';
-import { FilterList, Add, Refresh } from "@material-ui/icons";
+import { FilterList, Add, Refresh, AttachMoney } from "@material-ui/icons";
+import Autocomplete from "@material-ui/lab/Autocomplete";
+import { toast } from "react-toastify";
+import usePermissions from "../../hooks/usePermissions";
 import { 
   Tooltip, Typography, IconButton, InputBase, Select, MenuItem, FormControl,
-  Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Button
+  Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Button,
+  TextField, Chip, CircularProgress, InputAdornment, Box
 } from "@material-ui/core";
 
 
@@ -160,6 +164,26 @@ const Kanban = () => {
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [isTransferring, setIsTransferring] = useState(false);
   const [filtersModalOpen, setFiltersModalOpen] = useState(false);
+
+  // CRUD inline de fases (tags kanban) e negócios (deals)
+  const { hasPermission } = usePermissions();
+  const canEditLanes = hasPermission("tags.edit");
+  const canDeleteLanes = hasPermission("tags.delete");
+  const LANE_COLORS = ["#1976d2", "#388e3c", "#f57c00", "#d32f2f", "#7b1fa2", "#0288d1", "#455a64", "#c2185b"];
+  const emptyLaneForm = { name: "", color: LANE_COLORS[0] };
+  const emptyDealForm = { contactId: "", contact: null, dealTitle: "", value: "", dealDescription: "", laneId: null };
+  const [laneDialogOpen, setLaneDialogOpen] = useState(false);
+  const [laneForm, setLaneForm] = useState(emptyLaneForm);
+  const [editLaneId, setEditLaneId] = useState(null);
+  const [dealDialogOpen, setDealDialogOpen] = useState(false);
+  const [dealForm, setDealForm] = useState(emptyDealForm);
+  const [editDealId, setEditDealId] = useState(null);
+  const [contactOptions, setContactOptions] = useState([]);
+  const [contactSearch, setContactSearch] = useState("");
+  const [contactLoading, setContactLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const fmtBRL = (val) => Number(val).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
   // Kanban Pessoal
   const [viewingUserId, setViewingUserId] = useState(user.id);
@@ -363,6 +387,12 @@ const Kanban = () => {
     setSelectedTicket(null);
   };
 
+  // Total do pipeline: soma dos valores dos tickets marcados como negócio
+  const pipelineTotal = useMemo(() =>
+    (tickets || []).reduce((acc, t) => acc + (t.isDeal ? Number(t.value) || 0 : 0), 0),
+    [tickets]
+  );
+
   const applySearchAndSort = useCallback((list) => {
     let filtered = list;
     if (searchText) {
@@ -479,6 +509,8 @@ const Kanban = () => {
         title: i18n.t("tagsKanban.laneDefault"),
         label: filteredTickets.length.toString(),
         unreadCount: filteredTickets.reduce((acc, t) => acc + Number(t.unreadMessages || 0), 0),
+        dealTotal: filteredTickets.reduce((acc, t) => acc + (t.isDeal ? Number(t.value) || 0 : 0), 0),
+        tag: null,
         laneColor: '#5C5C5C', // Cor padrão para "Em aberto"
         style: { ...laneStyle, borderTop: `4px solid #5C5C5C` }, // Borda colorida no topo
         cards: filteredTickets.map(ticket => ({
@@ -493,11 +525,14 @@ const Kanban = () => {
         }));
 
         const unreadSum = filteredTickets.reduce((acc, t) => acc + Number(t.unreadMessages || 0), 0);
+        const dealSum = filteredTickets.reduce((acc, t) => acc + (t.isDeal ? Number(t.value) || 0 : 0), 0);
         return {
           id: tag.id.toString(),
           title: tag.name,
           label: filteredTickets?.length.toString(),
           unreadCount: unreadSum,
+          dealTotal: dealSum,
+          tag,
           laneColor: tag.color,
           style: { ...laneStyle, borderTop: `4px solid ${tag.color}` }, // Borda colorida no topo
           cards: filteredTickets.map(ticket => ({
@@ -530,9 +565,126 @@ const Kanban = () => {
     } catch (e) { }
   };
 
-  const handleAddConnectionClick = () => {
-    history.push('/tagsKanban');
+  // ── CRUD de fases (tags kanban) ──────────────────────────────────────────
+  const openAddLane = () => { setLaneForm(emptyLaneForm); setEditLaneId(null); setLaneDialogOpen(true); };
+  const openEditLane = (tag) => { setLaneForm({ name: tag.name, color: tag.color }); setEditLaneId(tag.id); setLaneDialogOpen(true); };
+
+  const saveLane = async () => {
+    if (!laneForm.name.trim()) { toast.warning("Nome da fase é obrigatório"); return; }
+    setSaving(true);
+    try {
+      if (editLaneId) {
+        await api.put(`/tags/${editLaneId}`, { name: laneForm.name.trim(), color: laneForm.color });
+      } else {
+        await api.post("/tags", { name: laneForm.name.trim(), color: laneForm.color, kanban: 1 });
+      }
+      setLaneDialogOpen(false);
+      fetchTags();
+      toast.success(editLaneId ? "Fase atualizada" : "Fase criada");
+    } catch (e) {
+      toast.error(e?.response?.data?.error || "Erro ao salvar fase");
+    } finally {
+      setSaving(false);
+    }
   };
+
+  const deleteLane = async (tag) => {
+    if (!window.confirm(`Remover a fase "${tag.name}"? Os cards dela voltam para a primeira coluna.`)) return;
+    try {
+      await api.delete(`/tags/${tag.id}`);
+      fetchTags();
+      ticketsCache.current.clear();
+      fetchTickets();
+      toast.success("Fase removida");
+    } catch (e) {
+      toast.error(e?.response?.data?.error || "Erro ao remover fase");
+    }
+  };
+
+  // ── CRUD de negócios (tickets isDeal) ───────────────────────────────────
+  const openAddDeal = (laneId) => {
+    setDealForm({ ...emptyDealForm, laneId });
+    setEditDealId(null);
+    setContactOptions([]);
+    setContactSearch("");
+    setDealDialogOpen(true);
+  };
+
+  const openEditDeal = (ticket) => {
+    setDealForm({
+      contactId: ticket.contactId || "",
+      contact: ticket.contact || null,
+      dealTitle: ticket.dealTitle || "",
+      value: ticket.value ? String(ticket.value) : "",
+      dealDescription: ticket.dealDescription || "",
+      laneId: ticket.tags && ticket.tags[0] ? String(ticket.tags[0].id) : 'lane0'
+    });
+    setEditDealId(ticket.id);
+    setDealDialogOpen(true);
+  };
+
+  const saveDeal = async () => {
+    if (!editDealId && !dealForm.contactId) { toast.warning("Selecione um contato"); return; }
+    setSaving(true);
+    try {
+      const value = dealForm.value !== "" ? parseFloat(dealForm.value) : 0;
+      if (editDealId) {
+        await api.put(`/tickets/${editDealId}/deal`, {
+          dealTitle: dealForm.dealTitle || null,
+          value,
+          dealDescription: dealForm.dealDescription || null
+        });
+      } else {
+        await api.post("/tickets/deal", {
+          contactId: dealForm.contactId,
+          tagId: dealForm.laneId && dealForm.laneId !== 'lane0' ? Number(dealForm.laneId) : null,
+          dealTitle: dealForm.dealTitle || null,
+          value,
+          dealDescription: dealForm.dealDescription || null
+        });
+      }
+      setDealDialogOpen(false);
+      ticketsCache.current.clear();
+      fetchTickets();
+      toast.success(editDealId ? "Negócio atualizado" : "Negócio criado");
+    } catch (e) {
+      toast.error(e?.response?.data?.error || e?.response?.data?.message || "Erro ao salvar negócio");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteDeal = async (ticket) => {
+    if (!window.confirm(`Remover o negócio "${ticket.dealTitle || ticket.contact?.name || ticket.id}"?`)) return;
+    try {
+      await api.delete(`/tickets/${ticket.id}/deal`);
+      ticketsCache.current.clear();
+      fetchTickets();
+      toast.success("Negócio removido");
+    } catch (e) {
+      toast.error(e?.response?.data?.error || "Erro ao remover negócio");
+    }
+  };
+
+  // Busca de contatos para o dialog de negócio (debounce)
+  useEffect(() => {
+    if (!dealDialogOpen || contactSearch.length < 3) {
+      setContactLoading(false);
+      return;
+    }
+    setContactLoading(true);
+    const delayDebounceFn = setTimeout(async () => {
+      try {
+        const { data } = await api.get("contacts", { params: { searchParam: contactSearch } });
+        setContactOptions(data.contacts || []);
+      } catch (err) {
+        setContactOptions([]);
+      } finally {
+        setContactLoading(false);
+      }
+    }, 500);
+    return () => clearTimeout(delayDebounceFn);
+  }, [contactSearch, dealDialogOpen]);
 
   useEffect(() => {
     try {
@@ -644,9 +796,20 @@ const Kanban = () => {
             </FormControl>
           )}
 
+          {pipelineTotal > 0 && (
+            <Tooltip title="Total de negócios no pipeline">
+              <Chip
+                icon={<AttachMoney style={{ fontSize: 16 }} />}
+                label={fmtBRL(pipelineTotal)}
+                size="small"
+                style={{ background: "#e8f5e9", color: "#2e7d32", fontWeight: 700 }}
+              />
+            </Tooltip>
+          )}
+
           <Can user={user} perform="tags.create" yes={() => (
-            <Tooltip title={i18n.t('kanban.addColumns')}>
-              <IconButton className={classes.actionButton} color="primary" onClick={handleAddConnectionClick}>
+            <Tooltip title="Nova fase">
+              <IconButton className={classes.actionButton} color="primary" onClick={openAddLane}>
                 <Add />
               </IconButton>
             </Tooltip>
@@ -698,6 +861,11 @@ const Kanban = () => {
                             onCardClick={handleCardClick}
                             allTags={tags}
                             onMoveRequest={quickMove}
+                            onAddDeal={() => openAddDeal(lane.id)}
+                            onEditLane={lane.tag && canEditLanes ? () => openEditLane(lane.tag) : undefined}
+                            onDeleteLane={lane.tag && canDeleteLanes ? () => deleteLane(lane.tag) : undefined}
+                            onEditDeal={openEditDeal}
+                            onDeleteDeal={deleteDeal}
 
                             innerRef={provided.innerRef}
                             draggableProps={provided.draggableProps}
@@ -772,6 +940,102 @@ const Kanban = () => {
           </Button>
           <Button onClick={handleConfirmTransfer} color="primary" variant="contained" disabled={isTransferring}>
             {isTransferring ? 'Transferindo...' : 'Sim, Assumir'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog de fase (criar/editar coluna = tag kanban) */}
+      <Dialog open={laneDialogOpen} onClose={() => setLaneDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>{editLaneId ? "Editar Fase" : "Nova Fase"}</DialogTitle>
+        <DialogContent>
+          <Box display="flex" flexDirection="column" style={{ gap: 16, marginTop: 8 }}>
+            <TextField
+              label="Nome da fase" size="small" variant="outlined" fullWidth autoFocus
+              value={laneForm.name} onChange={e => setLaneForm(f => ({ ...f, name: e.target.value }))}
+            />
+            <Box>
+              <Typography variant="caption" color="textSecondary">Cor da fase</Typography>
+              <Box display="flex" style={{ gap: 8, marginTop: 6, flexWrap: "wrap" }}>
+                {LANE_COLORS.map(c => (
+                  <Box
+                    key={c}
+                    onClick={() => setLaneForm(f => ({ ...f, color: c }))}
+                    style={{
+                      width: 28, height: 28, borderRadius: "50%", background: c, cursor: "pointer",
+                      border: laneForm.color === c ? "3px solid #000" : "3px solid transparent",
+                      outline: laneForm.color === c ? `2px solid ${c}` : "none",
+                      outlineOffset: 2,
+                      transform: laneForm.color === c ? "scale(1.15)" : "scale(1)",
+                    }}
+                  />
+                ))}
+              </Box>
+            </Box>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setLaneDialogOpen(false)}>Cancelar</Button>
+          <Button variant="contained" color="primary" onClick={saveLane} disabled={saving}
+            startIcon={saving ? <CircularProgress size={16} /> : null}>
+            {editLaneId ? "Salvar" : "Criar Fase"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog de negócio (criar/editar deal = ticket isDeal) */}
+      <Dialog open={dealDialogOpen} onClose={() => setDealDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>{editDealId ? "Editar Negócio" : "Novo Negócio"}</DialogTitle>
+        <DialogContent>
+          <Box display="flex" flexDirection="column" style={{ gap: 16, marginTop: 8 }}>
+            {!editDealId && (
+              <Autocomplete
+                fullWidth
+                options={contactOptions}
+                loading={contactLoading}
+                getOptionLabel={option => (option.number ? `${option.name} - ${option.number}` : option.name || "")}
+                getOptionSelected={(o, v) => o.id === v.id}
+                onChange={(e, newValue) => {
+                  setDealForm(f => ({ ...f, contact: newValue, contactId: newValue?.id || "" }));
+                }}
+                renderInput={params => (
+                  <TextField
+                    {...params}
+                    label="Contato" size="small" variant="outlined" autoFocus
+                    onChange={e => setContactSearch(e.target.value)}
+                    InputProps={{
+                      ...params.InputProps,
+                      endAdornment: (
+                        <>
+                          {contactLoading ? <CircularProgress color="inherit" size={18} /> : null}
+                          {params.InputProps.endAdornment}
+                        </>
+                      ),
+                    }}
+                  />
+                )}
+              />
+            )}
+            <TextField
+              label="Título do negócio" size="small" variant="outlined" fullWidth
+              autoFocus={!!editDealId}
+              value={dealForm.dealTitle} onChange={e => setDealForm(f => ({ ...f, dealTitle: e.target.value }))}
+            />
+            <TextField
+              label="Valor" size="small" variant="outlined" type="number" fullWidth
+              value={dealForm.value} onChange={e => setDealForm(f => ({ ...f, value: e.target.value }))}
+              InputProps={{ startAdornment: <InputAdornment position="start">R$</InputAdornment> }}
+            />
+            <TextField
+              label="Descrição" size="small" variant="outlined" multiline rows={3} fullWidth
+              value={dealForm.dealDescription} onChange={e => setDealForm(f => ({ ...f, dealDescription: e.target.value }))}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDealDialogOpen(false)}>Cancelar</Button>
+          <Button variant="contained" color="primary" onClick={saveDeal} disabled={saving}
+            startIcon={saving ? <CircularProgress size={16} /> : null}>
+            {editDealId ? "Salvar" : "Criar Negócio"}
           </Button>
         </DialogActions>
       </Dialog>

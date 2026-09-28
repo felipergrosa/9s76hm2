@@ -55,7 +55,6 @@ import {
   UserPlus as LeadsImportIcon,
   ScanSearch as LeadScraperIcon,
   BookOpen as KnowledgeBaseIcon,
-  Briefcase as DealsIcon,
   Sliders as CustomFieldsIcon,
 } from "lucide-react";
 
@@ -537,15 +536,6 @@ const MainListItems = ({ collapsed, drawerClose }) => {
           tooltip={collapsed}
         />
       )}
-
-      {/* NEGÓCIOS / DEALS */}
-      <ListItemLink
-        to="/deals"
-        primary="Negócios"
-        icon={<DealsIcon />}
-        viewMode={viewMode}
-        tooltip={collapsed}
-      />
 
       {/* 8. RESPOSTAS RÁPIDAS */}
       {hasPermission("quick-messages.view") && (

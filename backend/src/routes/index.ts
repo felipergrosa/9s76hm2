@@ -78,7 +78,6 @@ import leadRoutes from "./leadRoutes";
 import leadScraperRoutes from "./leadScraperRoutes";
 import instagramSessionRoutes from "./instagramSessionRoutes";
 import customFieldConfigRoutes from "./customFieldConfigRoutes";
-import dealRoutes from "./dealRoutes";
 import metaOAuthRoutes from "./metaOAuthRoutes";
 import { getLinkPreviewData, detectAndPreview } from "../controllers/LinkPreviewController";
 
@@ -169,7 +168,6 @@ routes.use(leadRoutes);
 routes.use(leadScraperRoutes);
 routes.use(instagramSessionRoutes);
 routes.use(customFieldConfigRoutes);
-routes.use(dealRoutes);
 routes.use(metaOAuthRoutes);
 
 // Link Preview routes
