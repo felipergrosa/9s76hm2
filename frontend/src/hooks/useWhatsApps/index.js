@@ -67,6 +67,10 @@ const useWhatsApps = () => {
 
 
   useEffect(() => {
+    // Aguarda a autenticação resolver (refresh_token no F5 define user.id).
+    // Disparar antes disso enviava token expirado → 401 → lista vazia.
+    if (!user?.id) return;
+
     setLoading(true);
     const fetchSession = async () => {
       try {
@@ -79,7 +83,7 @@ const useWhatsApps = () => {
       }
     };
     fetchSession();
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     if (user.companyId) {

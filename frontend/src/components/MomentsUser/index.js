@@ -317,11 +317,31 @@ const MomentsUser = ({ onPanStart }) => {
     if (onPanStart) onPanStart(e);
   };
 
+  const fetchTickets = async () => {
+    try {
+      const { data } = await api.get("/usersMoments");
+      setTickets(data);
+      setLoading(false);
+    } catch (err) {
+      setLoading(false);
+      toastError(err);
+    }
+  };
+
+  // Debounce de 500ms para evitar tempestade de GET /usersMoments
+  // a cada evento de socket (ticket/appMessage)
+  const debouncedFetchTickets = useRef(
+    debounce(() => {
+      fetchTickets();
+    }, 500)
+  ).current;
+
   useEffect(() => {
     fetchTickets();
     return () => {
       isMounted.current = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -348,25 +368,6 @@ const MomentsUser = ({ onPanStart }) => {
       debouncedFetchTickets.cancel();
     };
   }, [socket, user.companyId, debouncedFetchTickets]);
-
-  const fetchTickets = async () => {
-    try {
-      const { data } = await api.get("/usersMoments");
-      setTickets(data);
-      setLoading(false);
-    } catch (err) {
-      setLoading(false);
-      toastError(err);
-    }
-  };
-
-  // Debounce de 500ms para evitar tempestade de GET /usersMoments
-  // a cada evento de socket (ticket/appMessage)
-  const debouncedFetchTickets = useRef(
-    debounce(() => {
-      fetchTickets();
-    }, 500)
-  ).current;
 
   const { botTickets, campaignTickets, pendingTickets, userTickets } = useMemo(() => {
     const bots = [];
