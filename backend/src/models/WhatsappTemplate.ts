@@ -76,6 +76,12 @@ class WhatsappTemplate extends Model<WhatsappTemplate> {
   @Column(DataType.TEXT)
   rejectedReason: string;
 
+  // Caminho relativo (dentro de public/company{id}/) do arquivo de mídia do
+  // HEADER persistido localmente na criação/edição do template
+  @AllowNull(true)
+  @Column(DataType.TEXT)
+  headerMediaPath: string;
+
   // Data/hora da última sincronização com a API da Meta
   @AllowNull(true)
   @Column(DataType.DATE)

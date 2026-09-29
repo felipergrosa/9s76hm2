@@ -1,5 +1,8 @@
+import fs from "fs";
+import path from "path";
 import Contact from "../../models/Contact";
 import Whatsapp from "../../models/Whatsapp";
+import WhatsappTemplate from "../../models/WhatsappTemplate";
 import Ticket from "../../models/Ticket";
 import Message from "../../models/Message";
 import AppError from "../../errors/AppError";
@@ -24,6 +27,7 @@ interface SendTemplateToContactParams {
   components?: any[];
   variablesConfig?: Record<string, any>;  // NOVO: mapeamento de variáveis
   statusTicket?: string;  // Status do ticket: "open", "pending", "closed"
+  headerMediaFile?: Express.Multer.File;  // Mídia do header enviada no momento do envio
 }
 
 interface SendTemplateToContactResult {
@@ -41,7 +45,8 @@ const SendTemplateToContact = async ({
   languageCode = "pt_BR",
   components,
   variablesConfig,  // NOVO
-  statusTicket = "open"  // Status padrão: open, mas pode ser "pending" ou "closed"
+  statusTicket = "open",  // Status padrão: open, mas pode ser "pending" ou "closed"
+  headerMediaFile
 }: SendTemplateToContactParams): Promise<SendTemplateToContactResult> => {
   try {
     logger.info(
@@ -118,43 +123,88 @@ const SendTemplateToContact = async ({
       throw new AppError("Adapter oficial não suporta envio de templates", 500);
     }
 
-    // IMPORTANTE: Se template tem HEADER com mídia (DOCUMENT/IMAGE/VIDEO),
-    // fazer upload via Media API e usar media_id ao invés do link direto
+    // Se template tem HEADER com mídia (DOCUMENT/IMAGE/VIDEO), a Meta exige a
+    // mídia real no envio (link público ou media_id). O example.header_handle
+    // retornado na definição é um token opaco do Resumable Upload — NÃO é
+    // baixável nem reutilizável. Resolver a mídia nesta ordem:
+    //   1. Arquivo enviado junto na requisição (headerMediaFile)
+    //   2. Arquivo persistido na criação do template (WhatsappTemplate.headerMediaPath)
+    //   3. Erro claro pedindo a mídia
+    let sentHeaderMediaUrl: string | undefined;
     if (templateDefinition?.headerFormat &&
-      ["DOCUMENT", "IMAGE", "VIDEO"].includes(templateDefinition.headerFormat) &&
-      templateDefinition.headerHandle) {
+      ["DOCUMENT", "IMAGE", "VIDEO"].includes(templateDefinition.headerFormat)) {
 
-      logger.info(`[SendTemplateToContact] Template tem header ${templateDefinition.headerFormat} - fazendo upload`);
+      logger.info(`[SendTemplateToContact] Template tem header ${templateDefinition.headerFormat} - resolvendo mídia`);
+
+      const backendUrl = process.env.BACKEND_URL || "http://localhost:8080";
+      let mediaPublicUrl: string | undefined;
+      let localRelPath: string | undefined;
+
+      if (headerMediaFile) {
+        // Mídia fornecida no momento do envio (multer já gravou em disco)
+        const companyDir = path.resolve("public", `company${companyId}`);
+        const filePath = path.join(companyDir, headerMediaFile.filename);
+        localRelPath = headerMediaFile.filename;
+        if (!fs.existsSync(filePath)) {
+          // Fallback: arquivo pode ter ido para subpasta conforme uploadConfig
+          logger.warn(`[SendTemplateToContact] Arquivo de header não encontrado em ${filePath}`);
+        }
+        mediaPublicUrl = `${backendUrl}/public/company${companyId}/${headerMediaFile.filename}`;
+      } else {
+        // Reusar arquivo persistido quando o template foi criado pelo app
+        const localTemplate = await WhatsappTemplate.findOne({
+          where: { whatsappId, companyId, name: templateName, language: languageCode }
+        });
+        if (localTemplate?.headerMediaPath) {
+          const filePath = path.resolve("public", `company${companyId}`, localTemplate.headerMediaPath);
+          if (fs.existsSync(filePath)) {
+            localRelPath = localTemplate.headerMediaPath;
+            mediaPublicUrl = `${backendUrl}/public/company${companyId}/${localTemplate.headerMediaPath}`;
+          }
+        }
+
+        // Templates criados no WhatsApp Manager podem devolver URL real no
+        // header_handle (CDN Meta) — só usar se for http(s)
+        if (!mediaPublicUrl && /^https?:\/\//.test(templateDefinition.headerHandle || "")) {
+          mediaPublicUrl = templateDefinition.headerHandle;
+        }
+      }
+
+      if (!mediaPublicUrl) {
+        throw new AppError(
+          "Este template possui mídia no cabeçalho (imagem, vídeo ou documento). " +
+          "Anexe o arquivo no momento do envio para continuar.",
+          400
+        );
+      }
 
       try {
-        // Fazer upload da mídia e obter media_id
+        // Upload para a Media API e uso de media_id no parâmetro do header
         const mediaId = await official.uploadMedia(
-          templateDefinition.headerHandle,
+          mediaPublicUrl,
           templateDefinition.headerFormat.toLowerCase() as "document" | "image" | "video"
         );
 
         logger.info(`[SendTemplateToContact] Upload concluído, media_id: ${mediaId}`);
+
+        sentHeaderMediaUrl = localRelPath;
 
         const headerComponent: any = {
           type: "header",
           parameters: [{
             type: templateDefinition.headerFormat.toLowerCase(),
             [templateDefinition.headerFormat.toLowerCase()]: {
-              id: mediaId  // Usar media_id ao invés de link
+              id: mediaId
             }
           }]
         };
 
-        // Inserir header component NO INÍCIO do array
-        if (finalComponents) {
-          finalComponents = [headerComponent, ...finalComponents];
-        } else {
-          finalComponents = [headerComponent];
-        }
+        finalComponents = finalComponents
+          ? [headerComponent, ...finalComponents]
+          : [headerComponent];
 
       } catch (uploadError: any) {
         logger.error(`[SendTemplateToContact] Erro no upload de mídia: ${uploadError.message}`);
-        // Re-throw para que o template não seja enviado com header quebrado
         throw uploadError;
       }
     }
@@ -272,7 +322,7 @@ const SendTemplateToContact = async ({
     // Adicionar informação do header se for documento/imagem/vídeo
     if (templateDefinition && templateDefinition.headerFormat && ["DOCUMENT", "IMAGE", "VIDEO"].includes(templateDefinition.headerFormat)) {
       mediaType = templateDefinition.headerFormat.toLowerCase();
-      mediaUrl = templateDefinition.headerHandle; // URL original do arquivo
+      mediaUrl = sentHeaderMediaUrl; // Caminho local relativo (exibível no chat)
 
       logger.info(`[SendTemplateToContact] Salvando ${mediaType} na mensagem: ${mediaUrl}`);
     }

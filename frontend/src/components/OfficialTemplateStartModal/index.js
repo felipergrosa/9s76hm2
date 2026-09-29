@@ -43,6 +43,7 @@ const OfficialTemplateStartModal = ({
   const [sending, setSending] = useState(false);
   const [metaTemplateVariables, setMetaTemplateVariables] = useState(null);  // NOVO
   const [allowedTemplates, setAllowedTemplates] = useState(null);
+  const [headerFile, setHeaderFile] = useState(null);
 
   useEffect(() => {
     if (!open || !whatsappId) return;
@@ -91,19 +92,35 @@ const OfficialTemplateStartModal = ({
 
     setSending(true);
     try {
-      const payload = {
-        contactId,
-        queueId: queueId || null,
-        templateName: template.name,
-        languageCode: template.language || "pt_BR",
-        // NOVO: enviar mapeamento de variáveis definido pelo usuário
-        variablesConfig: metaTemplateVariables
-      };
-
-      const { data } = await api.post(
-        `/whatsapp/${whatsappId}/send-template-to-contact`,
-        payload
-      );
+      let response;
+      if (headerFile) {
+        const fd = new FormData();
+        fd.append("contactId", contactId);
+        fd.append("queueId", queueId || "");
+        fd.append("templateName", template.name);
+        fd.append("languageCode", template.language || "pt_BR");
+        if (metaTemplateVariables) {
+          fd.append("variablesConfig", JSON.stringify(metaTemplateVariables));
+        }
+        fd.append("headerFile", headerFile);
+        response = await api.post(
+          `/whatsapp/${whatsappId}/send-template-to-contact`,
+          fd
+        );
+      } else {
+        response = await api.post(
+          `/whatsapp/${whatsappId}/send-template-to-contact`,
+          {
+            contactId,
+            queueId: queueId || null,
+            templateName: template.name,
+            languageCode: template.language || "pt_BR",
+            // NOVO: enviar mapeamento de variáveis definido pelo usuário
+            variablesConfig: metaTemplateVariables
+          }
+        );
+      }
+      const { data } = response;
 
       toast.success("Template enviado com sucesso.");
 
@@ -121,11 +138,26 @@ const OfficialTemplateStartModal = ({
     if (sending) return;
     setSelectedTemplateId("");
     setMetaTemplateVariables(null);  // NOVO: limpar variáveis
+    setHeaderFile(null);
     onClose && onClose();
   };
 
   // NOVO: Template selecionado
   const selectedTemplate = templates.find(t => t.id === selectedTemplateId);
+
+  // Detecta se o header do template exige mídia (IMAGE/VIDEO/DOCUMENT)
+  const headerMediaFormat = (() => {
+    const header = selectedTemplate?.components?.find(c => c.type === "HEADER");
+    return header && ["IMAGE", "VIDEO", "DOCUMENT"].includes(header.format)
+      ? header.format
+      : null;
+  })();
+
+  const mediaAccept = {
+    IMAGE: "image/*",
+    VIDEO: "video/mp4",
+    DOCUMENT: "application/pdf"
+  }[headerMediaFormat] || "*/*";
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
@@ -192,6 +224,32 @@ const OfficialTemplateStartModal = ({
             </FormHelperText>
           )}
         </FormControl>
+
+        {/* Header de mídia: arquivo obrigatório no envio */}
+        {headerMediaFormat && (
+          <Box mt={2}>
+            <Alert severity="info" style={{ marginBottom: 8 }}>
+              <Typography variant="body2">
+                Este template usa <strong>{headerMediaFormat === "IMAGE" ? "imagem" : headerMediaFormat === "VIDEO" ? "vídeo" : "documento PDF"}</strong> no
+                cabeçalho. Se vazio, será usada a mídia salva na criação do template.
+              </Typography>
+            </Alert>
+            <Button
+              variant="outlined"
+              component="label"
+              size="small"
+              disabled={sending}
+            >
+              {headerFile ? headerFile.name : "Anexar arquivo do cabeçalho"}
+              <input
+                type="file"
+                hidden
+                accept={mediaAccept}
+                onChange={e => setHeaderFile(e.target.files?.[0] || null)}
+              />
+            </Button>
+          </Box>
+        )}
 
         {/* NOVO: Mapeador de variáveis do template */}
         {selectedTemplate && (

@@ -56,7 +56,16 @@ export const sendTemplateToContact = async (
 ): Promise<Response> => {
   const { whatsappId } = req.params;
   const { companyId, id: userId } = (req as any).user;
-  const { contactId, queueId, templateName, languageCode, components } = req.body;
+  const { contactId, queueId, templateName, languageCode } = req.body;
+  const companyIdNum = Number(companyId);
+
+  // components/variablesConfig podem chegar como string JSON em multipart
+  const parseMaybeJson = (v: any) => {
+    if (typeof v !== "string") return v;
+    try { return JSON.parse(v); } catch { return v; }
+  };
+  const components = parseMaybeJson(req.body.components);
+  const variablesConfig = parseMaybeJson(req.body.variablesConfig);
 
   if (!contactId || !templateName) {
     throw new AppError("contactId e templateName são obrigatórios", 400);
@@ -66,13 +75,14 @@ export const sendTemplateToContact = async (
     const { ticket, message } = await SendTemplateToContact({
       whatsappId: Number(whatsappId),
       contactId: Number(contactId),
-      companyId,
+      companyId: companyIdNum,
       userId: Number(userId),
       queueId: queueId ? Number(queueId) : undefined,
       templateName,
       languageCode,
       components,
-      variablesConfig: req.body.variablesConfig
+      variablesConfig,
+      headerMediaFile: req.file as Express.Multer.File | undefined
     });
 
     return res.status(200).json({ ticket, message });

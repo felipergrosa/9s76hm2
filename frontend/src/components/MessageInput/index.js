@@ -2026,6 +2026,11 @@ const MessageInput = ({
       formData.append("medias", blob, filename);
       formData.append("body", filename);
       formData.append("fromMe", true);
+      // Marca como voice note — backend converte para OGG/OPUS e envia com
+      // voice:true (API Oficial) / ptt:true (Baileys)
+      if (ticketChannel === "whatsapp") {
+        formData.append("isVoice", "true");
+      }
 
       if (isMounted.current) {
         await api.post(`/messages/${ticketId}`, formData);

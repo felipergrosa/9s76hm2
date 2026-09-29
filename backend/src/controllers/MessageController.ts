@@ -71,6 +71,7 @@ type MessageData = {
   quotedMsg?: Message;
   number?: string;
   isPrivate?: string;
+  isVoice?: string | boolean;
   vCard?: Contact;
 };
 
@@ -794,7 +795,7 @@ function obterNomeEExtensaoDoArquivo(url: string): string {
 
 export const store = async (req: Request, res: Response): Promise<Response> => {
   const { ticketId } = req.params;
-  const { body, quotedMsg, vCard, isPrivate = "false" }: MessageData = req.body;
+  const { body, quotedMsg, vCard, isPrivate = "false", isVoice = "false" }: MessageData = req.body;
   
   // Log para verificar se quotedMsg está chegando do frontend
   logger.info(`[MessageController.store] quotedMsg recebido: ${quotedMsg ? `id=${quotedMsg.id}, wid=${quotedMsg.wid}` : 'NULL'}`);
@@ -853,7 +854,8 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
               body: Array.isArray(body) ? body[index] : body,
               isPrivate: isPrivate === "true",
               isForwarded: false,
-              quotedMsg: quotedMsg || undefined
+              quotedMsg: quotedMsg || undefined,
+              isVoice: isVoice === "true" || isVoice === true
             });
           }
 

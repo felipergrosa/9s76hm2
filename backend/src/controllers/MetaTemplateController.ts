@@ -1,4 +1,6 @@
 import { Request, Response } from "express";
+import fs from "fs";
+import path from "path";
 import AppError from "../errors/AppError";
 import logger from "../utils/logger";
 import Whatsapp from "../models/Whatsapp";
@@ -187,6 +189,7 @@ export const store = async (
 
   // Se veio arquivo de mídia, sobe para a Meta e injeta o handle no HEADER
   const file = req.file as Express.Multer.File | undefined;
+  let headerMediaPath: string | undefined;
   if (file) {
     const headerHandle = await UploadTemplateHeaderMedia({
       whatsapp,
@@ -194,6 +197,15 @@ export const store = async (
       fileName: file.originalname,
       mimeType: file.mimetype
     });
+
+    // Persiste o arquivo localmente — a Meta não devolve a mídia de exemplo
+    // depois, e o header_handle não é baixável. Sem o arquivo local seria
+    // impossível reenviar a mídia no envio do template.
+    const dir = path.resolve("public", `company${companyId}`, "meta-templates");
+    fs.mkdirSync(dir, { recursive: true });
+    const safeName = `${Date.now()}_${String(file.originalname).replace(/[^\w.\-]/g, "_")}`;
+    fs.writeFileSync(path.join(dir, safeName), file.buffer);
+    headerMediaPath = `meta-templates/${safeName}`;
 
     components = upsertHeaderComponent(
       components,
@@ -214,6 +226,21 @@ export const store = async (
     allowCategoryChange,
     messageSendTtlSeconds
   });
+
+  // Cache local imediato (a lista da Meta pode demorar a refletir o novo template)
+  await WhatsappTemplate.upsert({
+    companyId,
+    whatsappId: Number(whatsappId),
+    metaTemplateId: id,
+    name,
+    language: language || null,
+    category: category || null,
+    status: templateStatus || "PENDING",
+    parameterFormat: parameterFormat ? String(parameterFormat).toUpperCase() : null,
+    components,
+    headerMediaPath: headerMediaPath || null,
+    lastSyncedAt: new Date()
+  } as any);
 
   emitTemplateStatus(companyId, { id, name, status: templateStatus });
 
@@ -239,7 +266,36 @@ export const update = async (
 
   const whatsapp = await getOfficialWhatsapp(whatsappId, companyId);
 
-  const components = parseComponents(req.body.components);
+  let components = parseComponents(req.body.components);
+
+  // Edição com nova mídia de header: sobe para a Meta e injeta o novo handle.
+  // Sem arquivo, o frontend preserva o example.header_handle existente.
+  const file = req.file as Express.Multer.File | undefined;
+  if (file) {
+    const headerHandle = await UploadTemplateHeaderMedia({
+      whatsapp,
+      fileBuffer: file.buffer,
+      fileName: file.originalname,
+      mimeType: file.mimetype
+    });
+
+    const dir = path.resolve("public", `company${companyId}`, "meta-templates");
+    fs.mkdirSync(dir, { recursive: true });
+    const safeName = `${Date.now()}_${String(file.originalname).replace(/[^\w.\-]/g, "_")}`;
+    fs.writeFileSync(path.join(dir, safeName), file.buffer);
+    const headerMediaPath = `meta-templates/${safeName}`;
+
+    components = upsertHeaderComponent(
+      components,
+      headerFormatFromMime(file.mimetype),
+      headerHandle
+    );
+
+    await WhatsappTemplate.update(
+      { headerMediaPath },
+      { where: { whatsappId: Number(whatsappId), companyId, metaTemplateId: templateId } }
+    );
+  }
 
   await UpdateWabaTemplate({
     whatsapp,

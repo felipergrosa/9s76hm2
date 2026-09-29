@@ -29,11 +29,12 @@ metaTemplateRoutes.post(
   MetaTemplateController.store
 );
 
-// Atualiza template existente na Meta
+// Atualiza template existente na Meta (aceita multipart com headerFile)
 metaTemplateRoutes.put(
   "/meta-templates/:whatsappId/:templateId",
   isAuth,
   checkPermission("meta-templates.edit"),
+  upload.single("headerFile"),
   MetaTemplateController.update
 );
 

@@ -301,10 +301,19 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
             break;
 
           case "audio":
-          case "ptt":
             payload.type = "audio";
             payload.audio = {
               link: accessibleUrl
+            };
+            break;
+
+          case "ptt":
+            // Meta Cloud API: voice:true exibe como mensagem de voz
+            // (ícone de mic + waveform) — exige arquivo .ogg codec OPUS
+            payload.type = "audio";
+            payload.audio = {
+              link: accessibleUrl,
+              voice: true
             };
             break;
 

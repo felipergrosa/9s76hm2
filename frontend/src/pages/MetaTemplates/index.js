@@ -17,6 +17,7 @@ import TableCell from "@material-ui/core/TableCell";
 import TableHead from "@material-ui/core/TableHead";
 import TableRow from "@material-ui/core/TableRow";
 import IconButton from "@material-ui/core/IconButton";
+import Checkbox from "@material-ui/core/Checkbox";
 import SearchIcon from "@material-ui/icons/Search";
 import TextField from "@material-ui/core/TextField";
 import InputAdornment from "@material-ui/core/InputAdornment";
@@ -28,10 +29,12 @@ import Tooltip from "@material-ui/core/Tooltip";
 import Typography from "@material-ui/core/Typography";
 import Box from "@material-ui/core/Box";
 
+import AddIcon from "@material-ui/icons/Add";
 import DeleteOutlineIcon from "@material-ui/icons/DeleteOutline";
 import EditIcon from "@material-ui/icons/Edit";
 import SyncIcon from "@material-ui/icons/Sync";
 import { Info } from "@material-ui/icons";
+import { WhatsApp as WhatsAppIcon } from "@material-ui/icons";
 
 import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
@@ -92,10 +95,70 @@ const reducer = (state, action) => {
 const useStyles = makeStyles((theme) => ({
   mainPaper: {
     flex: 1,
-    padding: theme.spacing(1),
+    padding: 0,
+    overflow: "hidden",
+  },
+  subtitle: {
+    color: theme.palette.text.secondary,
+    marginTop: theme.spacing(0.5),
   },
   connectionSelector: {
+    minWidth: 200,
+  },
+  toolbar: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1.5),
+    padding: theme.spacing(1.5, 2),
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    flexWrap: "wrap",
+  },
+  searchField: {
     minWidth: 220,
+    flex: "1 1 220px",
+    maxWidth: 320,
+  },
+  filterSelect: {
+    minWidth: 140,
+  },
+  bulkBar: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1.5),
+    padding: theme.spacing(0.5, 2),
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    backgroundColor:
+      theme.palette.type === "dark"
+        ? theme.palette.action.selected
+        : theme.palette.primary[50],
+  },
+  headCell: {
+    fontWeight: 600,
+    fontSize: 12,
+    letterSpacing: "0.03em",
+    color: theme.palette.text.secondary,
+    textTransform: "uppercase",
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    paddingTop: theme.spacing(1.25),
+    paddingBottom: theme.spacing(1.25),
+  },
+  bodyCell: {
+    paddingTop: theme.spacing(1.25),
+    paddingBottom: theme.spacing(1.25),
+  },
+  templateName: {
+    fontWeight: 500,
+    fontSize: 14,
+    lineHeight: 1.35,
+  },
+  templateSnippet: {
+    color: theme.palette.text.secondary,
+    fontSize: 12.5,
+    lineHeight: 1.4,
+    maxWidth: 420,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
   },
   infoBox: {
     backgroundColor:
@@ -103,16 +166,37 @@ const useStyles = makeStyles((theme) => ({
         ? theme.palette.grey[800]
         : "#eaf1c6af",
     padding: theme.spacing(2),
-    marginBottom: theme.spacing(2),
-    borderRadius: 4,
+    margin: theme.spacing(2),
+    borderRadius: 8,
     display: "flex",
     alignItems: "flex-start",
     gap: theme.spacing(1),
   },
   emptyState: {
-    padding: theme.spacing(4),
+    padding: theme.spacing(8, 4),
     textAlign: "center",
     color: theme.palette.text.secondary,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: theme.spacing(1.5),
+  },
+  emptyIcon: {
+    fontSize: 44,
+    opacity: 0.35,
+  },
+  rowHover: {
+    transition: "background-color 120ms ease",
+    "&:hover": {
+      backgroundColor: theme.palette.action.hover,
+    },
+  },
+  spinning: {
+    animation: "$spin 900ms linear infinite",
+  },
+  "@keyframes spin": {
+    from: { transform: "rotate(0deg)" },
+    to: { transform: "rotate(360deg)" },
   },
 }));
 
@@ -135,8 +219,6 @@ const STATUS_CHIP_CLASSES = {
 const DEFAULT_STATUS_CHIP =
   "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200";
 
-
-
 const CATEGORY_CHIP_CLASSES = {
   MARKETING: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
   UTILITY: "bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200",
@@ -153,7 +235,7 @@ const QUALITY_CHIP_CLASSES = {
 };
 
 const chipBaseClass =
-  "inline-block px-2 py-0.5 rounded-full text-xs font-semibold";
+  "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium";
 
 const StatusChip = ({ status }) => {
   const normalized = (status || "").toUpperCase();
@@ -177,9 +259,16 @@ const CategoryChip = ({ category }) => {
 
 const QualityChip = ({ score }) => {
   const normalized = (score || "").toUpperCase();
-  if (!normalized) return <>—</>;
+  if (!normalized || normalized === "UNKNOWN") return <>—</>;
   const chipClass = QUALITY_CHIP_CLASSES[normalized] || DEFAULT_STATUS_CHIP;
   return <span className={`${chipBaseClass} ${chipClass}`}>{normalized}</span>;
+};
+
+// Primeira linha do corpo do template como resumo (igual gerenciador da Meta)
+const bodySnippet = (template) => {
+  const comps = Array.isArray(template?.components) ? template.components : [];
+  const text = comps.find((c) => c.type === "BODY")?.text || "";
+  return text.replace(/\s+/g, " ").trim();
 };
 
 const MetaTemplates = () => {
@@ -189,10 +278,15 @@ const MetaTemplates = () => {
 
   const [loading, setLoading] = useState(false);
   const [searchParam, setSearchParam] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [languageFilter, setLanguageFilter] = useState("");
   const [templates, dispatch] = useReducer(reducer, []);
   const [selectedWhatsAppId, setSelectedWhatsAppId] = useState("");
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [deletingTemplate, setDeletingTemplate] = useState(null);
+  const [deletingBulk, setDeletingBulk] = useState(false);
+  const [checkedIds, setCheckedIds] = useState([]);
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
 
@@ -215,6 +309,7 @@ const MetaTemplates = () => {
   const fetchTemplates = useCallback(async () => {
     if (!selectedWhatsAppId) return;
     dispatch({ type: "RESET" });
+    setCheckedIds([]);
     setLoading(true);
     try {
       // O GET já dispara a sincronização com a Meta no backend
@@ -263,6 +358,10 @@ const MetaTemplates = () => {
 
   const handleChangeConnection = (event) => {
     setSelectedWhatsAppId(event.target.value);
+    setCategoryFilter("");
+    setStatusFilter("");
+    setLanguageFilter("");
+    setCheckedIds([]);
   };
 
   const handleOpenTemplateModal = () => {
@@ -299,10 +398,67 @@ const MetaTemplates = () => {
     setDeletingTemplate(null);
   };
 
-  // Busca client-side por nome
-  const filteredTemplates = templates.filter((t) =>
-    (t.name || "").toLowerCase().includes(searchParam)
+  const handleDeleteBulk = async () => {
+    try {
+      // DELETE com body precisa ir em `data` no axios
+      await api.delete(`/meta-templates/${selectedWhatsAppId}/bulk`, {
+        data: { templateIds: checkedIds },
+      });
+      checkedIds.forEach((id) =>
+        dispatch({ type: "DELETE_TEMPLATE", payload: id })
+      );
+      toast.success(i18n.t("metaTemplates.toasts.deleted"));
+      setCheckedIds([]);
+    } catch (err) {
+      toastError(err);
+    }
+    setDeletingBulk(false);
+  };
+
+  const toggleChecked = (id) =>
+    setCheckedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+
+  // Filtros client-side: busca por nome/snippet + selects de categoria/status/idioma
+  const filteredTemplates = templates.filter((t) => {
+    if (searchParam) {
+      const hay = `${t.name || ""} ${bodySnippet(t)}`.toLowerCase();
+      if (!hay.includes(searchParam)) return false;
+    }
+    if (categoryFilter && (t.category || "").toUpperCase() !== categoryFilter)
+      return false;
+    if (statusFilter && (t.status || "").toUpperCase() !== statusFilter)
+      return false;
+    if (languageFilter && (t.language || "") !== languageFilter) return false;
+    return true;
+  });
+
+  const languagesInUse = useMemo(
+    () => [...new Set(templates.map((t) => t.language).filter(Boolean))],
+    [templates]
   );
+  const statusesInUse = useMemo(
+    () =>
+      [...new Set(templates.map((t) => (t.status || "").toUpperCase()))]
+        .filter(Boolean)
+        .sort(),
+    [templates]
+  );
+
+  const filteredIds = filteredTemplates.map((t) => t.id);
+  const allFilteredChecked =
+    filteredIds.length > 0 &&
+    filteredIds.every((id) => checkedIds.includes(id));
+  const someChecked = checkedIds.length > 0;
+
+  const toggleAllFiltered = () => {
+    if (allFilteredChecked) {
+      setCheckedIds((prev) => prev.filter((id) => !filteredIds.includes(id)));
+    } else {
+      setCheckedIds((prev) => [...new Set([...prev, ...filteredIds])]);
+    }
+  };
 
   const hasOfficialConnection = officialWhatsApps.length > 0;
 
@@ -310,14 +466,21 @@ const MetaTemplates = () => {
     <MainContainer useWindowScroll>
       <ConfirmationModal
         title={
-          deletingTemplate &&
-          `${i18n.t("metaTemplates.confirm.deleteTitle")} ${
-            deletingTemplate.name
-          }?`
+          deletingBulk
+            ? i18n.t("metaTemplates.confirm.bulkDeleteTitle", {
+                defaultValue: `Excluir ${checkedIds.length} templates?`,
+                count: checkedIds.length,
+              })
+            : deletingTemplate &&
+              `${i18n.t("metaTemplates.confirm.deleteTitle")} ${
+                deletingTemplate.name
+              }?`
         }
         open={confirmModalOpen}
         onClose={() => setConfirmModalOpen(false)}
-        onConfirm={() => handleDeleteTemplate(deletingTemplate)}
+        onConfirm={() =>
+          deletingBulk ? handleDeleteBulk() : handleDeleteTemplate(deletingTemplate)
+        }
       >
         {i18n.t("metaTemplates.confirm.deleteMessage")}{" "}
         {i18n.t("metaTemplates.confirm.deleteWarning30d")}
@@ -330,23 +493,15 @@ const MetaTemplates = () => {
         onSaved={fetchTemplates}
       />
       <MainHeader>
-        <Title>
-          {i18n.t("metaTemplates.title")} ({filteredTemplates.length})
-        </Title>
+        <Box>
+          <Title>
+            {i18n.t("metaTemplates.title")} ({filteredTemplates.length})
+          </Title>
+          <Typography variant="body2" className={classes.subtitle}>
+            {i18n.t("metaTemplates.subtitle")}
+          </Typography>
+        </Box>
         <MainHeaderButtonsWrapper>
-          <TextField
-            placeholder={i18n.t("metaTemplates.searchPlaceholder")}
-            type="search"
-            value={searchParam}
-            onChange={handleSearch}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon style={{ color: "gray" }} />
-                </InputAdornment>
-              ),
-            }}
-          />
           <FormControl
             variant="outlined"
             size="small"
@@ -368,15 +523,13 @@ const MetaTemplates = () => {
           </FormControl>
           <Tooltip title={i18n.t("metaTemplates.buttons.sync")}>
             <span>
-              <Button
-                variant="outlined"
-                color="primary"
+              <IconButton
                 onClick={handleSync}
                 disabled={!selectedWhatsAppId || loading}
-                startIcon={<SyncIcon />}
+                size="small"
               >
-                {i18n.t("metaTemplates.buttons.sync")}
-              </Button>
+                <SyncIcon className={loading ? classes.spinning : undefined} />
+              </IconButton>
             </span>
           </Tooltip>
           <Button
@@ -384,6 +537,7 @@ const MetaTemplates = () => {
             color="primary"
             onClick={handleOpenTemplateModal}
             disabled={!selectedWhatsAppId}
+            startIcon={<AddIcon />}
           >
             {i18n.t("metaTemplates.buttons.add")}
           </Button>
@@ -398,71 +552,218 @@ const MetaTemplates = () => {
             </Typography>
           </Box>
         )}
+
+        {/* Barra de busca e filtros (padrão gerenciador da Meta) */}
+        {hasOfficialConnection && (
+          <Box className={classes.toolbar}>
+            <TextField
+              placeholder={i18n.t("metaTemplates.searchPlaceholder")}
+              type="search"
+              variant="outlined"
+              size="small"
+              className={classes.searchField}
+              value={searchParam}
+              onChange={handleSearch}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon style={{ color: "gray" }} fontSize="small" />
+                  </InputAdornment>
+                ),
+              }}
+            />
+            <FormControl
+              variant="outlined"
+              size="small"
+              className={classes.filterSelect}
+            >
+              <InputLabel>
+                {i18n.t("metaTemplates.table.category")}
+              </InputLabel>
+              <Select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                label={i18n.t("metaTemplates.table.category")}
+              >
+                <MenuItem value="">
+                  {i18n.t("metaTemplates.filters.all", { defaultValue: "Todas" })}
+                </MenuItem>
+                <MenuItem value="MARKETING">
+                  {i18n.t("metaTemplates.category.MARKETING")}
+                </MenuItem>
+                <MenuItem value="UTILITY">
+                  {i18n.t("metaTemplates.category.UTILITY")}
+                </MenuItem>
+                <MenuItem value="AUTHENTICATION">
+                  {i18n.t("metaTemplates.category.AUTHENTICATION")}
+                </MenuItem>
+              </Select>
+            </FormControl>
+            <FormControl
+              variant="outlined"
+              size="small"
+              className={classes.filterSelect}
+            >
+              <InputLabel>{i18n.t("metaTemplates.table.status")}</InputLabel>
+              <Select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                label={i18n.t("metaTemplates.table.status")}
+              >
+                <MenuItem value="">
+                  {i18n.t("metaTemplates.filters.all", { defaultValue: "Todas" })}
+                </MenuItem>
+                {statusesInUse.map((s) => (
+                  <MenuItem key={s} value={s}>
+                    {i18n.t(`metaTemplates.status.${s}`, { defaultValue: s })}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl
+              variant="outlined"
+              size="small"
+              className={classes.filterSelect}
+            >
+              <InputLabel>{i18n.t("metaTemplates.table.language")}</InputLabel>
+              <Select
+                value={languageFilter}
+                onChange={(e) => setLanguageFilter(e.target.value)}
+                label={i18n.t("metaTemplates.table.language")}
+              >
+                <MenuItem value="">
+                  {i18n.t("metaTemplates.filters.all", { defaultValue: "Todos" })}
+                </MenuItem>
+                {languagesInUse.map((l) => (
+                  <MenuItem key={l} value={l}>
+                    {l}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
+        )}
+
+        {/* Barra de ações em massa — aparece só com seleção */}
+        {someChecked && (
+          <Box className={classes.bulkBar}>
+            <Typography variant="body2" style={{ fontWeight: 600 }}>
+              {i18n.t("metaTemplates.bulk.selected", {
+                defaultValue: "{{count}} selecionado(s)",
+                count: checkedIds.length,
+              })}
+            </Typography>
+            <Button
+              size="small"
+              color="secondary"
+              startIcon={<DeleteOutlineIcon />}
+              onClick={() => {
+                setDeletingBulk(true);
+                setConfirmModalOpen(true);
+              }}
+            >
+              {i18n.t("metaTemplates.buttons.delete")}
+            </Button>
+            <Box flex={1} />
+            <Button size="small" onClick={() => setCheckedIds([])}>
+              {i18n.t("metaTemplates.bulk.clear", { defaultValue: "Limpar seleção" })}
+            </Button>
+          </Box>
+        )}
+
         <Table size="small">
           <TableHead>
             <TableRow>
-              <TableCell align="center">
+              <TableCell padding="checkbox">
+                <Checkbox
+                  size="small"
+                  indeterminate={someChecked && !allFilteredChecked}
+                  checked={allFilteredChecked}
+                  onChange={toggleAllFiltered}
+                  disabled={filteredTemplates.length === 0}
+                />
+              </TableCell>
+              <TableCell className={classes.headCell}>
                 {i18n.t("metaTemplates.table.name")}
               </TableCell>
-              <TableCell align="center">
-                {i18n.t("metaTemplates.table.language")}
-              </TableCell>
-              <TableCell align="center">
+              <TableCell align="center" className={classes.headCell}>
                 {i18n.t("metaTemplates.table.category")}
               </TableCell>
-              <TableCell align="center">
+              <TableCell align="center" className={classes.headCell}>
+                {i18n.t("metaTemplates.table.language")}
+              </TableCell>
+              <TableCell align="center" className={classes.headCell}>
                 {i18n.t("metaTemplates.table.status")}
               </TableCell>
-              <TableCell align="center">
+              <TableCell align="center" className={classes.headCell}>
                 {i18n.t("metaTemplates.table.quality")}
               </TableCell>
-              <TableCell align="center">
+              <TableCell align="center" className={classes.headCell}>
                 {i18n.t("metaTemplates.table.reason")}
               </TableCell>
-              <TableCell align="center">
+              <TableCell align="center" className={classes.headCell}>
                 {i18n.t("metaTemplates.table.actions")}
               </TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {loading ? (
-              <TableRowSkeleton key="skeleton" columns={7} />
+              <TableRowSkeleton key="skeleton" columns={8} />
             ) : (
               <>
                 {filteredTemplates.map((template) => (
-                  <TableRow key={template.id}>
-                    <TableCell align="center">{template.name}</TableCell>
-                    <TableCell align="center">
-                      {template.language || "—"}
+                  <TableRow key={template.id} className={classes.rowHover} hover={false}>
+                    <TableCell padding="checkbox" className={classes.bodyCell}>
+                      <Checkbox
+                        size="small"
+                        checked={checkedIds.includes(template.id)}
+                        onChange={() => toggleChecked(template.id)}
+                      />
                     </TableCell>
-                    <TableCell align="center">
+                    <TableCell className={classes.bodyCell}>
+                      <div className={classes.templateName}>{template.name}</div>
+                      {bodySnippet(template) && (
+                        <div className={classes.templateSnippet}>
+                          {bodySnippet(template)}
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell align="center" className={classes.bodyCell}>
                       <CategoryChip category={template.category} />
                     </TableCell>
-                    <TableCell align="center">
+                    <TableCell align="center" className={classes.bodyCell}>
+                      {template.language || "—"}
+                    </TableCell>
+                    <TableCell align="center" className={classes.bodyCell}>
                       <StatusChip status={template.status} />
                     </TableCell>
-                    <TableCell align="center">
+                    <TableCell align="center" className={classes.bodyCell}>
                       <QualityChip score={template.quality_score?.score} />
                     </TableCell>
-                    <TableCell align="center">
+                    <TableCell align="center" className={classes.bodyCell}>
                       {template.rejected_reason || "—"}
                     </TableCell>
-                    <TableCell align="center">
-                      <IconButton
-                        size="small"
-                        onClick={() => handleEditTemplate(template)}
-                      >
-                        <EditIcon />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        onClick={() => {
-                          setDeletingTemplate(template);
-                          setConfirmModalOpen(true);
-                        }}
-                      >
-                        <DeleteOutlineIcon />
-                      </IconButton>
+                    <TableCell align="center" className={classes.bodyCell}>
+                      <Tooltip title={i18n.t("metaTemplates.buttons.edit")}>
+                        <IconButton
+                          size="small"
+                          onClick={() => handleEditTemplate(template)}
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title={i18n.t("metaTemplates.buttons.delete")}>
+                        <IconButton
+                          size="small"
+                          onClick={() => {
+                            setDeletingBulk(false);
+                            setDeletingTemplate(template);
+                            setConfirmModalOpen(true);
+                          }}
+                        >
+                          <DeleteOutlineIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -472,8 +773,15 @@ const MetaTemplates = () => {
         </Table>
         {!loading && hasOfficialConnection && filteredTemplates.length === 0 && (
           <Box className={classes.emptyState}>
-            <Typography variant="body2">
+            <WhatsAppIcon className={classes.emptyIcon} />
+            <Typography variant="subtitle1" style={{ fontWeight: 600 }}>
               {i18n.t("metaTemplates.empty")}
+            </Typography>
+            <Typography variant="body2" color="textSecondary">
+              {i18n.t("metaTemplates.emptyHint", {
+                defaultValue:
+                  "Crie um novo template ou clique em Sincronizar para buscar os existentes na Meta.",
+              })}
             </Typography>
           </Box>
         )}

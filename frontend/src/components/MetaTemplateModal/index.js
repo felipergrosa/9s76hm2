@@ -6,12 +6,10 @@ import { toast } from "react-toastify";
 import {
   Box,
   Button,
-  Checkbox,
   CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
-  DialogTitle,
   Divider,
   FormControl,
   FormControlLabel,
@@ -19,10 +17,13 @@ import {
   Grid,
   IconButton,
   InputLabel,
+  Menu,
   MenuItem,
+  Paper,
   Radio,
   RadioGroup,
   Select,
+  Switch,
   TextField,
   Tooltip,
   Typography
@@ -34,11 +35,24 @@ import {
   ArrowDownward as ArrowDownwardIcon,
   ArrowUpward as ArrowUpwardIcon,
   AttachFile as AttachFileIcon,
+  Campaign as CampaignIcon,
+  Close as CloseIcon,
+  Code as CodeIcon,
   DeleteOutline as DeleteOutlineIcon,
+  Description as DescriptionIcon,
+  EmojiEmotions as EmojiIcon,
   FileCopy as FileCopyIcon,
+  FormatBold as FormatBoldIcon,
+  FormatItalic as FormatItalicIcon,
+  FormatStrikethrough as FormatStrikethroughIcon,
+  Image as ImageIcon,
   Link as LinkIcon,
+  Lock as LockIcon,
   Phone as PhoneIcon,
-  Reply as ReplyIcon
+  PlayCircleOutline as PlayCircleIcon,
+  Reply as ReplyIcon,
+  Title as TitleIcon,
+  Videocam as VideocamIcon
 } from "@material-ui/icons";
 
 import api from "../../services/api";
@@ -51,6 +65,21 @@ const tt = (key, defaultValue) =>
   i18n.t(`metaTemplates.modal.${key}`, { defaultValue });
 
 const CATEGORY_OPTIONS = ["MARKETING", "UTILITY", "AUTHENTICATION"];
+
+const CATEGORY_META = {
+  MARKETING: {
+    icon: CampaignIcon,
+    desc: "Promoções, ofertas, novidades e reengajamento"
+  },
+  UTILITY: {
+    icon: DescriptionIcon,
+    desc: "Confirmações, atualizações de pedido e avisos de conta"
+  },
+  AUTHENTICATION: {
+    icon: LockIcon,
+    desc: "Códigos de verificação e recuperação de acesso"
+  }
+};
 
 const LANGUAGE_OPTIONS = [
   "pt_BR",
@@ -74,8 +103,21 @@ const MEDIA_HEADER_CONFIG = {
   DOCUMENT: { accept: "application/pdf", maxMB: 100 }
 };
 
+const HEADER_TYPE_META = {
+  TEXT: { icon: TitleIcon, label: "Texto" },
+  IMAGE: { icon: ImageIcon, label: "Imagem" },
+  VIDEO: { icon: VideocamIcon, label: "Vídeo" },
+  DOCUMENT: { icon: DescriptionIcon, label: "Documento" }
+};
+
 const BUTTON_LIMITS = { URL: 2, PHONE_NUMBER: 1, COPY_CODE: 1 };
 const MAX_BUTTONS = 10;
+
+// Emojis comuns para inserção rápida no corpo da mensagem
+const QUICK_EMOJIS = [
+  "😀", "😊", "👍", "🙏", "🎉", "✅", "⭐", "❤️",
+  "🔥", "💬", "📦", "🚚", "📅", "⏰", "💡", "📞"
+];
 
 const VAR_REGEX = /\{\{([^}]+)\}\}/g;
 const NAME_REGEX = /^[a-z0-9_]+$/;
@@ -96,46 +138,276 @@ const isMediaHeader = format =>
   format === "IMAGE" || format === "VIDEO" || format === "DOCUMENT";
 
 const useStyles = makeStyles(theme => ({
+  dialogPaper: {
+    height: "92vh",
+    maxHeight: 860
+  },
+  dialogTitleBar: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: theme.spacing(1.5, 2.5),
+    borderBottom: `1px solid ${theme.palette.divider}`
+  },
+  dialogTitle: {
+    fontSize: 17,
+    fontWeight: 600,
+    letterSpacing: "-0.01em"
+  },
+  dialogSubtitle: {
+    color: theme.palette.text.secondary,
+    fontSize: 13,
+    marginTop: 2
+  },
+  content: {
+    padding: 0,
+    display: "flex",
+    overflow: "hidden"
+  },
+  formColumn: {
+    flex: "1 1 58%",
+    overflowY: "auto",
+    padding: theme.spacing(2.5, 3)
+  },
+  previewColumn: {
+    flex: "0 0 42%",
+    borderLeft: `1px solid ${theme.palette.divider}`,
+    padding: theme.spacing(2.5),
+    display: "flex",
+    flexDirection: "column",
+    backgroundColor:
+      theme.palette.type === "dark" ? theme.palette.grey[900] : "#f7f7f5",
+    [theme.breakpoints.down("sm")]: {
+      display: "none"
+    }
+  },
+  section: {
+    marginBottom: theme.spacing(3)
+  },
+  sectionTitle: {
+    fontWeight: 600,
+    fontSize: 14,
+    marginBottom: theme.spacing(0.25),
+    display: "flex",
+    alignItems: "center",
+    gap: 6
+  },
+  sectionHint: {
+    color: theme.palette.text.secondary,
+    fontSize: 12.5,
+    marginBottom: theme.spacing(1.5)
+  },
   field: {
     width: "100%"
   },
-  sectionTitle: {
-    marginTop: theme.spacing(2),
-    marginBottom: theme.spacing(0.5),
+  // Cards de categoria (padrão do gerenciador da Meta)
+  categoryGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, 1fr)",
+    gap: theme.spacing(1.5)
+  },
+  categoryCard: {
+    padding: theme.spacing(1.5),
+    cursor: "pointer",
+    border: `2px solid ${theme.palette.divider}`,
+    borderRadius: 10,
+    transition: "border-color 160ms ease-out, background-color 160ms ease-out, transform 160ms ease-out",
+    "&:hover": {
+      borderColor: theme.palette.primary.light,
+      transform: "translateY(-1px)"
+    },
+    "&:active": {
+      transform: "scale(0.98)"
+    }
+  },
+  categoryCardSelected: {
+    borderColor: theme.palette.primary.main,
+    backgroundColor:
+      theme.palette.type === "dark"
+        ? "rgba(25,118,210,0.12)"
+        : theme.palette.primary[50]
+  },
+  categoryCardDisabled: {
+    opacity: 0.55,
+    cursor: "not-allowed",
+    "&:hover": {
+      borderColor: theme.palette.divider,
+      transform: "none"
+    }
+  },
+  categoryIcon: {
+    color: theme.palette.primary.main,
+    marginBottom: theme.spacing(0.5)
+  },
+  categoryLabel: {
+    fontWeight: 600,
+    fontSize: 13.5,
+    lineHeight: 1.3
+  },
+  categoryDesc: {
+    color: theme.palette.text.secondary,
+    fontSize: 11.5,
+    lineHeight: 1.4,
+    marginTop: 2
+  },
+  // Chips de tipo de cabeçalho
+  headerTypeRow: {
+    display: "flex",
+    gap: theme.spacing(1),
+    flexWrap: "wrap"
+  },
+  headerChip: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "6px 12px",
+    borderRadius: 20,
+    border: `1px solid ${theme.palette.divider}`,
+    cursor: "pointer",
+    fontSize: 13,
+    backgroundColor: "transparent",
+    color: theme.palette.text.primary,
+    transition: "all 160ms ease-out",
+    "&:hover": {
+      borderColor: theme.palette.primary.light
+    },
+    "&:active": {
+      transform: "scale(0.97)"
+    }
+  },
+  headerChipActive: {
+    borderColor: theme.palette.primary.main,
+    backgroundColor:
+      theme.palette.type === "dark"
+        ? "rgba(25,118,210,0.15)"
+        : theme.palette.primary[50],
+    color: theme.palette.primary.main,
     fontWeight: 600
+  },
+  // Toolbar de formatação do corpo
+  formatBar: {
+    display: "flex",
+    alignItems: "center",
+    gap: 2,
+    padding: theme.spacing(0.25, 0.5),
+    border: `1px solid ${theme.palette.divider}`,
+    borderTop: "none",
+    borderRadius: "0 0 8px 8px",
+    backgroundColor:
+      theme.palette.type === "dark" ? theme.palette.grey[800] : "#fafafa"
+  },
+  bodyFieldNoBottomRadius: {
+    "& .MuiOutlinedInput-root": {
+      borderBottomLeftRadius: 0,
+      borderBottomRightRadius: 0
+    },
+    "& .MuiOutlinedInput-notchedOutline": {
+      borderBottomColor: "transparent"
+    }
+  },
+  charCounter: {
+    marginLeft: "auto",
+    color: theme.palette.text.secondary,
+    fontSize: 11.5,
+    paddingRight: theme.spacing(0.5)
+  },
+  exampleField: {
+    marginTop: theme.spacing(1)
   },
   buttonRow: {
     border: `1px solid ${theme.palette.divider}`,
     borderRadius: 8,
-    padding: theme.spacing(1),
-    marginBottom: theme.spacing(1)
+    padding: theme.spacing(1, 1.5),
+    marginBottom: theme.spacing(1),
+    backgroundColor: theme.palette.background.paper
+  },
+  buttonRowHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: theme.spacing(0.5)
+  },
+  buttonTypeLabel: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    fontSize: 12.5,
+    fontWeight: 600,
+    color: theme.palette.text.secondary,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em"
+  },
+  fileDrop: {
+    border: `1.5px dashed ${theme.palette.divider}`,
+    borderRadius: 10,
+    padding: theme.spacing(2.5),
+    textAlign: "center",
+    cursor: "pointer",
+    transition: "border-color 160ms ease-out, background-color 160ms ease-out",
+    "&:hover": {
+      borderColor: theme.palette.primary.main,
+      backgroundColor:
+        theme.palette.type === "dark"
+          ? "rgba(25,118,210,0.06)"
+          : theme.palette.primary[50]
+    }
+  },
+  optionRow: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: theme.spacing(1, 0)
   },
   // Preview estilo balão do WhatsApp
   previewPane: {
-    background: "#ece5dd",
-    borderRadius: 8,
-    padding: theme.spacing(2),
-    minHeight: 280,
-    position: "sticky",
-    top: 0
+    background:
+      theme.palette.type === "dark"
+        ? "#0b141a"
+        : "#ece5dd",
+    borderRadius: 12,
+    padding: theme.spacing(2.5, 1.5),
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 320
+  },
+  previewPaneTitle: {
+    alignSelf: "flex-start",
+    marginBottom: theme.spacing(1.5),
+    color: theme.palette.text.secondary,
+    fontWeight: 600,
+    fontSize: 11.5,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em"
   },
   bubble: {
-    background: "#e7ffdb",
-    borderRadius: 8,
-    boxShadow: "0 1px 1px rgba(0,0,0,0.18)",
-    padding: "8px 10px 6px",
-    fontSize: 14,
+    background:
+      theme.palette.type === "dark" ? "#202c33" : "#ffffff",
+    color: theme.palette.type === "dark" ? "#e9edef" : "#111b21",
+    borderRadius: "8px 8px 8px 0",
+    boxShadow: "0 1px 0.5px rgba(11,20,26,0.13)",
+    padding: "6px 9px 8px",
+    fontSize: 14.2,
+    lineHeight: 1.42,
     wordBreak: "break-word",
-    overflow: "hidden"
+    overflow: "hidden",
+    width: "100%",
+    maxWidth: 320,
+    fontFamily:
+      "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
   },
   previewMedia: {
-    background: "#cfd8dc",
+    background: theme.palette.type === "dark" ? "#2a3942" : "#d5d9dc",
     borderRadius: 6,
-    height: 110,
+    height: 120,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    color: "#546e7a",
+    flexDirection: "column",
+    gap: 4,
+    color: theme.palette.type === "dark" ? "#8696a0" : "#667781",
     marginBottom: 6,
     overflow: "hidden"
   },
@@ -143,21 +415,48 @@ const useStyles = makeStyles(theme => ({
     fontWeight: 700,
     marginBottom: 4
   },
+  previewBody: {
+    whiteSpace: "pre-wrap"
+  },
+  previewMetaRow: {
+    display: "flex",
+    justifyContent: "flex-end",
+    alignItems: "center",
+    gap: 3,
+    marginTop: 2,
+    fontSize: 11,
+    color: theme.palette.type === "dark" ? "#8696a0" : "#667781"
+  },
   previewFooter: {
-    color: "#8a8a8a",
-    fontSize: 12,
+    color: theme.palette.type === "dark" ? "#8696a0" : "#8696a0",
+    fontSize: 12.5,
     marginTop: 4
   },
   previewButton: {
-    borderTop: "1px solid #d9d9d9",
+    borderTop:
+      theme.palette.type === "dark"
+        ? "1px solid #2a3942"
+        : "1px solid #e9edef",
     color: "#00a5f4",
     textAlign: "center",
-    padding: "7px 4px",
+    padding: "8px 4px",
     fontSize: 14,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6
+    gap: 6,
+    margin: "0 -9px",
+    "&:first-of-type": {
+      marginTop: 6
+    }
+  },
+  actionsBar: {
+    padding: theme.spacing(1.25, 2.5),
+    borderTop: `1px solid ${theme.palette.divider}`,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: theme.spacing(1)
   },
   buttonProgress: {
     marginRight: theme.spacing(1)
@@ -176,7 +475,7 @@ const renderWithVars = (text, examples) => {
     if (m.index > last) nodes.push(text.slice(last, m.index));
     const v = m[1].trim();
     nodes.push(
-      <strong key={`v-${k++}`} style={{ color: "#075e54" }}>
+      <strong key={`v-${k++}`} style={{ color: "#00a884" }}>
         {examples[v] || m[0]}
       </strong>
     );
@@ -184,6 +483,40 @@ const renderWithVars = (text, examples) => {
   }
   nodes.push(text.slice(last));
   return nodes;
+};
+
+// Aplica marcações *negrito*, _itálico_, ~tachado~ e ```mono``` do WhatsApp no preview
+const renderWhatsAppMarkup = (text, examples) => {
+  const raw = renderWithVars(text, examples);
+  if (!raw) return null;
+  const nodes = Array.isArray(raw) ? raw : [raw];
+  const flat = [];
+  nodes.forEach(n => {
+    if (typeof n === "string") flat.push(n);
+    else flat.push(n);
+  });
+  // Parsing simples de *b*, _i_, ~s~, ```mono``` sobre o texto já com exemplos
+  return flat.map((node, i) => {
+    if (typeof node !== "string") return node;
+    const parts = node.split(
+      /(\*[^*]+\*|_[^_]+_|~[^~]+~|```[^`]+```)/g
+    );
+    return parts.map((p, j) => {
+      if (/^\*[^*]+\*$/.test(p))
+        return <strong key={`${i}-${j}`}>{p.slice(1, -1)}</strong>;
+      if (/^_[^_]+_$/.test(p))
+        return <em key={`${i}-${j}`}>{p.slice(1, -1)}</em>;
+      if (/^~[^~]+~$/.test(p))
+        return <s key={`${i}-${j}`}>{p.slice(1, -1)}</s>;
+      if (/^```[^`]+```$/.test(p))
+        return (
+          <code key={`${i}-${j}`} style={{ fontFamily: "monospace", fontSize: 13 }}>
+            {p.slice(3, -3)}
+          </code>
+        );
+      return <React.Fragment key={`${i}-${j}`}>{p}</React.Fragment>;
+    });
+  });
 };
 
 // Painel lateral com renderização aproximada da mensagem
@@ -208,13 +541,14 @@ const TemplatePreview = ({
     [headerFormat, headerFile]
   );
 
+  const now = new Date().toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+
   return (
     <div className={classes.previewPane}>
-      <Typography
-        variant="caption"
-        color="textSecondary"
-        style={{ display: "block", marginBottom: 8 }}
-      >
+      <Typography className={classes.previewPaneTitle}>
         {tt("preview.title", "Pré-visualização")}
       </Typography>
       <div className={classes.bubble}>
@@ -227,25 +561,39 @@ const TemplatePreview = ({
                 style={{ width: "100%", height: "100%", objectFit: "cover" }}
               />
             ) : (
-              <Typography variant="caption">
-                {headerFormat === "IMAGE" &&
-                  tt("preview.imageHeader", "Imagem do cabeçalho")}
-                {headerFormat === "VIDEO" &&
-                  tt("preview.videoHeader", "Vídeo do cabeçalho")}
-                {headerFormat === "DOCUMENT" &&
-                  tt("preview.documentHeader", "Documento do cabeçalho")}
-              </Typography>
+              <>
+                {headerFormat === "IMAGE" && <ImageIcon fontSize="large" />}
+                {headerFormat === "VIDEO" && <PlayCircleIcon fontSize="large" />}
+                {headerFormat === "DOCUMENT" && <DescriptionIcon fontSize="large" />}
+                <Typography variant="caption">
+                  {headerFormat === "IMAGE" &&
+                    tt("preview.imageHeader", "Imagem do cabeçalho")}
+                  {headerFormat === "VIDEO" &&
+                    tt("preview.videoHeader", "Vídeo do cabeçalho")}
+                  {headerFormat === "DOCUMENT" &&
+                    tt("preview.documentHeader", "Documento do cabeçalho")}
+                </Typography>
+              </>
             )}
           </div>
         )}
         {headerFormat === "TEXT" && headerText && (
           <div className={classes.previewHeaderText}>
-            {renderWithVars(headerText, headerExamples)}
+            {renderWhatsAppMarkup(headerText, headerExamples)}
           </div>
         )}
-        <div>{renderWithVars(bodyText, bodyExamples)}</div>
+        <div className={classes.previewBody}>
+          {renderWhatsAppMarkup(bodyText, bodyExamples) || (
+            <span style={{ opacity: 0.45 }}>
+              {tt("preview.emptyBody", "Comece a digitar o corpo da mensagem…")}
+            </span>
+          )}
+        </div>
         {footerText && <div className={classes.previewFooter}>{footerText}</div>}
-        {buttons.length > 0 && <div style={{ marginTop: 6 }} />}
+        <div className={classes.previewMetaRow}>
+          <span>{now}</span>
+          <span style={{ letterSpacing: -2 }}>✓✓</span>
+        </div>
         {buttons.map(btn => (
           <div key={btn.key} className={classes.previewButton}>
             {btn.type === "QUICK_REPLY" && <ReplyIcon fontSize="inherit" />}
@@ -255,7 +603,7 @@ const TemplatePreview = ({
             <span>
               {btn.type === "COPY_CODE"
                 ? tt("preview.copyCode", "Copiar código")
-                : btn.text || btn.type}
+                : btn.text || tt("preview.buttonPlaceholder", "Botão")}
             </span>
           </div>
         ))}
@@ -283,11 +631,14 @@ const MetaTemplateModal = ({ open, onClose, whatsappId, template, onSaved }) => 
   const [footerEnabled, setFooterEnabled] = useState(false);
   const [footerText, setFooterText] = useState("");
   const [buttons, setButtons] = useState([]);
+  const [ttlEnabled, setTtlEnabled] = useState(false);
   const [ttl, setTtl] = useState("");
   const [allowCategoryChange, setAllowCategoryChange] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [emojiAnchor, setEmojiAnchor] = useState(null);
 
   const fileInputRef = useRef(null);
+  const bodyInputRef = useRef(null);
   const btnSeq = useRef(0);
   const nextBtnKey = () => `btn-${++btnSeq.current}`;
 
@@ -577,7 +928,7 @@ const MetaTemplateModal = ({ open, onClose, whatsappId, template, onSaved }) => 
         errors.push(`${label}: ${tt("errors.copyCodeTooLong", "código deve ter no máximo 20 caracteres.")}`);
     });
 
-    if (ttl !== "" && (isNaN(Number(ttl)) || Number(ttl) < 0))
+    if (ttlEnabled && ttl !== "" && (isNaN(Number(ttl)) || Number(ttl) < 0))
       errors.push(tt("errors.ttlInvalid", "TTL deve ser um número válido."));
 
     return errors;
@@ -664,7 +1015,7 @@ const MetaTemplateModal = ({ open, onClose, whatsappId, template, onSaved }) => 
     }
 
     const components = buildComponents(values);
-    const ttlNum = ttl !== "" ? Number(ttl) : undefined;
+    const ttlNum = ttlEnabled && ttl !== "" ? Number(ttl) : undefined;
 
     setSaving(true);
     try {
@@ -673,7 +1024,18 @@ const MetaTemplateModal = ({ open, onClose, whatsappId, template, onSaved }) => 
         // APPROVED: a Meta não permite mudar categoria — omite do payload
         if (!isApproved) payload.category = values.category;
         if (ttlNum !== undefined) payload.messageSendTtlSeconds = ttlNum;
-        await api.put(`/meta-templates/${whatsappId}/${tplId}`, payload);
+        if (headerFile) {
+          // Nova mídia de header na edição → multipart com headerFile
+          const fd = new FormData();
+          fd.append("components", JSON.stringify(payload.components));
+          if (payload.category) fd.append("category", payload.category);
+          if (payload.messageSendTtlSeconds !== undefined)
+            fd.append("messageSendTtlSeconds", String(payload.messageSendTtlSeconds));
+          fd.append("headerFile", headerFile);
+          await api.put(`/meta-templates/${whatsappId}/${tplId}`, fd);
+        } else {
+          await api.put(`/meta-templates/${whatsappId}/${tplId}`, payload);
+        }
       } else if (headerFile) {
         // Multipart somente quando há arquivo de header — components vai como string JSON
         const fd = new FormData();
@@ -712,14 +1074,89 @@ const MetaTemplateModal = ({ open, onClose, whatsappId, template, onSaved }) => 
     }
   };
 
-  const bodyVarsForRender = text => extractVars(text);
+  // Insere marcação na posição do cursor do textarea do corpo
+  const wrapBodySelection = (setFieldValue, values, marker) => {
+    const el = bodyInputRef.current;
+    const text = values.bodyText || "";
+    if (!el || el.selectionStart === undefined) {
+      setFieldValue("bodyText", `${text}${marker}${marker}`);
+      return;
+    }
+    const { selectionStart, selectionEnd } = el;
+    const selected = text.slice(selectionStart, selectionEnd);
+    const next =
+      text.slice(0, selectionStart) +
+      marker +
+      selected +
+      marker +
+      text.slice(selectionEnd);
+    setFieldValue("bodyText", next);
+    // Restaura foco e seleção após o re-render
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(
+        selectionStart + marker.length,
+        selectionEnd + marker.length
+      );
+    });
+  };
+
+  const insertBodyVariable = (setFieldValue, values) => {
+    const vars = extractVars(values.bodyText);
+    const nextVar =
+      values.parameterFormat === "named"
+        ? `{{nome_${vars.length + 1}}}`
+        : `{{${vars.length + 1}}}`;
+    const el = bodyInputRef.current;
+    const text = values.bodyText || "";
+    if (!el || el.selectionStart === undefined) {
+      setFieldValue("bodyText", text + nextVar);
+      return;
+    }
+    const { selectionStart, selectionEnd } = el;
+    setFieldValue(
+      "bodyText",
+      text.slice(0, selectionStart) + nextVar + text.slice(selectionEnd)
+    );
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(
+        selectionStart + nextVar.length,
+        selectionStart + nextVar.length
+      );
+    });
+  };
+
+  const insertEmoji = (setFieldValue, values, emoji) => {
+    setEmojiAnchor(null);
+    const el = bodyInputRef.current;
+    const text = values.bodyText || "";
+    if (!el || el.selectionStart === undefined) {
+      setFieldValue("bodyText", text + emoji);
+      return;
+    }
+    const { selectionStart, selectionEnd } = el;
+    setFieldValue(
+      "bodyText",
+      text.slice(0, selectionStart) + emoji + text.slice(selectionEnd)
+    );
+    requestAnimationFrame(() => {
+      el.focus();
+      const pos = selectionStart + emoji.length;
+      el.setSelectionRange(pos, pos);
+    });
+  };
 
   const renderButtonEditor = (b, index) => (
     <Box key={b.key} className={classes.buttonRow}>
-      <Box display="flex" alignItems="center" justifyContent="space-between">
-        <Typography variant="caption" color="textSecondary">
+      <Box className={classes.buttonRowHeader}>
+        <span className={classes.buttonTypeLabel}>
+          {b.type === "QUICK_REPLY" && <ReplyIcon fontSize="small" />}
+          {b.type === "URL" && <LinkIcon fontSize="small" />}
+          {b.type === "PHONE_NUMBER" && <PhoneIcon fontSize="small" />}
+          {b.type === "COPY_CODE" && <FileCopyIcon fontSize="small" />}
           {index + 1}. {tt(`buttons.types.${b.type}`, b.type)}
-        </Typography>
+        </span>
         <Box>
           <IconButton size="small" onClick={() => moveButton(index, -1)} disabled={index === 0}>
             <ArrowUpwardIcon fontSize="small" />
@@ -806,14 +1243,35 @@ const MetaTemplateModal = ({ open, onClose, whatsappId, template, onSaved }) => 
       open={open}
       onClose={() => !saving && onClose?.()}
       scroll="paper"
-      maxWidth="md"
+      maxWidth="lg"
       fullWidth
+      PaperProps={{ className: classes.dialogPaper }}
     >
-      <DialogTitle>
-        {isEdit
-          ? tt("title.edit", "Editar template Meta")
-          : tt("title.create", "Novo template Meta")}
-      </DialogTitle>
+      {/* Barra de título customizada */}
+      <Box className={classes.dialogTitleBar}>
+        <Box>
+          <Typography className={classes.dialogTitle}>
+            {isEdit
+              ? `${tt("title.edit", "Editar template Meta")} — ${template?.name}`
+              : tt("title.create", "Novo template Meta")}
+          </Typography>
+          <Typography className={classes.dialogSubtitle}>
+            {isEdit
+              ? tt(
+                  "subtitle.edit",
+                  "Edite os componentes e envie para revisão automática da Meta."
+                )
+              : tt(
+                  "subtitle.create",
+                  "Configure categoria, conteúdo e botões. A Meta revisa antes de liberar o uso."
+                )}
+          </Typography>
+        </Box>
+        <IconButton onClick={() => !saving && onClose?.()} size="small">
+          <CloseIcon />
+        </IconButton>
+      </Box>
+
       <Formik
         initialValues={initialValues}
         validationSchema={validationSchema}
@@ -821,66 +1279,89 @@ const MetaTemplateModal = ({ open, onClose, whatsappId, template, onSaved }) => 
         onSubmit={handleSubmit}
       >
         {({ values, errors, touched, setFieldValue, handleChange, handleBlur }) => (
-          <Form>
-            <DialogContent dividers>
-              <Grid container spacing={3}>
-                {/* ---- Coluna do formulário ---- */}
-                <Grid item xs={12} md={7}>
-                  <TextField
-                    label={tt("fields.name", "Nome do template")}
-                    name="name"
-                    variant="outlined"
-                    margin="dense"
-                    fullWidth
-                    disabled={isEdit}
-                    value={values.name}
-                    onChange={e =>
-                      setFieldValue(
-                        "name",
-                        e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "")
-                      )
-                    }
-                    onBlur={handleBlur}
-                    error={touched.name && Boolean(errors.name)}
-                    helperText={
-                      (touched.name && errors.name) ||
-                      tt("fields.nameHint", "minúsculas, números e _ (ex.: ola_cliente)")
-                    }
-                  />
-
-                  <Grid container spacing={2}>
-                    <Grid item xs={12} sm={6}>
-                      <FormControl variant="outlined" margin="dense" className={classes.field}>
-                        <InputLabel>{tt("fields.category", "Categoria")}</InputLabel>
-                        <Select
-                          name="category"
-                          value={values.category}
-                          onChange={handleChange}
-                          label={tt("fields.category", "Categoria")}
-                          disabled={isApproved}
+          <Form style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
+            <DialogContent className={classes.content} dividers={false}>
+              {/* ---- Coluna do formulário ---- */}
+              <Box className={classes.formColumn}>
+                {/* SEÇÃO 1 — Categoria */}
+                <Box className={classes.section}>
+                  <Typography className={classes.sectionTitle}>
+                    {tt("fields.category", "Categoria")}
+                  </Typography>
+                  <Typography className={classes.sectionHint}>
+                    {tt(
+                      "fields.categoryHint",
+                      "Escolha a categoria que melhor descreve o objetivo da mensagem."
+                    )}
+                  </Typography>
+                  <Box className={classes.categoryGrid}>
+                    {CATEGORY_OPTIONS.map(c => {
+                      const Icon = CATEGORY_META[c].icon;
+                      const selected = values.category === c;
+                      const disabled = isApproved && !selected;
+                      return (
+                        <Paper
+                          key={c}
+                          variant="outlined"
+                          className={`${classes.categoryCard} ${
+                            selected ? classes.categoryCardSelected : ""
+                          } ${disabled ? classes.categoryCardDisabled : ""}`}
+                          onClick={() => {
+                            if (!disabled) setFieldValue("category", c);
+                          }}
+                          elevation={0}
                         >
-                          {CATEGORY_OPTIONS.map(c => (
-                            <MenuItem key={c} value={c}>
-                              <Box>
-                                <Typography variant="body2">{c}</Typography>
-                                <Typography variant="caption" color="textSecondary">
-                                  {tt(`categories.${c}`, c)}
-                                </Typography>
-                              </Box>
-                            </MenuItem>
-                          ))}
-                        </Select>
-                        {isApproved && (
-                          <FormHelperText>
-                            {tt(
-                              "fields.categoryLocked",
-                              "Categoria não pode ser alterada em templates aprovados."
-                            )}
-                          </FormHelperText>
-                        )}
-                      </FormControl>
+                          <Icon className={classes.categoryIcon} />
+                          <div className={classes.categoryLabel}>
+                            {tt(`categories.${c}`, c)}
+                          </div>
+                          <div className={classes.categoryDesc}>
+                            {tt(`categoriesDesc.${c}`, CATEGORY_META[c].desc)}
+                          </div>
+                        </Paper>
+                      );
+                    })}
+                  </Box>
+                  {isApproved && (
+                    <FormHelperText>
+                      {tt(
+                        "fields.categoryLocked",
+                        "Categoria não pode ser alterada em templates aprovados."
+                      )}
+                    </FormHelperText>
+                  )}
+                </Box>
+
+                {/* SEÇÃO 2 — Nome e idioma */}
+                <Box className={classes.section}>
+                  <Typography className={classes.sectionTitle}>
+                    {tt("sections.identity", "Nome e idioma")}
+                  </Typography>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={7}>
+                      <TextField
+                        label={tt("fields.name", "Nome do template")}
+                        name="name"
+                        variant="outlined"
+                        margin="dense"
+                        fullWidth
+                        disabled={isEdit}
+                        value={values.name}
+                        onChange={e =>
+                          setFieldValue(
+                            "name",
+                            e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "")
+                          )
+                        }
+                        onBlur={handleBlur}
+                        error={touched.name && Boolean(errors.name)}
+                        helperText={
+                          (touched.name && errors.name) ||
+                          `${values.name.length}/512 — ${tt("fields.nameHint", "minúsculas, números e _")}`
+                        }
+                      />
                     </Grid>
-                    <Grid item xs={12} sm={6}>
+                    <Grid item xs={12} sm={5}>
                       <Autocomplete
                         freeSolo
                         options={LANGUAGE_OPTIONS}
@@ -903,10 +1384,9 @@ const MetaTemplateModal = ({ open, onClose, whatsappId, template, onSaved }) => 
                       />
                     </Grid>
                   </Grid>
-
                   <FormControl component="fieldset" margin="dense">
                     <Typography variant="caption" color="textSecondary">
-                      {tt("fields.parameterFormat", "Formato dos parâmetros")}
+                      {tt("fields.parameterFormat", "Tipo de variável")}
                     </Typography>
                     <RadioGroup
                       row
@@ -926,30 +1406,59 @@ const MetaTemplateModal = ({ open, onClose, whatsappId, template, onSaved }) => 
                       />
                     </RadioGroup>
                   </FormControl>
+                </Box>
 
-                  <Divider />
+                <Divider />
 
-                  {/* ---- HEADER ---- */}
-                  <Typography className={classes.sectionTitle} variant="subtitle2">
+                {/* SEÇÃO 3 — Conteúdo */}
+                <Box className={classes.section} mt={2}>
+                  <Typography className={classes.sectionTitle}>
+                    {tt("sections.content", "Conteúdo")}
+                  </Typography>
+                  <Typography className={classes.sectionHint}>
+                    {tt(
+                      "sections.contentHint",
+                      "Cabeçalho, corpo e rodapé do template. Variáveis exigem exemplos."
+                    )}
+                  </Typography>
+
+                  {/* Cabeçalho */}
+                  <Typography variant="caption" color="textSecondary">
                     {tt("header.title", "Cabeçalho (opcional)")}
                   </Typography>
-                  <FormControl variant="outlined" margin="dense" className={classes.field}>
-                    <InputLabel>{tt("header.type", "Tipo de cabeçalho")}</InputLabel>
-                    <Select
-                      value={headerFormat}
-                      onChange={e => {
-                        setHeaderFormat(e.target.value);
+                  <Box className={classes.headerTypeRow} mt={0.5} mb={1.5}>
+                    <button
+                      type="button"
+                      className={`${classes.headerChip} ${
+                        headerFormat === "NONE" ? classes.headerChipActive : ""
+                      }`}
+                      onClick={() => {
+                        setHeaderFormat("NONE");
                         setHeaderFile(null);
                       }}
-                      label={tt("header.type", "Tipo de cabeçalho")}
                     >
-                      <MenuItem value="NONE">{tt("header.none", "Nenhum")}</MenuItem>
-                      <MenuItem value="TEXT">{tt("header.text", "Texto")}</MenuItem>
-                      <MenuItem value="IMAGE">{tt("header.image", "Imagem")}</MenuItem>
-                      <MenuItem value="VIDEO">{tt("header.video", "Vídeo")}</MenuItem>
-                      <MenuItem value="DOCUMENT">{tt("header.document", "Documento")}</MenuItem>
-                    </Select>
-                  </FormControl>
+                      {tt("header.none", "Nenhum")}
+                    </button>
+                    {Object.entries(HEADER_TYPE_META).map(([fmt, meta]) => {
+                      const Icon = meta.icon;
+                      return (
+                        <button
+                          key={fmt}
+                          type="button"
+                          className={`${classes.headerChip} ${
+                            headerFormat === fmt ? classes.headerChipActive : ""
+                          }`}
+                          onClick={() => {
+                            setHeaderFormat(fmt);
+                            setHeaderFile(null);
+                          }}
+                        >
+                          <Icon fontSize="small" />
+                          {tt(`header.${fmt.toLowerCase()}`, meta.label)}
+                        </button>
+                      );
+                    })}
+                  </Box>
 
                   {headerFormat === "TEXT" && (
                     <>
@@ -970,6 +1479,7 @@ const MetaTemplateModal = ({ open, onClose, whatsappId, template, onSaved }) => 
                           margin="dense"
                           size="small"
                           fullWidth
+                          className={classes.exampleField}
                           value={headerExamples[v] || ""}
                           onChange={e =>
                             setHeaderExamples(prev => ({ ...prev, [v]: e.target.value }))
@@ -999,27 +1509,32 @@ const MetaTemplateModal = ({ open, onClose, whatsappId, template, onSaved }) => 
                             accept={MEDIA_HEADER_CONFIG[headerFormat]?.accept}
                             onChange={onSelectHeaderFile}
                           />
-                          <Button
-                            variant="outlined"
-                            size="small"
-                            startIcon={<AttachFileIcon />}
+                          <Box
+                            className={classes.fileDrop}
                             onClick={() => fileInputRef.current?.click()}
                           >
-                            {headerFile
-                              ? headerFile.name
-                              : tt("header.selectFile", "Selecionar arquivo")}
-                          </Button>
-                          <FormHelperText>
-                            {tt("header.fileLimits", "Imagem ≤5MB (jpg/png) • Vídeo ≤16MB (mp4) • PDF ≤100MB")}
-                          </FormHelperText>
+                            <AttachFileIcon color="action" />
+                            <Typography variant="body2" style={{ marginTop: 4 }}>
+                              {headerFile
+                                ? headerFile.name
+                                : tt("header.selectFile", "Clique para selecionar o arquivo")}
+                            </Typography>
+                            <Typography variant="caption" color="textSecondary">
+                              {tt("header.fileLimits", "Imagem ≤5MB (jpg/png) • Vídeo ≤16MB (mp4) • PDF ≤100MB")}
+                            </Typography>
+                          </Box>
                         </>
                       )}
                     </Box>
                   )}
 
-                  {/* ---- BODY ---- */}
-                  <Typography className={classes.sectionTitle} variant="subtitle2">
-                    {tt("body.title", "Corpo da mensagem *")}
+                  {/* Corpo da mensagem */}
+                  <Typography
+                    variant="caption"
+                    color="textSecondary"
+                    style={{ display: "block", marginTop: 12 }}
+                  >
+                    {tt("body.title", "Corpo da mensagem")} *
                   </Typography>
                   <TextField
                     name="bodyText"
@@ -1027,19 +1542,92 @@ const MetaTemplateModal = ({ open, onClose, whatsappId, template, onSaved }) => 
                     margin="dense"
                     fullWidth
                     multiline
-                    rows={4}
+                    rows={5}
                     inputProps={{ maxLength: 1024 }}
+                    inputRef={bodyInputRef}
+                    className={classes.bodyFieldNoBottomRadius}
                     placeholder={tt("body.placeholder", "Ex.: Olá {{1}}, seu pedido {{2}} foi enviado.")}
                     value={values.bodyText}
                     onChange={handleChange}
                     onBlur={handleBlur}
                     error={touched.bodyText && Boolean(errors.bodyText)}
-                    helperText={
-                      (touched.bodyText && errors.bodyText) ||
-                      `${values.bodyText.length}/1024`
-                    }
                   />
-                  {bodyVarsForRender(values.bodyText).map(v => (
+                  {/* Toolbar de formatação WhatsApp */}
+                  <Box className={classes.formatBar}>
+                    <Tooltip title={tt("toolbar.emoji", "Emoji")}>
+                      <IconButton
+                        size="small"
+                        onClick={e => setEmojiAnchor(e.currentTarget)}
+                      >
+                        <EmojiIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title={tt("toolbar.bold", "Negrito (*texto*)")}>
+                      <IconButton
+                        size="small"
+                        onClick={() => wrapBodySelection(setFieldValue, values, "*")}
+                      >
+                        <FormatBoldIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title={tt("toolbar.italic", "Itálico (_texto_)")}>
+                      <IconButton
+                        size="small"
+                        onClick={() => wrapBodySelection(setFieldValue, values, "_")}
+                      >
+                        <FormatItalicIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title={tt("toolbar.strike", "Tachado (~texto~)")}>
+                      <IconButton
+                        size="small"
+                        onClick={() => wrapBodySelection(setFieldValue, values, "~")}
+                      >
+                        <FormatStrikethroughIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title={tt("toolbar.code", "Monoespaçado (```texto```)")}>
+                      <IconButton
+                        size="small"
+                        onClick={() => wrapBodySelection(setFieldValue, values, "```")}
+                      >
+                        <CodeIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Button
+                      size="small"
+                      startIcon={<AddIcon />}
+                      onClick={() => insertBodyVariable(setFieldValue, values)}
+                    >
+                      {tt("toolbar.addVariable", "Adicionar variável")}
+                    </Button>
+                    <span className={classes.charCounter}>
+                      {(touched.bodyText && errors.bodyText) || `${values.bodyText.length}/1024`}
+                    </span>
+                  </Box>
+                  <Menu
+                    anchorEl={emojiAnchor}
+                    open={Boolean(emojiAnchor)}
+                    onClose={() => setEmojiAnchor(null)}
+                  >
+                    <Box
+                      display="grid"
+                      gridTemplateColumns="repeat(8, 1fr)"
+                      p={0.5}
+                    >
+                      {QUICK_EMOJIS.map(e => (
+                        <IconButton
+                          key={e}
+                          size="small"
+                          onClick={() => insertEmoji(setFieldValue, values, e)}
+                        >
+                          <span style={{ fontSize: 18 }}>{e}</span>
+                        </IconButton>
+                      ))}
+                    </Box>
+                  </Menu>
+
+                  {extractVars(values.bodyText).map(v => (
                     <TextField
                       key={v}
                       label={`${tt("fields.varExample", "Exemplo para")} {{${v}}}`}
@@ -1048,6 +1636,7 @@ const MetaTemplateModal = ({ open, onClose, whatsappId, template, onSaved }) => 
                       size="small"
                       fullWidth
                       required
+                      className={classes.exampleField}
                       value={bodyExamples[v] || ""}
                       onChange={e =>
                         setBodyExamples(prev => ({ ...prev, [v]: e.target.value }))
@@ -1055,17 +1644,18 @@ const MetaTemplateModal = ({ open, onClose, whatsappId, template, onSaved }) => 
                     />
                   ))}
 
-                  {/* ---- FOOTER ---- */}
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        size="small"
-                        checked={footerEnabled}
-                        onChange={e => setFooterEnabled(e.target.checked)}
-                      />
-                    }
-                    label={tt("footer.enable", "Adicionar rodapé")}
-                  />
+                  {/* Rodapé */}
+                  <Box className={classes.optionRow} mt={1}>
+                    <Typography variant="body2">
+                      {tt("footer.enable", "Adicionar rodapé")}
+                    </Typography>
+                    <Switch
+                      size="small"
+                      checked={footerEnabled}
+                      onChange={e => setFooterEnabled(e.target.checked)}
+                      color="primary"
+                    />
+                  </Box>
                   {footerEnabled && (
                     <TextField
                       label={tt("footer.text", "Texto do rodapé (máx. 60, sem variáveis)")}
@@ -1077,20 +1667,30 @@ const MetaTemplateModal = ({ open, onClose, whatsappId, template, onSaved }) => 
                       onChange={e => setFooterText(e.target.value)}
                     />
                   )}
+                </Box>
 
-                  {/* ---- BUTTONS ---- */}
-                  <Typography className={classes.sectionTitle} variant="subtitle2">
+                <Divider />
+
+                {/* SEÇÃO 4 — Botões */}
+                <Box className={classes.section} mt={2}>
+                  <Typography className={classes.sectionTitle}>
                     {tt("buttons.title", "Botões (opcional, máx. 10)")}
+                  </Typography>
+                  <Typography className={classes.sectionHint}>
+                    {tt(
+                      "buttons.subtitle",
+                      "Permitem ao cliente responder ou executar uma ação com um toque."
+                    )}
                   </Typography>
                   {buttons.map((b, i) => renderButtonEditor(b, i))}
                   <Box display="flex" alignItems="center" mt={0.5}>
-                    <FormControl variant="outlined" size="small" style={{ minWidth: 260 }}>
+                    <FormControl variant="outlined" size="small" style={{ minWidth: 240 }}>
                       <Select
                         displayEmpty
                         value=""
                         onChange={e => addButton(e.target.value)}
                         disabled={buttons.length >= MAX_BUTTONS}
-                        renderValue={() => tt("buttons.add", "+ Adicionar botão")}
+                        renderValue={() => `+ ${tt("buttons.add", "Adicionar botão")}`}
                       >
                         <MenuItem value="QUICK_REPLY">
                           {tt("buttons.types.QUICK_REPLY", "Resposta rápida")}
@@ -1112,7 +1712,6 @@ const MetaTemplateModal = ({ open, onClose, whatsappId, template, onSaved }) => 
                         </MenuItem>
                       </Select>
                     </FormControl>
-                    <AddIcon color="disabled" style={{ marginLeft: 4 }} />
                   </Box>
                   <FormHelperText>
                     {tt(
@@ -1120,54 +1719,86 @@ const MetaTemplateModal = ({ open, onClose, whatsappId, template, onSaved }) => 
                       "Respostas rápidas devem ficar agrupadas no início ou no fim."
                     )}
                   </FormHelperText>
+                </Box>
 
-                  <Divider style={{ margin: "12px 0" }} />
+                <Divider />
 
-                  <TextField
-                    label={tt("fields.ttl", "TTL da mensagem (segundos, opcional)")}
-                    variant="outlined"
-                    margin="dense"
-                    type="number"
-                    size="small"
-                    value={ttl}
-                    onChange={e => setTtl(e.target.value)}
-                    inputProps={{ min: 0 }}
-                  />
-
-                  {!isEdit && (
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          size="small"
-                          checked={allowCategoryChange}
-                          onChange={e => setAllowCategoryChange(e.target.checked)}
-                        />
-                      }
-                      label={tt(
-                        "fields.allowCategoryChange",
-                        "Permitir que a Meta ajuste a categoria automaticamente"
-                      )}
+                {/* SEÇÃO 5 — Opções avançadas */}
+                <Box className={classes.section} mt={2} mb={0}>
+                  <Typography className={classes.sectionTitle}>
+                    {tt("sections.options", "Opções")}
+                  </Typography>
+                  <Box className={classes.optionRow}>
+                    <Box>
+                      <Typography variant="body2">
+                        {tt("fields.ttlToggle", "Validade da mensagem (TTL)")}
+                      </Typography>
+                      <Typography variant="caption" color="textSecondary">
+                        {tt(
+                          "fields.ttlHint",
+                          "Se não entregue nesse período, a mensagem expira (padrão Meta: 10 min)."
+                        )}
+                      </Typography>
+                    </Box>
+                    <Switch
+                      size="small"
+                      checked={ttlEnabled}
+                      onChange={e => {
+                        setTtlEnabled(e.target.checked);
+                        if (!e.target.checked) setTtl("");
+                      }}
+                      color="primary"
+                    />
+                  </Box>
+                  {ttlEnabled && (
+                    <TextField
+                      label={tt("fields.ttl", "TTL em segundos")}
+                      variant="outlined"
+                      margin="dense"
+                      type="number"
+                      size="small"
+                      value={ttl}
+                      onChange={e => setTtl(e.target.value)}
+                      inputProps={{ min: 0 }}
                     />
                   )}
-                </Grid>
+                  {!isEdit && (
+                    <Box className={classes.optionRow}>
+                      <Box>
+                        <Typography variant="body2">
+                          {tt(
+                            "fields.allowCategoryChange",
+                            "Permitir que a Meta ajuste a categoria automaticamente"
+                          )}
+                        </Typography>
+                      </Box>
+                      <Switch
+                        size="small"
+                        checked={allowCategoryChange}
+                        onChange={e => setAllowCategoryChange(e.target.checked)}
+                        color="primary"
+                      />
+                    </Box>
+                  )}
+                </Box>
+              </Box>
 
-                {/* ---- Preview ---- */}
-                <Grid item xs={12} md={5}>
-                  <TemplatePreview
-                    headerFormat={headerFormat}
-                    headerText={headerText}
-                    headerExamples={headerExamples}
-                    headerFile={headerFile}
-                    bodyText={values.bodyText}
-                    bodyExamples={bodyExamples}
-                    footerText={footerEnabled ? footerText : ""}
-                    buttons={buttons}
-                  />
-                </Grid>
-              </Grid>
+              {/* ---- Preview ---- */}
+              <Box className={classes.previewColumn}>
+                <TemplatePreview
+                  headerFormat={headerFormat}
+                  headerText={headerText}
+                  headerExamples={headerExamples}
+                  headerFile={headerFile}
+                  bodyText={values.bodyText}
+                  bodyExamples={bodyExamples}
+                  footerText={footerEnabled ? footerText : ""}
+                  buttons={buttons}
+                />
+              </Box>
             </DialogContent>
-            <DialogActions>
-              <Button onClick={() => onClose?.()} disabled={saving} color="secondary">
+            <DialogActions className={classes.actionsBar} disableSpacing={false}>
+              <Button onClick={() => onClose?.()} disabled={saving} color="inherit">
                 {tt("actions.cancel", "Cancelar")}
               </Button>
               <Tooltip title={isEdit && !tplId ? tt("errors.missingId", "Template sem ID") : ""}>
@@ -1183,7 +1814,7 @@ const MetaTemplateModal = ({ open, onClose, whatsappId, template, onSaved }) => 
                     )}
                     {isEdit
                       ? tt("actions.save", "Salvar alterações")
-                      : tt("actions.create", "Criar template")}
+                      : tt("actions.create", "Enviar para revisão")}
                   </Button>
                 </span>
               </Tooltip>

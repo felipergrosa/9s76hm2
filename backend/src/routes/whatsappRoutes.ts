@@ -42,7 +42,7 @@ whatsappRoutes.get("/whatsapp-admin/:whatsappId", isAuth, checkPermission("conne
 // Meta API Official - Templates
 whatsappRoutes.get("/whatsapp/:whatsappId/templates", isAuth, checkPermission("connections.view"), MetaController.getTemplates);
 whatsappRoutes.get("/whatsapp/:whatsappId/session-window", isAuth, checkPermission("connections.view"), MetaController.getSessionWindow);
-whatsappRoutes.post("/whatsapp/:whatsappId/send-template-to-contact", isAuth, checkPermission("tickets.create"), MetaController.sendTemplateToContact);
+whatsappRoutes.post("/whatsapp/:whatsappId/send-template-to-contact", isAuth, checkPermission("tickets.create"), upload.single("headerFile"), MetaController.sendTemplateToContact);
 
 // Sync Full History - Sincronização organizada de histórico
 whatsappRoutes.post("/whatsapp/:whatsappId/sync-full-history", isAuth, checkPermission("connections.edit"), WhatsAppController.syncFullHistory);

@@ -20,6 +20,7 @@ interface Request {
   isPrivate?: boolean;
   isForwarded?: boolean;
   quotedMsg?: any;
+  isVoice?: boolean;  // Áudio gravado pelo mic do chat → voice note (PTT / voice:true)
 }
 
 /**
@@ -38,7 +39,8 @@ const SendWhatsAppMediaUnified = async ({
   body,
   isPrivate = false,
   isForwarded = false,
-  quotedMsg
+  quotedMsg,
+  isVoice = false
 }: Request): Promise<IWhatsAppMessage | any> => {
   
   try {
@@ -92,8 +94,8 @@ const SendWhatsAppMediaUnified = async ({
     }
 
     // Determinar tipo de mídia baseado no mimetype
-    let mediaType: "image" | "audio" | "video" | "document" = "document";
-    
+    let mediaType: "image" | "audio" | "video" | "document" | "ptt" = "document";
+
     if (media.mimetype.startsWith("image/")) {
       mediaType = "image";
     } else if (media.mimetype.startsWith("audio/")) {
@@ -101,8 +103,44 @@ const SendWhatsAppMediaUnified = async ({
     } else if (media.mimetype.startsWith("video/")) {
       mediaType = "video";
     }
-    
+
+    // Voice note: áudio gravado pelo mic do chat vira "ptt" (Bolileys ptt:true /
+    // Meta audio:{voice:true}). Ambos exigem OGG+OPUS — conversão abaixo.
+    if (isVoice && mediaType === "audio") {
+      mediaType = "ptt";
+    }
+
     logger.info(`[SendMediaUnified] Mimetype: ${media.mimetype}, MediaType: ${mediaType}`);
+
+    // Voice note precisa de OGG/OPUS — converter o arquivo em disco antes de
+    // resolver caminho/URL (aplica-se a Baileys e Official igualmente)
+    let effectiveFilename = media.filename;
+    let effectiveMimetype = media.mimetype;
+    if (mediaType === "ptt") {
+      const candidates = [
+        path.join(process.cwd(), "public", `company${ticket.companyId}`, `contact${contact.id}`, media.filename),
+        path.join(process.cwd(), "public", `company${ticket.companyId}`, media.filename)
+      ];
+      const sourcePath = candidates.find(p => fs.existsSync(p));
+
+      if (!sourcePath) {
+        throw new AppError(`Arquivo de áudio não encontrado: ${media.filename}`, 404);
+      }
+
+      // OGG/OPUS é exigido pela Meta para voice:true; se já está em ogg/opus
+      // não há necessidade de transcodificar
+      const alreadyOpus = /\.ogg$/i.test(media.filename) && /ogg|opus/.test(media.mimetype);
+      if (alreadyOpus) {
+        effectiveMimetype = "audio/ogg";
+      } else {
+        const ConvertAudioToOpus = require("../../helpers/ConvertAudioToOpus").default;
+        const oggPath = await ConvertAudioToOpus(sourcePath);
+        effectiveFilename = path.basename(oggPath);
+        effectiveMimetype = "audio/ogg";
+      }
+
+      logger.info(`[SendMediaUnified] Voice note preparada: ${effectiveFilename}`);
+    }
 
     // Formatar corpo da mensagem (caption)
     const formattedBody = body ? formatBody(body, ticket) : undefined;
@@ -118,10 +156,10 @@ const SendWhatsAppMediaUnified = async ({
         process.cwd(),
         "public",
         `company${ticket.companyId}`,
-        media.filename
+        effectiveFilename
       );
       logger.debug(`[SendMediaUnified] Caminho primário: ${publicPath}, existe: ${fs.existsSync(publicPath)}`);
-      
+
       // Se arquivo não existe, tentar com contact{id}/ prefixo
       if (!fs.existsSync(publicPath)) {
         publicPath = path.join(
@@ -129,7 +167,7 @@ const SendWhatsAppMediaUnified = async ({
           "public",
           `company${ticket.companyId}`,
           `contact${contact.id}`,
-          media.filename
+          effectiveFilename
         );
         logger.debug(`[SendMediaUnified] Caminho alternativo: ${publicPath}, existe: ${fs.existsSync(publicPath)}`);
       }
@@ -157,8 +195,8 @@ const SendWhatsAppMediaUnified = async ({
         mediaPath: publicPath,
         mediaType,
         caption: formattedBody,
-        filename: media.originalname,
-        mimetype: media.mimetype,
+        filename: effectiveFilename,
+        mimetype: effectiveMimetype,
         quotedMsgId: quotedMsg?.wid || quotedMsg?.id
       });
       
@@ -174,7 +212,7 @@ const SendWhatsAppMediaUnified = async ({
         process.cwd(),
         "public",
         `company${ticket.companyId}`,
-        media.filename
+        effectiveFilename
       );
 
       const pathWithContact = path.join(
@@ -182,17 +220,17 @@ const SendWhatsAppMediaUnified = async ({
         "public",
         `company${ticket.companyId}`,
         `contact${contact.id}`,
-        media.filename
+        effectiveFilename
       );
 
       const filePath = fs.existsSync(pathWithContact) ? pathWithContact : rootPath;
 
       // Tentar primeiro com contact{id}/ prefixo (formato novo)
-      let mediaUrl = `${backendUrl}/public/company${ticket.companyId}/contact${contact.id}/${media.filename}`;
-      
+      let mediaUrl = `${backendUrl}/public/company${ticket.companyId}/contact${contact.id}/${effectiveFilename}`;
+
       // Se não existir na pasta contact, usar formato antigo (raiz)
       if (!fs.existsSync(pathWithContact)) {
-        mediaUrl = `${backendUrl}/public/company${ticket.companyId}/${media.filename}`;
+        mediaUrl = `${backendUrl}/public/company${ticket.companyId}/${effectiveFilename}`;
       }
 
       // Gerar thumbnail se for PDF
@@ -239,10 +277,10 @@ const SendWhatsAppMediaUnified = async ({
     let mediaTypeDb = "document";
     if (mediaType === "image") mediaTypeDb = "image";
     else if (mediaType === "video") mediaTypeDb = "video";
-    else if (mediaType === "audio") mediaTypeDb = "audio";
+    else if (mediaType === "audio" || mediaType === "ptt") mediaTypeDb = "audio";
     else if (media.mimetype === "application/pdf") mediaTypeDb = "application";
     else if (media.mimetype.startsWith("application/")) mediaTypeDb = "application";
-    
+
     // Salvar no banco
     await CreateMessageService({
       messageData: {
@@ -252,7 +290,7 @@ const SendWhatsAppMediaUnified = async ({
         body: formattedBody || media.originalname,
         fromMe: true,
         mediaType: mediaTypeDb,
-        mediaUrl: `contact${ticket.contactId}/${media.filename}`, // Incluir contactId no caminho
+        mediaUrl: `contact${ticket.contactId}/${effectiveFilename}`, // Incluir contactId no caminho
         read: true,
         ack: 1,
         remoteJid: ticket.contact?.remoteJid,

@@ -78,9 +78,17 @@ const SyncWabaTemplates = async ({
     }
   }
 
-  // Remove templates locais que não existem mais na Meta
+  // Remove templates locais que não existem mais na Meta.
+  // Proteção: registros criados há menos de 10 minutos são preservados — a
+  // lista da Meta pode demorar a refletir um template recém-criado, e remover
+  // o registro apagaria o headerMediaPath necessário para o envio.
+  const recencyThreshold = new Date(Date.now() - 10 * 60 * 1000);
   const staleIds = localRows
-    .filter((row: WhatsappTemplate) => !remoteIds.has(row.metaTemplateId))
+    .filter(
+      (row: WhatsappTemplate) =>
+        !remoteIds.has(row.metaTemplateId) &&
+        (!row.createdAt || row.createdAt < recencyThreshold)
+    )
     .map((row: WhatsappTemplate) => row.id);
 
   let removed = 0;
