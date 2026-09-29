@@ -48,7 +48,7 @@ const useStyles = makeStyles(theme => ({
   },
 }));
 
-const DripSequenceSchema = Yup.object().shape({
+const FollowUpSchema = Yup.object().shape({
   name: Yup.string().required("Obrigatório"),
   tagId: Yup.string().required("Obrigatório")
 });
@@ -60,48 +60,108 @@ const initialState = {
   active: true
 };
 
-const emptyStep = { delayDays: 0, message: "" };
+const emptyStep = {
+  delayDays: 0,
+  delayMinutes: 0,
+  delayUnit: "days",
+  delayValue: 0,
+  message: "",
+  metaTemplateName: "",
+  metaTemplateLanguage: "pt_BR"
+};
 
-const DripSequenceModal = ({ open, onClose, dripSequenceId }) => {
+// Converte valor+unidade do modal em delayDays/delayMinutes do backend
+const stepToDelay = step => {
+  const value = Number(step.delayValue) || 0;
+  if (step.delayUnit === "minutes") return { delayDays: 0, delayMinutes: value };
+  if (step.delayUnit === "hours") return { delayDays: 0, delayMinutes: value * 60 };
+  return { delayDays: value, delayMinutes: 0 };
+};
+
+// Converte delayDays/delayMinutes do backend para valor+unidade do modal
+const delayToStep = step => {
+  const days = Number(step.delayDays) || 0;
+  const minutes = Number(step.delayMinutes) || 0;
+  if (minutes > 0 && minutes % 60 === 0 && days === 0)
+    return { delayUnit: "hours", delayValue: minutes / 60 };
+  if (minutes > 0 && days === 0)
+    return { delayUnit: "minutes", delayValue: minutes };
+  return { delayUnit: "days", delayValue: days };
+};
+
+const FollowUpModal = ({ open, onClose, followUpId }) => {
   const classes = useStyles();
   const { whatsApps } = useWhatsApps();
-  const [dripSequence, setDripSequence] = useState(initialState);
+  const [followUp, setFollowUp] = useState(initialState);
   const [tags, setTags] = useState([]);
   const [steps, setSteps] = useState([{ ...emptyStep }]);
+  const [metaTemplates, setMetaTemplates] = useState([]);
+  const [selectedWhatsapp, setSelectedWhatsapp] = useState(null);
 
   useEffect(() => {
     if (!open) return;
-    api.get("/tags/", { params: { kanban: 0 } })
-      .then(({ data }) => setTags(data.tags || []))
+    // Tags normais (kanban=0) + lanes do Kanban (kanban=1) — ambas disparam follow-up
+    Promise.all([
+      api.get("/tags/", { params: { kanban: 0 } }),
+      api.get("/tags/", { params: { kanban: 1 } })
+    ])
+      .then(([normal, lanes]) => {
+        const normalTags = (normal.data.tags || normal.data || []).map(t => ({ ...t, isLane: false }));
+        const laneTags = (lanes.data.tags || lanes.data || []).map(t => ({ ...t, isLane: true }));
+        setTags([...laneTags, ...normalTags]);
+      })
       .catch(toastError);
   }, [open]);
 
+  // Carrega templates Meta quando a conexão selecionada é oficial
   useEffect(() => {
-    const fetchDripSequence = async () => {
-      if (!dripSequenceId) {
-        setDripSequence(initialState);
+    const wa = whatsApps.find(w => w.id === Number(followUp.whatsappId));
+    setSelectedWhatsapp(wa || null);
+    if (wa && wa.channelType === "official") {
+      api.get(`/meta-templates/${wa.id}`)
+        .then(({ data }) => {
+          const list = data.templates || [];
+          setMetaTemplates(list.filter(t => t.status === "APPROVED"));
+        })
+        .catch(() => setMetaTemplates([]));
+    } else {
+      setMetaTemplates([]);
+    }
+  }, [followUp.whatsappId, whatsApps]);
+
+  useEffect(() => {
+    const fetchFollowUp = async () => {
+      if (!followUpId) {
+        setFollowUp(initialState);
         setSteps([{ ...emptyStep }]);
         return;
       }
       try {
-        const { data } = await api.get(`/drip-sequences/${dripSequenceId}`);
-        setDripSequence({
+        const { data } = await api.get(`/drip-sequences/${followUpId}`);
+        setFollowUp({
           name: data.name || "",
           tagId: data.tagId || "",
           whatsappId: data.whatsappId || "",
           active: data.active !== false
         });
-        const loadedSteps = (data.steps || []).map(s => ({ delayDays: s.delayDays, message: s.message }));
+        const loadedSteps = (data.steps || []).map(s => ({
+          ...emptyStep,
+          ...delayToStep(s),
+          message: s.message || "",
+          metaTemplateName: s.metaTemplateName || "",
+          metaTemplateLanguage: s.metaTemplateLanguage || "pt_BR",
+          metaTemplateVariables: s.metaTemplateVariables || ""
+        }));
         setSteps(loadedSteps.length > 0 ? loadedSteps : [{ ...emptyStep }]);
       } catch (err) {
         toastError(err);
       }
     };
-    fetchDripSequence();
-  }, [dripSequenceId, open]);
+    fetchFollowUp();
+  }, [followUpId, open]);
 
   const handleClose = () => {
-    setDripSequence(initialState);
+    setFollowUp(initialState);
     setSteps([{ ...emptyStep }]);
     onClose();
   };
@@ -113,10 +173,19 @@ const DripSequenceModal = ({ open, onClose, dripSequenceId }) => {
   };
 
   const handleSave = async values => {
-    const validSteps = steps.filter(s => s.message && s.message.trim());
+    const isOfficial = selectedWhatsapp?.channelType === "official";
+    const validSteps = steps.filter(s =>
+      (s.message && s.message.trim()) || (s.metaTemplateName && s.metaTemplateName.trim())
+    );
     if (validSteps.length === 0) {
-      toast.warning("Adicione ao menos uma etapa com mensagem");
+      toast.warning("Adicione ao menos uma etapa com mensagem ou template");
       return;
+    }
+    if (isOfficial && validSteps.some(s => !s.metaTemplateName)) {
+      toast.warning(
+        "Conexão oficial: etapas sem template Meta só entregam dentro da janela de 24h. " +
+        "Fora dela o envio falha — considere usar template em todas as etapas."
+      );
     }
 
     const payload = {
@@ -124,18 +193,22 @@ const DripSequenceModal = ({ open, onClose, dripSequenceId }) => {
       whatsappId: values.whatsappId || null,
       steps: validSteps.map((step, index) => ({
         order: index,
-        delayDays: Number(step.delayDays) || 0,
-        message: step.message
+        ...stepToDelay(step),
+        message: step.message || "",
+        metaTemplateName: step.metaTemplateName || null,
+        metaTemplateLanguage: step.metaTemplateName
+          ? step.metaTemplateLanguage || "pt_BR"
+          : null
       }))
     };
 
     try {
-      if (dripSequenceId) {
-        await api.put(`/drip-sequences/${dripSequenceId}`, payload);
+      if (followUpId) {
+        await api.put(`/drip-sequences/${followUpId}`, payload);
       } else {
         await api.post("/drip-sequences", payload);
       }
-      toast.success("Sequência de drip salva com sucesso!");
+      toast.success("Follow-up salvo com sucesso!");
     } catch (err) {
       toastError(err);
     }
@@ -144,11 +217,11 @@ const DripSequenceModal = ({ open, onClose, dripSequenceId }) => {
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth scroll="paper">
-      <DialogTitle>{dripSequenceId ? "Editar Sequência de Drip" : "Nova Sequência de Drip"}</DialogTitle>
+      <DialogTitle>{followUpId ? "Editar Follow-up" : "Novo Follow-up"}</DialogTitle>
       <Formik
-        initialValues={dripSequence}
+        initialValues={followUp}
         enableReinitialize
-        validationSchema={DripSequenceSchema}
+        validationSchema={FollowUpSchema}
         onSubmit={(values, actions) => {
           setTimeout(() => {
             handleSave(values);
@@ -174,14 +247,16 @@ const DripSequenceModal = ({ open, onClose, dripSequenceId }) => {
                 </Grid>
                 <Grid item xs={12} sm={6}>
                   <FormControl variant="outlined" margin="dense" fullWidth error={touched.tagId && Boolean(errors.tagId)}>
-                    <InputLabel>Tag que dispara a inscrição</InputLabel>
+                    <InputLabel>Tag / Lane que dispara a inscrição</InputLabel>
                     <Select
                       value={values.tagId}
                       onChange={e => setFieldValue("tagId", e.target.value)}
-                      label="Tag que dispara a inscrição"
+                      label="Tag / Lane que dispara a inscrição"
                     >
                       {tags.map(tag => (
-                        <MenuItem key={tag.id} value={tag.id}>{tag.name}</MenuItem>
+                        <MenuItem key={tag.id} value={tag.id}>
+                          {tag.isLane ? `Lane: ${tag.name}` : tag.name}
+                        </MenuItem>
                       ))}
                     </Select>
                   </FormControl>
@@ -216,26 +291,50 @@ const DripSequenceModal = ({ open, onClose, dripSequenceId }) => {
 
                 <Grid item xs={12}>
                   <Typography variant="subtitle2" gutterBottom>
-                    Etapas (mensagens enviadas em sequência). Use {"{{name}}"} ou {"{{firstName}}"} para personalizar.
+                    Etapas — enviadas em sequência enquanto o contato estiver na lane/tag e não interagir.
+                    Use {"{{name}}"} ou {"{{firstName}}"} para personalizar.
                   </Typography>
+                  {selectedWhatsapp?.channelType === "official" && (
+                    <Typography variant="caption" color="textSecondary">
+                      Conexão oficial: mensagens livres só entregam dentro da janela de 24h.
+                      Para follow-up fora da janela, selecione um template Meta na etapa.
+                    </Typography>
+                  )}
                 </Grid>
 
                 {steps.map((step, index) => (
                   <Grid item xs={12} key={index}>
                     <Paper variant="outlined" className={classes.stepCard}>
                       <Grid container spacing={1} alignItems="center">
-                        <Grid item xs={4} sm={3}>
-                          <TextField
-                            label={index === 0 ? "Enviar no dia" : "Dias após a etapa anterior"}
-                            type="number"
-                            value={step.delayDays}
-                            onChange={e => handleStepChange(index, "delayDays", e.target.value)}
-                            variant="outlined"
-                            size="small"
-                            fullWidth
-                          />
+                        <Grid item xs={5} sm={4}>
+                          <Grid container spacing={1}>
+                            <Grid item xs={7}>
+                              <TextField
+                                label={index === 0 ? "Enviar após" : "Após etapa anterior"}
+                                type="number"
+                                inputProps={{ min: 0 }}
+                                value={step.delayValue}
+                                onChange={e => handleStepChange(index, "delayValue", e.target.value)}
+                                variant="outlined"
+                                size="small"
+                                fullWidth
+                              />
+                            </Grid>
+                            <Grid item xs={5}>
+                              <FormControl variant="outlined" size="small" fullWidth>
+                                <Select
+                                  value={step.delayUnit}
+                                  onChange={e => handleStepChange(index, "delayUnit", e.target.value)}
+                                >
+                                  <MenuItem value="minutes">min</MenuItem>
+                                  <MenuItem value="hours">horas</MenuItem>
+                                  <MenuItem value="days">dias</MenuItem>
+                                </Select>
+                              </FormControl>
+                            </Grid>
+                          </Grid>
                         </Grid>
-                        <Grid item xs={7} sm={8}>
+                        <Grid item xs={6} sm={7}>
                           <TextField
                             label={`Mensagem da etapa ${index + 1}`}
                             value={step.message}
@@ -246,6 +345,34 @@ const DripSequenceModal = ({ open, onClose, dripSequenceId }) => {
                             rows={2}
                             fullWidth
                           />
+                          {metaTemplates.length > 0 && (
+                            <FormControl variant="outlined" size="small" fullWidth style={{ marginTop: 8 }}>
+                              <InputLabel>Template Meta (opcional — substitui a mensagem)</InputLabel>
+                              <Select
+                                value={
+                                  step.metaTemplateName
+                                    ? `${step.metaTemplateName}|||${step.metaTemplateLanguage || "pt_BR"}`
+                                    : ""
+                                }
+                                onChange={e => {
+                                  const [name, lang] = String(e.target.value).split("|||");
+                                  handleStepChange(index, "metaTemplateName", name || "");
+                                  handleStepChange(index, "metaTemplateLanguage", lang || "pt_BR");
+                                }}
+                                label="Template Meta (opcional — substitui a mensagem)"
+                              >
+                                <MenuItem value="">Nenhum (mensagem livre)</MenuItem>
+                                {metaTemplates.map(t => (
+                                  <MenuItem
+                                    key={t.id || `${t.name}-${t.language}`}
+                                    value={`${t.name}|||${t.language}`}
+                                  >
+                                    {t.name} ({t.language})
+                                  </MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
+                          )}
                         </Grid>
                         <Grid item xs={1}>
                           <IconButton size="small" onClick={() => handleRemoveStep(index)} disabled={steps.length === 1}>
@@ -268,7 +395,7 @@ const DripSequenceModal = ({ open, onClose, dripSequenceId }) => {
                 Cancelar
               </Button>
               <Button type="submit" color="primary" disabled={isSubmitting} variant="contained" className={classes.btnWrapper}>
-                {dripSequenceId ? "Salvar" : "Adicionar"}
+                {followUpId ? "Salvar" : "Adicionar"}
                 {isSubmitting && <CircularProgress size={24} className={classes.buttonProgress} />}
               </Button>
             </DialogActions>
@@ -279,4 +406,4 @@ const DripSequenceModal = ({ open, onClose, dripSequenceId }) => {
   );
 };
 
-export default DripSequenceModal;
+export default FollowUpModal;

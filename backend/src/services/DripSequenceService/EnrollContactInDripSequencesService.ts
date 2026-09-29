@@ -9,6 +9,7 @@ interface Request {
 }
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const MS_PER_MINUTE = 60 * 1000;
 
 /**
  * Inscreve o contato em qualquer sequência de drip ativa vinculada à tag recém-aplicada.
@@ -53,7 +54,11 @@ const EnrollContactInDripSequencesService = async ({
     }
 
     await enrollment.update({
-      nextSendAt: new Date(Date.now() + firstStep.delayDays * MS_PER_DAY)
+      nextSendAt: new Date(
+        Date.now() +
+          firstStep.delayDays * MS_PER_DAY +
+          (firstStep.delayMinutes || 0) * MS_PER_MINUTE
+      )
     });
   }
 };

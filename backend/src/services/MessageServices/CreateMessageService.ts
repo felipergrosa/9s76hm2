@@ -156,6 +156,24 @@ const CreateMessageService = async ({
     throw new Error("ERR_CREATING_MESSAGE");
   }
 
+  // Interação do contato (mensagem inbound): cancela drip sequences ativas e
+  // tira o ticket da lane — fire-and-forget para não segurar a fila de mensagens.
+  if (!message.fromMe && messageData.contactId && !message.isPrivate) {
+    import("../DripSequenceService/ExitDripSequencesOnInteractionService")
+      .then(({ default: exitService }) =>
+        exitService({
+          companyId,
+          contactId: messageData.contactId,
+          ticketId: message.ticketId
+        })
+      )
+      .catch(err =>
+        logger.debug(
+          `[CreateMessageService] Exit de drip por interação falhou: ${err?.message}`
+        )
+      );
+  }
+
   // Invalidar cache de mensagens do ticket (nova mensagem chegou)
   // CRÍTICO: aguardar invalidação ANTES de emitir para evitar race condition
   // onde o frontend carrega cache stale e sobrescreve a mensagem recebida via Socket

@@ -6,7 +6,11 @@ import AppError from "../../errors/AppError";
 interface StepInput {
   order: number;
   delayDays: number;
+  delayMinutes?: number;
   message: string;
+  metaTemplateName?: string;
+  metaTemplateLanguage?: string;
+  metaTemplateVariables?: string;
 }
 
 interface Request {
@@ -26,6 +30,12 @@ const CreateService = async (data: Request): Promise<DripSequence> => {
     throw new AppError("Adicione ao menos uma etapa de mensagem");
   }
 
+  const hasContent = (s: StepInput) =>
+    (s.message && s.message.trim()) || (s.metaTemplateName && s.metaTemplateName.trim());
+  if (!data.steps.every(hasContent)) {
+    throw new AppError("Cada etapa precisa de mensagem ou template Meta");
+  }
+
   return sequelize.transaction(async transaction => {
     const record = await DripSequence.create(
       {
@@ -43,7 +53,16 @@ const CreateService = async (data: Request): Promise<DripSequence> => {
         dripSequenceId: record.id,
         order: step.order ?? index,
         delayDays: step.delayDays ?? 0,
-        message: step.message
+        delayMinutes: step.delayMinutes ?? 0,
+        message: step.message || "",
+        metaTemplateName: step.metaTemplateName || null,
+        metaTemplateLanguage: step.metaTemplateLanguage || null,
+        metaTemplateVariables:
+          typeof step.metaTemplateVariables === "string"
+            ? step.metaTemplateVariables
+            : step.metaTemplateVariables
+            ? JSON.stringify(step.metaTemplateVariables)
+            : null
       })),
       { transaction }
     );

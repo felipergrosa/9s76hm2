@@ -18,7 +18,15 @@ type StoreData = {
   tagId: number;
   whatsappId?: number | null;
   active?: boolean;
-  steps: { order: number; delayDays: number; message: string }[];
+  steps: {
+    order: number;
+    delayDays: number;
+    delayMinutes?: number;
+    message: string;
+    metaTemplateName?: string;
+    metaTemplateLanguage?: string;
+    metaTemplateVariables?: string;
+  }[];
 };
 
 export const index = async (req: Request, res: Response): Promise<Response> => {

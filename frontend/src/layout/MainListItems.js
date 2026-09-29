@@ -53,6 +53,7 @@ import {
   Bot as SmartToy,
   ShieldCheck as RolesIcon,
   ScanSearch as LeadScraperIcon,
+  Repeat as FollowUpIcon,
   BookOpen as KnowledgeBaseIcon,
   Sliders as CustomFieldsIcon,
 } from "lucide-react";
@@ -302,6 +303,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
   const isCampaignRouteActive =
     location.pathname === "/campaigns" ||
     location.pathname.startsWith("/contact-lists") ||
+    location.pathname.startsWith("/follow-ups") ||
     location.pathname.startsWith("/campaigns-config");
 
   const isFlowbuilderRouteActive =
@@ -724,6 +726,15 @@ const MainListItems = ({ collapsed, drawerClose }) => {
                 viewMode={viewMode}
                 tooltip={collapsed}
               />
+              {hasPermission("drip-sequences.view") && (
+                <ListItemLink
+                  to="/follow-ups"
+                  primary="Follow-ups"
+                  icon={<FollowUpIcon />}
+                  viewMode={viewMode}
+                  tooltip={collapsed}
+                />
+              )}
               {hasPermission("email-campaigns.view") && (
                 <ListItemLink
                   to="/email-campaigns"

@@ -27,7 +27,7 @@ import Title from "../../components/Title";
 
 import api from "../../services/api";
 import TableRowSkeleton from "../../components/TableRowSkeleton";
-import DripSequenceModal from "../../components/DripSequenceModal";
+import FollowUpModal from "../../components/FollowUpModal";
 import ConfirmationModal from "../../components/ConfirmationModal";
 import toastError from "../../errors/toastError";
 
@@ -57,7 +57,7 @@ const useStyles = makeStyles(theme => ({
   },
 }));
 
-const DripSequences = () => {
+const FollowUps = () => {
   const classes = useStyles();
 
   const [loading, setLoading] = useState(false);
@@ -106,7 +106,7 @@ const DripSequences = () => {
     try {
       await api.delete(`/drip-sequences/${id}`);
       dispatch({ type: "DELETE", payload: id });
-      toast.success("Sequência excluída");
+      toast.success("Follow-up excluído");
     } catch (err) {
       toastError(err);
     }
@@ -128,20 +128,20 @@ const DripSequences = () => {
   return (
     <MainContainer>
       <ConfirmationModal
-        title={deleting && "Excluir sequência de drip?"}
+        title={deleting && "Excluir follow-up?"}
         open={confirmOpen}
         onClose={() => setConfirmOpen(false)}
         onConfirm={() => handleDelete(deleting.id)}
       >
         Etapas e inscrições associadas também serão removidas. Essa ação não pode ser desfeita.
       </ConfirmationModal>
-      <DripSequenceModal
+      <FollowUpModal
         open={modalOpen}
         onClose={handleModalClose}
-        dripSequenceId={selectedId}
+        followUpId={selectedId}
       />
       <MainHeader>
-        <Title>Sequências de Drip ({records.length})</Title>
+        <Title>Follow-ups ({records.length})</Title>
         <MainHeaderButtonsWrapper>
           <TextField
             placeholder="Buscar..."
@@ -220,4 +220,4 @@ const DripSequences = () => {
   );
 };
 
-export default DripSequences;
+export default FollowUps;

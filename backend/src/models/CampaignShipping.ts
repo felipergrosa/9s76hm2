@@ -7,7 +7,8 @@ import {
   PrimaryKey,
   AutoIncrement,
   ForeignKey,
-  BelongsTo
+  BelongsTo,
+  DataType
 } from "sequelize-typescript";
 import Campaign from "./Campaign";
 import ContactListItem from "./ContactListItem";
@@ -55,6 +56,18 @@ class CampaignShipping extends Model<CampaignShipping> {
 
   @Column
   deliveredAt: Date;
+
+  // wid da mensagem na Meta (usado para reconciliar status do webhook)
+  @Column(DataType.TEXT)
+  wid: string;
+
+  // Último status reportado pela Meta: sent | delivered | read | failed
+  @Column(DataType.TEXT)
+  metaStatus: string;
+
+  // Momento em que a Meta confirmou leitura
+  @Column
+  readAt: Date;
 
   // Índice da mensagem escolhida (1..5) para suportar mídia por mensagem
   @Column

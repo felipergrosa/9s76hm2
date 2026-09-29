@@ -15,6 +15,7 @@ import DownloadOfficialMediaService from "./DownloadOfficialMediaService";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
 import { UpdateSessionWindow } from "../TicketServices/UpdateSessionWindowService";
 import { sessionWindowRenewalQueue } from "../../queues";
+import CampaignShipping from "../../models/CampaignShipping";
 import { Op } from "sequelize";
 
 // Lock mechanism para evitar race conditions na criação de contatos/tickets
@@ -875,6 +876,42 @@ async function processMessageStatus(
     // ou purgada): warn e segue — lançar erro aqui jogaria o change inteiro
     // para dead-letter após 8 retentativas inúteis.
     logger.warn(`[WebhookProcessor] Mensagem ${messageId} não encontrada para ACK da empresa ${companyId}`);
+  }
+
+  // Reconciliar CampaignShipping: o wid gravado no dispatch permite refletir
+  // o status real da Meta (delivered/read/failed) no relatório da campanha.
+  try {
+    const shipping = await CampaignShipping.findOne({
+      where: { wid: messageId }
+    });
+    if (shipping) {
+      const update: Record<string, any> = { metaStatus: ackStatus };
+      if (ackStatus === "delivered") {
+        update.deliveredAt = status.timestamp
+          ? new Date(Number(status.timestamp) * 1000)
+          : new Date();
+      }
+      if (ackStatus === "read") {
+        update.readAt = status.timestamp
+          ? new Date(Number(status.timestamp) * 1000)
+          : new Date();
+      }
+      if (ackStatus === "failed") {
+        update.status = "failed";
+        update.lastError =
+          status.errors?.[0]?.title ||
+          status.errors?.[0]?.code ||
+          "Falha reportada pela Meta";
+      }
+      await shipping.update(update);
+      logger.debug(
+        `[WebhookProcessor] CampaignShipping #${shipping.id} reconciliado: metaStatus=${ackStatus}`
+      );
+    }
+  } catch (err: any) {
+    logger.warn(
+      `[WebhookProcessor] Erro ao reconciliar CampaignShipping do wid ${messageId}: ${err.message}`
+    );
   }
 }
 

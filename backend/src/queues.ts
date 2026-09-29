@@ -53,6 +53,7 @@ import ContactTag from "./models/ContactTag";
 import Plan from "./models/Plan";
 import GetWhatsAppAdapter from "./helpers/GetWhatsAppAdapter";
 import SendTemplateToContact from "./services/MetaServices/SendTemplateToContact";
+import WhatsappTemplate from "./models/WhatsappTemplate";
 import GetTemplateDefinition from "./services/MetaServices/GetTemplateDefinition";
 import MapTemplateParameters from "./services/MetaServices/MapTemplateParameters";
 import CreateMessageService from "./services/MessageServices/CreateMessageService";
@@ -2161,6 +2162,7 @@ async function handleDispatchCampaign(job) {
     if (useOfficialTemplate) {
       const templateName = (campaign as any).metaTemplateName as string;
       const languageCode = ((campaign as any).metaTemplateLanguage as string) || "pt_BR";
+      let sentWid: string | undefined;
 
       try {
         // REGRA UNIFICADA: TODA campanha cria ticket "campaign" primeiro
@@ -2256,17 +2258,55 @@ async function handleDispatchCampaign(job) {
             }
 
             if (templateDef.headerFormat &&
-              ["DOCUMENT", "IMAGE", "VIDEO"].includes(templateDef.headerFormat) &&
-              templateDef.headerHandle) {
+              ["DOCUMENT", "IMAGE", "VIDEO"].includes(templateDef.headerFormat)) {
+              // header_handle é token opaco do Resumable Upload — não baixável.
+              // Resolver a mídia real: arquivo persistido na criação do template
+              // (WhatsappTemplate.headerMediaPath) ou URL pública do handle.
+              const backendUrl = process.env.BACKEND_URL || "http://localhost:8080";
+              let headerMediaUrl: string | null = null;
+              let headerMediaLocalPath: string | null = null;
+
+              const localTemplate = await WhatsappTemplate.findOne({
+                where: {
+                  whatsappId: selectedWhatsappId,
+                  companyId: campaign.companyId,
+                  name: templateName,
+                  language: languageCode
+                }
+              });
+              if (localTemplate?.headerMediaPath) {
+                const filePath = path.resolve(
+                  "public",
+                  `company${campaign.companyId}`,
+                  localTemplate.headerMediaPath
+                );
+                if (fs.existsSync(filePath)) {
+                  headerMediaLocalPath = localTemplate.headerMediaPath;
+                  headerMediaUrl = `${backendUrl}/public/company${campaign.companyId}/${localTemplate.headerMediaPath}`;
+                }
+              }
+
+              // Fallback: templates criados no Manager podem trazer URL real no handle
+              if (!headerMediaUrl && /^https?:\/\//.test(templateDef.headerHandle || "")) {
+                headerMediaUrl = templateDef.headerHandle;
+              }
+
+              if (!headerMediaUrl) {
+                throw new Error(
+                  `Template "${templateName}" exige mídia no cabeçalho, mas nenhum arquivo está disponível. ` +
+                  `Recadastre a mídia na edição do template em Templates Meta.`
+                );
+              }
+
               logger.info(`[DispatchCampaign] Template tem header ${templateDef.headerFormat}, incluindo no payload`);
               templateHeaderMediaType = templateDef.headerFormat.toLowerCase();
-              templateHeaderHandle = templateDef.headerHandle;
+              templateHeaderHandle = headerMediaLocalPath;
               const headerComponent = {
                 type: "header",
                 parameters: [{
                   type: templateDef.headerFormat.toLowerCase(),
                   [templateDef.headerFormat.toLowerCase()]: {
-                    link: templateDef.headerHandle
+                    link: headerMediaUrl
                   }
                 }]
               };
@@ -2349,6 +2389,7 @@ async function handleDispatchCampaign(job) {
 
             // Salvar mensagem no banco para aparecer no histórico do ticket
             const messageId = sentMessage?.id || `campaign-${Date.now()}`;
+            sentWid = sentMessage?.id;
             await CreateMessageService({
               messageData: {
                 wid: messageId,
@@ -2390,6 +2431,8 @@ async function handleDispatchCampaign(job) {
         await campaignShipping.update({
           deliveredAt: moment(),
           status: 'delivered',
+          wid: sentWid || null,
+          metaStatus: sentWid ? 'sent' : null,
           attempts: (campaignShipping.attempts || 0) + 1
         });
         resetBackoffOnSuccess(selectedWhatsappId);
@@ -2402,6 +2445,7 @@ async function handleDispatchCampaign(job) {
     } else {
       // REGRA UNIFICADA BAILEYS: TODA campanha cria ticket "campaign" primeiro
       // Exceto se já existe ticket "open" - nesse caso, reusar e apenas registrar mensagem
+      let lastSentWid: string | undefined;
       const { canonical: canonicalNumber } = safeNormalizePhoneNumber(String(campaignShipping.number || ""));
       const normalizedNumber = canonicalNumber || String(campaignShipping.number || "");
       const [contact] = await Contact.findOrCreate({
@@ -2541,6 +2585,7 @@ async function handleDispatchCampaign(job) {
             const sentMessage = await wbot.sendMessage(chatId, {
               text: `\u200c${campaignShipping.message}`
             });
+            lastSentWid = sentMessage?.key?.id || lastSentWid;
             await verifyMessage(sentMessage, ticket, contact, null, true, false, true); // isCampaign=true
           }
 
@@ -2574,11 +2619,13 @@ async function handleDispatchCampaign(job) {
                 const textMessage = await wbot.sendMessage(chatId, {
                   text: `\u200c${campaignShipping.message}`
                 });
+                lastSentWid = textMessage?.key?.id || lastSentWid;
                 await verifyMessage(textMessage, ticket, contact, null, true, false, true); // isCampaign=true
               }
               
               logger.info(`[CAMPAIGN-AUDIO-DEBUG] Enviando MÍDIA para ticket ${ticket.id}`);
               const sentMessage = await wbot.sendMessage(chatId, { ...options });
+              lastSentWid = sentMessage?.key?.id || lastSentWid;
 
               // FIX: Ensure caption is present in the returned message object so verifyMediaMessage can save it
               // Para campanhas com sendMediaSeparately OU áudio, não duplicar caption pois já foi enviado como mensagem separada
@@ -2605,6 +2652,8 @@ async function handleDispatchCampaign(job) {
         await campaignShipping.update({
           deliveredAt: moment(),
           status: 'delivered',
+          wid: lastSentWid || null,
+          metaStatus: lastSentWid ? 'sent' : null,
           attempts: (campaignShipping.attempts || 0) + 1
         });
         // sucesso: zera backoff e atualiza pacing da conexão
