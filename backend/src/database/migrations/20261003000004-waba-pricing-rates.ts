@@ -94,10 +94,10 @@ module.exports = {
 
     // Custo estimado carimbado em cada envio individual
     const shippingDef: any = await queryInterface.describeTable(
-      "CampaignShippings"
+      "CampaignShipping"
     );
     if (!shippingDef.estimatedCost) {
-      await queryInterface.addColumn("CampaignShippings", "estimatedCost", {
+      await queryInterface.addColumn("CampaignShipping", "estimatedCost", {
         type: DataTypes.DECIMAL(10, 4),
         allowNull: true
       });
@@ -127,7 +127,7 @@ module.exports = {
   down: async (queryInterface: QueryInterface) => {
     await queryInterface.removeColumn("CompaniesSettings", "usdToBrlRate");
     await queryInterface.removeColumn("Messages", "estimatedCost");
-    await queryInterface.removeColumn("CampaignShippings", "estimatedCost");
+    await queryInterface.removeColumn("CampaignShipping", "estimatedCost");
     await queryInterface.dropTable("WabaPricingRates");
   }
 };

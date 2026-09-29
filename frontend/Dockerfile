@@ -2,9 +2,9 @@
 FROM node:20-alpine AS build
 WORKDIR /app
 
-# Copia o package.json e instala as dependências
+# Copia o package.json + lockfile e instala com npm ci (reprodutível)
 COPY package*.json ./
-RUN npm install --legacy-peer-deps --no-audit --no-fund && \
+RUN npm ci --legacy-peer-deps --no-audit --no-fund && \
     npm cache clean --force
 
 # Copia o restante dos arquivos
