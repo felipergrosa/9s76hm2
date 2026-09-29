@@ -11,6 +11,7 @@ import TicketTag from "../models/TicketTag";
 import Ticket from "../models/Ticket";
 import SendDripStepMessageService from "../services/DripSequenceService/SendDripStepMessageService";
 import SendTemplateToContact from "../services/MetaServices/SendTemplateToContact";
+import ExecuteFollowUpEndActionService from "../services/DripSequenceService/ExecuteFollowUpEndActionService";
 import logger from "../utils/logger";
 
 const connection = process.env.REDIS_URI || "";
@@ -19,6 +20,32 @@ const MS_PER_MINUTE = 60 * 1000;
 
 const stepDelayMs = (step: DripSequenceStep): number =>
   (step.delayDays || 0) * MS_PER_DAY + (step.delayMinutes || 0) * MS_PER_MINUTE;
+
+/**
+ * Se a sequência tem janela de envio ("08:00"–"20:00"), reagenda o nextSendAt
+ * que cair fora dela para o início da próxima janela.
+ */
+function clampToSendWindow(
+  date: Date,
+  windowStart?: string | null,
+  windowEnd?: string | null
+): Date {
+  if (!windowStart || !windowEnd) return date;
+  const [sh, sm] = windowStart.split(":").map(Number);
+  const [eh, em] = windowEnd.split(":").map(Number);
+  if ([sh, sm, eh, em].some(Number.isNaN)) return date;
+
+  const start = new Date(date); start.setHours(sh, sm, 0, 0);
+  const end = new Date(date); end.setHours(eh, em, 0, 0);
+
+  if (date < start) return start;
+  if (date > end) {
+    const next = new Date(start);
+    next.setDate(next.getDate() + 1);
+    return next;
+  }
+  return date;
+}
 
 /**
  * Confirma que o gatilho da sequência ainda está aplicado ao contato:
@@ -171,12 +198,17 @@ async function dispatchDripStep(job: any): Promise<void> {
     if (nextStep) {
       await enrollment.update({
         currentStepIndex: nextIndex,
-        nextSendAt: new Date(Date.now() + stepDelayMs(nextStep)),
+        nextSendAt: clampToSendWindow(
+          new Date(Date.now() + stepDelayMs(nextStep)),
+          dripSequence.sendWindowStart,
+          dripSequence.sendWindowEnd
+        ),
         attempts: 0,
         lastError: null
       });
     } else {
       await enrollment.update({ status: "completed", currentStepIndex: nextIndex });
+      await ExecuteFollowUpEndActionService(dripSequence, contact);
     }
   } catch (error: any) {
     const attempts = (enrollment.attempts || 0) + 1;

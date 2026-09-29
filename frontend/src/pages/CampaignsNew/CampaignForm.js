@@ -25,7 +25,7 @@ import InfoOutlinedIcon from "@material-ui/icons/InfoOutlined";
 import LocalOfferIcon from "@material-ui/icons/LocalOffer";
 import SaveIcon from "@material-ui/icons/Save";
 import AccessTimeIcon from "@material-ui/icons/AccessTime";
-import { ChevronRight, ChevronLeft, ArrowLeft, Settings as SettingsIcon, Assignment as AssignmentIcon, Event as EventIcon, QuestionAnswer as QuestionAnswerIcon, Send as SendIcon, FlashOn as FlashOnIcon, PlayCircleOutline as PlayCircleOutlineIcon, PauseCircleOutline as PauseCircleOutlineIcon, Refresh as RefreshIcon, OpenInNew as OpenInNewIcon, ExpandMore as ExpandMoreIcon, HelpOutline as HelpOutlineIcon } from "@material-ui/icons";
+import { ChevronRight, ChevronLeft, ArrowLeft, Settings as SettingsIcon, Assignment as AssignmentIcon, Event as EventIcon, QuestionAnswer as QuestionAnswerIcon, Send as SendIcon, FlashOn as FlashOnIcon, PlayCircleOutline as PlayCircleOutlineIcon, PauseCircleOutline as PauseCircleOutlineIcon, Refresh as RefreshIcon, Add as AddIcon, ExpandMore as ExpandMoreIcon, HelpOutline as HelpOutlineIcon } from "@material-ui/icons";
 import { Sparkles, Smile, Settings, Rocket, Calendar, Zap } from "lucide-react";
 
 import api from "../../services/api";
@@ -46,6 +46,7 @@ import WhatsAppPreview from "../../components/CampaignModal/WhatsAppPreview";
 import WhatsAppPopover from "../../components/WhatsAppPopover";
 import FormattedTextField from "../../components/FormattedTextField";
 import TemplateVariableMapper from "../../components/TemplateVariableMapper";
+import MetaTemplateModal from "../../components/MetaTemplateModal";
 import Sidebar from "../../pages/LibraryManager/components/Sidebar";
 import TopBar from "../../pages/LibraryManager/components/TopBar";
 import BreadcrumbNav from "../../pages/LibraryManager/components/BreadcrumbNav";
@@ -329,7 +330,6 @@ const CampaignSchema = Yup.object().shape({
 });
 
 const STEPS = ["Configuração", "Regras", "Mensagem", "Confirmação"];
-const META_TEMPLATE_MANAGER_URL = "https://business.facebook.com/wa/manage/message-templates";
 const CAMPAIGN_ESTIMATE_DEFAULTS = {
   messageInterval: 20,
   longerIntervalAfter: 20,
@@ -760,6 +760,7 @@ const CampaignForm = () => {
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [metaTemplateVariables, setMetaTemplateVariables] = useState({});
+  const [templateModalOpen, setTemplateModalOpen] = useState(false);
 
   // Message tabs & media
   const [messageTab, setMessageTab] = useState(0);
@@ -2007,16 +2008,16 @@ const CampaignForm = () => {
                              </Box>
 
                              <Box display="flex" alignItems="center" justifyContent="space-between" flexWrap="wrap" style={{ gap: 8 }}>
-                               <Tooltip title="Abre o gerenciador da Meta em nova aba para criar ou editar templates oficiais desta conta.">
+                               <Tooltip title="Abre o criador de templates integrado — o template é enviado direto para a Meta e volta para esta lista após aprovação.">
                                  <span>
                                    <Button
                                      size="small"
                                      variant="outlined"
                                      color="primary"
-                                     startIcon={<OpenInNewIcon fontSize="small" />}
-                                     onClick={() => window.open(META_TEMPLATE_MANAGER_URL, "_blank", "noopener,noreferrer")}
+                                     startIcon={<AddIcon fontSize="small" />}
+                                     onClick={() => setTemplateModalOpen(true)}
                                    >
-                                     Criar template no Meta
+                                     Criar template Meta
                                    </Button>
                                  </span>
                                </Tooltip>
@@ -2341,6 +2342,20 @@ const CampaignForm = () => {
                 onUploadComplete={() => {
                   setUploadModalOpen(false);
                   toast.success("Arquivo enviado com sucesso!");
+                }}
+              />
+
+              {/* Criador de templates Meta integrado — substitui o link externo
+                  para o gerenciador da Meta; ao salvar, recarrega a lista local */}
+              <MetaTemplateModal
+                open={templateModalOpen}
+                onClose={() => setTemplateModalOpen(false)}
+                whatsappId={whatsappId}
+                template={null}
+                onSaved={() => {
+                  setTemplateModalOpen(false);
+                  loadOfficialTemplates(whatsappId);
+                  toast.success("Template enviado — após aprovação da Meta ele fica disponível na lista");
                 }}
               />
             </Form>

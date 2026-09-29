@@ -83,6 +83,7 @@ const KnowledgeBase = lazy(() => import("../pages/KnowledgeBase"));
 const AdminCustomFields = lazy(() => import("../pages/AdminCustomFields"));
 const MetaTemplates = lazy(() => import("../pages/MetaTemplates"));
 const FollowUps = lazy(() => import("../pages/FollowUps"));
+const FollowUpForm = lazy(() => import("../pages/FollowUps/FollowUpForm"));
 
 // FlowBuilder (pesado - sempre lazy)
 const FlowBuilder = lazy(() => import("../pages/FlowBuilder"));
@@ -239,6 +240,8 @@ const Routes = () => {
                     <Route exact path="/campaign/:campaignId/detailed-report" component={CampaignDetailedReport} isPrivate />
                     <Route exact path="/campaigns-config" component={CampaignsConfig} isPrivate />
                     <PrivateRoute exact path="/follow-ups" component={FollowUps} permission="drip-sequences.view" />
+                    <PrivateRoute exact path="/follow-ups/new" component={FollowUpForm} permission="drip-sequences.create" />
+                    <PrivateRoute exact path="/follow-ups/:followUpId" component={FollowUpForm} permission="drip-sequences.edit" />
                     <PrivateRoute exact path="/email-campaigns" component={EmailCampaigns} permission="email-campaigns.view" />
                   </>
                 )}

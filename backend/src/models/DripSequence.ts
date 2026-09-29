@@ -13,6 +13,8 @@ import {
 import Company from "./Company";
 import Tag from "./Tag";
 import Whatsapp from "./Whatsapp";
+import Queue from "./Queue";
+import User from "./User";
 import DripSequenceStep from "./DripSequenceStep";
 import DripSequenceEnrollment from "./DripSequenceEnrollment";
 
@@ -49,6 +51,43 @@ class DripSequence extends Model<DripSequence> {
 
   @BelongsTo(() => Whatsapp)
   whatsapp: Whatsapp;
+
+  // Ação ao concluir o follow-up:
+  // none | move_tag | ticket_status | assign_queue | assign_user
+  @Column({ defaultValue: "none" })
+  endAction: string;
+
+  @ForeignKey(() => Tag)
+  @Column
+  endActionTagId: number;
+
+  @BelongsTo(() => Tag, "endActionTagId")
+  endActionTag: Tag;
+
+  // open | pending | closed — usado por endAction = ticket_status
+  @Column
+  endActionStatus: string;
+
+  @ForeignKey(() => Queue)
+  @Column
+  endActionQueueId: number;
+
+  @BelongsTo(() => Queue)
+  endActionQueue: Queue;
+
+  @ForeignKey(() => User)
+  @Column
+  endActionUserId: number;
+
+  @BelongsTo(() => User)
+  endActionUser: User;
+
+  // Janela de envio opcional ("08:00"–"20:00") — fora dela, reagenda para o início
+  @Column
+  sendWindowStart: string;
+
+  @Column
+  sendWindowEnd: string;
 
   @HasMany(() => DripSequenceStep)
   steps: DripSequenceStep[];

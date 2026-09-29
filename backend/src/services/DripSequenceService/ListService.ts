@@ -47,8 +47,8 @@ const ListService = async ({
     offset,
     order: [literal('"DripSequence"."createdAt" DESC')],
     include: [
-      { model: Tag, attributes: ["id", "name", "color"] },
-      { model: Whatsapp, attributes: ["id", "name"] }
+      { model: Tag, as: "tag", attributes: ["id", "name", "color", "kanban"] },
+      { model: Whatsapp, attributes: ["id", "name", "channelType"] }
     ]
   });
 

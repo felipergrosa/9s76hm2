@@ -154,11 +154,18 @@ const useStyles = makeStyles((theme) => ({
   templateSnippet: {
     color: theme.palette.text.secondary,
     fontSize: 12.5,
+    lineHeight: 1.45,
+    maxWidth: 480,
+    whiteSpace: "pre-line",
+    marginTop: 2,
+  },
+  templateFooter: {
+    color: theme.palette.text.disabled,
+    fontSize: 11.5,
     lineHeight: 1.4,
-    maxWidth: 420,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
+    maxWidth: 480,
+    marginTop: 4,
+    fontStyle: "italic",
   },
   infoBox: {
     backgroundColor:
@@ -264,11 +271,16 @@ const QualityChip = ({ score }) => {
   return <span className={`${chipBaseClass} ${chipClass}`}>{normalized}</span>;
 };
 
-// Primeira linha do corpo do template como resumo (igual gerenciador da Meta)
-const bodySnippet = (template) => {
+// Corpo completo do template — exibido integralmente na listagem
+const bodyText = (template) => {
   const comps = Array.isArray(template?.components) ? template.components : [];
-  const text = comps.find((c) => c.type === "BODY")?.text || "";
-  return text.replace(/\s+/g, " ").trim();
+  return (comps.find((c) => c.type === "BODY")?.text || "").trim();
+};
+
+// Rodapé do template (exibido abaixo do corpo quando presente)
+const footerText = (template) => {
+  const comps = Array.isArray(template?.components) ? template.components : [];
+  return (comps.find((c) => c.type === "FOOTER")?.text || "").trim();
 };
 
 const MetaTemplates = () => {
@@ -722,9 +734,14 @@ const MetaTemplates = () => {
                     </TableCell>
                     <TableCell className={classes.bodyCell}>
                       <div className={classes.templateName}>{template.name}</div>
-                      {bodySnippet(template) && (
+                      {bodyText(template) && (
                         <div className={classes.templateSnippet}>
-                          {bodySnippet(template)}
+                          {bodyText(template)}
+                        </div>
+                      )}
+                      {footerText(template) && (
+                        <div className={classes.templateFooter}>
+                          {footerText(template)}
                         </div>
                       )}
                     </TableCell>
