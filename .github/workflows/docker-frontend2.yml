@@ -47,9 +47,23 @@ jobs:
 
       - name: Deploy no swarm
         run: |
+          # Descobre o service pela imagem (não pelo nome fixo) — cobre stack
+          # redeployada com prefixo diferente (ex.: whaticket2_whaticketfront)
+          SERVICE=$(docker service ls --format '{{.Name}}\t{{.Image}}' \
+            | awk '$2 ~ /9s76hm2-frontend/ {print $1}' | head -1)
+
+          if [ -z "$SERVICE" ]; then
+            echo "::warning::Nenhum service com imagem 9s76hm2-frontend encontrado no swarm."
+            echo "Services ativos com 'whaticket' no nome:"
+            docker service ls --filter name=whaticket || true
+            echo "A imagem :latest foi publicada — recrie a stack ou o Shepherd fará o rollout."
+            exit 0
+          fi
+
+          echo "Atualizando service: $SERVICE"
           docker service update --with-registry-auth --force \
             --image felipergrosa/9s76hm2-frontend:latest \
-            whaticket_whaticketfront
+            "$SERVICE"
 
       - name: Cleanup docker cache
         if: always()
