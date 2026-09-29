@@ -241,7 +241,10 @@ const Routes = () => {
                     <Route exact path="/campaigns-config" component={CampaignsConfig} isPrivate />
                     <PrivateRoute exact path="/follow-ups" component={FollowUps} permission="drip-sequences.view" />
                     <PrivateRoute exact path="/follow-ups/new" component={FollowUpForm} permission="drip-sequences.create" />
-                    <PrivateRoute exact path="/follow-ups/:followUpId" component={FollowUpForm} permission="drip-sequences.edit" />
+                    {/* (\\d+) restringe a IDs numéricos — sem isso "/follow-ups/new"
+                        casa aqui também e renderiza o form duplicado (rotas dentro
+                        do LoggedInLayout não passam por Switch) */}
+                    <PrivateRoute exact path="/follow-ups/:followUpId(\d+)" component={FollowUpForm} permission="drip-sequences.edit" />
                     <PrivateRoute exact path="/email-campaigns" component={EmailCampaigns} permission="email-campaigns.view" />
                   </>
                 )}

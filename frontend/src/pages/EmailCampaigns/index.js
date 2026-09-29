@@ -10,21 +10,24 @@ import TableCell from "@material-ui/core/TableCell";
 import TableHead from "@material-ui/core/TableHead";
 import TableRow from "@material-ui/core/TableRow";
 import IconButton from "@material-ui/core/IconButton";
-import SearchIcon from "@material-ui/icons/Search";
+import Box from "@material-ui/core/Box";
+import Typography from "@material-ui/core/Typography";
 import TextField from "@material-ui/core/TextField";
 import InputAdornment from "@material-ui/core/InputAdornment";
-import Chip from "@material-ui/core/Chip";
 import Tooltip from "@material-ui/core/Tooltip";
 
-import DeleteOutlineIcon from "@material-ui/icons/DeleteOutline";
-import EditIcon from "@material-ui/icons/Edit";
-import SendIcon from "@material-ui/icons/Send";
-import CancelIcon from "@material-ui/icons/Cancel";
-import AssessmentIcon from "@material-ui/icons/Assessment";
+import {
+  Search as SearchIcon,
+  Trash2 as DeleteOutlineIcon,
+  Edit as EditIcon,
+  Send as SendIcon,
+  XCircle as CancelIcon,
+  BarChart3 as AssessmentIcon,
+  Plus as AddIcon,
+  Mail as MailIcon,
+} from "lucide-react";
 
 import MainContainer from "../../components/MainContainer";
-import MainHeader from "../../components/MainHeader";
-import MainHeaderButtonsWrapper from "../../components/MainHeaderButtonsWrapper";
 import Title from "../../components/Title";
 
 import api from "../../services/api";
@@ -53,26 +56,133 @@ const reducer = (state, action) => {
   }
 };
 
-const STATUS_LABEL = {
-  INATIVA: "Inativa",
-  PROGRAMADA: "Programada",
-  EM_ANDAMENTO: "Em andamento",
-  CANCELADA: "Cancelada",
-  FINALIZADA: "Finalizada"
+// Chip de status no padrão tailwind dark-mode das páginas novas
+const StatusChip = ({ status }) => {
+  const map = {
+    INATIVA: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
+    PROGRAMADA: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+    EM_ANDAMENTO:
+      "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200",
+    CANCELADA: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
+    FINALIZADA:
+      "bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200",
+  };
+  const label = {
+    INATIVA: "Inativa",
+    PROGRAMADA: "Programada",
+    EM_ANDAMENTO: "Em andamento",
+    CANCELADA: "Cancelada",
+    FINALIZADA: "Finalizada",
+  };
+  return (
+    <span
+      className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+        map[status] || map.INATIVA
+      }`}
+    >
+      {label[status] || status}
+    </span>
+  );
 };
 
-const STATUS_COLOR = {
-  INATIVA: "default",
-  PROGRAMADA: "primary",
-  EM_ANDAMENTO: "secondary",
-  CANCELADA: "default",
-  FINALIZADA: "primary"
-};
-
+// ===== Estilos no padrão do gerenciador de Templates Meta =====
 const useStyles = makeStyles(theme => ({
-  mainPaper: {
+  paper: {
     flex: 1,
-    padding: theme.spacing(1),
+    padding: 0,
+    overflow: "hidden",
+    borderRadius: 12,
+    border: `1px solid ${theme.palette.divider}`,
+    backgroundColor: theme.palette.background.paper,
+  },
+  header: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing(2),
+    flexWrap: "wrap",
+    padding: theme.spacing(2, 2.5),
+  },
+  headerText: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+  },
+  subtitle: {
+    color: theme.palette.text.secondary,
+    fontSize: "0.85rem",
+  },
+  toolbar: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1.5),
+    flexWrap: "wrap",
+    padding: theme.spacing(1.5, 2.5),
+    borderTop: `1px solid ${theme.palette.divider}`,
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    background:
+      theme.palette.type === "dark"
+        ? theme.palette.background.default
+        : "#fafafa",
+  },
+  searchField: {
+    minWidth: 260,
+    flex: "1 1 320px",
+    maxWidth: 420,
+  },
+  headCell: {
+    fontWeight: 600,
+    fontSize: "0.72rem",
+    letterSpacing: "0.06em",
+    textTransform: "uppercase",
+    color: theme.palette.text.secondary,
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    background:
+      theme.palette.type === "dark"
+        ? theme.palette.background.default
+        : "#fafafa",
+    whiteSpace: "nowrap",
+  },
+  bodyCell: {
+    fontSize: "0.85rem",
+    paddingTop: theme.spacing(1.25),
+    paddingBottom: theme.spacing(1.25),
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    verticalAlign: "top",
+  },
+  rowHover: {
+    "&:hover": {
+      backgroundColor: theme.palette.action.hover,
+    },
+    transition: "background-color 120ms ease",
+  },
+  nameCell: {
+    fontWeight: 600,
+    fontSize: "0.9rem",
+    lineHeight: 1.35,
+  },
+  mutedText: {
+    color: theme.palette.text.secondary,
+    fontSize: "0.78rem",
+    marginTop: 2,
+  },
+  actionsCell: {
+    whiteSpace: "nowrap",
+  },
+  emptyState: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing(1),
+    padding: theme.spacing(8, 2),
+    color: theme.palette.text.secondary,
+    textAlign: "center",
+  },
+  emptyIcon: {
+    fontSize: 44,
+    opacity: 0.35,
+    marginBottom: theme.spacing(1),
   },
 }));
 
@@ -167,7 +277,7 @@ const EmailCampaigns = () => {
   };
 
   return (
-    <MainContainer>
+    <MainContainer useWindowScroll>
       <ConfirmationModal
         title={deleting && "Excluir campanha de e-mail?"}
         open={confirmOpen}
@@ -181,90 +291,132 @@ const EmailCampaigns = () => {
         onClose={() => setModalOpen(false)}
         emailCampaignId={selectedId}
       />
-      <MainHeader>
-        <Title>Campanhas de E-mail ({records.length})</Title>
-        <MainHeaderButtonsWrapper>
+      <Paper className={classes.paper} variant="outlined">
+        {/* Header — padrão do gerenciador de Templates Meta */}
+        <Box className={classes.header}>
+          <div className={classes.headerText}>
+            <Title>Campanhas de E-mail ({records.length})</Title>
+            <span className={classes.subtitle}>
+              Disparos de e-mail em massa — acompanhe status e relatórios de
+              entrega.
+            </span>
+          </div>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<AddIcon size={18} />}
+            onClick={handleOpenModal}
+          >
+            Nova campanha
+          </Button>
+        </Box>
+
+        {/* Toolbar: busca */}
+        <Box className={classes.toolbar}>
           <TextField
-            placeholder="Buscar..."
+            className={classes.searchField}
+            variant="outlined"
+            size="small"
+            placeholder="Buscar por nome ou assunto..."
             type="search"
             value={searchParam}
             onChange={e => setSearchParam(e.target.value)}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
-                  <SearchIcon style={{ color: "gray" }} />
+                  <SearchIcon size={18} style={{ color: "gray" }} />
                 </InputAdornment>
               ),
             }}
           />
-          <Button variant="contained" color="primary" onClick={handleOpenModal}>
-            Adicionar
-          </Button>
-        </MainHeaderButtonsWrapper>
-      </MainHeader>
-      <Paper className={classes.mainPaper} variant="outlined">
+        </Box>
+
         <Table size="small">
           <TableHead>
             <TableRow>
-              <TableCell align="center">ID</TableCell>
-              <TableCell align="left">Nome</TableCell>
-              <TableCell align="left">Assunto</TableCell>
-              <TableCell align="center">Status</TableCell>
-              <TableCell align="center">Ações</TableCell>
+              <TableCell className={classes.headCell}>ID</TableCell>
+              <TableCell className={classes.headCell}>Nome</TableCell>
+              <TableCell className={classes.headCell}>Assunto</TableCell>
+              <TableCell align="center" className={classes.headCell}>Status</TableCell>
+              <TableCell align="center" className={classes.headCell}>Ações</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {records.map(record => (
-              <TableRow key={record.id}>
-                <TableCell align="center">{record.id}</TableCell>
-                <TableCell align="left">{record.name}</TableCell>
-                <TableCell align="left">{record.subject}</TableCell>
-                <TableCell align="center">
-                  <Chip
-                    size="small"
-                    label={STATUS_LABEL[record.status] || record.status}
-                    color={STATUS_COLOR[record.status] || "default"}
-                  />
+              <TableRow key={record.id} className={classes.rowHover} hover={false}>
+                <TableCell className={classes.bodyCell} style={{ width: 60 }}>
+                  #{record.id}
                 </TableCell>
-                <TableCell align="center">
+                <TableCell className={classes.bodyCell}>
+                  <div className={classes.nameCell}>{record.name}</div>
+                </TableCell>
+                <TableCell className={classes.bodyCell}>
+                  {record.subject}
+                </TableCell>
+                <TableCell align="center" className={classes.bodyCell}>
+                  <StatusChip status={record.status} />
+                </TableCell>
+                <TableCell align="center" className={`${classes.bodyCell} ${classes.actionsCell}`}>
                   <Tooltip title="Ver relatório">
                     <IconButton size="small" onClick={() => handleShowReport(record.id)}>
-                      <AssessmentIcon />
+                      <AssessmentIcon size={18} />
                     </IconButton>
                   </Tooltip>
                   {["INATIVA", "PROGRAMADA"].includes(record.status) && (
                     <Tooltip title="Enviar agora">
                       <IconButton size="small" onClick={() => handleSendNow(record.id)}>
-                        <SendIcon />
+                        <SendIcon size={18} />
                       </IconButton>
                     </Tooltip>
                   )}
                   {["PROGRAMADA", "EM_ANDAMENTO"].includes(record.status) && (
                     <Tooltip title="Cancelar">
                       <IconButton size="small" onClick={() => handleCancel(record.id)}>
-                        <CancelIcon />
+                        <CancelIcon size={18} />
                       </IconButton>
                     </Tooltip>
                   )}
-                  <IconButton size="small" onClick={() => handleEdit(record)} disabled={record.status === "EM_ANDAMENTO"}>
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton
-                    size="small"
-                    onClick={() => {
-                      setDeleting(record);
-                      setConfirmOpen(true);
-                    }}
-                    disabled={record.status === "EM_ANDAMENTO"}
-                  >
-                    <DeleteOutlineIcon />
-                  </IconButton>
+                  <Tooltip title="Editar">
+                    <span>
+                      <IconButton size="small" onClick={() => handleEdit(record)} disabled={record.status === "EM_ANDAMENTO"}>
+                        <EditIcon size={18} />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                  <Tooltip title="Excluir">
+                    <span>
+                      <IconButton
+                        size="small"
+                        onClick={() => {
+                          setDeleting(record);
+                          setConfirmOpen(true);
+                        }}
+                        disabled={record.status === "EM_ANDAMENTO"}
+                      >
+                        <DeleteOutlineIcon size={18} />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
                 </TableCell>
               </TableRow>
             ))}
             {loading && <TableRowSkeleton columns={5} />}
           </TableBody>
         </Table>
+
+        {!loading && records.length === 0 && (
+          <Box className={classes.emptyState}>
+            <MailIcon className={classes.emptyIcon} />
+            <Typography variant="subtitle1" style={{ fontWeight: 600 }}>
+              {searchParam
+                ? "Nenhuma campanha encontrada para a busca."
+                : "Nenhuma campanha de e-mail criada ainda."}
+            </Typography>
+            <Typography variant="body2" color="textSecondary">
+              {!searchParam && "Crie sua primeira campanha de e-mail em massa."}
+            </Typography>
+          </Box>
+        )}
       </Paper>
     </MainContainer>
   );

@@ -31,6 +31,7 @@ import MessageIcon from "@material-ui/icons/Message";
 import FlagIcon from "@material-ui/icons/Flag";
 
 import api from "../../services/api";
+import TemplateVariableMapper from "../../components/TemplateVariableMapper";
 import toastError from "../../errors/toastError";
 import useWhatsApps from "../../hooks/useWhatsApps";
 import MetaTemplateModal from "../../components/MetaTemplateModal";
@@ -136,7 +137,15 @@ const emptyStep = () => ({
   message: "",
   metaTemplateName: "",
   metaTemplateLanguage: "pt_BR",
+  metaTemplateVariables: {},
 });
+
+// Normaliza metaTemplateVariables que pode vir como string JSON do backend
+const parseStepVariables = v => {
+  if (!v) return {};
+  if (typeof v === "object") return v;
+  try { return JSON.parse(v); } catch { return {}; }
+};
 
 const delayToStep = s => {
   const days = Number(s.delayDays) || 0;
@@ -258,6 +267,7 @@ const FollowUpForm = () => {
           message: s.message || "",
           metaTemplateName: s.metaTemplateName || "",
           metaTemplateLanguage: s.metaTemplateLanguage || "pt_BR",
+          metaTemplateVariables: parseStepVariables(s.metaTemplateVariables),
         }));
         setSteps(loaded.length ? loaded : [emptyStep()]);
       })
@@ -335,6 +345,9 @@ const FollowUpForm = () => {
           metaTemplateLanguage: step.metaTemplateName
             ? step.metaTemplateLanguage || "pt_BR"
             : null,
+          metaTemplateVariables: step.metaTemplateName
+            ? step.metaTemplateVariables || {}
+            : null,
         })),
       };
       if (followUpId) {
@@ -385,7 +398,6 @@ const FollowUpForm = () => {
         {STEP_LABELS.map((label, i) => (
           <Step key={label} completed={activeStep > i}>
             <StepLabel
-              StepIconComponent={() => null}
               icon={
                 i === 0 ? <SettingsIcon fontSize="small" /> :
                 i === 1 ? <MessageIcon fontSize="small" /> :
@@ -630,6 +642,21 @@ const FollowUpForm = () => {
                         <DeleteIcon />
                       </IconButton>
                     </Grid>
+                    {/* Preview do template + mapeamento de variáveis — igual
+                        ao "Compor Conteúdo" de campaigns/new */}
+                    {step.metaTemplateName && (
+                      <Grid item xs={12} style={{ marginTop: 8 }}>
+                        <TemplateVariableMapper
+                          whatsappId={form.whatsappId}
+                          templateName={step.metaTemplateName}
+                          languageCode={step.metaTemplateLanguage || "pt_BR"}
+                          value={step.metaTemplateVariables}
+                          onChange={vars =>
+                            handleStepChange(index, "metaTemplateVariables", vars)
+                          }
+                        />
+                      </Grid>
+                    )}
                   </Grid>
                 </Paper>
               ))}

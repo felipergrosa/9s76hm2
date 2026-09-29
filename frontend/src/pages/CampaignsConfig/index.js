@@ -6,7 +6,6 @@ import Paper from "@material-ui/core/Paper";
 import { toast } from "react-toastify";
 
 import MainContainer from "../../components/MainContainer";
-import MainHeader from "../../components/MainHeader";
 import Title from "../../components/Title";
 import DeleteOutlineIcon from "@material-ui/icons/DeleteOutline";
 import api from "../../services/api";
@@ -50,25 +49,43 @@ function TabPanel(props) {
       aria-labelledby={`campaign-config-tab-${index}`}
       {...other}
     >
-      {value === index && <Box p={2}>{children}</Box>}
+      {value === index && <Box p={2.5}>{children}</Box>}
     </div>
   );
 }
 
 const useStyles = makeStyles((theme) => ({
+  // Superfície no padrão do gerenciador de Templates Meta
   mainPaper: {
     flex: 1,
-    padding: theme.spacing(1),
-    // padding: theme.padding,
-    overflowY: "scroll",
-    ...theme.scrollbarStyles,
+    padding: 0,
+    overflow: "hidden",
+    borderRadius: 12,
+    border: `1px solid ${theme.palette.divider}`,
+    backgroundColor: theme.palette.background.paper,
+  },
+  header: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing(2),
+    flexWrap: "wrap",
+    padding: theme.spacing(2, 2.5),
+  },
+  headerText: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+  },
+  subtitle: {
+    color: theme.palette.text.secondary,
+    fontSize: "0.85rem",
   },
   textRight: {
     textAlign: "right",
   },
   tabPanelsContainer: {
-    // padding: theme.spacing(2),
-    padding: theme.padding,
+    padding: theme.spacing(2, 2.5),
   },
   paper: {
     padding: theme.spacing(2),
@@ -302,7 +319,7 @@ const CampaignsConfig = () => {
   };
 
   return (
-    <MainContainer>
+    <MainContainer useWindowScroll>
       <ConfirmationModal
         title={i18n.t("campaigns.confirmationModal.deleteTitle")}
         open={confirmationOpen}
@@ -312,16 +329,17 @@ const CampaignsConfig = () => {
         {i18n.t("campaigns.confirmationModal.deleteMessage")}
       </ConfirmationModal>
       { hasPermission("campaigns-config.view") ? (
-          <>
-            <MainHeader>
-              <Grid style={{ width: "99.6%" }} container>
-                <Grid xs={12} item>
-                  <Title>{i18n.t("campaignsConfig.title")}</Title>
-                </Grid>
-              </Grid>
-            </MainHeader>
-
-            <Paper className={classes.mainPaper} variant="outlined">
+          <Paper className={classes.mainPaper} variant="outlined">
+            {/* Header — padrão do gerenciador de Templates Meta */}
+            <Box className={classes.header}>
+              <div className={classes.headerText}>
+                <Title>{i18n.t("campaignsConfig.title")}</Title>
+                <span className={classes.subtitle}>
+                  Intervalos, limites de disparo e variáveis — separados por
+                  tipo de conexão.
+                </span>
+              </div>
+            </Box>
               {/* Tabs para separar configurações por tipo de conexão */}
               <Tabs
                 value={activeTab}
@@ -829,8 +847,7 @@ const CampaignsConfig = () => {
                   </Grid>
                 </Grid>
               </TabPanel>
-            </Paper>
-          </>
+          </Paper>
         ) : <ForbiddenPage /> }
     </MainContainer>
   );

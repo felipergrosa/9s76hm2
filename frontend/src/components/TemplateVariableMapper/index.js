@@ -208,9 +208,74 @@ const TemplateVariableMapper = ({
         return null;
     }
 
+    // Bloco de pré-visualização — header (texto ou mídia), corpo com variáveis
+    // resolvidas e footer. Exibido sempre que o template carrega, mesmo sem
+    // parâmetros (o usuário precisa ver exatamente o que será enviado).
+    const previewBlock = (
+        <Box mb={3} p={2} bgcolor="#e3f2fd" borderRadius={4} border="1px solid #90caf9">
+            <Typography variant="caption" color="primary" style={{ fontWeight: "bold", display: "block", marginBottom: 4 }}>
+                PRÉ-VISUALIZAÇÃO
+            </Typography>
+
+            {template.headerFormat && ["DOCUMENT", "IMAGE", "VIDEO"].includes(template.headerFormat) ? (
+                <Typography
+                    variant="caption"
+                    style={{
+                        display: "block",
+                        marginBottom: 8,
+                        fontWeight: 600,
+                        color: "#1565c0"
+                    }}
+                >
+                    {template.headerFormat === "IMAGE" && "🖼️ Imagem no cabeçalho"}
+                    {template.headerFormat === "VIDEO" && "🎬 Vídeo no cabeçalho"}
+                    {template.headerFormat === "DOCUMENT" && "📄 Documento no cabeçalho"}
+                </Typography>
+            ) : null}
+
+            {template.header && (
+                <Typography variant="subtitle2" style={{ fontWeight: "bold", marginBottom: 8 }}>
+                    {template.header}
+                </Typography>
+            )}
+
+            <Typography variant="body1" style={{ whiteSpace: "pre-wrap" }}>
+                {buildPreviewBody()}
+            </Typography>
+
+            {template.footer && (
+                <Typography variant="caption" color="textSecondary" style={{ display: "block", marginTop: 8 }}>
+                    {template.footer}
+                </Typography>
+            )}
+
+            {template.hasButtons && (template.buttons || []).map((b, i) => (
+                <Box
+                    key={i}
+                    mt={1}
+                    p={1}
+                    style={{
+                        border: "1px solid #90caf9",
+                        borderRadius: 4,
+                        textAlign: "center",
+                        background: "#fff"
+                    }}
+                >
+                    <Typography variant="body2" color="primary">
+                        {b.type === "URL" && "🔗 "}
+                        {b.type === "PHONE_NUMBER" && "📞 "}
+                        {b.type === "QUICK_REPLY" && "💬 "}
+                        {b.text}
+                    </Typography>
+                </Box>
+            ))}
+        </Box>
+    );
+
     if (!template.parameters || template.parameters.length === 0) {
         return (
-            <Box p={1}>
+            <Box>
+                {previewBlock}
                 <Typography variant="body2" color="textSecondary">
                     ✓ Template não possui variáveis parametrizadas
                 </Typography>
@@ -224,28 +289,7 @@ const TemplateVariableMapper = ({
                 📋 Variáveis do Template "{template.name}"
             </Typography>
 
-            {/* Pré-visualização da Mensagem */}
-            <Box mb={3} p={2} bgcolor="#e3f2fd" borderRadius={4} border="1px solid #90caf9">
-                <Typography variant="caption" color="primary" style={{ fontWeight: "bold", display: "block", marginBottom: 4 }}>
-                    PRÉ-VISUALIZAÇÃO
-                </Typography>
-
-                {template.header && (
-                    <Typography variant="subtitle2" style={{ fontWeight: "bold", marginBottom: 8 }}>
-                        {template.header}
-                    </Typography>
-                )}
-
-                <Typography variant="body1" style={{ whiteSpace: "pre-wrap" }}>
-                    {buildPreviewBody()}
-                </Typography>
-
-                {template.footer && (
-                    <Typography variant="caption" color="textSecondary" style={{ display: "block", marginTop: 8 }}>
-                        {template.footer}
-                    </Typography>
-                )}
-            </Box>
+            {previewBlock}
 
             {template.parameters.map((param) => {
                 const config = (value && value[param.index]) || { type: "crm_field", source: "name" };

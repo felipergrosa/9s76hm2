@@ -5,8 +5,7 @@ import { toast } from "react-toastify";
 
 import { useHistory } from "react-router-dom";
 
-import { makeStyles, useTheme } from "@material-ui/core/styles";
-import useMediaQuery from "@material-ui/core/useMediaQuery";
+import { makeStyles } from "@material-ui/core/styles";
 import Paper from "@material-ui/core/Paper";
 import Button from "@material-ui/core/Button";
 import Table from "@material-ui/core/Table";
@@ -15,6 +14,9 @@ import TableCell from "@material-ui/core/TableCell";
 import TableHead from "@material-ui/core/TableHead";
 import TableRow from "@material-ui/core/TableRow";
 import IconButton from "@material-ui/core/IconButton";
+import Tooltip from "@material-ui/core/Tooltip";
+import Box from "@material-ui/core/Box";
+import Typography from "@material-ui/core/Typography";
 import {
   Search as SearchIcon,
   Trash2 as DeleteOutlineIcon,
@@ -23,12 +25,16 @@ import {
   PlayCircle as PlayCircleOutlineIcon,
   PauseCircle as PauseCircleOutlineIcon,
   Copy as FileCopyOutlinedIcon,
+  Plus as AddIcon,
+  Megaphone as CampaignsIcon,
 } from "lucide-react";
 import TextField from "@material-ui/core/TextField";
 import InputAdornment from "@material-ui/core/InputAdornment";
+import FormControl from "@material-ui/core/FormControl";
+import Select from "@material-ui/core/Select";
+import MenuItem from "@material-ui/core/MenuItem";
 
 import MainContainer from "../../components/MainContainer";
-import MainHeader from "../../components/MainHeader";
 import Title from "../../components/Title";
 
 import api from "../../services/api";
@@ -36,7 +42,6 @@ import { i18n } from "../../translate/i18n";
 import TableRowSkeleton from "../../components/TableRowSkeleton";
 import ConfirmationModal from "../../components/ConfirmationModal";
 import toastError from "../../errors/toastError";
-import { Grid } from "@material-ui/core";
 import { isArray } from "lodash";
 import { useDate } from "../../hooks/useDate";
 import ForbiddenPage from "../../components/ForbiddenPage";
@@ -83,6 +88,7 @@ const reducer = (state, action) => {
     const campaignId = action.payload;
 
     const campaignIndex = state.findIndex((u) => u.id === campaignId);
+
     if (campaignIndex !== -1) {
       state.splice(campaignIndex, 1);
     }
@@ -94,25 +100,120 @@ const reducer = (state, action) => {
   }
 };
 
+// ===== Estilos no padrão do gerenciador de Templates Meta =====
 const useStyles = makeStyles((theme) => ({
-  mainPaper: {
+  paper: {
     flex: 1,
-    padding: theme.spacing(2),
-    overflowY: "scroll",
-    ...theme.scrollbarStyles,
+    padding: 0,
+    overflow: "hidden",
+    borderRadius: 12,
+    border: `1px solid ${theme.palette.divider}`,
+    backgroundColor: theme.palette.background.paper,
   },
-  tableContainer: {
-    width: '100%',
-    overflowX: 'auto',
+  header: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing(2),
+    flexWrap: "wrap",
+    padding: theme.spacing(2, 2.5),
   },
-  table: {
-    width: "100%",
-    tableLayout: "fixed",
+  headerText: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
   },
+  subtitle: {
+    color: theme.palette.text.secondary,
+    fontSize: "0.85rem",
+  },
+  toolbar: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1.5),
+    flexWrap: "wrap",
+    padding: theme.spacing(1.5, 2.5),
+    borderTop: `1px solid ${theme.palette.divider}`,
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    background:
+      theme.palette.type === "dark"
+        ? theme.palette.background.default
+        : "#fafafa",
+  },
+  searchField: {
+    minWidth: 260,
+    flex: "1 1 320px",
+    maxWidth: 420,
+  },
+  filterSelect: {
+    minWidth: 160,
+  },
+  headCell: {
+    fontWeight: 600,
+    fontSize: "0.72rem",
+    letterSpacing: "0.06em",
+    textTransform: "uppercase",
+    color: theme.palette.text.secondary,
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    background:
+      theme.palette.type === "dark"
+        ? theme.palette.background.default
+        : "#fafafa",
+    whiteSpace: "nowrap",
+  },
+  bodyCell: {
+    fontSize: "0.85rem",
+    paddingTop: theme.spacing(1.25),
+    paddingBottom: theme.spacing(1.25),
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    verticalAlign: "top",
+  },
+  rowHover: {
+    "&:hover": {
+      backgroundColor: theme.palette.action.hover,
+    },
+    transition: "background-color 120ms ease",
+  },
+  campaignName: {
+    fontWeight: 600,
+    fontSize: "0.9rem",
+    lineHeight: 1.35,
+  },
+  mutedText: {
+    color: theme.palette.text.secondary,
+    fontSize: "0.78rem",
+    marginTop: 2,
+  },
+  actionsCell: {
+    whiteSpace: "nowrap",
+  },
+  emptyState: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing(1),
+    padding: theme.spacing(8, 2),
+    color: theme.palette.text.secondary,
+    textAlign: "center",
+  },
+  emptyIcon: {
+    fontSize: 44,
+    opacity: 0.35,
+    marginBottom: theme.spacing(1),
+  },
+  paginationBar: {
+    display: "flex",
+    justifyContent: "center",
+    padding: theme.spacing(1.5),
+    borderTop: `1px solid ${theme.palette.divider}`,
+  },
+  // Cards mobile
   mobileList: {
     display: "grid",
     gridTemplateColumns: "1fr",
-    gap: theme.spacing(2),
+    gap: theme.spacing(1.5),
+    padding: theme.spacing(1.5),
     [theme.breakpoints.up("sm")]: {
       display: "none",
     },
@@ -123,13 +224,12 @@ const useStyles = makeStyles((theme) => ({
     },
   },
   card: {
-    borderRadius: 14,
-    padding: theme.spacing(2),
-    boxShadow: "0 6px 18px rgba(0,0,0,0.08)",
+    borderRadius: 12,
+    padding: theme.spacing(1.75),
     border: `1px solid ${theme.palette.divider}`,
     display: "flex",
     flexDirection: "column",
-    gap: theme.spacing(1.5),
+    gap: theme.spacing(1.25),
     background: theme.palette.background.paper,
   },
   cardHeader: {
@@ -139,17 +239,10 @@ const useStyles = makeStyles((theme) => ({
     gap: theme.spacing(1),
   },
   cardTitle: {
-    fontSize: "1.05rem",
+    fontSize: "1rem",
     fontWeight: 700,
-    lineHeight: 1.2,
+    lineHeight: 1.25,
     wordBreak: "break-word",
-  },
-  statusPill: {
-    padding: theme.spacing(0.5, 1.25),
-    borderRadius: 999,
-    fontSize: "0.85rem",
-    fontWeight: 600,
-    background: "rgba(0,0,0,0.06)",
   },
   cardMeta: {
     display: "grid",
@@ -157,50 +250,66 @@ const useStyles = makeStyles((theme) => ({
     gap: theme.spacing(1),
   },
   metaLabel: {
-    fontSize: "0.85rem",
+    fontSize: "0.72rem",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
     color: theme.palette.text.secondary,
   },
   metaValue: {
-    fontSize: "0.95rem",
+    fontSize: "0.9rem",
     fontWeight: 600,
   },
   cardActions: {
     display: "flex",
     alignItems: "center",
-    gap: theme.spacing(1),
+    gap: theme.spacing(0.5),
     flexWrap: "wrap",
   },
-  actionButton: {
-    minWidth: 44,
-    minHeight: 44,
-  },
-  headerActions: {
-    display: "flex",
-    gap: theme.spacing(1),
-    marginTop: theme.spacing(1),
-    [theme.breakpoints.down("sm")]: {
-      flexDirection: "column",
-    },
-  },
 }));
+
+// Chip de status com cores tailwind compatíveis com dark mode
+const StatusChip = ({ status }) => {
+  const map = {
+    INATIVA: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
+    PROGRAMADA: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+    EM_ANDAMENTO:
+      "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200",
+    CANCELADA:
+      "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
+    FINALIZADA:
+      "bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200",
+  };
+  const label = {
+    INATIVA: "Inativa",
+    PROGRAMADA: "Programada",
+    EM_ANDAMENTO: "Em andamento",
+    CANCELADA: "Pausada",
+    FINALIZADA: "Finalizada",
+  };
+  return (
+    <span
+      className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+        map[status] || map.INATIVA
+      }`}
+    >
+      {label[status] || status}
+    </span>
+  );
+};
 
 const Campaigns = () => {
   const classes = useStyles();
   const history = useHistory();
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
   const [loading, setLoading] = useState(false);
   const [pageNumber, setPageNumber] = useState(1);
   const [totalCampaigns, setTotalCampaigns] = useState(0);
   const [deletingCampaign, setDeletingCampaign] = useState(null);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
-  const [showCampaigns, setShowCampaigns] = useState(false);
   const [searchParam, setSearchParam] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
   const [campaigns, dispatch] = useReducer(reducer, []);
-  //   const socketManager = useContext(SocketContext);
   const { user, socket } = useContext(AuthContext);
-
 
   const { datetimeToClient } = useDate();
   const { getPlanCompany } = usePlans();
@@ -237,7 +346,6 @@ const Campaigns = () => {
 
   useEffect(() => {
     const companyId = user.companyId;
-    // const socket = socketManager.GetSocket();
 
     const onCompanyCampaign = (data) => {
       if (data.action === "update" || data.action === "create") {
@@ -323,23 +431,6 @@ const Campaigns = () => {
     ));
   };
 
-  const formatStatus = (val) => {
-    switch (val) {
-      case "INATIVA":
-        return <span style={{ color: '#9e9e9e' }}>⚪ Inativa</span>;
-      case "PROGRAMADA":
-        return <span style={{ color: '#2196f3' }}>🕐 Programada</span>;
-      case "EM_ANDAMENTO":
-        return <span style={{ color: '#4caf50', fontWeight: 'bold' }}>▶️ Em Andamento</span>;
-      case "CANCELADA":
-        return <span style={{ color: '#ff9800', fontWeight: 'bold' }}>⏸️ Pausada</span>;
-      case "FINALIZADA":
-        return <span style={{ color: '#673ab7' }}>✅ Finalizada</span>;
-      default:
-        return val;
-    }
-  };
-
   const getContactListName = (campaign) => {
     // Verifica se tem múltiplas listas (contactListIds)
     if (campaign.contactListIds) {
@@ -387,14 +478,84 @@ const Campaigns = () => {
     try {
       const { data } = await api.post(`/campaigns/${campaign.id}/clone`);
       toast.success("Campanha clonada com sucesso!");
-      handleEditCampaign(data); // Abre modal para edição da campanha clonada
+      handleEditCampaign(data); // Abre edição da campanha clonada
     } catch (err) {
       toastError(err);
     }
   };
 
+  // Ações compartilhadas entre tabela desktop e cards mobile
+  const renderActions = (campaign) => (
+    <>
+      {campaign.status === "EM_ANDAMENTO" && (
+        <Tooltip title="Pausar campanha">
+          <IconButton
+            onClick={() => cancelCampaign(campaign)}
+            size="small"
+            style={{ color: "#f44336" }}
+          >
+            <PauseCircleOutlineIcon size={18} />
+          </IconButton>
+        </Tooltip>
+      )}
+      {campaign.status === "CANCELADA" && (
+        <Tooltip title="Retomar campanha">
+          <IconButton
+            onClick={() => restartCampaign(campaign)}
+            size="small"
+            style={{ color: "#4caf50" }}
+          >
+            <PlayCircleOutlineIcon size={18} />
+          </IconButton>
+        </Tooltip>
+      )}
+      <Tooltip title="Relatório detalhado">
+        <IconButton
+          onClick={() =>
+            history.push(`/campaign/${campaign.id}/detailed-report`)
+          }
+          size="small"
+        >
+          <DescriptionIcon size={18} />
+        </IconButton>
+      </Tooltip>
+      <Tooltip title="Editar">
+        <IconButton
+          size="small"
+          onClick={() => handleEditCampaign(campaign)}
+        >
+          <EditIcon size={18} />
+        </IconButton>
+      </Tooltip>
+      <Tooltip title="Clonar campanha">
+        <IconButton
+          size="small"
+          onClick={() => handleCloneCampaign(campaign)}
+          style={{ color: "#2196f3" }}
+        >
+          <FileCopyOutlinedIcon size={18} />
+        </IconButton>
+      </Tooltip>
+      <Tooltip title="Excluir">
+        <IconButton
+          size="small"
+          onClick={() => {
+            setConfirmModalOpen(true);
+            setDeletingCampaign(campaign);
+          }}
+        >
+          <DeleteOutlineIcon size={18} />
+        </IconButton>
+      </Tooltip>
+    </>
+  );
+
+  const filteredCampaigns = statusFilter
+    ? campaigns.filter((c) => c.status === statusFilter)
+    : campaigns;
+
   return (
-    <MainContainer>
+    <MainContainer useWindowScroll>
       <ConfirmationModal
         title={
           deletingCampaign &&
@@ -407,288 +568,194 @@ const Campaigns = () => {
         {i18n.t("campaigns.confirmationModal.deleteMessage")}
       </ConfirmationModal>
       {hasPermission("campaigns.view") ? (
-        <>
-          <MainHeader>
-            <Grid container alignItems="center" justifyContent="space-between" spacing={2}>
-              <Grid item xs={12} sm={6} md={4}>
-                <Title>{i18n.t("campaigns.title")}</Title>
-              </Grid>
-              <Grid item xs={12} sm={6} md={8}>
-                <Grid container spacing={2} alignItems="center" justifyContent="flex-end">
-                  <Grid item xs={12} sm={6} md={5}>
-                    <TextField
-                      fullWidth
-                      size="small"
-                      placeholder={i18n.t("campaigns.searchPlaceholder")}
-                      type="search"
-                      value={searchParam}
-                      onChange={handleSearch}
-                      InputProps={{
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <SearchIcon style={{ color: "gray" }} />
-                          </InputAdornment>
-                        ),
-                      }}
-                    />
-                  </Grid>
-                  <Grid item xs="auto">
-                    <Button
-                      variant="contained"
-                      onClick={() => history.push("/campaigns/new")}
-                      color="primary"
-                      size="small"
-                      style={{
-                        minHeight: 36,
-                        paddingLeft: 16,
-                        paddingRight: 16,
-                        whiteSpace: "nowrap",
-                        textTransform: 'none',
-                        fontWeight: 600,
-                        borderRadius: '8px',
-                        boxShadow: '0 2px 8px rgba(25, 118, 210, 0.3)'
-                      }}
-                    >
-                      + Nova Campanha
-                    </Button>
-                  </Grid>
-                </Grid>
-              </Grid>
-            </Grid>
-          </MainHeader>
-          <Paper
-            className={classes.mainPaper}
-            variant="outlined"
-          >
-            {/* Mobile cards */}
-            <div className={classes.mobileList}>
-              {campaigns.map((campaign) => (
-                <div key={campaign.id} className={classes.card}>
-                  <div className={classes.cardHeader}>
-                    <div className={classes.cardTitle}>{campaign.name}</div>
-                    <div className={classes.statusPill}>
-                      {formatStatus(campaign.status)}
-                    </div>
-                  </div>
-                  <div className={classes.cardMeta}>
-                    <div>
-                      <div className={classes.metaLabel}>{i18n.t("campaigns.table.contactList")}</div>
-                      <div className={classes.metaValue}>{getContactListName(campaign)}</div>
-                    </div>
-                    <div>
-                      <div className={classes.metaLabel}>{i18n.t("campaigns.table.whatsapp")}</div>
-                      <div className={classes.metaValue}>{campaign.whatsappId ? campaign.whatsapp?.name || "Não definido" : "Não definido"}</div>
-                    </div>
-                    <div>
-                      <div className={classes.metaLabel}>{i18n.t("campaigns.table.scheduledAt")}</div>
-                      <div className={classes.metaValue}>{campaign.scheduledAt ? datetimeToClient(campaign.scheduledAt) : "Sem agendamento"}</div>
-                    </div>
-                    <div>
-                      <div className={classes.metaLabel}>{i18n.t("campaigns.table.completedAt")}</div>
-                      <div className={classes.metaValue}>{campaign.completedAt ? datetimeToClient(campaign.completedAt) : "Não concluída"}</div>
-                    </div>
-                    <div>
-                      <div className={classes.metaLabel}>{i18n.t("campaigns.table.confirmation")}</div>
-                      <div className={classes.metaValue}>{campaign.confirmation ? "Habilitada" : "Desabilitada"}</div>
-                    </div>
-                  </div>
-                  <div className={classes.cardActions}>
-                    {campaign.status === "EM_ANDAMENTO" && (
-                      <IconButton
-                        onClick={() => cancelCampaign(campaign)}
-                        title="Pausar Campanha (Em Andamento)"
-                        size="small"
-                        className={classes.actionButton}
-                        style={{ color: '#f44336' }}
-                      >
-                        <PauseCircleOutlineIcon />
-                      </IconButton>
-                    )}
-                    {campaign.status === "CANCELADA" && (
-                      <IconButton
-                        onClick={() => restartCampaign(campaign)}
-                        title="Retomar Campanha (Pausada)"
-                        size="small"
-                        className={classes.actionButton}
-                        style={{ color: '#4caf50' }}
-                      >
-                        <PlayCircleOutlineIcon />
-                      </IconButton>
-                    )}
-                    <IconButton
-                      onClick={() =>
-                        history.push(`/campaign/${campaign.id}/detailed-report`)
-                      }
-                      size="small"
-                      className={classes.actionButton}
-                      title="Relatório Detalhado"
-                    >
-                      <DescriptionIcon />
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      className={classes.actionButton}
-                      onClick={() => handleEditCampaign(campaign)}
-                      title="Editar"
-                    >
-                      <EditIcon />
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      className={classes.actionButton}
-                      onClick={() => handleCloneCampaign(campaign)}
-                      title="Clonar Campanha"
-                      style={{ color: '#2196f3' }}
-                    >
-                      <FileCopyOutlinedIcon />
-                    </IconButton>
+        <Paper className={classes.paper} variant="outlined">
+          {/* Header — padrão do gerenciador de Templates Meta */}
+          <Box className={classes.header}>
+            <div className={classes.headerText}>
+              <Title>
+                {i18n.t("campaigns.title")} ({totalCampaigns})
+              </Title>
+              <span className={classes.subtitle}>
+                Disparos em massa via WhatsApp — acompanhe status, agendamentos
+                e relatórios de entrega.
+              </span>
+            </div>
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<AddIcon size={18} />}
+              onClick={() => history.push("/campaigns/new")}
+            >
+              Nova campanha
+            </Button>
+          </Box>
 
-                    <IconButton
-                      size="small"
-                      className={classes.actionButton}
-                      onClick={() => {
-                        setConfirmModalOpen(true);
-                        setDeletingCampaign(campaign);
-                      }}
-                      title="Excluir"
-                    >
-                      <DeleteOutlineIcon />
-                    </IconButton>
+          {/* Toolbar: busca + filtro de status */}
+          <Box className={classes.toolbar}>
+            <TextField
+              className={classes.searchField}
+              variant="outlined"
+              size="small"
+              placeholder={i18n.t("campaigns.searchPlaceholder")}
+              type="search"
+              value={searchParam}
+              onChange={handleSearch}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon size={18} style={{ color: "gray" }} />
+                  </InputAdornment>
+                ),
+              }}
+            />
+            <FormControl
+              variant="outlined"
+              size="small"
+              className={classes.filterSelect}
+            >
+              <Select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                displayEmpty
+              >
+                <MenuItem value="">Todos os status</MenuItem>
+                <MenuItem value="INATIVA">Inativa</MenuItem>
+                <MenuItem value="PROGRAMADA">Programada</MenuItem>
+                <MenuItem value="EM_ANDAMENTO">Em andamento</MenuItem>
+                <MenuItem value="CANCELADA">Pausada</MenuItem>
+                <MenuItem value="FINALIZADA">Finalizada</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+
+          {/* Mobile cards */}
+          <div className={classes.mobileList}>
+            {filteredCampaigns.map((campaign) => (
+              <div key={campaign.id} className={classes.card}>
+                <div className={classes.cardHeader}>
+                  <div className={classes.cardTitle}>{campaign.name}</div>
+                  <StatusChip status={campaign.status} />
+                </div>
+                <div className={classes.cardMeta}>
+                  <div>
+                    <div className={classes.metaLabel}>{i18n.t("campaigns.table.contactList")}</div>
+                    <div className={classes.metaValue}>{getContactListName(campaign)}</div>
+                  </div>
+                  <div>
+                    <div className={classes.metaLabel}>{i18n.t("campaigns.table.whatsapp")}</div>
+                    <div className={classes.metaValue}>{campaign.whatsappId ? campaign.whatsapp?.name || "Não definido" : "Não definido"}</div>
+                  </div>
+                  <div>
+                    <div className={classes.metaLabel}>{i18n.t("campaigns.table.scheduledAt")}</div>
+                    <div className={classes.metaValue}>{campaign.scheduledAt ? datetimeToClient(campaign.scheduledAt) : "Sem agendamento"}</div>
+                  </div>
+                  <div>
+                    <div className={classes.metaLabel}>{i18n.t("campaigns.table.confirmation")}</div>
+                    <div className={classes.metaValue}>{campaign.confirmation ? "Habilitada" : "Desabilitada"}</div>
                   </div>
                 </div>
-              ))}
-              {loading && <TableRowSkeleton columns={1} />}
-            </div>
-
-            {/* Desktop table */}
-            <div className={classes.desktopTableWrapper}>
-              <div className={classes.tableContainer}>
-                <Table size="small" className={classes.table}>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell align="center">
-                        {i18n.t("campaigns.table.name")}
-                      </TableCell>
-                      <TableCell align="center">
-                        {i18n.t("campaigns.table.status")}
-                      </TableCell>
-                      <TableCell align="center">
-                        {i18n.t("campaigns.table.contactList")}
-                      </TableCell>
-                      <TableCell align="center">
-                        {i18n.t("campaigns.table.whatsapp")}
-                      </TableCell>
-                      <TableCell align="center">
-                        {i18n.t("campaigns.table.scheduledAt")}
-                      </TableCell>
-                      <TableCell align="center">
-                        {i18n.t("campaigns.table.completedAt")}
-                      </TableCell>
-                      <TableCell align="center">
-                        {i18n.t("campaigns.table.confirmation")}
-                      </TableCell>
-                      <TableCell align="center">
-                        {i18n.t("campaigns.table.actions")}
-                      </TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    <>
-                      {campaigns.map((campaign) => (
-                        <TableRow key={campaign.id}>
-                          <TableCell align="center">{campaign.name}</TableCell>
-                          <TableCell align="center">
-                            {formatStatus(campaign.status)}
-                          </TableCell>
-                          <TableCell align="center">
-                            {getContactListName(campaign)}
-                          </TableCell>
-                          <TableCell align="center">
-                            {campaign.whatsappId
-                              ? campaign.whatsapp?.name || "Não definido"
-                              : "Não definido"}
-                          </TableCell>
-                          <TableCell align="center">
-                            {campaign.scheduledAt
-                              ? datetimeToClient(campaign.scheduledAt)
-                              : "Sem agendamento"}
-                          </TableCell>
-                          <TableCell align="center">
-                            {campaign.completedAt
-                              ? datetimeToClient(campaign.completedAt)
-                              : "Não concluída"}
-                          </TableCell>
-                          <TableCell align="center">
-                            {campaign.confirmation ? "Habilitada" : "Desabilitada"}
-                          </TableCell>
-                          <TableCell align="center">
-                            {campaign.status === "EM_ANDAMENTO" && (
-                              <IconButton
-                                onClick={() => cancelCampaign(campaign)}
-                                title="Pausar Campanha (Em Andamento)"
-                                size="small"
-                                style={{ color: '#f44336' }}
-                              >
-                                <PauseCircleOutlineIcon />
-                              </IconButton>
-                            )}
-                            {campaign.status === "CANCELADA" && (
-                              <IconButton
-                                onClick={() => restartCampaign(campaign)}
-                                title="Retomar Campanha (Pausada)"
-                                size="small"
-                                style={{ color: '#4caf50' }}
-                              >
-                                <PlayCircleOutlineIcon />
-                              </IconButton>
-                            )}
-                            <IconButton
-                              onClick={() =>
-                                history.push(`/campaign/${campaign.id}/detailed-report`)
-                              }
-                              size="small"
-                              title="Relatório Detalhado"
-                            >
-                              <DescriptionIcon />
-                            </IconButton>
-                            <IconButton
-                              size="small"
-                              onClick={() => handleEditCampaign(campaign)}
-                              title="Editar"
-                            >
-                              <EditIcon />
-                            </IconButton>
-                            <IconButton
-                              size="small"
-                              onClick={() => handleCloneCampaign(campaign)}
-                              title="Clonar Campanha"
-                              style={{ color: '#2196f3' }}
-                            >
-                              <FileCopyOutlinedIcon />
-                            </IconButton>
-
-                            <IconButton
-                              size="small"
-                              onClick={(e) => {
-                                setConfirmModalOpen(true);
-                                setDeletingCampaign(campaign);
-                              }}
-                              title="Excluir"
-                            >
-                              <DeleteOutlineIcon />
-                            </IconButton>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      {loading && <TableRowSkeleton columns={8} />}
-                    </>
-                  </TableBody>
-                </Table>
+                <div className={classes.cardActions}>
+                  {renderActions(campaign)}
+                </div>
               </div>
-            </div>
-          </Paper>
+            ))}
+            {loading && <TableRowSkeleton columns={1} />}
+          </div>
+
+          {/* Desktop table */}
+          <div className={classes.desktopTableWrapper}>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell className={classes.headCell}>
+                    {i18n.t("campaigns.table.name")}
+                  </TableCell>
+                  <TableCell align="center" className={classes.headCell}>
+                    {i18n.t("campaigns.table.status")}
+                  </TableCell>
+                  <TableCell align="center" className={classes.headCell}>
+                    {i18n.t("campaigns.table.contactList")}
+                  </TableCell>
+                  <TableCell align="center" className={classes.headCell}>
+                    {i18n.t("campaigns.table.whatsapp")}
+                  </TableCell>
+                  <TableCell align="center" className={classes.headCell}>
+                    {i18n.t("campaigns.table.scheduledAt")}
+                  </TableCell>
+                  <TableCell align="center" className={classes.headCell}>
+                    {i18n.t("campaigns.table.completedAt")}
+                  </TableCell>
+                  <TableCell align="center" className={classes.headCell}>
+                    {i18n.t("campaigns.table.confirmation")}
+                  </TableCell>
+                  <TableCell align="center" className={classes.headCell}>
+                    {i18n.t("campaigns.table.actions")}
+                  </TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {filteredCampaigns.map((campaign) => (
+                  <TableRow key={campaign.id} className={classes.rowHover} hover={false}>
+                    <TableCell className={classes.bodyCell}>
+                      <div className={classes.campaignName}>{campaign.name}</div>
+                      {campaign.confirmation && (
+                        <div className={classes.mutedText}>
+                          Confirmação habilitada
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell align="center" className={classes.bodyCell}>
+                      <StatusChip status={campaign.status} />
+                    </TableCell>
+                    <TableCell align="center" className={classes.bodyCell}>
+                      {getContactListName(campaign)}
+                    </TableCell>
+                    <TableCell align="center" className={classes.bodyCell}>
+                      {campaign.whatsappId
+                        ? campaign.whatsapp?.name || "Não definido"
+                        : "Não definido"}
+                    </TableCell>
+                    <TableCell align="center" className={classes.bodyCell}>
+                      {campaign.scheduledAt
+                        ? datetimeToClient(campaign.scheduledAt)
+                        : "Sem agendamento"}
+                    </TableCell>
+                    <TableCell align="center" className={classes.bodyCell}>
+                      {campaign.completedAt
+                        ? datetimeToClient(campaign.completedAt)
+                        : "Não concluída"}
+                    </TableCell>
+                    <TableCell align="center" className={classes.bodyCell}>
+                      {campaign.confirmation ? "Habilitada" : "Desabilitada"}
+                    </TableCell>
+                    <TableCell align="center" className={`${classes.bodyCell} ${classes.actionsCell}`}>
+                      {renderActions(campaign)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {loading && <TableRowSkeleton columns={8} />}
+              </TableBody>
+            </Table>
+          </div>
+
+          {/* Empty state */}
+          {!loading && filteredCampaigns.length === 0 && (
+            <Box className={classes.emptyState}>
+              <CampaignsIcon className={classes.emptyIcon} />
+              <Typography variant="subtitle1" style={{ fontWeight: 600 }}>
+                {searchParam || statusFilter
+                  ? "Nenhuma campanha encontrada para os filtros aplicados."
+                  : "Nenhuma campanha criada ainda."}
+              </Typography>
+              <Typography variant="body2" color="textSecondary">
+                {!searchParam && !statusFilter &&
+                  "Crie sua primeira campanha de disparo em massa."}
+              </Typography>
+            </Box>
+          )}
+
           {/* Paginação numerada */}
-          <nav className="flex justify-center mt-4" aria-label="Page navigation">
+          <nav className={`flex justify-center ${classes.paginationBar}`} aria-label="Page navigation">
             <ul className="inline-flex -space-x-px text-sm">
               <li>
                 <button
@@ -741,7 +808,7 @@ const Campaigns = () => {
               </li>
             </ul>
           </nav>
-        </>
+        </Paper>
       ) : (
         <ForbiddenPage />
       )}
