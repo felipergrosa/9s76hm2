@@ -66,6 +66,17 @@ module.exports = {
             chunks: 'all',
           },
         };
+        // Limita workers do Terser: cada worker duplica a AST na memória.
+        // Com ~150 chunks (splitChunks por rota), o padrão (cpus-1) estourava
+        // o heap do container no CI e causava OOM (exit 255).
+        webpackConfig.optimization.minimizer = (webpackConfig.optimization.minimizer || []).map(
+          (minimizer) => {
+            if (minimizer && minimizer.constructor && minimizer.constructor.name === 'TerserPlugin') {
+              minimizer.options.parallel = 2;
+            }
+            return minimizer;
+          }
+        );
       }
 
       webpackConfig.plugins = [
