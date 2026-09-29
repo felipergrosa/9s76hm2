@@ -2,6 +2,8 @@ import { Op, Sequelize } from "sequelize";
 import Campaign from "../../models/Campaign";
 import CampaignShipping from "../../models/CampaignShipping";
 import Whatsapp from "../../models/Whatsapp";
+import WhatsappTemplate from "../../models/WhatsappTemplate";
+import { getSendCostBrl } from "../MetaServices/WabaPricingService";
 import moment from "moment";
 
 // Tabela de preços Meta (Brasil) - Atualizar conforme necessário
@@ -164,9 +166,44 @@ export const CalculateCampaignCost = async (
   const freeUsed = Math.min(deliveredMessages, remainingFreeBefore);
   const chargeableMessages = Math.max(0, deliveredMessages - freeUsed);
 
-  // Custo (assumindo marketing)
-  const costPerMessage = pricing.marketingCost;
-  const totalCost = chargeableMessages * costPerMessage;
+  // Custo por mensagem: preferir a soma real carimbada por envio
+  // (CampaignShipping.estimatedCost gravado no dispatch pela categoria do
+  // template); fallback para o rate vigente da categoria; último fallback
+  // para a tabela estática de referência.
+  const stampedTotal: any = await CampaignShipping.findAll({
+    where: { campaignId, estimatedCost: { [Op.ne]: null } },
+    attributes: [
+      [Sequelize.fn("SUM", Sequelize.col("estimatedCost")), "total"],
+      [Sequelize.fn("COUNT", Sequelize.col("estimatedCost")), "stamped"]
+    ],
+    raw: true
+  });
+  const stampedSum = parseFloat(stampedTotal[0]?.total || "0");
+  const stampedCount = parseInt(stampedTotal[0]?.stamped || "0", 10);
+
+  let costPerMessage = pricing.marketingCost;
+  try {
+    const templateName = (campaign as any).metaTemplateName;
+    const localTemplate = templateName
+      ? await WhatsappTemplate.findOne({
+          where: { whatsappId: whatsapp.id, name: templateName }
+        })
+      : null;
+    const dynamicRate = await getSendCostBrl({
+      companyId: campaign.companyId,
+      whatsappId: whatsapp.id,
+      category: localTemplate?.category || "MARKETING"
+    });
+    if (dynamicRate !== null && dynamicRate !== undefined) {
+      costPerMessage = dynamicRate;
+    }
+  } catch {
+    // Rate dinâmico indisponível — segue com a tabela estática
+  }
+
+  const totalCost = stampedCount > 0
+    ? stampedSum
+    : chargeableMessages * costPerMessage;
 
   return {
     campaignId: campaign.id,
@@ -235,7 +272,12 @@ export const CalculateMonthlyCost = async (
         status: "delivered"
       },
       attributes: [
-        [Sequelize.fn("COUNT", "*"), "total"]
+        [Sequelize.fn("COUNT", "*"), "total"],
+        [Sequelize.fn("SUM", Sequelize.col("estimatedCost")), "stampedTotal"],
+        [
+          Sequelize.fn("COUNT", Sequelize.col("estimatedCost")),
+          "stampedCount"
+        ]
       ],
       raw: true
     });
@@ -244,7 +286,34 @@ export const CalculateMonthlyCost = async (
     const remainingFree = Math.max(0, pricing.freeConversations - accumulatedMessages);
     const freeUsed = Math.min(deliveredMessages, remainingFree);
     const chargeableMessages = Math.max(0, deliveredMessages - freeUsed);
-    const totalCost = chargeableMessages * pricing.marketingCost;
+
+    // Custo: soma real carimbada por envio, ou rate da categoria, ou tabela estática
+    const stampedSum = parseFloat(shippings[0]?.stampedTotal || "0");
+    const stampedCount = parseInt(shippings[0]?.stampedCount || "0", 10);
+
+    let unitCost = pricing.marketingCost;
+    try {
+      const templateName = (campaign as any).metaTemplateName;
+      const localTemplate = templateName
+        ? await WhatsappTemplate.findOne({
+            where: { whatsappId: campaign.whatsapp!.id, name: templateName }
+          })
+        : null;
+      const dynamicRate = await getSendCostBrl({
+        companyId,
+        whatsappId: campaign.whatsapp!.id,
+        category: localTemplate?.category || "MARKETING"
+      });
+      if (dynamicRate !== null && dynamicRate !== undefined) {
+        unitCost = dynamicRate;
+      }
+    } catch {
+      // Rate dinâmico indisponível — segue com a tabela estática
+    }
+
+    const totalCost = stampedCount > 0
+      ? stampedSum
+      : chargeableMessages * unitCost;
 
     campaignCosts.push({
       campaignId: campaign.id,
@@ -258,7 +327,7 @@ export const CalculateMonthlyCost = async (
       
       freeUsed,
       chargeableMessages,
-      costPerMessage: pricing.marketingCost,
+      costPerMessage: unitCost,
       totalCost,
       currency: pricing.currency,
       

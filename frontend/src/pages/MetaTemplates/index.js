@@ -283,6 +283,15 @@ const footerText = (template) => {
   return (comps.find((c) => c.type === "FOOTER")?.text || "").trim();
 };
 
+// Formata valor monetário em Real brasileiro (ex.: 0,0625 → "R$ 0,0625")
+const formatBrl = (value) =>
+  new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    minimumFractionDigits: 4,
+    maximumFractionDigits: 4
+  }).format(Number(value));
+
 const MetaTemplates = () => {
   const classes = useStyles();
   const { user, socket } = useContext(AuthContext);
@@ -702,6 +711,9 @@ const MetaTemplates = () => {
                 {i18n.t("metaTemplates.table.category")}
               </TableCell>
               <TableCell align="center" className={classes.headCell}>
+                {i18n.t("metaTemplates.table.cost", { defaultValue: "Custo/envio" })}
+              </TableCell>
+              <TableCell align="center" className={classes.headCell}>
                 {i18n.t("metaTemplates.table.language")}
               </TableCell>
               <TableCell align="center" className={classes.headCell}>
@@ -720,7 +732,7 @@ const MetaTemplates = () => {
           </TableHead>
           <TableBody>
             {loading ? (
-              <TableRowSkeleton key="skeleton" columns={8} />
+              <TableRowSkeleton key="skeleton" columns={9} />
             ) : (
               <>
                 {filteredTemplates.map((template) => (
@@ -747,6 +759,18 @@ const MetaTemplates = () => {
                     </TableCell>
                     <TableCell align="center" className={classes.bodyCell}>
                       <CategoryChip category={template.category} />
+                    </TableCell>
+                    <TableCell align="center" className={classes.bodyCell}>
+                      {template.estimatedCost !== null &&
+                      template.estimatedCost !== undefined ? (
+                        <Tooltip title="Custo estimado por envio (tarifa efetiva Meta — pode variar por tier)">
+                          <span className="bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 px-2 py-0.5 rounded-full text-xs">
+                            {formatBrl(template.estimatedCost)}
+                          </span>
+                        </Tooltip>
+                      ) : (
+                        "—"
+                      )}
                     </TableCell>
                     <TableCell align="center" className={classes.bodyCell}>
                       {template.language || "—"}

@@ -83,6 +83,7 @@ import TicketFunnelState from "../models/TicketFunnelState";
 import LeadScraperJob from "../models/LeadScraperJob";
 import CustomFieldConfig from "../models/CustomFieldConfig";
 import WhatsappTemplate from "../models/WhatsappTemplate";
+import WabaPricingRate from "../models/WabaPricingRate";
 
 // eslint-disable-next-line
 const dbConfig = require("../config/database");
@@ -245,7 +246,8 @@ const models = [
   TicketFunnelState,
   LeadScraperJob,
   CustomFieldConfig,
-  WhatsappTemplate
+  WhatsappTemplate,
+  WabaPricingRate
 ];
 
 sequelize.addModels(models);

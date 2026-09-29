@@ -13,6 +13,7 @@ export interface TemplateDefinition {
     name: string;
     language: string;
     status: string;
+    category?: string;  // MARKETING | UTILITY | AUTHENTICATION (usado no cálculo de custo por envio)
     hasButtons: boolean;
     hasHeader: boolean;  // Se o template tem componente HEADER (mesmo que fixo sem variáveis)
     headerFormat?: "TEXT" | "DOCUMENT" | "IMAGE" | "VIDEO";  // Formato do header
@@ -215,6 +216,7 @@ export const GetTemplateDefinition = async (
             name: template.name,
             language: template.language,
             status: template.status,
+            category: template.category,
             hasButtons: buttons.length > 0,
             hasHeader: !!header || !!headerFormat,  // true se template tem header
             headerFormat,

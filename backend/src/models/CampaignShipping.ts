@@ -69,6 +69,10 @@ class CampaignShipping extends Model<CampaignShipping> {
   @Column
   readAt: Date;
 
+  // Custo estimado do envio em R$ (tarifa Meta vigente por categoria do template)
+  @Column(DataType.DECIMAL(10, 4))
+  estimatedCost: number;
+
   // Índice da mensagem escolhida (1..5) para suportar mídia por mensagem
   @Column
   messageIndex: number;

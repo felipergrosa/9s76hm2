@@ -217,6 +217,9 @@ class Message extends Model<Message> {
   @Column(DataType.JSONB)
   pollData: any; // Dados de enquete (poll)
 
+  @Column(DataType.DECIMAL(10, 4))
+  estimatedCost: number; // Custo estimado do envio em R$ (tarifa Meta por categoria)
+
   @BeforeValidate
   static checkBody(instance: Message) {
     if (instance.body === null || instance.body === undefined) {

@@ -11,6 +11,7 @@ import CreateTicketService from "../TicketServices/CreateTicketService";
 import GetWhatsAppAdapter from "../../helpers/GetWhatsAppAdapter";
 import CreateMessageService from "../MessageServices/CreateMessageService";
 import GetTemplateDefinition, { TemplateDefinition } from "./GetTemplateDefinition";
+import { getSendCostBrl } from "./WabaPricingService";
 import MapTemplateParameters from "./MapTemplateParameters";
 import { Op } from "sequelize";  // NOVO: para query de ticket existente
 import { safeNormalizePhoneNumber } from "../../utils/phone";
@@ -357,6 +358,25 @@ const SendTemplateToContact = async ({
       },
       companyId
     });
+
+    // Carimba o custo estimado por envio (R$) conforme a categoria do template
+    // e a tarifa vigente na tabela de pricing (pricing_analytics ou manual)
+    try {
+      const estimatedCost = templateDefinition?.category
+        ? await getSendCostBrl({
+            companyId,
+            whatsappId,
+            category: templateDefinition.category
+          })
+        : null;
+      if (estimatedCost !== null && estimatedCost !== undefined) {
+        await message.update({ estimatedCost });
+      }
+    } catch (costErr: any) {
+      logger.warn(
+        `[SendTemplateToContact] Falha ao registrar custo estimado: ${costErr.message}`
+      );
+    }
 
     // Se statusTicket for "closed", fechar o ticket após enviar a mensagem
     if (statusTicket === "closed" && ticket.status !== "closed") {

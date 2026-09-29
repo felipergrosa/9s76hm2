@@ -12,6 +12,22 @@ const upload = multer({
   limits: { fileSize: 100 * 1024 * 1024 }
 });
 
+// Tarifas por envio (pricing_analytics) — antes de /:whatsappId para não conflitar
+metaTemplateRoutes.get(
+  "/meta-templates/:whatsappId/pricing",
+  isAuth,
+  checkPermission("meta-templates.view"),
+  MetaTemplateController.pricing
+);
+
+// Força re-sync das tarifas com a Meta
+metaTemplateRoutes.post(
+  "/meta-templates/:whatsappId/pricing/sync",
+  isAuth,
+  checkPermission("meta-templates.view"),
+  MetaTemplateController.pricingSync
+);
+
 // Lista/sincroniza templates da Meta para uma conexão WhatsApp oficial
 metaTemplateRoutes.get(
   "/meta-templates/:whatsappId",

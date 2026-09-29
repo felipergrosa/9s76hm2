@@ -19,6 +19,12 @@ import UpdateWabaTemplate from "../services/MetaServices/UpdateWabaTemplate";
 import DeleteWabaTemplate from "../services/MetaServices/DeleteWabaTemplate";
 import UploadTemplateHeaderMedia from "../services/MetaServices/UploadTemplateHeaderMedia";
 import SyncWabaTemplates from "../services/MetaServices/SyncWabaTemplates";
+import WabaPricingRate from "../models/WabaPricingRate";
+import { getMetaAxiosClient } from "../services/MetaServices/metaApiClient";
+import {
+  getUsdToBrlRate,
+  SyncWabaPricing
+} from "../services/MetaServices/WabaPricingService";
 import { validateTemplatePayload } from "../services/MetaServices/validateTemplateComponents";
 
 // Busca a conexão WhatsApp da empresa e garante que é do canal oficial (Meta)
@@ -106,6 +112,35 @@ const upsertHeaderComponent = (
 // GET /meta-templates/:whatsappId?status=
 // Sincroniza templates com a Meta e persiste localmente; se a Meta falhar,
 // faz fallback para os dados persistidos (resposta com stale: true)
+// Anexa custo estimado por envio (R$) a cada template conforme sua categoria.
+// Uma única query carrega os rates da conexão e indexa por categoria.
+const withEstimatedCost = async (
+  templates: any[],
+  whatsappId: number,
+  companyId: number
+): Promise<any[]> => {
+  try {
+    const rates = await WabaPricingRate.findAll({
+      where: { companyId, whatsappId, country: "BR" }
+    });
+    if (rates.length === 0) return templates;
+
+    const rateByCategory = new Map<string, number>();
+    rates.forEach(r => {
+      const value = Number(r.rateBrl ?? r.rate);
+      if (Number.isFinite(value)) rateByCategory.set(r.category, value);
+    });
+
+    return templates.map(t => ({
+      ...t,
+      estimatedCost: rateByCategory.get(t.category) ?? null
+    }));
+  } catch {
+    // Falha na consulta de custo não deve impedir a listagem de templates
+    return templates;
+  }
+};
+
 export const index = async (
   req: Request,
   res: Response
@@ -123,7 +158,9 @@ export const index = async (
       ? synced.filter(t => (t as any).status === status)
       : synced;
 
-    return res.json({ templates });
+    return res.json({
+      templates: await withEstimatedCost(templates, Number(whatsappId), companyId)
+    });
   } catch (syncError: any) {
     logger.warn(
       `[MetaTemplateController] Falha ao consultar Meta, usando cache local: ${syncError.message}`
@@ -149,8 +186,107 @@ export const index = async (
       ? mapped.filter(t => t.status === status)
       : mapped;
 
-    return res.json({ templates, stale: true });
+    return res.json({
+      templates: await withEstimatedCost(templates, Number(whatsappId), companyId),
+      stale: true
+    });
   }
+};
+
+// GET /meta-templates/:whatsappId/pricing
+// Tarifas vigentes por categoria (R$), cotação USD→BRL e gasto real dos
+// últimos 30 dias conforme pricing_analytics da Meta
+export const pricing = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { whatsappId } = req.params;
+  const { companyId } = req.user;
+
+  const whatsapp = await getOfficialWhatsapp(whatsappId, companyId);
+
+  const [rates, usdToBrl] = await Promise.all([
+    WabaPricingRate.findAll({
+      where: { companyId, whatsappId: Number(whatsappId), country: "BR" },
+      order: [["category", "ASC"]]
+    }),
+    getUsdToBrlRate(companyId)
+  ]);
+
+  // Gasto real consolidado dos últimos 30 dias (billed, na moeda da WABA)
+  let billedLast30d: any = null;
+  try {
+    const client = getMetaAxiosClient(whatsapp);
+    const end = Math.floor(Date.now() / 1000);
+    const start = end - 30 * 24 * 60 * 60;
+    const { data } = await client.get(`/${whatsapp.wabaBusinessAccountId}`, {
+      params: {
+        fields:
+          "pricing_analytics" +
+          `.start(${start})` +
+          `.end(${end})` +
+          ".granularity(MONTHLY)" +
+          ".metric_types(COST,VOLUME)" +
+          ".dimensions(PRICING_CATEGORY,PRICING_TYPE)"
+      }
+    });
+
+    const points = (data?.pricing_analytics?.data || []).flatMap(
+      (e: any) => e.data_points || []
+    );
+
+    const byCategory: Record<string, { cost: number; volume: number }> = {};
+    let totalCost = 0;
+    let totalVolume = 0;
+    points.forEach((p: any) => {
+      if (p.pricing_type !== "REGULAR") return;
+      const cat = p.pricing_category || "OUTROS";
+      const agg = byCategory[cat] || { cost: 0, volume: 0 };
+      agg.cost += Number(p.cost || 0);
+      agg.volume += Number(p.volume || 0);
+      byCategory[cat] = agg;
+      totalCost += Number(p.cost || 0);
+      totalVolume += Number(p.volume || 0);
+    });
+
+    billedLast30d = { totalCost, totalVolume, byCategory };
+  } catch (err: any) {
+    // WABA via Solution Partner não retorna COST — segue sem o consolidado
+    logger.warn(
+      `[MetaTemplateController] pricing_analytics indisponível: ${err.message}`
+    );
+  }
+
+  return res.json({
+    rates: rates.map(r => ({
+      category: r.category,
+      country: r.country,
+      rate: r.rate !== null ? Number(r.rate) : null,
+      currency: r.currency,
+      rateBrl: r.rateBrl !== null ? Number(r.rateBrl) : null,
+      tier: r.tier,
+      source: r.source,
+      lastSyncAt: r.lastSyncAt
+    })),
+    usdToBrl,
+    billedLast30d
+  });
+};
+
+// POST /meta-templates/:whatsappId/pricing/sync
+// Força o recálculo das tarifas a partir de pricing_analytics (útil no
+// primeiro uso — o cron diário também popula automaticamente)
+export const pricingSync = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { whatsappId } = req.params;
+  const { companyId } = req.user;
+
+  const whatsapp = await getOfficialWhatsapp(whatsappId, companyId);
+  const updated = await SyncWabaPricing({ whatsapp, companyId });
+
+  return res.json({ updated });
 };
 
 // POST /meta-templates/:whatsappId

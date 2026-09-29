@@ -139,6 +139,10 @@ import {
     // POST /webhooks/external-form/:token — null/vazio desabilita o endpoint para a empresa
     @Column
     externalFormWebhookToken: string;
+
+    // Cotação USD→BRL usada na conversão das tarifas Meta para exibição em R$
+    @Column
+    usdToBrlRate: string;
   }
   
   export default CompaniesSettings;

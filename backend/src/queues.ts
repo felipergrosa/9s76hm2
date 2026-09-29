@@ -55,6 +55,7 @@ import GetWhatsAppAdapter from "./helpers/GetWhatsAppAdapter";
 import SendTemplateToContact from "./services/MetaServices/SendTemplateToContact";
 import WhatsappTemplate from "./models/WhatsappTemplate";
 import GetTemplateDefinition from "./services/MetaServices/GetTemplateDefinition";
+import { getSendCostBrl, SyncAllWabaPricing } from "./services/MetaServices/WabaPricingService";
 import MapTemplateParameters from "./services/MetaServices/MapTemplateParameters";
 import CreateMessageService from "./services/MessageServices/CreateMessageService";
 import { buildOfficialPreviewData } from "./utils/officialMessagePreview";
@@ -2163,6 +2164,7 @@ async function handleDispatchCampaign(job) {
       const templateName = (campaign as any).metaTemplateName as string;
       const languageCode = ((campaign as any).metaTemplateLanguage as string) || "pt_BR";
       let sentWid: string | undefined;
+      let templateCategory: string | null = null;
 
       try {
         // REGRA UNIFICADA: TODA campanha cria ticket "campaign" primeiro
@@ -2242,6 +2244,7 @@ async function handleDispatchCampaign(job) {
 
             // Extrair texto do body do template
             templateBodyText = templateDef.body || "";
+            templateCategory = templateDef.category || null;
             templateFooterText = templateDef.footer || "";
             templateButtonsPreview = templateDef.buttons || [];
 
@@ -2428,11 +2431,27 @@ async function handleDispatchCampaign(job) {
           }
         }
 
+        // Custo estimado do envio em R$ conforme categoria do template
+        // (tarifa vigente em WabaPricingRates — pricing_analytics ou manual)
+        let estimatedCost: number | null = null;
+        if (templateCategory) {
+          try {
+            estimatedCost = await getSendCostBrl({
+              companyId: campaign.companyId,
+              whatsappId: selectedWhatsappId,
+              category: templateCategory
+            });
+          } catch (costErr: any) {
+            logger.warn(`[DispatchCampaign] Falha ao calcular custo estimado: ${costErr.message}`);
+          }
+        }
+
         await campaignShipping.update({
           deliveredAt: moment(),
           status: 'delivered',
           wid: sentWid || null,
           metaStatus: sentWid ? 'sent' : null,
+          estimatedCost,
           attempts: (campaignShipping.attempts || 0) + 1
         });
         resetBackoffOnSuccess(selectedWhatsappId);
@@ -3317,6 +3336,22 @@ async function handleWhatsapp() {
   }, null, false, 'America/Sao_Paulo')
   jobW.start();
 }
+
+// Sync diário das tarifas Meta (pricing_analytics) → WabaPricingRates
+// Atualiza o rate efetivo (cost/volume) por categoria em cada conexão oficial
+async function handleWabaPricingSync() {
+  const job = new CronJob('0 0 6 * * *', async () => {
+    try {
+      const result = await SyncAllWabaPricing();
+      logger.info(
+        `[WabaPricing] Sync diário concluído: ${result.synced} tarifas, ${result.errors} erros`
+      );
+    } catch (e: any) {
+      logger.error(`[WabaPricing] Falha no sync diário: ${e.message}`);
+    }
+  }, null, false, 'America/Sao_Paulo');
+  job.start();
+}
 async function handleInvoiceCreate() {
   const job = new CronJob('0 * * * * *', async () => {
 
@@ -3397,6 +3432,7 @@ handleInvoiceCreate()
 handleWhatsapp();
 handleProcessLanes();
 handleCloseTicketsAutomatic();
+handleWabaPricingSync();
 
 export async function startQueueProcess() {
   logger.info("Iniciando processamento de filas");

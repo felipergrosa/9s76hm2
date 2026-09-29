@@ -81,6 +81,15 @@ const CATEGORY_META = {
   }
 };
 
+// Formata custo em Real brasileiro com precisão de centésimos de centavo
+const formatBrlCost = value =>
+  new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    minimumFractionDigits: 4,
+    maximumFractionDigits: 4
+  }).format(Number(value));
+
 const LANGUAGE_OPTIONS = [
   "pt_BR",
   "pt_PT",
@@ -249,6 +258,11 @@ const useStyles = makeStyles(theme => ({
     fontSize: 11.5,
     lineHeight: 1.4,
     marginTop: 2
+  },
+  categoryCost: {
+    color: theme.palette.success?.main || "#059669",
+    fontSize: 11,
+    marginTop: 4
   },
   // Chips de tipo de cabeçalho
   headerTypeRow: {
@@ -636,6 +650,8 @@ const MetaTemplateModal = ({ open, onClose, whatsappId, template, onSaved }) => 
   const [allowCategoryChange, setAllowCategoryChange] = useState(true);
   const [saving, setSaving] = useState(false);
   const [emojiAnchor, setEmojiAnchor] = useState(null);
+  // Custo estimado por envio (R$) indexado por categoria — vem de /pricing
+  const [costByCategory, setCostByCategory] = useState({});
 
   const fileInputRef = useRef(null);
   const bodyInputRef = useRef(null);
@@ -764,6 +780,29 @@ const MetaTemplateModal = ({ open, onClose, whatsappId, template, onSaved }) => 
     if (open && template) parseComponents(template);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, template]);
+
+  // Carrega tarifas por categoria (custo estimado por envio em R$)
+  React.useEffect(() => {
+    if (!open || !whatsappId) return;
+    let cancelled = false;
+    api
+      .get(`/meta-templates/${whatsappId}/pricing`)
+      .then(({ data }) => {
+        if (cancelled) return;
+        const map = {};
+        (data?.rates || []).forEach(r => {
+          if (r.rateBrl !== null && r.rateBrl !== undefined) {
+            map[r.category] = Number(r.rateBrl);
+          }
+        });
+        setCostByCategory(map);
+      })
+      .catch(() => {
+        // Sem tarifas disponíveis ainda (sync diário ou WABA sem histórico)
+        if (!cancelled) setCostByCategory({});
+      });
+    return () => { cancelled = true; };
+  }, [open, whatsappId]);
 
   // ---- Botões: add/remove/reorder ----
   const countType = type => buttons.filter(b => b.type === type).length;
@@ -1318,10 +1357,29 @@ const MetaTemplateModal = ({ open, onClose, whatsappId, template, onSaved }) => 
                           <div className={classes.categoryDesc}>
                             {tt(`categoriesDesc.${c}`, CATEGORY_META[c].desc)}
                           </div>
+                          {costByCategory[c] !== undefined && (
+                            <div className={classes.categoryCost}>
+                              {tt(
+                                "fields.costPerSend",
+                                "Custo estimado"
+                              )}:{" "}
+                              <strong>{formatBrlCost(costByCategory[c])}/envio</strong>
+                            </div>
+                          )}
                         </Paper>
                       );
                     })}
                   </Box>
+                  {costByCategory[values.category] !== undefined && (
+                    <FormHelperText>
+                      {tt(
+                        "fields.costEstimated",
+                        `Custo estimado por envio: ${formatBrlCost(
+                          costByCategory[values.category]
+                        )} — tarifa efetiva Meta (pode variar por volume/tier e país do destinatário).`
+                      )}
+                    </FormHelperText>
+                  )}
                   {isApproved && (
                     <FormHelperText>
                       {tt(
