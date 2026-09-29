@@ -80,7 +80,7 @@ module.exports = {
             // 11. Índice para envios de campanha
             await queryInterface.sequelize.query(`
         CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_perf_campaign_shipping 
-        ON "CampaignShippings" ("campaignId", "deliveredAt");
+        ON "CampaignShipping" ("campaignId", "deliveredAt");
       `, { transaction }).catch(() => { });
 
             // 12. Índice para tickets com mensagens não lidas

@@ -103,6 +103,15 @@ module.exports = {
       });
     }
 
+    // Índice que a migration 20260122170000 tentava criar com nome errado
+    // ("CampaignShippings") e era engolido por .catch — cria agora, idempotente
+    await queryInterface.sequelize
+      .query(
+        `CREATE INDEX IF NOT EXISTS idx_perf_campaign_shipping
+         ON "CampaignShipping" ("campaignId", "deliveredAt")`
+      )
+      .catch(() => {});
+
     const messagesDef: any = await queryInterface.describeTable("Messages");
     if (!messagesDef.estimatedCost) {
       await queryInterface.addColumn("Messages", "estimatedCost", {

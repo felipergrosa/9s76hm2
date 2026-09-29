@@ -68,6 +68,16 @@ migFiles.forEach(f => {
   for (const m of src.matchAll(TABLE_VAR_REF)) {
     if (tableVars[m[1]]) check(tableVars[m[1]], `const ${m[1]}`);
   }
+
+  // Nomes de tabela dentro de SQL raw: ON "X", FROM "X", JOIN "X",
+  // INTO "X", UPDATE "X", ALTER TABLE "X", DROP TABLE ... "X"
+  for (const m of src.matchAll(
+    /\b(?:ON|FROM|JOIN|INTO|UPDATE|TABLE)\s+"([\w]+)"/g
+  )) {
+    // Ignora nomes de índice/constraint (minúsculos com prefixo idx_/fk_/etc.)
+    if (/^(idx|fk|pk|uniq)_/i.test(m[1])) continue;
+    check(m[1], "SQL raw");
+  }
 });
 
 if (errors > 0) {
