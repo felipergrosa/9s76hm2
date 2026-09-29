@@ -9,12 +9,14 @@ export const getTemplates = async (
   res: Response
 ): Promise<Response> => {
   const { whatsappId } = req.params;
+  const { all } = req.query as any;
   const { companyId } = (req as any).user;
 
   try {
     const templates = await GetApprovedTemplates({
       whatsappId: Number(whatsappId),
-      companyId
+      companyId,
+      includeAll: all === "true" || all === true
     });
 
     return res.status(200).json({ templates });

@@ -128,5 +128,6 @@ export const AuditEntities = {
   QUICK_MESSAGE: "Resposta Rápida",
   SETTING: "Configuração",
   COMPANY: "Empresa",
-  FLOWBUILDER: "Fluxo"
+  FLOWBUILDER: "Fluxo",
+  TEMPLATE: "Template Meta"
 };

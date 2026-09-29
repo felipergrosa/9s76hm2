@@ -1,6 +1,7 @@
 import AppError from "../../errors/AppError";
 import Contact from "../../models/Contact";
 import ContactCustomField, { validateCustomFieldTypedValue } from "../../models/ContactCustomField";
+import CustomFieldConfig from "../../models/CustomFieldConfig";
 import ContactTag from "../../models/ContactTag";
 import { Op } from "sequelize";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
@@ -227,8 +228,32 @@ const UpdateContactService = async ({
   }
 
   if (extraInfo) {
+    // type/options/required vêm do CustomFieldConfig do admin — nunca do payload do cliente
+    const cfConfigs = await CustomFieldConfig.findAll({
+      where: { companyId, entityType: "lead" },
+      attributes: ["key", "type", "options", "required", "label"]
+    });
+
+    const missingRequired = cfConfigs.filter(
+      cfg =>
+        cfg.required &&
+        !extraInfo.some(
+          (e: any) => e.name === cfg.key && String(e.value ?? "").trim() !== ""
+        )
+    );
+    if (missingRequired.length) {
+      throw new AppError(
+        `Campos obrigatórios não preenchidos: ${missingRequired.map(c => c.label).join(", ")}`
+      );
+    }
+
     await Promise.all(
       extraInfo.map(async (info: any) => {
+        const cfg = cfConfigs.find(c => c.key === info.name);
+        if (cfg) {
+          info.type = cfg.type;
+          info.options = cfg.options;
+        }
         // upsert() não dispara hooks de instância no Sequelize v5 (Postgres) —
         // valida explicitamente aqui antes de gravar.
         validateCustomFieldTypedValue(info);

@@ -626,6 +626,17 @@ const MainListItems = ({ collapsed, drawerClose }) => {
         />
       )}
 
+      {/* 2.1 TEMPLATES META */}
+      {hasPermission("meta-templates.view") && (
+        <ListItemLink
+          to="/meta-templates"
+          primary={i18n.t("mainDrawer.listItems.metaTemplates")}
+          icon={<Description />}
+          viewMode={viewMode}
+          tooltip={collapsed}
+        />
+      )}
+
       {/* 3. GERENCIAR CONEXÕES (SUPER) */}
       {user.super && (
         <ListItemLink

@@ -1,7 +1,8 @@
 import AppError from "../../errors/AppError";
 import CompaniesSettings from "../../models/CompaniesSettings";
 import Contact from "../../models/Contact";
-import ContactCustomField from "../../models/ContactCustomField";
+import ContactCustomField, { validateCustomFieldTypedValue } from "../../models/ContactCustomField";
+import CustomFieldConfig from "../../models/CustomFieldConfig";
 import logger from "../../utils/logger";
 import { Op } from "sequelize";
 import User from "../../models/User";
@@ -329,6 +330,22 @@ const CreateContactService = async ({
     return num;
   };
   const vlUltCompraValue = parseMoney(vlUltCompra as any);
+
+  // Enriquece extraInfo com type/options do CustomFieldConfig (admin) — nunca confia no cliente
+  if (Array.isArray(extraInfo) && extraInfo.length) {
+    const cfConfigs = await CustomFieldConfig.findAll({
+      where: { companyId, entityType: "lead" },
+      attributes: ["key", "type", "options"]
+    });
+    extraInfo.forEach((info: any) => {
+      const cfg = cfConfigs.find(c => c.key === info.name);
+      if (cfg) {
+        info.type = cfg.type;
+        info.options = cfg.options;
+      }
+      validateCustomFieldTypedValue(info);
+    });
+  }
 
   const contactData: {
     name: string;

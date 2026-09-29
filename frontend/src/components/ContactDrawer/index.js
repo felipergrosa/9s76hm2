@@ -26,9 +26,6 @@ import FileCopyIcon from "@material-ui/icons/FileCopy";
 import SettingsIcon from "@material-ui/icons/Settings";
 import AssignmentIndIcon from "@material-ui/icons/AssignmentInd";
 import { ContactForm } from "../ContactForm";
-// OTIMIZAÇÃO: Lazy loading para evitar 21s de parsing do chunk no carregamento inicial
-const ContactModal = lazy(() => import("../ContactModal"));
-const QuickMessagesPanel = lazy(() => import("../QuickMessagesPanel"));
 import { ContactNotes } from "../ContactNotes";
 
 import { AuthContext } from "../../context/Auth/AuthContext";
@@ -39,6 +36,10 @@ import { toast } from "react-toastify";
 import { TagsKanbanContainer } from "../TagsKanbanContainer";
 import SharedMediaPanel from "../SharedMediaPanel";
 import EntityTimeline from "../EntityTimeline";
+
+// OTIMIZAÇÃO: Lazy loading para evitar 21s de parsing do chunk no carregamento inicial
+const ContactModal = lazy(() => import("../ContactModal"));
+const QuickMessagesPanel = lazy(() => import("../QuickMessagesPanel"));
 
 const drawerWidth = 320;
 
@@ -168,6 +169,20 @@ const ContactDrawer = ({ open, handleDrawerClose, contact, ticket, loading, acti
     const [avatarLargeUrl, setAvatarLargeUrl] = useState(null);
     const [notesOpen, setNotesOpen] = useState(true);
     const [activeTab, setActiveTab] = useState(activeTabParams);
+    const [cfLabels, setCfLabels] = useState({}); // key -> label dos campos customizados do admin
+
+    useEffect(() => {
+        let mounted = true;
+        api.get("/custom-field-configs?entityType=lead")
+            .then(({ data }) => {
+                if (!mounted) return;
+                const map = {};
+                (Array.isArray(data) ? data : []).forEach(c => { map[c.key] = c.label; });
+                setCfLabels(map);
+            })
+            .catch(() => {});
+        return () => { mounted = false; };
+    }, []);
     const [contactStatus, setContactStatus] = useState(null);  // Status/Recado do contato
 
     useEffect(() => {
@@ -666,7 +681,7 @@ const ContactDrawer = ({ open, handleDrawerClose, contact, ticket, loading, acti
                                             variant="outlined"
                                             className={classes.contactExtraInfo}
                                         >
-                                            <InputLabel>{info.name}</InputLabel>
+                                            <InputLabel>{cfLabels[info.name] || info.name}</InputLabel>
                                             <Typography component="div" noWrap style={{ paddingTop: 2 }}>
                                                 <MarkdownWrapper>{info.value}</MarkdownWrapper>
                                             </Typography>

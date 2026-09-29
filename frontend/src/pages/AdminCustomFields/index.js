@@ -11,6 +11,7 @@ import {
   Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon,
   Tune as TuneIcon, CheckCircle as RequiredIcon,
 } from "@material-ui/icons";
+import { FormControlLabel, Checkbox } from "@material-ui/core";
 import { toast } from "react-toastify";
 import api from "../../services/api";
 import MainContainer from "../../components/MainContainer";
@@ -69,11 +70,10 @@ const useStyles = makeStyles(theme => ({
   optional: { background: "#f5f5f5", color: "#9e9e9e", fontWeight: 600, fontSize: 10 },
 }));
 
+// Somente "lead" tem storage/consumo implementado (ContactCustomField + form de contato).
+// ticket/company/deal foram removidos da UI para não gerar configs órfãs.
 const ENTITIES = [
   { value: "lead",    label: "Lead / Contato" },
-  { value: "ticket",  label: "Ticket" },
-  { value: "company", label: "Empresa" },
-  { value: "deal",    label: "Negócio" },
 ];
 
 const FIELD_TYPES = ["text", "number", "date", "boolean", "select"];
@@ -145,13 +145,17 @@ export default function AdminCustomFields() {
     const options = form.type === "select"
       ? form.options.split(",").map(s => s.trim()).filter(Boolean)
       : null;
+    if (form.type === "select" && (!options || options.length === 0)) {
+      toast.warning("Informe ao menos uma opção para o campo Seleção");
+      return;
+    }
     setSaving(true);
     try {
       if (editId) {
         await api.put(`/custom-field-configs/${editId}`, { ...form, options });
         toast.success("Campo atualizado");
       } else {
-        await api.post("/custom-field-configs", { ...form, options });
+        await api.post("/custom-field-configs", { ...form, options, position: configs.length });
         toast.success("Campo criado");
       }
       setOpen(false);
@@ -186,7 +190,7 @@ export default function AdminCustomFields() {
           <Box>
             <Typography className={classes.heroTitle}>Campos Customizados</Typography>
             <Typography className={classes.heroSub}>
-              Configure campos extras para Leads, Tickets, Empresas e Negócios
+              Configure campos extras exibidos no cadastro do Lead / Contato
             </Typography>
           </Box>
         </Box>
@@ -296,7 +300,7 @@ export default function AdminCustomFields() {
         <DialogTitle>{editId ? "Editar Campo" : "Novo Campo Customizado"}</DialogTitle>
         <DialogContent>
           <Box display="flex" flexDirection="column" style={{ gap: 16, marginTop: 8 }}>
-            <FormControl fullWidth variant="outlined" size="small">
+            <FormControl fullWidth variant="outlined" size="small" disabled={!!editId}>
               <InputLabel>Entidade</InputLabel>
               <Select value={form.entityType} onChange={e => setField("entityType", e.target.value)} label="Entidade">
                 {ENTITIES.map(e => <MenuItem key={e.value} value={e.value}>{e.label}</MenuItem>)}
@@ -305,8 +309,9 @@ export default function AdminCustomFields() {
             <TextField
               label="Chave (key)" size="small" variant="outlined" autoFocus
               value={form.key}
+              disabled={!!editId}
               onChange={e => setField("key", e.target.value.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, ""))}
-              helperText="snake_case, ex: data_nascimento"
+              helperText={editId ? "A chave não pode ser alterada (valores salvos ficam vinculados a ela)" : "snake_case, ex: data_nascimento"}
               InputProps={{
                 startAdornment: <Box component="span" className={classes.keyCode} style={{ marginRight: 8, fontSize: 10 }}>key:</Box>
               }}
@@ -340,6 +345,16 @@ export default function AdminCustomFields() {
                 helperText={form.options ? `${form.options.split(",").filter(s => s.trim()).length} opções` : ""}
               />
             )}
+            <FormControlLabel
+              control={
+                <Checkbox
+                  color="primary"
+                  checked={!!form.required}
+                  onChange={e => setField("required", e.target.checked)}
+                />
+              }
+              label="Campo obrigatório no formulário de contato"
+            />
           </Box>
         </DialogContent>
         <DialogActions>

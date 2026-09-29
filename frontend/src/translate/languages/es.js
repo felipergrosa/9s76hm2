@@ -882,7 +882,8 @@ const messages = {
           prompts: "Talk.Ai",
           allConnections: "Administrar conexiones",
           reports: "Informes",
-          management: "Gerencia"
+          management: "Gerencia",
+          metaTemplates: "Plantillas Meta"
         },
         appBar: {
           user: {
@@ -1678,6 +1679,112 @@ const messages = {
           expirationDate: "Fecha Venc.",
           action: "Acción"
         }
+      },
+      metaTemplates: {
+        title: "Plantillas Meta",
+        subtitle: "Gestiona las plantillas de mensajes de la API Oficial de WhatsApp",
+        searchPlaceholder: "Buscar plantilla...",
+        selectConnection: "Conexión",
+        buttons: {
+          add: "Nueva Plantilla",
+          sync: "Sincronizar",
+          cancel: "Cancelar",
+          save: "Guardar",
+          edit: "Editar",
+          delete: "Eliminar",
+          newButton: "Agregar botón",
+          addButton: "Agregar botón"
+        },
+        table: {
+          name: "Nombre",
+          language: "Idioma",
+          category: "Categoría",
+          status: "Estado",
+          quality: "Calidad",
+          reason: "Motivo",
+          actions: "Acciones"
+        },
+        status: {
+          APPROVED: "Aprobada",
+          PENDING: "Pendiente",
+          IN_REVIEW: "En revisión",
+          REJECTED: "Rechazada",
+          PAUSED: "Pausada",
+          DISABLED: "Deshabilitada",
+          FLAGGED: "Marcada",
+          ARCHIVED: "Archivada",
+          DELETED: "Eliminada",
+          PENDING_DELETION: "Eliminación pendiente",
+          IN_APPEAL: "En apelación",
+          REINSTATED: "Restablecida",
+          LOCKED: "Bloqueada",
+          LIMIT_EXCEEDED: "Límite excedido"
+        },
+        category: {
+          MARKETING: "Marketing",
+          UTILITY: "Utilidad",
+          AUTHENTICATION: "Autenticación"
+        },
+        form: {
+          name: "Nombre de la plantilla",
+          nameHelper: "Solo letras minúsculas, números y guiones bajos",
+          category: "Categoría",
+          language: "Idioma",
+          parameterFormat: "Formato de parámetros",
+          positional: "Posicional",
+          named: "Nombrado",
+          headerType: "Tipo de encabezado",
+          headerNone: "Ninguno",
+          headerText: "Texto",
+          headerImage: "Imagen",
+          headerVideo: "Video",
+          headerDocument: "Documento",
+          headerFile: "Archivo",
+          body: "Cuerpo del mensaje",
+          bodyHelper: "Usa {{1}}, {{2}}... para variables posicionales",
+          footer: "Pie de página",
+          variables: "Variables",
+          exampleFor: "Ejemplo para",
+          buttons: "Botones",
+          buttonType: "Tipo de botón",
+          quickReply: "Respuesta rápida",
+          urlButton: "Botón de URL",
+          url: "URL",
+          urlExample: "Ejemplo de URL",
+          phoneButton: "Botón de teléfono",
+          phoneNumber: "Número de teléfono",
+          copyCode: "Copiar código",
+          copyExample: "Ejemplo de código",
+          buttonText: "Texto del botón",
+          ttl: "TTL (tiempo de vida)",
+          ttlHelper: "Tiempo en segundos para que el mensaje expire",
+          preview: "Vista previa",
+          submitting: "Enviando..."
+        },
+        modal: {
+          createTitle: "Crear Plantilla",
+          editTitle: "Editar Plantilla"
+        },
+        toasts: {
+          created: "¡Plantilla creada con éxito!",
+          updated: "¡Plantilla actualizada con éxito!",
+          deleted: "¡Plantilla eliminada con éxito!",
+          synced: "¡Plantillas sincronizadas con éxito!"
+        },
+        confirm: {
+          deleteTitle: "Eliminar plantilla",
+          deleteMessage:
+            "¿Estás seguro de que deseas eliminar esta plantilla? Esta acción no se puede revertir.",
+          deleteWarning30d:
+            "Atención: las plantillas eliminadas no pueden recrearse con el mismo nombre durante 30 días."
+        },
+        errors: {
+          noOfficialConnection:
+            "No se encontró ninguna conexión oficial. Configura una conexión con la API Oficial de Meta.",
+          staleCache:
+            "Los datos mostrados pueden estar desactualizados. Haz clic en Sincronizar para actualizar."
+        },
+        empty: "No se encontraron plantillas."
       },
       backendErrors: {
         ERR_NO_OTHER_WHATSAPP: "Debe haber al menos un WhatsApp predeterminado.",

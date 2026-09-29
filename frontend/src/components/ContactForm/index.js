@@ -14,6 +14,7 @@ import { i18n } from "../../translate/i18n";
 
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
+import CustomFieldsInputs from "../CustomFieldsInputs";
 import InputMask from "react-input-mask";
 import { FormControl, InputLabel, MenuItem, Select, Grid, Checkbox, ListItemText } from "@material-ui/core";
 import { isValidCPF, isValidCNPJ } from "../../utils/validators";
@@ -388,6 +389,11 @@ export function ContactForm ({ initialContact, onSave, onCancel }) {
                                 fullWidth
                             />
                         </Grid>
+                        <CustomFieldsInputs
+                            entityType="lead"
+                            values={values}
+                            setFieldValue={setFieldValue}
+                        />
                         <Grid item xs={12} spacing={1}>
                             <Grid container spacing={1}>
                                 <Grid xs={6} item>

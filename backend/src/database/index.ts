@@ -82,6 +82,7 @@ import UserRole from "../models/UserRole";
 import TicketFunnelState from "../models/TicketFunnelState";
 import LeadScraperJob from "../models/LeadScraperJob";
 import CustomFieldConfig from "../models/CustomFieldConfig";
+import WhatsappTemplate from "../models/WhatsappTemplate";
 
 // eslint-disable-next-line
 const dbConfig = require("../config/database");
@@ -243,7 +244,8 @@ const models = [
   UserRole,
   TicketFunnelState,
   LeadScraperJob,
-  CustomFieldConfig
+  CustomFieldConfig,
+  WhatsappTemplate
 ];
 
 sequelize.addModels(models);

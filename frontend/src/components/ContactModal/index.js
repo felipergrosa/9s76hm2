@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { parseISO, format } from "date-fns";
 import * as Yup from "yup";
-import { Formik, FieldArray, Form, Field } from "formik";
+import { Formik, Form, Field } from "formik";
 import { toast } from "react-toastify";
 
 import { makeStyles } from "@material-ui/core/styles";
@@ -13,16 +13,15 @@ import DialogActions from "@material-ui/core/DialogActions";
 import DialogContent from "@material-ui/core/DialogContent";
 import DialogTitle from "@material-ui/core/DialogTitle";
 import Typography from "@material-ui/core/Typography";
-import IconButton from "@material-ui/core/IconButton";
-import DeleteOutlineIcon from "@material-ui/icons/DeleteOutline";
 import { Close as CloseIcon } from "@material-ui/icons";
 import CircularProgress from "@material-ui/core/CircularProgress";
 import Switch from "@material-ui/core/Switch";
 import withStyles from "@material-ui/core/styles/withStyles";
-import { Grid, FormControl, InputLabel, MenuItem, Select, Checkbox, ListItemText, Chip } from "@material-ui/core";
+import { Grid, FormControl, InputLabel, MenuItem, Select, Chip } from "@material-ui/core";
 import { Autocomplete } from "@material-ui/lab";
 import ContactAvatar from "../ContactAvatar";
 import EntityTimeline from "../EntityTimeline";
+import CustomFieldsInputs from "../CustomFieldsInputs";
 
 import { i18n } from "../../translate/i18n";
 
@@ -318,6 +317,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 
 	const [contact, setContact] = useState(initialState);
 	const [disableBot, setDisableBot] = useState(false);
+	const [cfConfigs, setCfConfigs] = useState([]); // campos customizados do admin (entityType=lead)
 	const [walletUsers, setWalletUsers] = useState([]); // Usuários calculados das tags pessoais
 
 	// Buscar usuários para o campo wallets (baseado nas tags pessoais)
@@ -547,6 +547,19 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 	};
 
 	const handleSaveContact = async values => {
+		// valida campos customizados obrigatórios configurados no admin
+		const missingRequired = cfConfigs.filter(
+			c =>
+				c.required &&
+				!(values.extraInfo || []).some(
+					e => e.name === c.key && String(e.value ?? "").trim() !== ""
+				)
+		);
+		if (missingRequired.length) {
+			toast.warning(`Preencha os campos obrigatórios: ${missingRequired.map(m => m.label).join(", ")}`);
+			return;
+		}
+
 		const payload = {
 			...values,
 			clientCode: values.clientCode?.trim?.() || values.clientCode || null,
@@ -1305,66 +1318,21 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 										{i18n.t("contactModal.form.termsLGDP")} {contact?.lgpdAcceptedAt ? format(new Date(contact?.lgpdAcceptedAt), "dd/MM/yyyy 'às' HH:mm") : ""}
 									</Typography>
 								</div>
-								<Typography
-									style={{ marginBottom: 8, marginTop: 12 }}
-									variant="subtitle1"
-								>
-									{i18n.t("contactModal.form.extraInfo")}
-								</Typography>
+								{cfConfigs.length > 0 && (
+									<Typography
+										style={{ marginBottom: 8, marginTop: 12 }}
+										variant="subtitle1"
+									>
+										{i18n.t("contactModal.form.extraInfo")}
+									</Typography>
+								)}
 
-								<FieldArray name="extraInfo">
-									{({ push, remove }) => (
-										<>
-											{values.extraInfo &&
-												values.extraInfo.length > 0 &&
-												values.extraInfo.map((info, index) => (
-													<div
-														className={classes.extraAttr}
-														key={`${index}-info`}
-													>
-														<Field
-															as={TextField}
-															label={i18n.t("contactModal.form.extraName")}
-															name={`extraInfo[${index}].name`}
-															variant="outlined"
-															margin="dense"
-															className={classes.textField}
-															InputLabelProps={{
-																shrink: true,
-															}}
-														/>
-														<Field
-															as={TextField}
-															label={i18n.t("contactModal.form.extraValue")}
-															name={`extraInfo[${index}].value`}
-															variant="outlined"
-															margin="dense"
-															className={classes.textField}
-															InputLabelProps={{
-																shrink: true,
-															}}
-														/>
-														<IconButton
-															size="small"
-															onClick={() => remove(index)}
-														>
-															<DeleteOutlineIcon />
-														</IconButton>
-													</div>
-												))}
-											<div className={classes.extraAttr}>
-												<Button
-													style={{ flex: 1, marginTop: 8 }}
-													variant="outlined"
-													color="primary"
-													onClick={() => push({ name: "", value: "" })}
-												>
-													{`+ ${i18n.t("contactModal.buttons.addExtraInfo")}`}
-												</Button>
-											</div>
-										</>
-									)}
-								</FieldArray>
+								<CustomFieldsInputs
+									entityType="lead"
+									values={values}
+									setFieldValue={setFieldValue}
+									onLoadConfigs={setCfConfigs}
+								/>
 
 								{contactId && (
 									<EntityTimeline

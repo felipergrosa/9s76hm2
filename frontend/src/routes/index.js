@@ -81,6 +81,7 @@ const EmailCampaigns = lazy(() => import("../pages/EmailCampaigns"));
 const LeadScraper = lazy(() => import("../pages/LeadScraper"));
 const KnowledgeBase = lazy(() => import("../pages/KnowledgeBase"));
 const AdminCustomFields = lazy(() => import("../pages/AdminCustomFields"));
+const MetaTemplates = lazy(() => import("../pages/MetaTemplates"));
 
 // FlowBuilder (pesado - sempre lazy)
 const FlowBuilder = lazy(() => import("../pages/FlowBuilder"));
@@ -189,6 +190,7 @@ const Routes = () => {
                 <Route exact path="/helps/webchat" component={WebChatTutorial} isPrivate />
                 <Route exact path="/users" component={Users} isPrivate />
                 <PrivateRoute exact path="/roles" component={Roles} permission="roles.view" />
+                <PrivateRoute exact path="/meta-templates" component={MetaTemplates} permission="meta-templates.view" />
                 <PrivateRoute exact path="/lead-scraper" component={LeadScraper} permission="contacts.import" />
                 <Route exact path="/knowledge-base" component={KnowledgeBase} isPrivate />
                 <Route exact path="/admin-custom-fields" component={AdminCustomFields} isPrivate />

@@ -1,6 +1,7 @@
 import axios from "axios";
 import logger from "../../utils/logger";
 import Whatsapp from "../../models/Whatsapp";
+import { officialApiVersion } from "../../libs/whatsapp/officialApiVersion";
 
 interface MetaTemplateComponent {
   type: "HEADER" | "BODY" | "FOOTER" | "BUTTONS";
@@ -28,11 +29,13 @@ export interface MetaTemplate {
 interface GetApprovedTemplatesParams {
   whatsappId: number;
   companyId: number;
+  includeAll?: boolean;
 }
 
 export const GetApprovedTemplates = async ({
   whatsappId,
-  companyId
+  companyId,
+  includeAll = false
 }: GetApprovedTemplatesParams): Promise<MetaTemplate[]> => {
   try {
     logger.info(`[GetApprovedTemplates] Buscando templates para whatsappId=${whatsappId}`);
@@ -60,10 +63,11 @@ export const GetApprovedTemplates = async ({
     // Buscar WABA ID (WhatsApp Business Account ID)
     // Primeiro precisamos obter o WABA ID através do phoneNumberId
     let wabaId: string;
-    
+    const apiVersion = officialApiVersion();
+
     try {
       const phoneResponse = await axios.get(
-        `https://graph.facebook.com/v18.0/${wabaPhoneNumberId}`,
+        `https://graph.facebook.com/${apiVersion}/${wabaPhoneNumberId}`,
         {
           params: {
             access_token: wabaAccessToken,
@@ -81,10 +85,10 @@ export const GetApprovedTemplates = async ({
     }
 
     // Buscar templates
-    // API: GET /v18.0/{whatsapp-business-account-id}/message_templates
+    // API: GET /{api-version}/{whatsapp-business-account-id}/message_templates
     // Usar WABA ID se disponível, senão usar phoneNumberId
     const accountId = wabaBusinessAccountId || wabaPhoneNumberId;
-    const url = `https://graph.facebook.com/v18.0/${accountId}/message_templates`;
+    const url = `https://graph.facebook.com/${apiVersion}/${accountId}/message_templates`;
     
     logger.info(`[GetApprovedTemplates] Buscando templates em: ${url}`);
 
@@ -97,15 +101,20 @@ export const GetApprovedTemplates = async ({
     });
 
     const templates: MetaTemplate[] = data.data || [];
-    
+
+    if (includeAll) {
+      logger.info(`[GetApprovedTemplates] ${templates.length} templates retornados (sem filtro)`);
+      return templates;
+    }
+
     // Filtrar apenas templates aprovados
-    const approved = templates.filter(t => 
-      t.status === "APPROVED" && 
+    const approved = templates.filter(t =>
+      t.status === "APPROVED" &&
       t.category !== "AUTHENTICATION" // Excluir templates de autenticação
     );
-    
+
     logger.info(`[GetApprovedTemplates] ${approved.length} de ${templates.length} templates aprovados`);
-    
+
     return approved;
   } catch (error: any) {
     logger.error(`[GetApprovedTemplates] Erro:`, {
@@ -122,6 +131,12 @@ export const GetApprovedTemplates = async ({
     
     throw error;
   }
+};
+
+export const ListAllTemplates = async (
+  params: Omit<GetApprovedTemplatesParams, "includeAll">
+): Promise<MetaTemplate[]> => {
+  return GetApprovedTemplates({ ...params, includeAll: true });
 };
 
 export default GetApprovedTemplates;

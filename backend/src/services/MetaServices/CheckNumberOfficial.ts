@@ -11,6 +11,7 @@ import axios from "axios";
 import Whatsapp from "../../models/Whatsapp";
 import logger from "../../utils/logger";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
+import { officialApiVersion } from "../../libs/whatsapp/officialApiVersion";
 
 interface ContactValidationResult {
   input: string;           // Número original enviado
@@ -61,7 +62,7 @@ async function getOfficialWhatsappConfig(companyId: number): Promise<{
     return {
       phoneNumberId,
       accessToken,
-      apiVersion: "v18.0"
+      apiVersion: officialApiVersion()
     };
   } catch (error: any) {
     logger.error(`[CheckNumberOfficial] Erro ao buscar config: ${error.message}`);

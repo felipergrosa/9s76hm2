@@ -85,7 +85,11 @@ export const AVAILABLE_PERMISSIONS = {
     "drip-sequences.view",
     "drip-sequences.create",
     "drip-sequences.edit",
-    "drip-sequences.delete"
+    "drip-sequences.delete",
+    "meta-templates.view",
+    "meta-templates.create",
+    "meta-templates.edit",
+    "meta-templates.delete"
   ],
 
   // FLOWBUILDER
@@ -637,6 +641,10 @@ const formatPermissionLabel = (key: string): string => {
     "drip-sequences.create": "Criar Sequências de Drip",
     "drip-sequences.edit": "Editar Sequências de Drip",
     "drip-sequences.delete": "Deletar Sequências de Drip",
+    "meta-templates.view": "Ver Templates Meta",
+    "meta-templates.create": "Criar Templates Meta",
+    "meta-templates.edit": "Editar Templates Meta",
+    "meta-templates.delete": "Deletar Templates Meta",
     "users.view": "Ver Usuários",
     "users.create": "Criar Usuários",
     "users.edit": "Editar Usuários",
@@ -730,6 +738,10 @@ const getPermissionDescription = (key: string): string => {
     "drip-sequences.create": "Criar sequências automáticas de mensagens disparadas por tag",
     "drip-sequences.edit": "Editar sequências de drip existentes",
     "drip-sequences.delete": "Deletar sequências de drip",
+    "meta-templates.view": "Visualizar templates de mensagem da Meta (WhatsApp API oficial)",
+    "meta-templates.create": "Criar e submeter novos templates de mensagem à Meta",
+    "meta-templates.edit": "Editar templates de mensagem Meta existentes",
+    "meta-templates.delete": "Deletar templates de mensagem Meta",
     "users.edit": "Editar informações e permissões de outros usuários",
     "users.edit-own": "Permitir que o usuário edite seu próprio perfil (nome, avatar, cor, etc)",
     "connections.edit": "Adicionar, editar e remover conexões WhatsApp",

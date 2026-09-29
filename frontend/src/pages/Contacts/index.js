@@ -41,7 +41,7 @@ import api from "../../services/api";
 import ContactRow from "../../components/ContactRow";
 import ContactCard from "../../components/ContactCard";
 // Removida virtualização mobile para manter um único scroll externo
-import TableRowSkeleton from "../../components/TableRowSkeleton";
+
 import ContactModal from "../../components/ContactModal";
 import ConfirmationModal from "../../components/ConfirmationModal";
 
@@ -56,7 +56,7 @@ import PopupState, { bindTrigger, bindMenu } from "material-ui-popup-state";
 import { FormatMask } from "../../utils/FormatMask";
 import formatSerializedId, { safeFormatPhoneNumber } from '../../utils/formatSerializedId';
 import { v4 as uuidv4 } from "uuid";
-import LoadingOverlay from "../../components/LoadingOverlay";
+
 
 import ContactImportWpModal from "../../components/ContactImportWpModal";
 import ContactImportTagsModal from "../../components/ContactImportTagsModal";
@@ -816,7 +816,6 @@ const Contacts = () => {
         <div className="flex-1 bg-gray-50 dark:bg-gray-900 min-h-full">
             <MainContainer useWindowScroll>
                 <div className="w-full p-4 md:p-6 lg:p-8 overflow-x-hidden">
-                    <LoadingOverlay open={loading} message="Aguarde..." />
                     <NewTicketModal
                         modalOpen={newTicketModalOpen}
                         initialContact={contactTicket}
@@ -1277,7 +1276,6 @@ const Contacts = () => {
                                             userProfile={user}
                                         />
                                     ))}
-                                    {loading && <TableRowSkeleton avatar columns={9} />}
                                 </tbody>
                             </table>
                         </div>
