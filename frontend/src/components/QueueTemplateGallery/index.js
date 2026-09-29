@@ -32,21 +32,23 @@ import {
 } from "@material-ui/core";
 import {
   ShoppingCart as ShoppingIcon,
-  Support as SupportIcon,
   AccountBalance as FinanceIcon,
   Group as HRIcon,
-  Campaign as MarketingIcon,
   CheckCircle as CheckIcon,
   Info as InfoIcon,
   PlayArrow as PlayIcon,
   Settings as SettingsIcon,
   Timeline as TimelineIcon,
-  Psychology as AIIcon,
   Speed as SpeedIcon,
   Security as SecurityIcon,
   TrendingUp as TrendingIcon,
   Close as CloseIcon
 } from "@material-ui/icons";
+import {
+  Megaphone as MarketingIcon,
+  Headset as SupportIcon,
+  Brain as AIIcon
+} from "lucide-react";
 import { makeStyles } from "@material-ui/core/styles";
 import { toast } from "react-toastify";
 import api from "../../services/api";

@@ -35,7 +35,6 @@ import {
   ArrowDownward as ArrowDownwardIcon,
   ArrowUpward as ArrowUpwardIcon,
   AttachFile as AttachFileIcon,
-  Campaign as CampaignIcon,
   Close as CloseIcon,
   Code as CodeIcon,
   DeleteOutline as DeleteOutlineIcon,
@@ -54,6 +53,7 @@ import {
   Title as TitleIcon,
   Videocam as VideocamIcon
 } from "@material-ui/icons";
+import { Megaphone as CampaignIcon } from "lucide-react";
 
 import api from "../../services/api";
 import { i18n } from "../../translate/i18n";

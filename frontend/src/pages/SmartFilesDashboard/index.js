@@ -32,16 +32,11 @@ import {
 } from "@material-ui/core";
 import {
   Dashboard as DashboardIcon,
-  SmartToy as AIIcon,
   CloudUpload as UploadIcon,
-  Analytics as AnalyticsIcon,
   Help as HelpIcon,
   PlayArrow as PlayIcon,
   Settings as SettingsIcon,
   TrendingUp as TrendingUpIcon,
-  Psychology as PsychologyIcon,
-  AutoAwesome as MagicIcon,
-  Lightbulb as IdeaIcon,
   School as TutorialIcon,
   ExpandMore as ExpandMoreIcon,
   CheckCircle as CheckIcon,
@@ -50,6 +45,13 @@ import {
   Security as SecurityIcon,
   Group as TeamIcon
 } from "@material-ui/icons";
+import {
+  Bot as AIIcon,
+  BarChart3 as AnalyticsIcon,
+  Brain as PsychologyIcon,
+  Sparkles as MagicIcon,
+  Lightbulb as IdeaIcon
+} from "lucide-react";
 import { makeStyles } from "@material-ui/core/styles";
 import { useHistory } from "react-router-dom";
 import { toast } from "react-toastify";

@@ -15,10 +15,10 @@ import {
   Send as SendIcon,
   Inbox as InboxIcon,
   Person as PersonIcon,
-  SmartToy as BotIcon,
   CheckCircle as CheckIcon,
   Info as InfoIcon,
 } from "@material-ui/icons";
+import { Bot as BotIcon } from "lucide-react";
 
 const useStyles = makeStyles((theme) => ({
   root: {

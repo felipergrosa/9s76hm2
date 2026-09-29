@@ -16,7 +16,6 @@ import {
     Trash2 as DeleteForeverIcon,
     Search as SearchIcon,
     Download as DownloadIcon,
-    DeleteSweep,
     RefreshCw,
 } from "lucide-react";
 

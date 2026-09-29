@@ -40,17 +40,19 @@ import {
   TrendingUp as TrendingUpIcon,
   Speed as SpeedIcon,
   Security as SecurityIcon,
-  Psychology as AIIcon,
   CloudUpload as UploadIcon,
-  Analytics as AnalyticsIcon,
   School as SchoolIcon,
-  Lightbulb as TipIcon,
   Star as StarIcon,
   Timeline as TimelineIcon,
   Assessment as AssessmentIcon,
   Close as CloseIcon,
   PlayArrow as PlayIcon
 } from "@material-ui/icons";
+import {
+  Brain as AIIcon,
+  BarChart3 as AnalyticsIcon,
+  Lightbulb as TipIcon
+} from "lucide-react";
 import { makeStyles } from "@material-ui/core/styles";
 
 const useStyles = makeStyles((theme) => ({
