@@ -5,26 +5,17 @@ import {
 import {
   Settings as SettingsIcon,
   AccessTime as ScheduleIcon,
-  Business as BusinessIcon,
-  CardMembership as PlansIcon,
-  HelpOutline as HelpIcon,
-  Palette as WhitelabelIcon,
   Tune as OptionsIcon,
 } from "@material-ui/icons";
 
 import MainContainer from "../../components/MainContainer";
 import TabPanel from "../../components/TabPanel";
 import SchedulesForm from "../../components/SchedulesForm";
-import CompaniesManager from "../../components/CompaniesManager";
-import PlansManager from "../../components/PlansManager";
-import HelpsManager from "../../components/HelpsManager";
 import Options from "../../components/Settings/Options";
-import Whitelabel from "../../components/Settings/Whitelabel";
 import { i18n } from "../../translate/i18n.js";
 import { toast } from "react-toastify";
 import useCompanies from "../../hooks/useCompanies";
 import { AuthContext } from "../../context/Auth/AuthContext";
-import OnlyForSuperUser from "../../components/OnlyForSuperUser";
 import useCompanySettings from "../../hooks/useSettings/companySettings";
 import useSettings from "../../hooks/useSettings";
 import ForbiddenPage from "../../components/ForbiddenPage/index.js";
@@ -140,8 +131,6 @@ const SettingsCustom = () => {
     setLoading(false);
   };
 
-  const isSuper = () => currentUser.super;
-
   if (!hasPermission("settings.view")) return <ForbiddenPage />;
 
   return (
@@ -184,30 +173,6 @@ const SettingsCustom = () => {
                 label={<TabLabel icon={<ScheduleIcon />} label="Horários" />}
               />
             )}
-            {isSuper() && (
-              <Tab
-                value="companies"
-                label={<TabLabel icon={<BusinessIcon />} label="Empresas" />}
-              />
-            )}
-            {isSuper() && (
-              <Tab
-                value="plans"
-                label={<TabLabel icon={<PlansIcon />} label={i18n.t("settings.tabs.plans") || "Planos"} />}
-              />
-            )}
-            {isSuper() && (
-              <Tab
-                value="helps"
-                label={<TabLabel icon={<HelpIcon />} label={i18n.t("settings.tabs.helps") || "Ajuda"} />}
-              />
-            )}
-            {isSuper() && (
-              <Tab
-                value="whitelabel"
-                label={<TabLabel icon={<WhitelabelIcon />} label="Whitelabel" />}
-              />
-            )}
           </Tabs>
 
           <Box className={classes.tabContent}>
@@ -227,26 +192,6 @@ const SettingsCustom = () => {
                 initialValues={schedules}
               />
             </TabPanel>
-
-            <OnlyForSuperUser
-              user={currentUser}
-              yes={() => (
-                <>
-                  <TabPanel className={classes.container} value={tab} name="companies">
-                    <CompaniesManager />
-                  </TabPanel>
-                  <TabPanel className={classes.container} value={tab} name="plans">
-                    <PlansManager />
-                  </TabPanel>
-                  <TabPanel className={classes.container} value={tab} name="helps">
-                    <HelpsManager />
-                  </TabPanel>
-                  <TabPanel className={classes.container} value={tab} name="whitelabel">
-                    <Whitelabel settings={oldSettings} />
-                  </TabPanel>
-                </>
-              )}
-            />
           </Box>
         </Paper>
       </Box>

@@ -59,14 +59,14 @@ const MessagesAPI = lazy(() => import("../pages/MessagesAPI"));
 const QuickMessages = lazy(() => import("../pages/QuickMessages"));
 const Schedules = lazy(() => import("../pages/Schedules"));
 const Annoucements = lazy(() => import("../pages/Annoucements"));
-const AllConnections = lazy(() => import("../pages/AllConnections"));
+const Admin = lazy(() => import("../pages/Admin"));
 const Reports = lazy(() => import("../pages/Reports"));
 const QueueIntegration = lazy(() => import("../pages/QueueIntegration"));
 const LibraryManager = lazy(() => import("../pages/LibraryManager"));
 const ToDoList = lazy(() => import("../pages/ToDoList"));
 const Kanban = lazy(() => import("../pages/Kanban"));
 const TagsKanban = lazy(() => import("../pages/TagsKanban"));
-const Companies = lazy(() => import("../pages/Companies"));
+
 
 // Campanhas
 const Campaigns = lazy(() => import("../pages/Campaigns"));
@@ -152,7 +152,11 @@ const Routes = () => {
                 <LoggedInLayout>
                 <PrivateRoute exact path="/financeiro" component={Financeiro} permission="financeiro.view" />
 
-                <PrivateRoute exact path="/companies" component={Companies} permission="companies.view" />
+                {/* Console central do superadmin — abas via ?tab= */}
+                <PrivateRoute exact path="/admin" component={Admin} permission="companies.view" />
+                {/* Redirects de bookmarks antigos para o console unificado */}
+                <Route exact path="/companies" render={() => <Redirect to="/admin?tab=empresas" />} isPrivate />
+                <Route exact path="/allConnections" render={() => <Redirect to="/admin?tab=conexoes" />} isPrivate />
                 <Route exact path="/" component={Dashboard} isPrivate />
                 <Route exact path="/tickets/:ticketId?" component={TicketResponsiveContainer} isPrivate />
                 <PrivateRoute exact path="/connections" component={Connections} permission="connections.view" />
@@ -227,7 +231,6 @@ const Routes = () => {
                 <PrivateRoute exact path="/moments" component={ChatMoments} permission="realtime.view" />
                 <PrivateRoute exact path="/Kanban" component={Kanban} permission="kanban.view" />
                 <PrivateRoute exact path="/TagsKanban" component={TagsKanban} permission="kanban.view" />
-                <PrivateRoute exact path="/allConnections" component={AllConnections} permission="all-connections.view" />
                 <PrivateRoute exact path="/ai-settings" component={AISettings} permission="ai-settings.view" />
                 <PrivateRoute exact path="/ai-agents" component={AIAgents} permission="ai-agents.view" />
                 <PrivateRoute exact path="/ai-training" component={AITraining} permission="ai-training.view" />

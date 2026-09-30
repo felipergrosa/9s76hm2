@@ -495,17 +495,43 @@ const UserModal = ({ open, onClose, userId }) => {
                                   {i18n.t("userModal.form.profile")}
                                 </InputLabel>
 
-                                <Field
-                                  as={Select}
+                                {/* Perfil base (Admin/Usuário) + Perfis de Acesso criados
+                                    em /users → aba Perfis. Escolher um perfil define
+                                    profile="user" e vincula a role selecionada — as
+                                    permissões dela somam às da aba Permissões. */}
+                                <Select
                                   label={i18n.t("userModal.form.profile")}
-                                  name="profile"
                                   labelId="profile-selection-label"
                                   id="profile-selection"
                                   required
+                                  value={
+                                    values.profile === "admin"
+                                      ? "admin"
+                                      : selectedRoleIds.length > 0
+                                        ? `role:${selectedRoleIds[0]}`
+                                        : (values.profile || "user")
+                                  }
+                                  onChange={e => {
+                                    const v = e.target.value;
+                                    if (typeof v === "string" && v.startsWith("role:")) {
+                                      const rid = Number(v.slice(5));
+                                      setFieldValue("profile", "user");
+                                      setSelectedRoleIds([rid]);
+                                    } else {
+                                      setFieldValue("profile", v);
+                                      setSelectedRoleIds([]);
+                                    }
+                                  }}
                                 >
                                   <MenuItem value="admin">Admin</MenuItem>
                                   <MenuItem value="user">User</MenuItem>
-                                </Field>
+                                  {roleOptions.length > 0 && <Divider />}
+                                  {roleOptions.map(r => (
+                                    <MenuItem key={r.id} value={`role:${r.id}`}>
+                                      {r.name} — perfil de acesso
+                                    </MenuItem>
+                                  ))}
+                                </Select>
                               </>
                             )}
                           />

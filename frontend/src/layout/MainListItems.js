@@ -36,7 +36,7 @@ import {
   Megaphone as AnnouncementIcon,
   MessageSquare as ForumIcon,
   Banknote as LocalAtmIcon,
-  Building2 as BusinessIcon,
+  ShieldCheck as AdminIcon,
   Infinity as AllInclusive,
   Paperclip as AttachFile,
   LayoutDashboard as Dashboard,
@@ -44,7 +44,6 @@ import {
   Router as DeviceHubOutlined,
   Grid3x3 as GridOn,
   List as ListAlt,
-  Smartphone as PhonelinkSetup,
   Cpu as Memory,
   SquareKanban as ViewKanban,
   Megaphone as Campaign,
@@ -629,12 +628,12 @@ const MainListItems = ({ collapsed, drawerClose }) => {
         />
       )}
 
-      {/* 3. GERENCIAR CONEXÕES (SUPER) */}
+      {/* 3. ADMINISTRAÇÃO (SUPER) — console SaaS: empresas, conexões, planos... */}
       {user.super && (
         <ListItemLink
-          to="/allConnections"
-          primary={i18n.t("mainDrawer.listItems.allConnections")}
-          icon={<PhonelinkSetup />}
+          to="/admin"
+          primary={i18n.t("mainDrawer.listItems.administration") || "Administração"}
+          icon={<AdminIcon size={20} />}
           viewMode={viewMode}
           tooltip={collapsed}
         />
@@ -967,16 +966,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
         />
       )}
 
-      {/* 13. EMPRESAS (SUPER) */}
-      {user.super && (
-        <ListItemLink
-          to="/companies"
-          primary={i18n.t("mainDrawer.listItems.companies")}
-          icon={<BusinessIcon />}
-          viewMode={viewMode}
-          tooltip={collapsed}
-        />
-      )}
+
 
       {!collapsed && (
         <React.Fragment>
