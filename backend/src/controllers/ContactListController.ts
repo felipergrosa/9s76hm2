@@ -89,8 +89,10 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
 
 export const show = async (req: Request, res: Response): Promise<Response> => {
   const { id } = req.params;
+  const { companyId } = req.user;
 
-  const record = await ShowService(id);
+  // Segurança: escopo por empresa para evitar IDOR entre tenants
+  const record = await ShowService(id, companyId);
 
   return res.status(200).json(record);
 };
@@ -117,7 +119,8 @@ export const update = async (
 
   const record = await UpdateService({
     ...data,
-    id
+    id,
+    companyId
   });
 
   const io = getIO();
@@ -140,7 +143,7 @@ export const remove = async (
   const { id } = req.params;
   const { companyId } = req.user;
 
-  await DeleteService(id);
+  await DeleteService(id, companyId);
 
   const io = getIO();
   await emitToCompanyNamespace(
@@ -175,7 +178,10 @@ export const findList = async (
   res: Response
 ): Promise<Response> => {
   const params = req.query as FindParams;
-  const records: ContactList[] = await FindService(params);
+  const { companyId } = req.user;
+
+  // Segurança: companyId da query não pode sobrescrever o do usuário autenticado
+  const records: ContactList[] = await FindService({ ...params, companyId: String(companyId) });
 
   return res.status(200).json(records);
 };

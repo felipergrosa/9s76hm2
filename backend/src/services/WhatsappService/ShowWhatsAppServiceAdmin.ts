@@ -7,9 +7,12 @@ import Chatbot from "../../models/Chatbot";
 
 const ShowWhatsAppServiceAdmin = async (
   id: string | number,
+  companyId: number,
 ): Promise<Whatsapp> => {
 
   const findOptions: FindOptions = {
+    // Escopo por empresa: impede IDOR entre tenants
+    where: { id, companyId },
     include: [
       {
         model: Queue,
@@ -29,7 +32,7 @@ const ShowWhatsAppServiceAdmin = async (
       ["queues", "chatbots", "id", "ASC"]
     ]
   };
-  const whatsapp = await Whatsapp.findByPk(id, findOptions);
+  const whatsapp = await Whatsapp.findOne(findOptions);
 
   if (!whatsapp) {
     throw new AppError("ERR_NO_WAPP_FOUND", 404);

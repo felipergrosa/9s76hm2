@@ -89,10 +89,11 @@ export const deleteFlowCampaign = async (
   res: Response
 ): Promise<Response> => {
   const { idFlow } = req.params;
+  const { companyId } = req.user;
 
   const flowIdInt = parseInt(idFlow);
 
-  const flow = await DeleteFlowCampaignService(flowIdInt);
+  const flow = await DeleteFlowCampaignService(flowIdInt, companyId);
 
   return res.status(200).json(flow);
 };

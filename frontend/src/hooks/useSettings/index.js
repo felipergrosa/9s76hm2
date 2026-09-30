@@ -95,16 +95,12 @@ const useSettings = () => {
   };
 
   const getPublicSetting = async (key) => {
-    // Endpoint público - não requer permissão nem AuthContext
-    const params = {
-      token: "wtV"
-    }
-
+    // Endpoint público - não requer permissão nem AuthContext.
+    // O backend só serve chaves de branding (whitelist no service).
     try {
       const { data } = await openApi.request({
         url: `/public-settings/${key}`,
-        method: 'GET',
-        params
+        method: 'GET'
       });
       return data;
     } catch (err) {

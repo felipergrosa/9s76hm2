@@ -98,8 +98,9 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
 
 export const show = async (req: Request, res: Response): Promise<Response> => {
   const { id } = req.params;
+  const { companyId } = req.user;
 
-  const record = await ShowService(id);
+  const record = await ShowService(id, companyId);
 
   return res.status(200).json(record);
 };
@@ -131,6 +132,7 @@ export const update = async (
     userId: req.user.id,
     id,
     isAdmin,
+    companyId,
   });
 
   const io = getIO();
@@ -151,15 +153,15 @@ export const remove = async (
   const { companyId, profile } = req.user;
   const isAdmin = profile === "admin" || (req.user as any).super === true;
 
-  // User padrão só pode excluir as próprias
+  // User padrão só pode excluir as próprias (busca já filtrada por empresa)
   if (!isAdmin) {
-    const record = await QuickMessage.findByPk(id);
+    const record = await QuickMessage.findOne({ where: { id, companyId } });
     if (record && record.userId !== Number(req.user.id)) {
       throw new AppError("ERR_NO_PERMISSION", 403);
     }
   }
 
-  await DeleteService(id);
+  await DeleteService(id, companyId);
 
   const io = getIO();
   io.of(`/workspace-${companyId}`)
@@ -188,6 +190,7 @@ export const mediaUpload = async (
   res: Response
 ): Promise<Response> => {
   const { id } = req.params;
+  const { companyId } = req.user;
   const files = req.files as Express.Multer.File[];
 
   try {
@@ -195,7 +198,8 @@ export const mediaUpload = async (
       throw new AppError("Nenhum arquivo foi enviado", 400);
     }
 
-    const quickmessage = await QuickMessage.findByPk(id);
+    // Filtra por companyId para impedir upload em mensagem de outra empresa
+    const quickmessage = await QuickMessage.findOne({ where: { id, companyId } });
 
     if (!quickmessage) {
       throw new AppError("Mensagem rápida não encontrada", 404);
@@ -287,7 +291,8 @@ export const deleteMedia = async (
   const { companyId } = req.user
 
   try {
-    const quickmessage = await QuickMessage.findByPk(id);
+    // Filtra por companyId para impedir remoção de mídia em mensagem de outra empresa
+    const quickmessage = await QuickMessage.findOne({ where: { id, companyId } });
 
     if (!quickmessage) {
       throw new AppError("Mensagem rápida não encontrada", 404);
@@ -356,9 +361,11 @@ export const incrementUse = async (
   res: Response
 ): Promise<Response> => {
   const { id } = req.params;
+  const { companyId } = req.user;
 
   try {
-    const record = await QuickMessage.findByPk(id);
+    // Filtra por companyId para impedir incremento em mensagem de outra empresa
+    const record = await QuickMessage.findOne({ where: { id, companyId } });
     if (!record) {
       throw new AppError("ERR_NO_TICKETNOTE_FOUND", 404);
     }

@@ -7,6 +7,28 @@ import IAClientFactory from "../services/IA/IAClientFactory";
 import ChatAssistantService from "../services/IA/usecases/ChatAssistantService";
 import PresetService from "../services/IA/PresetService";
 
+// Hosts oficiais permitidos para consulta de modelos — impede SSRF/
+// exfiltração de apiKey via baseURL arbitrário salvo na integração.
+const ALLOWED_MODELS_HOSTS = new Set([
+  "api.openai.com",
+  "api.deepseek.com",
+  "api.x.ai",
+  "generativelanguage.googleapis.com"
+]);
+
+const sanitizeModelsBaseURL = (raw: any, fallback: string): string => {
+  try {
+    if (!raw || typeof raw !== "string") return fallback;
+    const u = new URL(raw);
+    if (u.protocol !== "https:" || !ALLOWED_MODELS_HOSTS.has(u.hostname)) {
+      return fallback;
+    }
+    return raw;
+  } catch {
+    return fallback;
+  }
+};
+
 const extractVariables = (text: string): string[] => {
   if (!text) return [];
   const matches = text.match(/\{[^}]+\}/g) || [];
@@ -202,7 +224,7 @@ export const listModels = async (req: Request, res: Response) => {
       try {
         const integration = await GetIntegrationByTypeService({ companyId, type: 'openai' });
         const cfg = (typeof integration?.jsonContent === 'string') ? JSON.parse(integration.jsonContent) : (integration?.jsonContent || {});
-        const apiKey = (cfg?.apiKey) || (req.query as any)?.apiKey || (req.headers['x-api-key'] as string);
+        const apiKey = cfg?.apiKey;
         if (apiKey) {
           const resp = await axios.get('https://api.openai.com/v1/models', {
             headers: { Authorization: `Bearer ${apiKey}` }
@@ -226,8 +248,8 @@ export const listModels = async (req: Request, res: Response) => {
       try {
         const integration = await GetIntegrationByTypeService({ companyId, type: 'deepseek' });
         const cfg = (typeof integration?.jsonContent === 'string') ? JSON.parse(integration.jsonContent) : (integration?.jsonContent || {});
-        const apiKey = (cfg?.apiKey) || (req.query as any)?.apiKey || (req.headers['x-api-key'] as string);
-        const baseURL = (cfg?.baseURL) || ((req.query as any)?.baseURL as string) || 'https://api.deepseek.com';
+        const apiKey = cfg?.apiKey;
+        const baseURL = sanitizeModelsBaseURL(cfg?.baseURL, 'https://api.deepseek.com');
         if (apiKey) {
           const resp = await axios.get(`${baseURL.replace(/\/$/, '')}/v1/models`, {
             headers: { Authorization: `Bearer ${apiKey}` }
@@ -246,8 +268,8 @@ export const listModels = async (req: Request, res: Response) => {
       try {
         const integration = await GetIntegrationByTypeService({ companyId, type: 'grok' });
         const cfg = (typeof integration?.jsonContent === 'string') ? JSON.parse(integration.jsonContent) : (integration?.jsonContent || {});
-        const apiKey = (cfg?.apiKey) || (req.query as any)?.apiKey || (req.headers['x-api-key'] as string);
-        const baseURL = (cfg?.baseURL) || ((req.query as any)?.baseURL as string) || 'https://api.x.ai/v1';
+        const apiKey = cfg?.apiKey;
+        const baseURL = sanitizeModelsBaseURL(cfg?.baseURL, 'https://api.x.ai/v1');
         if (apiKey) {
           const resp = await axios.get(`${baseURL.replace(/\/$/, '')}/models`, {
             headers: { Authorization: `Bearer ${apiKey}` }
@@ -265,7 +287,7 @@ export const listModels = async (req: Request, res: Response) => {
     try {
       const integration = await GetIntegrationByTypeService({ companyId, type: 'gemini' });
       const cfg = (typeof integration?.jsonContent === 'string') ? JSON.parse(integration.jsonContent) : (integration?.jsonContent || {});
-      const apiKey = (cfg?.apiKey) || (req.query as any)?.apiKey || (req.headers['x-api-key'] as string);
+      const apiKey = cfg?.apiKey;
       if (apiKey) {
         // Google Generative Language API
         const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`;

@@ -8,7 +8,10 @@ import logger from "../utils/logger";
  * Body: { companyId: number, whatsappId?: number, dryRun?: boolean }
  */
 export const mergeDuplicateTickets = async (req: Request, res: Response): Promise<Response> => {
-  const { companyId, whatsappId, dryRun = false } = req.body;
+  const { whatsappId, dryRun = false } = req.body;
+  const { companyId: userCompanyId, super: isSuper } = req.user as any;
+  // Segurança: companyId sempre do usuário autenticado; apenas superadmin pode informar outro
+  const companyId = isSuper && req.body.companyId ? Number(req.body.companyId) : Number(userCompanyId);
 
   try {
     logger.info(`[mergeDuplicateTickets] Solicitação recebida: companyId=${companyId}, dryRun=${dryRun}`);
@@ -37,7 +40,10 @@ export const mergeDuplicateTickets = async (req: Request, res: Response): Promis
  * GET /tickets/duplicate-check?companyId=X&whatsappId=Y
  */
 export const checkDuplicateTickets = async (req: Request, res: Response): Promise<Response> => {
-  const { companyId, whatsappId } = req.query;
+  const { whatsappId } = req.query;
+  const { companyId: userCompanyId, super: isSuper } = req.user as any;
+  // Segurança: companyId sempre do usuário autenticado; apenas superadmin pode informar outro
+  const companyId = isSuper && req.query.companyId ? Number(req.query.companyId) : Number(userCompanyId);
 
   if (!companyId) {
     return res.status(400).json({

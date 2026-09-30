@@ -93,8 +93,8 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
       user: {
         id: serializedUser.id,
         email: serializedUser.email,
-        companyId: serializedUser.companyId,
-        token: serializedUser.token
+        companyId: serializedUser.companyId
+        // SEGURANÇA: nunca emitir token via socket — o token vai só na resposta HTTP.
       }
     });
 
@@ -126,12 +126,14 @@ export const update = async (
 
 export const me = async (req: Request, res: Response): Promise<Response> => {
   const token: string = req.cookies.jrt;
-  const user = await FindUserFromToken(token);
-  const { id, profile, super: superAdmin } = user;
 
+  // Checa !token ANTES de decodificar — evita 500 por verify(undefined).
   if (!token) {
     throw new AppError("ERR_SESSION_EXPIRED", 401);
   }
+
+  const user = await FindUserFromToken(token);
+  const { id, profile, super: superAdmin } = user;
 
   return res.json({ id, profile, super: superAdmin });
 };

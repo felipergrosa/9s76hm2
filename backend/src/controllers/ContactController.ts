@@ -1361,7 +1361,7 @@ export const saveTagImportPreset = async (req: Request, res: Response): Promise<
 export const toggleAcceptAudio = async (req: Request, res: Response): Promise<Response> => {
   var { contactId } = req.params;
   const { companyId } = req.user;
-  const contact = await ToggleAcceptAudioContactService({ contactId });
+  const contact = await ToggleAcceptAudioContactService({ contactId, companyId });
 
   await emitToCompanyNamespace(
     companyId,
@@ -1562,7 +1562,7 @@ export const getContactTags = async (
 export const toggleDisableBot = async (req: Request, res: Response): Promise<Response> => {
   var { contactId } = req.params;
   const { companyId } = req.user;
-  const contact = await ToggleDisableBotContactService({ contactId });
+  const contact = await ToggleDisableBotContactService({ contactId, companyId });
 
   const io = getIO();
   io.of(`/workspace-${companyId}`)

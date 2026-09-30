@@ -6,16 +6,18 @@ import * as QueueIntegrationController from "../controllers/QueueIntegrationCont
 
 const queueIntegrationRoutes = Router();
 
+// O catálogo (PermissionAdapter) não tem integrations.create/edit/delete —
+// escritas exigem settings.edit; leituras seguem com integrations.view.
 queueIntegrationRoutes.get("/queueIntegration", isAuth, checkPermission("integrations.view"), QueueIntegrationController.index);
 
-queueIntegrationRoutes.post("/queueIntegration", isAuth, checkPermission("integrations.view"), QueueIntegrationController.store);
+queueIntegrationRoutes.post("/queueIntegration", isAuth, checkPermission("settings.edit"), QueueIntegrationController.store);
 
 queueIntegrationRoutes.get("/queueIntegration/:integrationId", isAuth, checkPermission("integrations.view"), QueueIntegrationController.show);
 
-queueIntegrationRoutes.put("/queueIntegration/:integrationId", isAuth, checkPermission("integrations.view"), QueueIntegrationController.update);
+queueIntegrationRoutes.put("/queueIntegration/:integrationId", isAuth, checkPermission("settings.edit"), QueueIntegrationController.update);
 
-queueIntegrationRoutes.delete("/queueIntegration/:integrationId", isAuth, checkPermission("integrations.view"), QueueIntegrationController.remove);
+queueIntegrationRoutes.delete("/queueIntegration/:integrationId", isAuth, checkPermission("settings.edit"), QueueIntegrationController.remove);
 
-queueIntegrationRoutes.post("/queueIntegration/testsession", isAuth, checkPermission("integrations.view"), QueueIntegrationController.testSession);
+queueIntegrationRoutes.post("/queueIntegration/testsession", isAuth, checkPermission("settings.edit"), QueueIntegrationController.testSession);
 
 export default queueIntegrationRoutes;

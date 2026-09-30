@@ -4,6 +4,7 @@ import TicketNote from "../../models/TicketNote";
 interface Request {
   searchParam?: string;
   pageNumber?: string;
+  companyId: number;
 }
 
 interface Response {
@@ -14,9 +15,11 @@ interface Response {
 
 const ListTicketNotesService = async ({
   searchParam = "",
-  pageNumber = "1"
+  pageNumber = "1",
+  companyId
 }: Request): Promise<Response> => {
   const whereCondition = {
+    companyId,
     [Op.or]: [
       {
         note: Sequelize.where(

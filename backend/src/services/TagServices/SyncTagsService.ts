@@ -5,21 +5,27 @@ import ContactTag from "../../models/ContactTag";
 interface Request {
   tags: Tag[];
   contactId: number;
+  companyId: number;
 }
 
 const SyncTags = async ({
   tags,
-  contactId
+  contactId,
+  companyId
 }: Request): Promise<Contact | null> => {
-  const contact = await Contact.findByPk(contactId, { include: [Tag] });
+  // Filtra por companyId para impedir sync em contato de outra empresa
+  const contact = await Contact.findOne({
+    where: { id: contactId, companyId },
+    include: [Tag]
+  });
 
   if (!contact) {
     return null;
   }
 
-  const tagList = tags.map(t => ({ tagId: t.id, contactId, companyId: contact.companyId }));
+  const tagList = tags.map(t => ({ tagId: t.id, contactId, companyId }));
 
-  await ContactTag.destroy({ where: { contactId } });
+  await ContactTag.destroy({ where: { contactId, companyId } });
   await ContactTag.bulkCreate(tagList);
 
   await contact.reload();

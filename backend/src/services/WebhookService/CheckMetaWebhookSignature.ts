@@ -3,16 +3,42 @@ import Whatsapp from "../../models/Whatsapp";
 import { isValidMetaSignature } from "../../helpers/VerifyMetaWebhookSignature";
 import logger from "../../utils/logger";
 
-export const WEBHOOK_SIGNATURE_ENFORCE =
-  process.env.WEBHOOK_SIGNATURE_ENFORCE === "true";
+/**
+ * Política de verificação de assinatura HMAC (X-Hub-Signature-256) — fail-closed:
+ * - Quando existe secret configurado (META_APP_SECRET global ou metaAppSecret
+ *   por conexão), a assinatura é SEMPRE verificada e payload inválido é rejeitado.
+ * - Quando NENHUM secret está configurado é impossível verificar: em produção
+ *   (NODE_ENV=production) o evento é rejeitado; fora de produção aceita com
+ *   warning (dev/teste local sem app Meta configurado).
+ */
+
+// Log de boot: em produção sem secret global, só passam webhooks de conexões
+// que tenham metaAppSecret próprio — deixar isso explícito desde o start.
+if (process.env.NODE_ENV === "production" && !process.env.META_APP_SECRET) {
+  logger.warn(
+    "[Webhook] META_APP_SECRET não configurado: webhooks só serão aceitos para " +
+    "conexões com metaAppSecret próprio; demais eventos serão rejeitados (fail-closed)."
+  );
+}
+
+// Garante que o erro de "sem secret em produção" seja logado apenas uma vez
+let secretlessRejectLogged = false;
+const logSecretlessRejectOnce = (label: string): void => {
+  if (secretlessRejectLogged) return;
+  secretlessRejectLogged = true;
+  logger.error(
+    `[Webhook][${label}] Rejeitando evento sem verificação: nenhum secret configurado ` +
+    "(META_APP_SECRET ou metaAppSecret por conexão) em produção"
+  );
+};
 
 /**
  * Valida a assinatura HMAC (X-Hub-Signature-256) de um webhook da Meta.
  * Tenta primeiro o App Secret global (META_APP_SECRET) e, se não validar,
  * cai para os App Secrets configurados por conexão (multi-app por empresa).
  *
- * Em modo log-only (WEBHOOK_SIGNATURE_ENFORCE != "true"), nunca bloqueia —
- * só registra um warning para permitir observar antes de aplicar enforcement.
+ * Retorna false quando a assinatura é inválida/ausente havendo secret
+ * configurado, ou quando não há nenhum secret e o ambiente é produção.
  */
 export async function checkMetaWebhookSignature(
   rawBody: Buffer | undefined,
@@ -35,9 +61,19 @@ export async function checkMetaWebhookSignature(
 
   if (matched) return true;
 
-  logger.warn(
-    `[Webhook][${label}] Assinatura HMAC inválida ou ausente (enforce=${WEBHOOK_SIGNATURE_ENFORCE})`
-  );
+  const anySecret = Boolean(globalSecret) || connectionsWithSecret.length > 0;
+  if (!anySecret) {
+    if (process.env.NODE_ENV === "production") {
+      logSecretlessRejectOnce(label);
+      return false;
+    }
+    logger.warn(
+      `[Webhook][${label}] Assinatura NÃO verificada — configure META_APP_SECRET ou metaAppSecret por conexão`
+    );
+    return true;
+  }
+
+  logger.warn(`[Webhook][${label}] Assinatura HMAC inválida ou ausente`);
   return false;
 }
 
@@ -63,11 +99,15 @@ export async function checkOfficialWebhookSignature(
   if (coveredIds.size !== ids.length) return false;
 
   const globalSecret = process.env.META_APP_SECRET;
-  // Se nenhum secret está configurado (nem global nem por conexão), verificar
-  // é impossível — enforce total viraria outage silenciosa no deploy. Aceita
-  // com warning alto para incentivar a configuração.
+  // Sem nenhum secret (nem global nem por conexão) verificar é impossível.
+  // Fail-closed: em produção rejeita; fora de produção aceita com warning
+  // para permitir desenvolvimento/teste local sem app Meta.
   const anySecret = Boolean(globalSecret) || connections.some(c => c.metaAppSecret);
   if (!anySecret) {
+    if (process.env.NODE_ENV === "production") {
+      logSecretlessRejectOnce("whatsapp-official");
+      return false;
+    }
     logger.warn(
       "[Webhook] Assinatura NÃO verificada — configure META_APP_SECRET ou metaAppSecret por conexão"
     );

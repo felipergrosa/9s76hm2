@@ -3,13 +3,16 @@ import Contact from "../../models/Contact";
 
 interface Request {
     contactId: string;
+    companyId: number;
 }
 
 const ToggleUseQueuesContactService = async ({
-    contactId
+    contactId,
+    companyId
 }: Request): Promise<Contact> => {
+    // Segurança: escopo por empresa para evitar IDOR entre tenants
     const contact = await Contact.findOne({
-        where: { id: contactId },
+        where: { id: contactId, companyId },
         attributes: ["id", "acceptAudioMessage"]
     });
 

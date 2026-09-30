@@ -1,5 +1,3 @@
-import { verify } from "jsonwebtoken";
-import authConfig from "../config/auth";
 import * as Yup from "yup";
 import { Request, Response } from "express";
 // import { getIO } from "../libs/socket";
@@ -16,15 +14,6 @@ import FindAllCompaniesService from "../services/CompanyService/FindAllCompanies
 import ShowPlanCompanyService from "../services/CompanyService/ShowPlanCompanyService";
 import User from "../models/User";
 import ListCompaniesPlanService from "../services/CompanyService/ListCompaniesPlanService";
-
-interface TokenPayload {
-  id: string;
-  username: string;
-  profile: string;
-  companyId: number;
-  iat: number;
-  exp: number;
-}
 
 type IndexQuery = {
   searchParam: string;
@@ -53,14 +42,11 @@ type SchedulesData = {
 export const index = async (req: Request, res: Response): Promise<Response> => {
   const { searchParam, pageNumber } = req.query as IndexQuery;
 
-  const authHeader = req.headers.authorization;
-  const [, token] = authHeader.split(" ");
-  const decoded = verify(token, authConfig.secret);
-  const { id, profile, companyId } = decoded as TokenPayload;
-  const company = await Company.findByPk(companyId);
-  const requestUser = await User.findByPk(id);
+  // Usa req.user populado pelo isAuth + usuário FRESCO do DB para flag super
+  const { companyId } = req.user;
+  const requestUser = await User.findByPk(req.user.id);
 
-  if (requestUser.super === true) {
+  if (requestUser?.super === true) {
     const { companies, count, hasMore } = await ListCompaniesService({
       searchParam,
       pageNumber
@@ -69,9 +55,11 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
     return res.json({ companies, count, hasMore });
 
   } else {
+    // SEGURANÇA: não-super só enxerga a própria empresa (filtro obrigatório)
     const { companies, count, hasMore } = await ListCompaniesService({
-      searchParam: company.name,
-      pageNumber
+      searchParam,
+      pageNumber,
+      companyId
     });
     return res.json({ companies, count, hasMore });
 
@@ -100,14 +88,10 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
 
 export const show = async (req: Request, res: Response): Promise<Response> => {
   const { id } = req.params;
+  const { companyId } = req.user;
+  const requestUser = await User.findByPk(req.user.id);
 
-  const authHeader = req.headers.authorization;
-  const [, token] = authHeader.split(" ");
-  const decoded = verify(token, authConfig.secret);
-  const { id: requestUserId, profile, companyId } = decoded as TokenPayload;
-  const requestUser = await User.findByPk(requestUserId);
-
-  if (requestUser.super === true) {
+  if (requestUser?.super === true) {
     const company = await ShowCompanyService(id);
     return res.status(200).json(company);
   } else if (id !== companyId.toString()) {
@@ -120,27 +104,16 @@ export const show = async (req: Request, res: Response): Promise<Response> => {
 
 export const list = async (req: Request, res: Response): Promise<Response> => {
 
-  const authHeader = req.headers.authorization;
-  const [, token] = authHeader.split(" ");
-  const decoded = verify(token, authConfig.secret);
-  const { id, profile, companyId } = decoded as TokenPayload;
-  const requestUser = await User.findByPk(id);
+  const { companyId } = req.user;
+  const requestUser = await User.findByPk(req.user.id);
 
-  if (requestUser.super === true) {
+  if (requestUser?.super === true) {
     const companies: Company[] = await FindAllCompaniesService();
     return res.status(200).json(companies);
   } else {
-    const companies: Company[] = await FindAllCompaniesService();
-    let company = [];
-
-    for (let i = 0; i < companies.length; i++) {
-      const id = companies[i].id;
-
-      if (id === companyId) {
-        company.push(companies[i])
-        return res.status(200).json(company);
-      }
-    }
+    // SEGURANÇA: não-super recebe apenas a própria empresa, sem varrer a tabela
+    const companies: Company[] = await Company.findAll({ where: { id: companyId } });
+    return res.status(200).json(companies);
   }
 
 };
@@ -163,20 +136,23 @@ export const update = async (
   }
 
   const { id } = req.params;
+  const { companyId } = req.user;
+  const requestUser = await User.findByPk(req.user.id);
 
-  const authHeader = req.headers.authorization;
-  const [, token] = authHeader.split(" ");
-  const decoded = verify(token, authConfig.secret);
-  const { id: requestUserId, profile, companyId } = decoded as TokenPayload;
-  const requestUser = await User.findByPk(requestUserId);
-
-  if (requestUser.super === true) {
+  if (requestUser?.super === true) {
     const company = await UpdateCompanyService({ id, ...companyData });
     return res.status(200).json(company);
-  } else if (String(companyData?.id) !== id || String(companyId) !== id) {
+  } else if (
+    (companyData?.id !== undefined && String(companyData.id) !== String(id)) ||
+    String(companyId) !== String(id)
+  ) {
     return res.status(400).json({ error: "Você não possui permissão para acessar este recurso!" });
   } else {
-    const company = await UpdateCompanyService({ id, ...companyData });
+    // SEGURANÇA: não-super só edita a própria empresa e apenas campos da
+    // whitelist — planId, status, dueDate, recurrence, paymentMethod,
+    // campaignsEnabled e credenciais do usuário-dono são exclusivos do super.
+    const { name, phone, document } = companyData;
+    const company = await UpdateCompanyService({ id, name, phone, document });
     return res.status(200).json(company);
   }
 
@@ -188,14 +164,10 @@ export const updateSchedules = async (
 ): Promise<Response> => {
   const { schedules }: SchedulesData = req.body;
   const { id } = req.params;
+  const { companyId } = req.user;
+  const requestUser = await User.findByPk(req.user.id);
 
-  const authHeader = req.headers.authorization;
-  const [, token] = authHeader.split(" ");
-  const decoded = verify(token, authConfig.secret);
-  const { id: requestUserId, profile, companyId } = decoded as TokenPayload;
-  const requestUser = await User.findByPk(requestUserId);
-
-  if (requestUser.super === true) {
+  if (requestUser?.super === true) {
     const company = await UpdateSchedulesService({ id, schedules });
     return res.status(200).json(company);
   } else if (companyId.toString() !== id) {
@@ -212,13 +184,9 @@ export const remove = async (
   res: Response
 ): Promise<Response> => {
   const { id } = req.params;
-  const authHeader = req.headers.authorization;
-  const [, token] = authHeader.split(" ");
-  const decoded = verify(token, authConfig.secret);
-  const { id: requestUserId, profile, companyId } = decoded as TokenPayload;
-  const requestUser = await User.findByPk(requestUserId);
+  const requestUser = await User.findByPk(req.user.id);
 
-  if (requestUser.super === true) {
+  if (requestUser?.super === true) {
     const company = await DeleteCompanyService(id);
     return res.status(200).json(company);
   } else {
@@ -235,13 +203,10 @@ export const listPlan = async (req: Request, res: Response): Promise<Response> =
     return res.status(400).json({ error: "ID da empresa não fornecido" });
   }
 
-  const authHeader = req.headers.authorization;
-  const [, token] = authHeader.split(" ");
-  const decoded = verify(token, authConfig.secret);
-  const { id: requestUserId, profile, companyId } = decoded as TokenPayload;
-  const requestUser = await User.findByPk(requestUserId);
+  const { companyId } = req.user;
+  const requestUser = await User.findByPk(req.user.id);
 
-  if (requestUser.super === true) {
+  if (requestUser?.super === true) {
     const company = await ShowPlanCompanyService(id);
     return res.status(200).json(company);
   } else if (companyId.toString() !== id) {
@@ -256,14 +221,9 @@ export const listPlan = async (req: Request, res: Response): Promise<Response> =
 export const indexPlan = async (req: Request, res: Response): Promise<Response> => {
   const { searchParam, pageNumber } = req.query as IndexQuery;
 
-  const authHeader = req.headers.authorization;
-  const [, token] = authHeader.split(" ");
-  const decoded = verify(token, authConfig.secret);
-  const { id, profile, companyId } = decoded as TokenPayload;
-  // const company = await Company.findByPk(companyId);
-  const requestUser = await User.findByPk(id);
+  const requestUser = await User.findByPk(req.user.id);
 
-  if (requestUser.super === true) {
+  if (requestUser?.super === true) {
     const companies = await ListCompaniesPlanService();
     return res.json({ companies });
   } else {

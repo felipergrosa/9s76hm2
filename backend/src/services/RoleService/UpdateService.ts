@@ -2,7 +2,11 @@ import { Op } from "sequelize";
 import AppError from "../../errors/AppError";
 import Role from "../../models/Role";
 import UserRole from "../../models/UserRole";
-import { invalidateRolePermissionsCache } from "../../helpers/PermissionAdapter";
+import {
+  AVAILABLE_PERMISSIONS,
+  getAllAvailablePermissions,
+  invalidateRolePermissionsCache
+} from "../../helpers/PermissionAdapter";
 
 interface Request {
   id: string | number;
@@ -10,6 +14,8 @@ interface Request {
   name?: string;
   description?: string;
   permissions?: string[];
+  // Flag do requisitante (vinda do DB) — permissões do grupo super só para super
+  requestUserIsSuper?: boolean;
 }
 
 const UpdateService = async ({
@@ -17,7 +23,8 @@ const UpdateService = async ({
   companyId,
   name,
   description,
-  permissions
+  permissions,
+  requestUserIsSuper = false
 }: Request): Promise<Role> => {
   const role = await Role.findOne({ where: { id, companyId } });
 
@@ -40,6 +47,18 @@ const UpdateService = async ({
   }
 
   if (permissions !== undefined) {
+    // SEGURANÇA: valida permissions[] contra o catálogo conhecido — rejeita
+    // chaves arbitrárias/desconhecidas e, para não-super, chaves do grupo super.
+    const catalog = new Set(getAllAvailablePermissions());
+    const superGroup = new Set<string>(AVAILABLE_PERMISSIONS.super);
+    for (const p of permissions) {
+      if (!catalog.has(p)) {
+        throw new AppError(`Permissão desconhecida: ${p}`, 400);
+      }
+      if (!requestUserIsSuper && superGroup.has(p)) {
+        throw new AppError("ERR_NO_PERMISSION - PERMISSAO RESTRITA A SUPER ADMIN", 403);
+      }
+    }
     role.permissions = permissions;
   }
 

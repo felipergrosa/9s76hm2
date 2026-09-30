@@ -1,5 +1,7 @@
 import ContactListItem from "../../models/ContactListItem";
+import ContactList from "../../models/ContactList";
 import Contact from "../../models/Contact";
+import AppError from "../../errors/AppError";
 import { Op } from "sequelize";
 import logger from "../../utils/logger";
 
@@ -24,11 +26,20 @@ const FixUnlinkedContactsService = async ({
 }: Request): Promise<Response> => {
     logger.info(`Iniciando correção de vínculos para lista ${contactListId}`);
 
+    // Segurança: garante que a lista pertence à empresa antes de alterar itens (IDOR)
+    const list = await ContactList.findOne({
+        where: { id: contactListId, companyId }
+    });
+    if (!list) {
+        throw new AppError("ERR_NO_CONTACTLIST_FOUND", 404);
+    }
+
     // Buscar itens que NÃO têm um Contact associado via canonicalNumber
     // Isso inclui itens com canonicalNumber NULL ou que não correspondem a nenhum Contact
     const allItems = await ContactListItem.findAll({
         where: {
             contactListId,
+            companyId,
             isGroup: false // Grupos não precisam de vínculo
         },
         attributes: ["id", "name", "number", "canonicalNumber"],
@@ -98,7 +109,7 @@ const FixUnlinkedContactsService = async ({
             // Atualizar o canonicalNumber do item para corresponder ao Contact
             await ContactListItem.update(
                 { canonicalNumber: matchedContact.canonicalNumber },
-                { where: { id: item.id } }
+                { where: { id: item.id, companyId } }
             );
             fixed++;
             logger.debug(`Item ${item.id} (${itemAny.name}) vinculado ao Contact ${matchedContact.id}`);

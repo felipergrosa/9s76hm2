@@ -6,6 +6,17 @@ import logger from "../utils/logger";
 
 const publicFolder = path.resolve(__dirname, "..", "..", "public");
 
+// Validação anti-traversal: aceita apenas nomes simples de arquivo
+// (sem "/", "\" ou ".."), mesmo que a rota seja re-montada futuramente.
+const FILENAME_REGEX = /^[a-zA-Z0-9._-]+$/;
+const isSafeFilename = (filename: string): boolean =>
+  FILENAME_REGEX.test(filename) && !filename.includes("..");
+
+const resolveInsidePublic = (filename: string): string | null => {
+  const resolved = path.resolve(publicFolder, filename);
+  return resolved.startsWith(publicFolder + path.sep) ? resolved : null;
+};
+
 /**
  * Serve mídia com suporte a thumbnails e redimensionamento
  * Query params:
@@ -19,12 +30,15 @@ export const serveMedia = async (req: Request, res: Response): Promise<Response 
     const { filename } = req.params;
     const { thumb, quality, maxWidth, maxHeight } = req.query;
 
-    if (!filename) {
+    if (!filename || !isSafeFilename(filename)) {
       return res.status(400).json({ error: "Filename required" });
     }
 
-    // Construir caminho do arquivo
-    const filePath = path.join(publicFolder, filename);
+    // Construir caminho do arquivo (garantido dentro de publicFolder)
+    const filePath = resolveInsidePublic(filename);
+    if (!filePath) {
+      return res.status(400).json({ error: "Invalid filename" });
+    }
 
     // Verificar se arquivo existe
     if (!fs.existsSync(filePath)) {
@@ -46,8 +60,8 @@ export const serveMedia = async (req: Request, res: Response): Promise<Response 
     const targetMaxWidth = thumbMode ? 200 : parseInt(maxWidth as string) || undefined;
     const targetMaxHeight = thumbMode ? 200 : parseInt(maxHeight as string) || undefined;
 
-    // Gerar chave de cache baseada nos parâmetros
-    const cacheKey = `${filename}_q${targetQuality}_w${targetMaxWidth || "auto"}_h${targetMaxHeight || "auto"}`;
+    // Gerar chave de cache baseada nos parâmetros (basename defensivo)
+    const cacheKey = `${path.basename(filename)}_q${targetQuality}_w${targetMaxWidth || "auto"}_h${targetMaxHeight || "auto"}`;
     const cachePath = path.join(publicFolder, ".cache", cacheKey + ".jpg");
 
     // Verificar se já existe no cache
@@ -102,12 +116,15 @@ export const getVideoThumbnail = async (req: Request, res: Response): Promise<Re
   try {
     const { filename } = req.params;
 
-    if (!filename) {
+    if (!filename || !isSafeFilename(filename)) {
       return res.status(400).json({ error: "Filename required" });
     }
 
-    const videoPath = path.join(publicFolder, filename);
-    const thumbName = filename.replace(/\.[^.]+$/, "_thumb.jpg");
+    const videoPath = resolveInsidePublic(filename);
+    if (!videoPath) {
+      return res.status(400).json({ error: "Invalid filename" });
+    }
+    const thumbName = path.basename(filename).replace(/\.[^.]+$/, "_thumb.jpg");
     const thumbPath = path.join(publicFolder, ".cache", thumbName);
 
     // Verificar se thumbnail já existe

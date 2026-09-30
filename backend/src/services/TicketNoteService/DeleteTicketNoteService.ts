@@ -1,9 +1,10 @@
 import TicketNote from "../../models/TicketNote";
 import AppError from "../../errors/AppError";
 
-const DeleteTicketNoteService = async (id: string): Promise<void> => {
+const DeleteTicketNoteService = async (id: string, companyId: number): Promise<void> => {
+  // Validação de tenant ANTES da exclusão
   const ticketnote = await TicketNote.findOne({
-    where: { id }
+    where: { id, companyId }
   });
 
   if (!ticketnote) {

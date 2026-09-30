@@ -59,10 +59,11 @@ export const deleteFlow = async (
   res: Response
 ): Promise<Response> => {
   const { idFlow } = req.params;
+  const { companyId } = req.user;
 
   const flowIdInt = parseInt(idFlow);
 
-  const flow = await DeleteFlowBuilderService(flowIdInt);
+  const flow = await DeleteFlowBuilderService(flowIdInt, companyId);
 
   return res.status(200).json(flow);
 };
@@ -186,8 +187,9 @@ export const FlowUploadAudio = async (req: Request, res: Response) => {
 
 export const FlowDuplicate = async (req: Request, res: Response) => {
   const { flowId } = req.body;
+  const { companyId } = req.user;
 
-  const newFlow = await DuplicateFlowBuilderService({ id: flowId });
+  const newFlow = await DuplicateFlowBuilderService({ id: flowId, companyId });
 
   return res.status(200).json(newFlow);
 };

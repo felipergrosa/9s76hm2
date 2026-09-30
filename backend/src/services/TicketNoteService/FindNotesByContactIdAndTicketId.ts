@@ -6,16 +6,19 @@ import Ticket from "../../models/Ticket";
 interface Params {
   contactId: number | string;
   ticketId: number | string;
+  companyId: number;
 }
 
 const FindNotesByContactIdAndTicketId = async ({
   contactId,
-  ticketId
+  ticketId,
+  companyId
 }: Params): Promise<TicketNote[]> => {
   const notes: TicketNote[] = await TicketNote.findAll({
     where: {
       contactId,
-      ticketId
+      ticketId,
+      companyId
     },
     include: [
       { model: User, as: "user", attributes: ["id", "name", "email"] },

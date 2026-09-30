@@ -61,29 +61,35 @@ const UpdateQueueIntegrationService = async ({
 
   const integration = await ShowIntegrationService(integrationId, companyId);
 
+  // Campos sensíveis dentro do jsonContent — o controller serve esses
+  // valores mascarados, então um valor mascarado/ausente não pode
+  // sobrescrever a credencial real.
+  const SECRET_FIELDS = ["apiKey", "key"];
+  const isMasked = (v: any) =>
+    typeof v !== "string" || v.length === 0 || v.includes("*");
+
   // Prepare jsonContent for persistence
   let jsonToPersist: string | undefined = jsonContent;
-  if ((type || integration.type) === "openai") {
-    try {
-      const incoming = jsonContent ? JSON.parse(jsonContent) : {};
-      const current = integration.jsonContent ? JSON.parse(integration.jsonContent) : {};
+  const effectiveType = type || integration.type;
+  try {
+    const incoming = jsonContent ? JSON.parse(jsonContent) : {};
+    const current = integration.jsonContent ? JSON.parse(integration.jsonContent) : {};
 
-      // Preserve existing apiKey if incoming is missing or masked
-      const incomingKey = incoming?.apiKey;
-      if (typeof incomingKey === "string" && incomingKey.length > 0 && incomingKey !== "********") {
-        if (!incomingKey.startsWith("ENC::")) {
-          incoming.apiKey = encryptString(incomingKey);
-        }
-      } else {
-        incoming.apiKey = current?.apiKey; // keep existing (already encrypted)
+    for (const field of SECRET_FIELDS) {
+      const incomingVal = incoming?.[field];
+      if (isMasked(incomingVal)) {
+        // Mantém o valor já persistido (mascarado/ausente nunca sobrescreve)
+        incoming[field] = current?.[field];
+      } else if (effectiveType === "openai" && !String(incomingVal).startsWith("ENC::")) {
+        incoming[field] = encryptString(incomingVal);
       }
-
-      // Merge model and any other fields
-      const merged = { ...current, ...incoming };
-      jsonToPersist = JSON.stringify(merged);
-    } catch (_) {
-      // if parse fails, fallback to incoming string as-is
     }
+
+    // Merge model and any other fields
+    const merged = { ...current, ...incoming };
+    jsonToPersist = JSON.stringify(merged);
+  } catch (_) {
+    // if parse fails, fallback to incoming string as-is
   }
 
   await integration.update({
@@ -93,7 +99,8 @@ const UpdateQueueIntegrationService = async ({
     jsonContent: jsonToPersist,
     language,
     urlN8N,
-    companyId,
+    // companyId nunca é gravado a partir do request — o registro já foi
+    // validado como pertencente ao tenant via ShowIntegrationService
     typebotExpires,
     typebotKeywordFinish,
     typebotSlug,

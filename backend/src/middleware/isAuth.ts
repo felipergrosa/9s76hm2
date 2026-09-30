@@ -30,14 +30,15 @@ interface TokenPayload {
 const isAuth = async (req: ExtendedRequest, res: Response, next: NextFunction): Promise<void> => {
   const authHeader = req.headers.authorization;
 
-  if (!authHeader) {
+  // Exige formato "Bearer <token>" (rejeita header cru ou com esquema diferente).
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
     throw new AppError("ERR_SESSION_EXPIRED", 401);
   }
 
   const [, token] = authHeader.split(" ");
 
   try {
-    const decoded = verify(token, authConfig.secret) as TokenPayload;
+    const decoded = verify(token, authConfig.secret, { algorithms: ["HS256"] }) as TokenPayload;
     const { id, profile, companyId, super: superUser } = decoded;
 
     // REMOVIDO: updateUser causava deadlock em requisições simultâneas

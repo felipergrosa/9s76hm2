@@ -2,6 +2,7 @@ import AppError from "../../errors/AppError";
 import Campaign from "../../models/Campaign";
 import ContactList from "../../models/ContactList";
 import Queue from "../../models/Queue";
+import Tag from "../../models/Tag";
 import User from "../../models/User";
 import Whatsapp from "../../models/Whatsapp";
 
@@ -28,6 +29,7 @@ interface Data {
   confirmationMessage5?: string;
   contactListIds?: number[] | string | null;
   userId: number | string;
+  userIds?: number[] | string | null;
   queueId: number | string;
   statusTicket: string;
   openTicket: string;
@@ -47,15 +49,61 @@ interface Data {
   metaTemplateName?: string | null;
   metaTemplateLanguage?: string | null;
   metaTemplateVariables?: Record<string, any> | null;  // Mapeamento de variáveis do template
+  sendMediaSeparately?: boolean;  // Enviar mídia separada do texto
 }
 
+// N2: extrai IDs numéricos de campo que pode vir como número, array ou JSON string
+const toIdList = (value: any): number[] => {
+  if (value === null || value === undefined || value === "") return [];
+  let arr: any[] = Array.isArray(value) ? value : [value];
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) arr = parsed;
+    } catch { /* valor escalar */ }
+  }
+  return arr.map(Number).filter((n: number) => Number.isInteger(n));
+};
+
+// N2: garante que FKs referenciadas pertencem ao tenant da empresa
+const assertSameCompany = async (
+  model: any,
+  ids: number[],
+  companyId: number,
+  label: string
+): Promise<void> => {
+  const unique = [...new Set(ids)];
+  if (unique.length === 0) return;
+  const found = await model.count({ where: { id: unique, companyId } });
+  if (found !== unique.length) {
+    throw new AppError(`${label} não pertence a esta empresa`, 400);
+  }
+};
+
+// N2 (mass assignment): whitelist explícita de campos editáveis da campanha.
+// Nunca aceita id, companyId, mediaPath/mediaName (somente via upload) ou timestamps.
+const EDITABLE_FIELDS = [
+  "name", "status", "confirmation", "scheduledAt",
+  "message1", "message2", "message3", "message4", "message5",
+  "confirmationMessage1", "confirmationMessage2", "confirmationMessage3",
+  "confirmationMessage4", "confirmationMessage5",
+  "contactListId", "contactListIds", "tagListId", "negativeTagListIds",
+  "whatsappId", "userId", "userIds", "queueId",
+  "statusTicket", "openTicket", "dispatchStrategy", "allowedWhatsappIds",
+  "mediaUrl1", "mediaName1", "mediaUrl2", "mediaName2",
+  "mediaUrl3", "mediaName3", "mediaUrl4", "mediaName4",
+  "mediaUrl5", "mediaName5", "sendMediaSeparately",
+  "metaTemplateName", "metaTemplateLanguage", "metaTemplateVariables"
+];
+
 const UpdateService = async (data: Data): Promise<Campaign> => {
-  const { id } = data;
+  const { id, companyId } = data;
 
   // DEBUG: Log para verificar se metaTemplateVariables está chegando
   console.log('[UpdateService] metaTemplateVariables recebido:', JSON.stringify(data.metaTemplateVariables));
 
-  const record = await Campaign.findByPk(id);
+  // N2 (IDOR): só localiza campanha do próprio tenant
+  const record = await Campaign.findOne({ where: { id, companyId } });
 
   if (!record) {
     throw new AppError("ERR_NO_CAMPAIGN_FOUND", 404);
@@ -77,8 +125,26 @@ const UpdateService = async (data: Data): Promise<Campaign> => {
     data.status = "PROGRAMADA";
   }
 
+  // N2: valida que todas as FKs informadas pertencem ao tenant antes de gravar
+  await assertSameCompany(ContactList, toIdList(data.contactListId), companyId, "Lista de contatos");
+  await assertSameCompany(ContactList, toIdList(data.contactListIds), companyId, "Listas de contatos");
+  await assertSameCompany(Tag, toIdList(data.tagListId), companyId, "Tag");
+  await assertSameCompany(Tag, toIdList(data.negativeTagListIds), companyId, "Tags de exclusão");
+  await assertSameCompany(Whatsapp, toIdList(data.whatsappId), companyId, "Conexão WhatsApp");
+  await assertSameCompany(Whatsapp, toIdList(data.allowedWhatsappIds), companyId, "Conexões permitidas");
+  await assertSameCompany(Queue, toIdList(data.queueId), companyId, "Fila");
+  await assertSameCompany(User, toIdList(data.userId), companyId, "Usuário");
+  await assertSameCompany(User, toIdList(data.userIds), companyId, "Usuários");
+
+  // Monta payload apenas com campos da whitelist (impede mass assignment)
+  const payload: any = {};
+  EDITABLE_FIELDS.forEach(field => {
+    if ((data as any)[field] !== undefined) {
+      payload[field] = (data as any)[field];
+    }
+  });
+
   // Serializa allowedWhatsappIds e contactListIds se vierem como array/objeto
-  const payload: any = { ...data };
   if (
     payload.allowedWhatsappIds != null &&
     typeof payload.allowedWhatsappIds !== "string"
@@ -87,6 +153,17 @@ const UpdateService = async (data: Data): Promise<Campaign> => {
       payload.allowedWhatsappIds = JSON.stringify(payload.allowedWhatsappIds);
     } catch (e) {
       payload.allowedWhatsappIds = String(payload.allowedWhatsappIds);
+    }
+  }
+
+  if (
+    payload.userIds != null &&
+    typeof payload.userIds !== "string"
+  ) {
+    try {
+      payload.userIds = JSON.stringify(payload.userIds);
+    } catch (e) {
+      payload.userIds = String(payload.userIds);
     }
   }
 

@@ -41,7 +41,10 @@ const BlockUnblockContactService = async ({
     companyId,
     active
 }: Request): Promise<Contact> => {
-    const contact = await Contact.findByPk(contactId);
+    // Segurança: escopo por empresa para evitar IDOR entre tenants
+    const contact = await Contact.findOne({
+        where: { id: contactId, companyId }
+    });
 
     if (!contact) {
         throw new AppError("ERR_NO_CONTACT_FOUND", 404);

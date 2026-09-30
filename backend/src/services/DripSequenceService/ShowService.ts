@@ -6,8 +6,13 @@ import Queue from "../../models/Queue";
 import User from "../../models/User";
 import AppError from "../../errors/AppError";
 
-const ShowService = async (id: string | number): Promise<DripSequence> => {
-  const record = await DripSequence.findByPk(id, {
+const ShowService = async (
+  id: string | number,
+  companyId: number
+): Promise<DripSequence> => {
+  // N2 (IDOR): restringe a busca ao tenant autenticado
+  const record = await DripSequence.findOne({
+    where: { id, companyId },
     include: [
       { model: Tag, as: "tag", attributes: ["id", "name", "color", "kanban"] },
       { model: Whatsapp, attributes: ["id", "name", "channelType"] },

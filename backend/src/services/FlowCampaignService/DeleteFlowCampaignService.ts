@@ -1,10 +1,13 @@
 import AppError from "../../errors/AppError";
 import { FlowCampaignModel } from "../../models/FlowCampaign";
 
-const DeleteFlowCampaignService = async (id: number): Promise<FlowCampaignModel> => {
-  
+const DeleteFlowCampaignService = async (
+  id: number,
+  companyId: number
+): Promise<FlowCampaignModel> => {
+
   const flow = await FlowCampaignModel.findOne({
-    where: { id: id }
+    where: { id: id, companyId }
   });
 
   if (!flow) {
@@ -17,4 +20,3 @@ const DeleteFlowCampaignService = async (id: number): Promise<FlowCampaignModel>
 };
 
 export default DeleteFlowCampaignService;
-

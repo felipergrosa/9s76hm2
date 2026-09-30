@@ -2,43 +2,33 @@ import { Request, Response, NextFunction } from "express";
 
 import AppError from "../errors/AppError";
 
-type TokenPayload = {
-  token: string | undefined;
-};
-
 const envTokenAuth = (
   req: Request,
   res: Response,
   next: NextFunction
 ): void => {
-  try {
-    const { token: bodyToken } = req.body as TokenPayload;
-    const { token: queryToken } = req.query as TokenPayload;
+  // Token configurado exclusivamente via ENV_TOKEN — sem fallback público.
+  const configuredToken = process.env.ENV_TOKEN;
 
-    // Token configurado via ENV_TOKEN
-    const configuredToken = process.env.ENV_TOKEN;
+  if (!configuredToken) {
+    // Falha fechada: sem ENV_TOKEN configurado não há como autenticar.
+    throw new AppError("Autenticação por token de ambiente não configurada", 503);
+  }
 
-    // Em desenvolvimento, aceitar token padrão "wtV" se ENV_TOKEN não estiver configurado
-    // Em produção, também aceitar "wtV" como fallback para compatibilidade
-    const isDevelopment = process.env.NODE_ENV !== "production";
-    const fallbackToken = "wtV";
+  // Token aceito apenas via header. Query (?token=) vaza em logs de proxy
+  // e body não se aplica a GETs — ambos removidos por segurança.
+  const headerToken = req.headers["x-env-token"];
+  const authHeader = req.headers.authorization;
+  const bearerToken =
+    typeof authHeader === "string" && authHeader.startsWith("Bearer ")
+      ? authHeader.slice("Bearer ".length)
+      : undefined;
 
-    const validToken = configuredToken || fallbackToken;
+  const providedToken =
+    (typeof headerToken === "string" ? headerToken : undefined) || bearerToken;
 
-    if (!validToken) {
-      throw new AppError("Token de ambiente não configurado", 500);
-    }
-
-    if (queryToken === validToken) {
-      return next();
-    }
-
-    if (bodyToken === validToken) {
-      return next();
-    }
-  } catch (e) {
-    if (e instanceof AppError) throw e;
-    // Não logar detalhes do erro para evitar exposição.
+  if (providedToken && providedToken === configuredToken) {
+    return next();
   }
 
   throw new AppError("Token inválido", 403);

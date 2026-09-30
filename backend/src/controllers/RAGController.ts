@@ -9,6 +9,7 @@ import FilesOptions from "../models/FilesOptions";
 import path from "path";
 import fs from "fs";
 import uploadConfig from "../config/upload";
+import assertPublicUrl from "../utils/assertPublicUrl";
 
 export const indexText = async (req: Request, res: Response) => {
   try {
@@ -376,11 +377,18 @@ export const indexUrl = async (req: Request, res: Response) => {
       return res.status(400).json({ error: "URL é obrigatória" });
     }
 
+    // Anti-SSRF: valida a URL inicial (e cada hop de redirect) — só
+    // http/https e hosts que resolvem para IPs públicos.
+    await assertPublicUrl(url);
+
     // Função para fazer fetch com suporte a redirects
     const fetchWithRedirects = async (targetUrl: string, maxRedirects = 5): Promise<{ body: string; finalUrl: string; hostname: string; }> => {
       if (maxRedirects <= 0) {
         throw new Error('Muitos redirects');
       }
+
+      // Cada hop (incluindo redirects) precisa ser público
+      await assertPublicUrl(targetUrl);
 
       const https = require('https');
       const http = require('http');
@@ -592,12 +600,21 @@ export const indexSitemap = async (req: Request, res: Response) => {
     const { url, maxUrls = 100, sameHostOnly = true, tags = [] } = (req.body || {}) as any;
     if (!url) return res.status(400).json({ error: 'url é obrigatória' });
 
+    // Anti-SSRF: sitemap só pode apontar para host público
+    await assertPublicUrl(url);
+
     const https = require('https');
     const http = require('http');
     const { URL } = require('url');
-    const client = url.startsWith('https:') ? https : http;
 
-    const get = (u: string) => new Promise<string>((resolve, reject) => {
+    const get = (u: string) => new Promise<string>(async (resolve, reject) => {
+      // Valida cada URL/hop (redirects e sitemaps filhos inclusos)
+      try {
+        await assertPublicUrl(u);
+      } catch (e) {
+        return reject(e);
+      }
+      const client = u.startsWith('https:') ? https : http;
       const req2 = client.get(u, (resp: any) => {
         if (resp.statusCode && resp.statusCode >= 300 && resp.statusCode < 400 && resp.headers.location) {
           const resolved = new URL(resp.headers.location, u).toString();

@@ -5,6 +5,15 @@ import logger from "../../utils/logger";
 
 const formData: FormData = new FormData();
 
+// Log sanitizado de erro da Graph API — nunca logar o objeto error/config
+// inteiro: error.config carrega o access_token na URL e nos params.
+const logGraphError = (label: string, error: any): void => {
+  logger.error(
+    `[graphAPI][${label}] ${error?.message || error} ` +
+    `(status=${error?.response?.status ?? "n/a"}, meta=${JSON.stringify(error?.response?.data?.error ?? null)})`
+  );
+};
+
 const apiBase = (token: string) =>
   axios.create({
     baseURL: "https://graph.facebook.com/v18.0/",
@@ -53,7 +62,7 @@ export const showTypingIndicator = async (
 
     return data;
   } catch (error) {
-    console.log(error);
+    logGraphError("showTypingIndicator", error);
   }
 
 }
@@ -75,7 +84,7 @@ export const sendText = async (
     });
     return data;
   } catch (error) {
-    console.log(error);
+    logGraphError("sendText", error);
   }
 };
 
@@ -102,7 +111,7 @@ export const sendAttachmentFromUrl = async (
 
     return data;
   } catch (error) {
-    console.log(error);
+    logGraphError("sendAttachmentFromUrl", error);
   }
 };
 
@@ -160,7 +169,7 @@ export const getProfile = async (id: string, token: string): Promise<any> => {
 
     return data;
   } catch (error) {
-    console.log(error);
+    logGraphError("getProfile", error);
     throw new Error("ERR_FETCHING_FB_USER_PROFILE_2");
   }
 };
@@ -175,7 +184,7 @@ export const getPageProfile = async (
     );
     return data;
   } catch (error) {
-    console.log(error);
+    logGraphError("getPageProfile", error);
     throw new Error("ERR_FETCHING_FB_PAGES");
   }
 };
@@ -187,7 +196,7 @@ export const profilePsid = async (id: string, token: string): Promise<any> => {
     );
     return data;
   } catch (error) {
-    console.log(error);
+    logGraphError("profilePsid", error);
     await getProfile(id, token);
   }
 };
@@ -208,7 +217,7 @@ export const subscribeApp = async (id: string, token: string): Promise<any> => {
     );
     return data;
   } catch (error) {
-    console.log(error)
+    logGraphError("subscribeApp", error)
     throw new Error("ERR_SUBSCRIBING_PAGE_TO_MESSAGE_WEBHOOKS");
   }
 };
@@ -261,7 +270,7 @@ export const getAccessTokenFromPage = async (
 
     return data.data.access_token;
   } catch (error) {
-    console.log(error);
+    logGraphError("getAccessTokenFromPage", error);
     throw new Error("ERR_FETCHING_FB_USER_TOKEN");
   }
 };

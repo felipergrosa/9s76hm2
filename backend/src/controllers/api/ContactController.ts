@@ -13,15 +13,15 @@ import { Op } from "sequelize";
 import Tag from "../../models/Tag";
 import ContactTag from "../../models/ContactTag";
 import User from "../../models/User"; // ✅ Importação faltante
+import Company from "../../models/Company";
 
 type IndexQuery = {
   companyId: number;
 };
 
 export const segments = async (req: Request, res: Response): Promise<Response> => {
-  const bodyCompanyId = (req.body as any)?.companyId;
-  const queryCompanyId = (req.query as any)?.companyId;
-  const companyId = Number(bodyCompanyId ?? queryCompanyId);
+  // Segurança: tenant sempre vem do JWT (req.user), nunca do body/query do cliente
+  const companyId = Number(req.user?.companyId);
 
   if (!companyId || Number.isNaN(companyId)) {
     throw new AppError("companyId é obrigatório", 400);
@@ -47,9 +47,8 @@ export const segments = async (req: Request, res: Response): Promise<Response> =
 }
 
 export const empresas = async (req: Request, res: Response): Promise<Response> => {
-  const bodyCompanyId = (req.body as any)?.companyId;
-  const queryCompanyId = (req.query as any)?.companyId;
-  const companyId = Number(bodyCompanyId ?? queryCompanyId);
+  // Segurança: tenant sempre vem do JWT (req.user), nunca do body/query do cliente
+  const companyId = Number(req.user?.companyId);
 
   if (!companyId || Number.isNaN(companyId)) {
     throw new AppError("companyId é obrigatório", 400);
@@ -98,7 +97,12 @@ interface ContactData {
 }
 
 export const show = async (req: Request, res: Response): Promise<Response> => {
-  const { companyId } = req.body as IndexQuery;
+  // Segurança: tenant sempre vem do JWT (req.user), nunca do body/query do cliente
+  const companyId = Number(req.user?.companyId);
+
+  if (!companyId || Number.isNaN(companyId)) {
+    throw new AppError("companyId é obrigatório", 400);
+  }
 
   const contacts = await FindAllContactService({ companyId });
 
@@ -106,7 +110,12 @@ export const show = async (req: Request, res: Response): Promise<Response> => {
 }
 
 export const count = async (req: Request, res: Response): Promise<Response> => {
-  const { companyId } = req.body as IndexQuery;
+  // Segurança: tenant sempre vem do JWT (req.user), nunca do body/query do cliente
+  const companyId = Number(req.user?.companyId);
+
+  if (!companyId || Number.isNaN(companyId)) {
+    throw new AppError("companyId é obrigatório", 400);
+  }
 
   // COUNT direto no banco: antes carregava a tabela inteira com includes só para fazer .length
   const total = await Contact.count({ where: { companyId } });
@@ -117,6 +126,17 @@ export const count = async (req: Request, res: Response): Promise<Response> => {
 export const sync = async (req: Request, res: Response): Promise<Response> => {
   const { companyId } = req.body as IndexQuery;
   const contactData = req.body as ContactData;
+
+  // isAuthCompany usa COMPANY_TOKEN global (sem req.user): companyId é obrigatório
+  // no body, deve referenciar uma empresa existente e o acesso é auditado em log.
+  if (!companyId || Number.isNaN(Number(companyId))) {
+    throw new AppError("companyId é obrigatório", 400);
+  }
+  const company = await Company.findByPk(Number(companyId));
+  if (!company) {
+    throw new AppError("Empresa não encontrada", 404);
+  }
+  logger.info(`[API contacts/sync] Acesso via COMPANY_TOKEN ao companyId=${companyId}`);
 
   // Normaliza silentMode vindo do body (true, "true", etc.)
   const rawSilentMode = (req.body as any)?.silentMode;
@@ -361,6 +381,15 @@ export const sync = async (req: Request, res: Response): Promise<Response> => {
     if (contactData.tagIds && contactData.tagIds.length > 0) {
       for (const tagId of contactData.tagIds) {
         try {
+          // Segurança: só associa tag que pertence à mesma empresa; ignora inválidas
+          const validTag = await Tag.findOne({
+            where: { id: tagId, companyId },
+            attributes: ["id"]
+          });
+          if (!validTag) {
+            logger.warn(`Tag ID ${tagId} ignorada no sync: não pertence ao companyId ${companyId}`);
+            continue;
+          }
           await ContactTag.findOrCreate({
             where: {
               contactId: contact.id,
@@ -403,9 +432,16 @@ export const remove = async (req: Request, res: Response): Promise<Response> => 
     // Para API, o companyId deve vir do body ou query (isAuthCompany não adiciona ao req.user)
     const companyId = req.body.companyId || req.query.companyId;
 
-    if (!companyId || Number.isNaN(companyId)) {
+    if (!companyId || Number.isNaN(Number(companyId))) {
       throw new AppError("companyId é obrigatório (envie no body ou query)", 400);
     }
+
+    // Segurança: COMPANY_TOKEN é global — valida que a empresa existe e audita o acesso
+    const company = await Company.findByPk(Number(companyId));
+    if (!company) {
+      throw new AppError("Empresa não encontrada", 404);
+    }
+    logger.info(`[API contacts/delete] Acesso via COMPANY_TOKEN ao companyId=${companyId}, contactId=${id}`);
 
     if (!id) {
       throw new AppError("ID do contato é obrigatório", 400);

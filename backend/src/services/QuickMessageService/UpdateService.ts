@@ -16,12 +16,16 @@ interface Data {
   delay?: number;
   sendAsCaption?: boolean;
   flow?: string;
+  companyId: number | string;
 }
 
 const UpdateService = async (data: Data): Promise<QuickMessage> => {
-  const { id, shortcode, message, userId, geral, mediaPath, mediaName, visao, groupName, color, isAdmin, delay, sendAsCaption, flow } = data;
+  const { id, shortcode, message, userId, geral, mediaPath, mediaName, visao, groupName, color, isAdmin, delay, sendAsCaption, flow, companyId } = data;
 
-  const record = await QuickMessage.findByPk(id);
+  // Filtra por companyId para impedir edição cross-tenant
+  const record = await QuickMessage.findOne({
+    where: { id, companyId }
+  });
 
   if (!record) {
     throw new AppError("ERR_NO_TICKETNOTE_FOUND", 404);

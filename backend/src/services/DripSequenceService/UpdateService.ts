@@ -16,6 +16,7 @@ interface StepInput {
 
 interface Request {
   id: string | number;
+  companyId: number;
   name?: string;
   tagId?: number;
   whatsappId?: number | null;
@@ -33,7 +34,10 @@ interface Request {
 const END_ACTIONS = ["none", "move_tag", "ticket_status", "assign_queue", "assign_user"];
 
 const UpdateService = async (data: Request): Promise<DripSequence> => {
-  const record = await DripSequence.findByPk(data.id);
+  // N2 (IDOR): só localiza follow-up do próprio tenant
+  const record = await DripSequence.findOne({
+    where: { id: data.id, companyId: data.companyId }
+  });
 
   if (!record) {
     throw new AppError("Follow-up não encontrado", 404);

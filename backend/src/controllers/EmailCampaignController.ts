@@ -53,8 +53,9 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
 
 export const show = async (req: Request, res: Response): Promise<Response> => {
   const { id } = req.params;
+  const { companyId } = req.user;
 
-  const record = await ShowService(id);
+  const record = await ShowService(id, companyId);
 
   return res.status(200).json(record);
 };
@@ -64,7 +65,7 @@ export const update = async (req: Request, res: Response): Promise<Response> => 
   const { id } = req.params;
   const data = req.body as StoreData;
 
-  const record = await UpdateService({ ...data, id });
+  const record = await UpdateService({ ...data, id, companyId });
 
   const io = getIO();
   io.of(`/workspace-${companyId}`).emit(`company-${companyId}-email-campaign`, {
@@ -79,7 +80,7 @@ export const remove = async (req: Request, res: Response): Promise<Response> => 
   const { companyId } = req.user;
   const { id } = req.params;
 
-  await DeleteService(id);
+  await DeleteService(id, companyId);
 
   const io = getIO();
   io.of(`/workspace-${companyId}`).emit(`company-${companyId}-email-campaign`, {
@@ -92,24 +93,27 @@ export const remove = async (req: Request, res: Response): Promise<Response> => 
 
 export const cancel = async (req: Request, res: Response): Promise<Response> => {
   const { id } = req.params;
+  const { companyId } = req.user;
 
-  await CancelService(id);
+  await CancelService(id, companyId);
 
   return res.status(204).json({ message: "Cancelamento realizado" });
 };
 
 export const sendNow = async (req: Request, res: Response): Promise<Response> => {
   const { id } = req.params;
+  const { companyId } = req.user;
 
-  await startEmailCampaignNow(+id);
+  await startEmailCampaignNow(+id, companyId);
 
   return res.status(200).json({ message: "Campanha de e-mail iniciada" });
 };
 
 export const report = async (req: Request, res: Response): Promise<Response> => {
   const { id } = req.params;
+  const { companyId } = req.user;
 
-  const data = await GetReportService(id);
+  const data = await GetReportService(id, companyId);
 
   return res.status(200).json(data);
 };

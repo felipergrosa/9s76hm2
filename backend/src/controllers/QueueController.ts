@@ -5,6 +5,7 @@ import DeleteQueueService from "../services/QueueService/DeleteQueueService";
 import ListQueuesService from "../services/QueueService/ListQueuesService";
 import ShowQueueService from "../services/QueueService/ShowQueueService";
 import UpdateQueueService from "../services/QueueService/UpdateQueueService";
+import User from "../models/User";
 import { isNil } from "lodash";
 
 type QueueFilter = {
@@ -17,8 +18,13 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
   const { companyId: queryCompanyId, onlyWithBot } = req.query as unknown as QueueFilter;
   let companyId = userCompanyId;
 
+  // SEGURANÇA: companyId da query só é honrado para super admin
+  // (verificado no usuário fresco do DB, não apenas no JWT).
   if (!isNil(queryCompanyId)) {
-    companyId = +queryCompanyId;
+    const requestUser = await User.findByPk(req.user.id);
+    if (requestUser?.super === true) {
+      companyId = +queryCompanyId;
+    }
   }
 
   const queues = await ListQueuesService({

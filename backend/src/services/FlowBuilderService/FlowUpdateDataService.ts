@@ -1,4 +1,5 @@
 import { FlowBuilderModel } from "../../models/FlowBuilder";
+import { restoreFlowSecrets } from "./flowSecrets";
 import { WebhookModel } from "../../models/Webhook";
 import { randomString } from "../../utils/randomCode";
 
@@ -43,13 +44,19 @@ const FlowUpdateDataService = async ({
 
     // Botão "Salvar" original não envia status — comportamento 1:1 preservado.
     // "Salvar como rascunho"/"Publicar" (novos, opcionais) enviam status explícito.
+    // Restaura credenciais mascaradas/ausentes (apiKey, voiceKey...) do
+    // fluxo persistido — o frontend nunca recebe os valores reais.
+    const current = await FlowBuilderModel.findOne({
+        where: { id: bodyData.idFlow, company_id: companyId }
+    });
+    if (current?.flow) {
+        updatePayload.flow = restoreFlowSecrets(updatePayload.flow, current.flow);
+    }
+
     if (bodyData.status === "draft" || bodyData.status === "published") {
         updatePayload.status = bodyData.status;
 
         if (bodyData.status === "published") {
-            const current = await FlowBuilderModel.findOne({
-                where: { id: bodyData.idFlow, company_id: companyId }
-            });
             updatePayload.version = (current?.version || 1) + 1;
         }
     }

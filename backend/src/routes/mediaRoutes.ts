@@ -1,13 +1,11 @@
 import { Router } from "express";
-import { serveMedia, getVideoThumbnail } from "../controllers/MediaController";
 
 const mediaRoutes = Router();
 
-// Rota para servir mídia com suporte a thumbnails
-// Exemplo: GET /media/company1/image.jpg?thumb=1&quality=30
-mediaRoutes.get("/:companyId/:filename", serveMedia);
-
-// Rota para thumbnail de vídeo
-mediaRoutes.get("/:companyId/:filename/thumbnail", getVideoThumbnail);
+// SEGURANÇA (N2): rotas GET /media/:companyId/:filename e .../thumbnail removidas.
+// Eram públicas, sem autenticação e vulneráveis a path traversal (filename
+// entrava direto em path.join). Nada no frontend consome /media/ — o acesso
+// a mídias é feito exclusivamente por /public, protegido por authorizePublicMedia.
+// O router permanece registrado em routes/index.ts, mas sem endpoints.
 
 export default mediaRoutes;

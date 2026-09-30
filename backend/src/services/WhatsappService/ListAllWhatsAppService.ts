@@ -4,10 +4,12 @@ import Whatsapp from "../../models/Whatsapp";
 
 interface Request {
   session?: number | string;
+  companyId?: number;
 }
 
 const ListAllWhatsAppsService = async ({
   session,
+  companyId,
 }: Request): Promise<Whatsapp[]> => {
   const options: FindOptions = {
     include: [
@@ -18,6 +20,11 @@ const ListAllWhatsAppsService = async ({
       }
     ]
   };
+
+  // Sem companyId (super admin) lista todas; com companyId restringe à empresa.
+  if (companyId !== undefined) {
+    options.where = { companyId };
+  }
 
   if (session !== undefined && session == 0) {
     options.attributes = { exclude: ["session"] };

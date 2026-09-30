@@ -5,19 +5,27 @@ import { serviceCache } from "../../utils/serviceCache";
 interface Request {
     key: string;
     value: string;
+    // Quando informado, restringe o findOrCreate à empresa (rotas autenticadas).
+    // Chamadas internas legadas sem companyId mantêm o escopo global anterior.
+    companyId?: number;
 }
 
 const UpdateOneSettingService = async ({
     key,
-    value
+    value,
+    companyId
 }: Request): Promise<Setting | undefined> => {
+    const where: any = { key };
+    if (companyId !== undefined) {
+        where.companyId = companyId;
+    }
+
     const [setting] = await Setting.findOrCreate({
-        where: {
-            key
-        },
+        where,
         defaults: {
             key,
-            value
+            value,
+            ...(companyId !== undefined ? { companyId } : {})
         }
     });
 
@@ -27,9 +35,13 @@ const UpdateOneSettingService = async ({
 
     await setting.update({ value });
 
-    // Invalida caches de settings: este service não recebe companyId,
-    // então limpa todas as listagens por empresa + a chave pública
-    serviceCache.invalidatePattern(/^settings:/);
+    // Invalida caches de settings
+    if (companyId !== undefined) {
+        serviceCache.invalidate(`settings:${companyId}`);
+    } else {
+        // Sem companyId, limpa todas as listagens por empresa
+        serviceCache.invalidatePattern(/^settings:/);
+    }
     serviceCache.invalidate(`publicSetting:${key}`);
 
     return setting;

@@ -149,6 +149,7 @@ export const AVAILABLE_PERMISSIONS = {
     "files.upload",
     "files.delete",
     "financeiro.view",
+    "financeiro.edit",
     "settings.view",
     "settings.edit",
     "ai-settings.view",

@@ -150,18 +150,18 @@ const Routes = () => {
                   <CommandPaletteActions />
                 </Suspense>
                 <LoggedInLayout>
-                <Route exact path="/financeiro" component={Financeiro} isPrivate />
+                <PrivateRoute exact path="/financeiro" component={Financeiro} permission="financeiro.view" />
 
-                <Route exact path="/companies" component={Companies} isPrivate />
+                <PrivateRoute exact path="/companies" component={Companies} permission="companies.view" />
                 <Route exact path="/" component={Dashboard} isPrivate />
                 <Route exact path="/tickets/:ticketId?" component={TicketResponsiveContainer} isPrivate />
-                <Route exact path="/connections" component={Connections} isPrivate />
-                <Route exact path="/quick-messages" component={QuickMessages} isPrivate />
+                <PrivateRoute exact path="/connections" component={Connections} permission="connections.view" />
+                <PrivateRoute exact path="/quick-messages" component={QuickMessages} permission="quick-messages.view" />
                 <Route exact path="/todolist" component={ToDoList} isPrivate />
-                <Route exact path="/schedules" component={Schedules} isPrivate />
-                <Route exact path="/tags" component={Tags} isPrivate />
-                <Route exact path="/contacts" component={Contacts} isPrivate />
-                <Route exact path="/contacts/import" component={ContactImportPage} isPrivate />
+                <PrivateRoute exact path="/schedules" component={Schedules} permission="schedules.view" />
+                <PrivateRoute exact path="/tags" component={Tags} permission="tags.view" />
+                <PrivateRoute exact path="/contacts" component={Contacts} permission="contacts.view" />
+                <PrivateRoute exact path="/contacts/import" component={ContactImportPage} permission="contacts.import" />
                 <Route exact path="/groups" component={Groups} isPrivate />
                 <Route exact path="/helps" component={Helps} isPrivate />
                 <Route exact path="/helps/ai-tutorial" component={AITutorial} isPrivate />
@@ -189,56 +189,57 @@ const Routes = () => {
                 <Route exact path="/helps/facebook" component={FacebookTutorial} isPrivate />
                 <Route exact path="/helps/instagram" component={InstagramTutorial} isPrivate />
                 <Route exact path="/helps/webchat" component={WebChatTutorial} isPrivate />
-                <Route exact path="/users" component={Users} isPrivate />
+                {/* /users unifica usuários + perfis (abas) — entra com qualquer uma */}
+                <PrivateRoute exact path="/users" component={Users} permissions={["users.view", "roles.view"]} />
                 {/* /roles virou aba dentro de /users — redirect para bookmarks antigos */}
                 <Route exact path="/roles" render={() => <Redirect to="/users" />} isPrivate />
                 <PrivateRoute exact path="/meta-templates" component={MetaTemplates} permission="meta-templates.view" />
                 <PrivateRoute exact path="/lead-scraper" component={LeadScraper} permission="contacts.import" />
-                <Route exact path="/knowledge-base" component={KnowledgeBase} isPrivate />
-                <Route exact path="/admin-custom-fields" component={AdminCustomFields} isPrivate />
+                <PrivateRoute exact path="/knowledge-base" component={KnowledgeBase} permission="helps.view" />
+                <PrivateRoute exact path="/admin-custom-fields" component={AdminCustomFields} permission="contacts.edit" />
 
-                <Route exact path="/messages-api" component={MessagesAPI} isPrivate />
-                <Route exact path="/settings" component={SettingsCustom} isPrivate />
-                <Route exact path="/queues" component={Queues} isPrivate />
-                <Route exact path="/reports" component={Reports} isPrivate />
-                <Route exact path="/queue-integration" component={QueueIntegration} isPrivate />
-                <Route exact path="/announcements" component={Annoucements} isPrivate />
-                <Route
+                <PrivateRoute exact path="/messages-api" component={MessagesAPI} permission="external-api.view" />
+                <PrivateRoute exact path="/settings" component={SettingsCustom} permission="settings.view" />
+                <PrivateRoute exact path="/queues" component={Queues} permission="queues.view" />
+                <PrivateRoute exact path="/reports" component={Reports} permission="reports.view" />
+                <PrivateRoute exact path="/queue-integration" component={QueueIntegration} permission="integrations.view" />
+                <PrivateRoute exact path="/announcements" component={Annoucements} permission="announcements.view" />
+                <PrivateRoute
                   exact
                   path="/phrase-lists"
                   component={CampaignsPhrase}
-                  isPrivate
+                  permission="phrase-campaigns.view"
                 />
-                <Route
+                <PrivateRoute
                   exact
                   path="/flowbuilders"
                   component={FlowBuilder}
-                  isPrivate
+                  permission="flowbuilder.view"
                 />
-                <Route
+                <PrivateRoute
                   exact
                   path="/flowbuilder/:id?"
                   component={FlowBuilderConfig}
-                  isPrivate
+                  permission="flowbuilder.view"
                 />
-                <Route exact path="/chats/:id?" component={Chat} isPrivate />
-                <Route exact path="/files" component={LibraryManager} isPrivate />
-                <Route exact path="/moments" component={ChatMoments} isPrivate />
+                <PrivateRoute exact path="/chats/:id?" component={Chat} permission="internal-chat.view" />
+                <PrivateRoute exact path="/files" component={LibraryManager} permission="files.view" />
+                <PrivateRoute exact path="/moments" component={ChatMoments} permission="realtime.view" />
                 <PrivateRoute exact path="/Kanban" component={Kanban} permission="kanban.view" />
-                <Route exact path="/TagsKanban" component={TagsKanban} isPrivate />
-                <Route exact path="/allConnections" component={AllConnections} isPrivate />
-                <Route exact path="/ai-settings" component={AISettings} isPrivate />
-                <Route exact path="/ai-agents" component={AIAgents} isPrivate />
-                <Route exact path="/ai-training" component={AITraining} isPrivate />
+                <PrivateRoute exact path="/TagsKanban" component={TagsKanban} permission="kanban.view" />
+                <PrivateRoute exact path="/allConnections" component={AllConnections} permission="all-connections.view" />
+                <PrivateRoute exact path="/ai-settings" component={AISettings} permission="ai-settings.view" />
+                <PrivateRoute exact path="/ai-agents" component={AIAgents} permission="ai-agents.view" />
+                <PrivateRoute exact path="/ai-training" component={AITraining} permission="ai-training.view" />
                 {showCampaigns && (
                   <>
                     <PrivateRoute exact path="/contact-lists" component={ContactLists} permission="contact-lists.view" />
                     <PrivateRoute exact path="/contact-lists/:contactListId/contacts" component={ContactListItems} permission="contact-lists.view" />
-                    <Route exact path="/campaigns" component={Campaigns} isPrivate />
-                    <Route exact path="/campaigns/new" component={CampaignsNew} isPrivate />
-                    <Route exact path="/campaignsNew/:campaignId" component={CampaignsNew} isPrivate />
-                    <Route exact path="/campaign/:campaignId/detailed-report" component={CampaignDetailedReport} isPrivate />
-                    <Route exact path="/campaigns-config" component={CampaignsConfig} isPrivate />
+                    <PrivateRoute exact path="/campaigns" component={Campaigns} permission="campaigns.view" />
+                    <PrivateRoute exact path="/campaigns/new" component={CampaignsNew} permission="campaigns.create" />
+                    <PrivateRoute exact path="/campaignsNew/:campaignId" component={CampaignsNew} permission="campaigns.edit" />
+                    <PrivateRoute exact path="/campaign/:campaignId/detailed-report" component={CampaignDetailedReport} permission="campaigns.view" />
+                    <PrivateRoute exact path="/campaigns-config" component={CampaignsConfig} permission="campaigns-config.view" />
                     <PrivateRoute exact path="/follow-ups" component={FollowUps} permission="drip-sequences.view" />
                     <PrivateRoute exact path="/follow-ups/new" component={FollowUpForm} permission="drip-sequences.create" />
                     {/* (\\d+) restringe a IDs numéricos — sem isso "/follow-ups/new"

@@ -5,6 +5,7 @@ import Announcement from "../../models/Announcement";
 interface Request {
   searchParam?: string;
   pageNumber?: string;
+  companyId: number;
 }
 
 interface Response {
@@ -15,10 +16,12 @@ interface Response {
 
 const ListService = async ({
   searchParam = "",
-  pageNumber = "1"
+  pageNumber = "1",
+  companyId
 }: Request): Promise<Response> => {
   let whereCondition: any = {
-    status: true
+    status: true,
+    companyId
   };
 
   if (!isEmpty(searchParam)) {

@@ -62,7 +62,7 @@ const sendDialog = async (
   contact: Contact,
   ticket: Ticket
 ) => {
-  const showChatBots = await ShowChatBotServices(choosenQueue.id);
+  const showChatBots = await ShowChatBotServices(choosenQueue.id, ticket.companyId);
   if (showChatBots.options) {
     let options = "";
 
@@ -205,7 +205,7 @@ export const sayChatbot = async (
 
   if (getStageBot) {
     const selected = isNumeric(selectedOption) ? selectedOption : 1;
-    const bots = await ShowChatBotServices(getStageBot.chatbotId);
+    const bots = await ShowChatBotServices(getStageBot.chatbotId, ticket.companyId);
     const choosenQueue = bots.options[+selected - 1]
       ? bots.options[+selected - 1]
       : bots.options[0];

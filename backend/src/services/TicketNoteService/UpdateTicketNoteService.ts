@@ -7,11 +7,15 @@ interface TicketNoteData {
 }
 
 const UpdateTicketNoteService = async (
-  ticketNoteData: TicketNoteData
+  ticketNoteData: TicketNoteData,
+  companyId: number
 ): Promise<TicketNote> => {
   const { id, note } = ticketNoteData;
 
-  const ticketNote = await TicketNote.findByPk(id);
+  // Validação de tenant ANTES da atualização
+  const ticketNote = await TicketNote.findOne({
+    where: { id, companyId }
+  });
 
   if (!ticketNote) {
     throw new AppError("ERR_NO_TICKETNOTE_FOUND", 404);

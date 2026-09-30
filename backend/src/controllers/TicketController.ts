@@ -628,6 +628,20 @@ export const update = async (
   const ticketData: TicketData = req.body;
   const { companyId } = req.user;
 
+  // Validação de tenant ANTES de repassar: userId/queueId devem pertencer à empresa
+  if (ticketData.userId !== undefined && ticketData.userId !== null) {
+    const targetUser = await User.findOne({ where: { id: ticketData.userId, companyId } });
+    if (!targetUser) {
+      throw new AppError("ERR_NO_USER_FOUND", 404);
+    }
+  }
+  if (ticketData.queueId !== undefined && ticketData.queueId !== null) {
+    const targetQueue = await Queue.findOne({ where: { id: ticketData.queueId, companyId } });
+    if (!targetQueue) {
+      throw new AppError("ERR_QUEUE_NOT_FOUND", 404);
+    }
+  }
+
   const mutex = new Mutex();
   const { ticket } = await mutex.runExclusive(async () => {
     const result = await UpdateTicketService({
@@ -660,7 +674,8 @@ export const remove = async (
   const { ticketId } = req.params;
   const { id: userId, companyId } = req.user;
 
-  // await ShowTicketService(ticketId, companyId);
+  // Validação de tenant ANTES de qualquer escrita: garante que o ticket pertence à empresa
+  await ShowTicketService(ticketId, companyId);
 
   const ticket = await DeleteTicketService(ticketId, userId, companyId);
 
@@ -775,7 +790,7 @@ export const getSessionWindow = async (
   const { ticketId } = req.params;
   const { companyId } = req.user;
 
-  const sessionStatus = await GetSessionWindowStatus(Number(ticketId));
+  const sessionStatus = await GetSessionWindowStatus(Number(ticketId), companyId);
 
   return res.status(200).json(sessionStatus);
 };

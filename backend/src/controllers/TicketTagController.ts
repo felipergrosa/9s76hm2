@@ -11,12 +11,15 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
   const { companyId } = req.user;
 
   try {
-    // Log para debug
-    console.log(`[TicketTag] Criando ticketTag: ticketId=${ticketId}, tagId=${tagId}, companyId=${companyId}`);
-    
-    const ticketTag = await TicketTag.create({ ticketId, tagId, companyId });
-
+    // Validação de tenant ANTES de criar: ticket e tag devem pertencer à empresa
     const ticket = await ShowTicketService(ticketId, companyId);
+
+    const tag = await Tag.findOne({ where: { id: tagId, companyId } });
+    if (!tag) {
+      throw new AppError("ERR_NO_TAG_FOUND", 404);
+    }
+
+    const ticketTag = await TicketTag.create({ ticketId, tagId, companyId });
 
     const io = getIO();
     io.of(`/workspace-${companyId}`)
@@ -55,8 +58,11 @@ export const remove = async (req: Request, res: Response): Promise<Response> => 
   console.log(`[TicketTag] Removendo ticketTag: ticketId=${ticketId}, companyId=${companyId}`);
 
   try {
+    // Validação de tenant ANTES de remover: ticket deve pertencer à empresa
+    await ShowTicketService(ticketId, companyId);
+
     // Retrieve tagIds associated with the provided ticketId from TicketTags
-    const ticketTags = await TicketTag.findAll({ where: { ticketId } });
+    const ticketTags = await TicketTag.findAll({ where: { ticketId, companyId } });
     const tagIds = ticketTags.map((ticketTag) => ticketTag.tagId);
 
     // Find the tagIds with kanban = 1 in the Tags table
@@ -64,13 +70,14 @@ export const remove = async (req: Request, res: Response): Promise<Response> => 
       where: {
         id: tagIds,
         kanban: 1,
+        companyId,
       },
     });
 
     // Remove the tagIds with kanban = 1 from TicketTags
     const tagIdsWithKanbanOne = tagsWithKanbanOne.map((tag) => tag.id);
     if (tagIdsWithKanbanOne && tagIdsWithKanbanOne.length > 0)
-      await TicketTag.destroy({ where: { ticketId, tagId: tagIdsWithKanbanOne } });
+      await TicketTag.destroy({ where: { ticketId, tagId: tagIdsWithKanbanOne, companyId } });
 
 
     const ticket = await ShowTicketService(ticketId, companyId);

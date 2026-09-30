@@ -6,6 +6,7 @@ import UpdateService from "../services/RoleService/UpdateService";
 import DeleteService from "../services/RoleService/DeleteService";
 import SetUserRolesService from "../services/RoleService/SetUserRolesService";
 import ListUserRolesService from "../services/RoleService/ListUserRolesService";
+import User from "../models/User";
 
 export const index = async (req: Request, res: Response): Promise<Response> => {
   const { companyId } = req.user;
@@ -29,7 +30,17 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
   const { companyId } = req.user;
   const { name, description, permissions } = req.body;
 
-  const role = await CreateService({ name, description, permissions, companyId });
+  // Flag super do usuário FRESCO do DB — controla concessão de permissões
+  // do grupo super dentro do service.
+  const requestUser = await User.findByPk(req.user.id);
+
+  const role = await CreateService({
+    name,
+    description,
+    permissions,
+    companyId,
+    requestUserIsSuper: requestUser?.super === true
+  });
 
   return res.status(200).json(role);
 };
@@ -39,7 +50,16 @@ export const update = async (req: Request, res: Response): Promise<Response> => 
   const { id } = req.params;
   const { name, description, permissions } = req.body;
 
-  const role = await UpdateService({ id, companyId, name, description, permissions });
+  const requestUser = await User.findByPk(req.user.id);
+
+  const role = await UpdateService({
+    id,
+    companyId,
+    name,
+    description,
+    permissions,
+    requestUserIsSuper: requestUser?.super === true
+  });
 
   return res.status(200).json(role);
 };

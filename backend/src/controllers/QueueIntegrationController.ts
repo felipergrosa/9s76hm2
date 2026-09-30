@@ -7,6 +7,26 @@ import ShowQueueIntegrationService from "../services/QueueIntegrationServices/Sh
 import TestSessionIntegrationService from "../services/QueueIntegrationServices/TestSessionDialogflowService";
 import UpdateQueueIntegrationService from "../services/QueueIntegrationServices/UpdateQueueIntegrationService";
 
+
+// Mascara campos sensíveis (apiKey/key) do jsonContent para TODOS os tipos
+// de integração — antes só "openai" era mascarado, vazando credenciais de
+// n8n/gemini/deepseek/etc. Mantém só os últimos 4 caracteres.
+const maskSensitiveJsonContent = (obj: any): any => {
+  try {
+    if (obj?.jsonContent) {
+      const parsed = JSON.parse(obj.jsonContent);
+      for (const field of ["apiKey", "key"]) {
+        const val = parsed?.[field];
+        if (typeof val === "string" && val.length > 0) {
+          parsed[field] = `********${val.slice(-4)}`;
+        }
+      }
+      obj.jsonContent = JSON.stringify(parsed);
+    }
+  } catch (_) {}
+  return obj;
+};
+
 type IndexQuery = {
   searchParam: string;
   pageNumber: string;
@@ -26,22 +46,10 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
     excludeTypes
   });
 
-  // Máscara parcial da apiKey (mantém prefixo e oculta o restante)
   const sanitized = queueIntegrations.map(qi => {
     try {
-      let obj: any = (qi as any).toJSON ? (qi as any).toJSON() : (qi as any);
-      if (obj?.type === "openai" && obj?.jsonContent) {
-        try {
-          const parsed = JSON.parse(obj.jsonContent);
-          if (parsed && parsed.apiKey) {
-            const key: string = String(parsed.apiKey);
-            const keep = Math.min(8, key.length);
-            parsed.apiKey = `${key.slice(0, keep)}********`;
-            obj.jsonContent = JSON.stringify(parsed);
-          }
-        } catch (_) {}
-      }
-      return obj;
+      const obj: any = (qi as any).toJSON ? (qi as any).toJSON() : (qi as any);
+      return maskSensitiveJsonContent(obj);
     } catch (_) {
       return qi;
     }
@@ -78,19 +86,8 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     queueIntegration
   });
 
-  // Máscara parcial da apiKey se for OpenAI
   let obj: any = queueIntegration?.toJSON ? queueIntegration.toJSON() : queueIntegration;
-  try {
-    if (obj?.type === "openai" && obj?.jsonContent) {
-      const parsed = JSON.parse(obj.jsonContent);
-      if (parsed?.apiKey) {
-        const key: string = String(parsed.apiKey);
-        const keep = Math.min(8, key.length);
-        parsed.apiKey = `${key.slice(0, keep)}********`;
-      }
-      obj.jsonContent = JSON.stringify(parsed);
-    }
-  } catch (_) {}
+  obj = maskSensitiveJsonContent(obj);
 
   return res.status(200).json(obj);
 };
@@ -101,19 +98,8 @@ export const show = async (req: Request, res: Response): Promise<Response> => {
 
   const queueIntegration = await ShowQueueIntegrationService(integrationId, companyId);
 
-  // Máscara parcial da apiKey se for OpenAI
   let obj: any = queueIntegration?.toJSON ? queueIntegration.toJSON() : queueIntegration;
-  try {
-    if (obj?.type === "openai" && obj?.jsonContent) {
-      const parsed = JSON.parse(obj.jsonContent);
-      if (parsed?.apiKey) {
-        const key: string = String(parsed.apiKey);
-        const keep = Math.min(8, key.length);
-        parsed.apiKey = `${key.slice(0, keep)}********`;
-      }
-      obj.jsonContent = JSON.stringify(parsed);
-    }
-  } catch (_) {}
+  obj = maskSensitiveJsonContent(obj);
 
   return res.status(200).json(obj);
 };
@@ -135,19 +121,8 @@ export const update = async (
     queueIntegration
   });
 
-  // Mascarar apiKey se for OpenAI
   let obj: any = queueIntegration?.toJSON ? queueIntegration.toJSON() : queueIntegration;
-  try {
-    if (obj?.type === "openai" && obj?.jsonContent) {
-      const parsed = JSON.parse(obj.jsonContent);
-      if (parsed?.apiKey) {
-        const key: string = String(parsed.apiKey);
-        const keep = Math.min(8, key.length);
-        parsed.apiKey = `${key.slice(0, keep)}********`;
-      }
-      obj.jsonContent = JSON.stringify(parsed);
-    }
-  } catch (_) {}
+  obj = maskSensitiveJsonContent(obj);
 
   return res.status(201).json(obj);
 };
@@ -159,7 +134,7 @@ export const remove = async (
   const { integrationId } = req.params;
   const { companyId } = req.user;
 
-  await DeleteQueueIntegrationService(integrationId);
+  await DeleteQueueIntegrationService(integrationId, companyId);
 
   const io = getIO();
   io.of(`/workspace-${companyId}`)

@@ -9,6 +9,8 @@ import ListSettingsServiceOne from "../services/SettingServices/ListSettingsServ
 import GetSettingService from "../services/SettingServices/GetSettingService";
 import UpdateOneSettingService from "../services/SettingServices/UpdateOneSettingService";
 import GetPublicSettingService from "../services/SettingServices/GetPublicSettingService";
+import User from "../models/User";
+import { hasPermissionAsync } from "../helpers/PermissionAdapter";
 import { getActiveSavedFilterCronConfig, rescheduleSavedFilterCron, updateCronSettingsAndReschedule } from "../jobs/SavedFilterCronManager";
 
 type LogoRequest = {
@@ -61,7 +63,16 @@ export const update = async (
   res: Response
 ): Promise<Response> => {
 
-  if (req.user.profile !== "admin") {
+  // Autorização com usuário FRESCO do DB: admin ou quem tem settings.edit
+  // (a rota já passa por checkPermission("settings.edit"); esta checagem é
+  // defesa em profundidade e substitui a verificação baseada só no JWT).
+  const requestUser = await User.findByPk(req.user.id);
+  const allowed = !!requestUser && (
+    requestUser.profile === "admin" ||
+    requestUser.super === true ||
+    (await hasPermissionAsync(requestUser, "settings.edit"))
+  );
+  if (!allowed) {
     throw new AppError("ERR_NO_PERMISSION", 403);
   }
 
@@ -95,8 +106,10 @@ export const getSetting = async (
   res: Response): Promise<Response> => {
 
   const { settingKey: key } = req.params;
+  const { companyId } = req.user;
 
-  const setting = await GetSettingService({ key });
+  // SEGURANÇA: escopo por empresa — evita leitura cross-tenant
+  const setting = await GetSettingService({ key, companyId });
 
   return res.status(200).json(setting);
 
@@ -109,15 +122,18 @@ export const updateOne = async (
 
   const { settingKey: key } = req.params;
   const { value } = req.body;
+  const { companyId } = req.user;
 
   // Validação: impedir atualização sem 'value'
   if (value === undefined || value === null) {
     return res.status(400).json({ error: "'value' é obrigatório" });
   }
 
+  // SEGURANÇA: escopo por empresa — evita escrita cross-tenant
   const setting = await UpdateOneSettingService({
     key,
-    value
+    value,
+    companyId
   });
 
   // Se for configuração do cron de savedFilter, re-agenda com base nas configs atuais

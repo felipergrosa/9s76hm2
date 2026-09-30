@@ -5,6 +5,7 @@ import { getIO } from "../../libs/socket";
 import wbotMonitor from "./wbotMonitor";
 import logger from "../../utils/logger";
 import * as Sentry from "@sentry/node";
+import sanitizeWhatsapp from "../../helpers/sanitizeWhatsapp";
 
 export const StartWhatsAppSession = async (
   whatsapp: Whatsapp,
@@ -16,7 +17,7 @@ export const StartWhatsAppSession = async (
   io.of(`/workspace-${companyId}`)
     .emit(`company-${companyId}-whatsappSession`, {
       action: "update",
-      session: whatsapp
+      session: sanitizeWhatsapp(whatsapp)
     });
 
   try {

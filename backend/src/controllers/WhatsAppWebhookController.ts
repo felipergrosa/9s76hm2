@@ -6,8 +6,7 @@ import WhatsappTemplate from "../models/WhatsappTemplate";
 import { getIO } from "../libs/socket";
 import {
   checkMetaWebhookSignature,
-  checkOfficialWebhookSignature,
-  WEBHOOK_SIGNATURE_ENFORCE
+  checkOfficialWebhookSignature
 } from "../services/WebhookService/CheckMetaWebhookSignature";
 import { enqueueOfficialWebhookChange } from "../queues/OfficialWebhookQueue";
 
@@ -128,11 +127,9 @@ export const processWebhook = async (req: Request, res: Response): Promise<Respo
     } else {
       // Evento de template não tem phone_number_id: valida o HMAC contra
       // o META_APP_SECRET global ou metaAppSecret de qualquer conexão.
-      // Mesmo contrato do fluxo FB/IG: sem WEBHOOK_SIGNATURE_ENFORCE=true o
-      // modo é log-only — bloquear sem secret configurado faria a Meta
-      // retentar para sempre e o status de template nunca atualizaria.
+      // Mesma verificação dos eventos "messages" — fail-closed (sem bypass).
       const valid = await checkMetaWebhookSignature(req.rawBody, signatureHeader, "whatsapp-templates");
-      if (!valid && WEBHOOK_SIGNATURE_ENFORCE) {
+      if (!valid) {
         logger.warn("[Webhook] Assinatura inválida em evento de status de template");
         return res.status(403).send("Forbidden");
       }

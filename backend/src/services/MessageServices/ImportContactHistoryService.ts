@@ -397,8 +397,9 @@ const ImportContactHistoryService = async ({
     };
 
     try {
-        // 1. Buscar ticket com informações necessárias
-        const ticket = await Ticket.findByPk(ticketId, {
+        // 1. Buscar ticket com informações necessárias (validação de tenant)
+        const ticket = await Ticket.findOne({
+            where: { id: ticketId, companyId },
             include: [
                 { model: Contact, as: "contact" },
                 { model: Whatsapp, as: "whatsapp" }

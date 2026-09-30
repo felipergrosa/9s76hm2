@@ -59,8 +59,9 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
 
 export const show = async (req: Request, res: Response): Promise<Response> => {
   const { id } = req.params;
+  const { companyId } = req.user;
 
-  const record = await ShowService(id);
+  const record = await ShowService(id, companyId);
 
   return res.status(200).json(record);
 };
@@ -70,7 +71,7 @@ export const update = async (req: Request, res: Response): Promise<Response> => 
   const { id } = req.params;
   const data = req.body as StoreData;
 
-  const record = await UpdateService({ ...data, id });
+  const record = await UpdateService({ ...data, id, companyId });
 
   const io = getIO();
   io.of(`/workspace-${companyId}`).emit(`company-${companyId}-drip-sequence`, {
@@ -85,7 +86,7 @@ export const remove = async (req: Request, res: Response): Promise<Response> => 
   const { companyId } = req.user;
   const { id } = req.params;
 
-  await DeleteService(id);
+  await DeleteService(id, companyId);
 
   const io = getIO();
   io.of(`/workspace-${companyId}`).emit(`company-${companyId}-drip-sequence`, {
@@ -98,8 +99,9 @@ export const remove = async (req: Request, res: Response): Promise<Response> => 
 
 export const enrollments = async (req: Request, res: Response): Promise<Response> => {
   const { id } = req.params;
+  const { companyId } = req.user;
 
-  const records = await ListEnrollmentsService(id);
+  const records = await ListEnrollmentsService(id, companyId);
 
   return res.status(200).json(records);
 };

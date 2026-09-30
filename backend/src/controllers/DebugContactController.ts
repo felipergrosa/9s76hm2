@@ -8,7 +8,9 @@ import { fn, col, where, literal } from "sequelize";
  * Controller para debug de busca de contatos
  */
 export const debugContactSearch = async (req: Request, res: Response): Promise<Response> => {
-    const { searchParam, companyId } = req.query;
+    const { searchParam } = req.query;
+    // Segurança: tenant sempre vem do JWT (req.user), nunca da query do cliente
+    const companyId = req.user?.companyId;
 
     try {
         const trimmedSearchParam = String(searchParam || "").trim();

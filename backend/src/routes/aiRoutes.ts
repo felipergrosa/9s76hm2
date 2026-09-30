@@ -70,7 +70,7 @@ routes.post(
 routes.post(
   "/ai/training/improvements/apply",
   isAuth,
-  checkPermission("ai-training.view"),
+  checkPermission("ai-settings.edit"),
   AITrainingImprovementController.applyImprovements
 );
 
@@ -151,7 +151,7 @@ routes.post(
 routes.delete(
   "/ai/test-scenarios/:scenarioId",
   isAuth,
-  checkPermission("ai-training.view"),
+  checkPermission("ai-settings.edit"),
   AITestScenariosController.deleteScenario
 );
 
@@ -186,7 +186,7 @@ routes.get(
 routes.post(
   "/ai/prompt-versions/:versionId/rollback",
   isAuth,
-  checkPermission("ai-training.view"),
+  checkPermission("ai-settings.edit"),
   AIPromptVersionController.rollbackToVersion
 );
 

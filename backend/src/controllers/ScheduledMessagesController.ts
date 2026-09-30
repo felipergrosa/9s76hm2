@@ -72,7 +72,7 @@ export const show = async (req: Request, res: Response): Promise<Response> => {
     const { scheduleId } = req.params;
     const { companyId } = req.user;
 
-    const schedule = await ShowService(scheduleId);
+    const schedule = await ShowService(scheduleId, companyId);
 
     return res.status(200).json(schedule);
 };
@@ -87,7 +87,9 @@ export const update = async (req: Request, res: Response): Promise<Response> => 
     const files = req.files as Express.Multer.File[];
     const file = head(files);
 
-    const schedule = await UpdateService({ scheduleData, id: scheduleId, mediaPath: !!file ? file?.filename : null, mediaName: !!file ? file?.originalname : null });
+    const { companyId } = req.user;
+
+    const schedule = await UpdateService({ scheduleData, id: scheduleId, mediaPath: !!file ? file?.filename : null, mediaName: !!file ? file?.originalname : null, companyId });
 
     return res.status(200).json(schedule);
 };

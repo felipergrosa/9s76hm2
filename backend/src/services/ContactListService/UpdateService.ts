@@ -3,14 +3,18 @@ import ContactList from "../../models/ContactList";
 
 interface Data {
   id: number | string;
+  companyId: number | string;
   name?: string;
   savedFilter?: any | null;
 }
 
 const UpdateService = async (data: Data): Promise<ContactList> => {
-  const { id, name, savedFilter } = data;
+  const { id, companyId, name, savedFilter } = data;
 
-  const record = await ContactList.findByPk(id);
+  // Segurança: escopo por empresa para evitar IDOR entre tenants
+  const record = await ContactList.findOne({
+    where: { id, companyId }
+  });
 
   if (!record) {
     throw new AppError("ERR_NO_CONTACTLIST_FOUND", 404);

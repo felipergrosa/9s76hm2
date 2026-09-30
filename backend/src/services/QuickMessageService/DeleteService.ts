@@ -1,9 +1,10 @@
 import QuickMessage from "../../models/QuickMessage";
 import AppError from "../../errors/AppError";
 
-const DeleteService = async (id: string): Promise<void> => {
+const DeleteService = async (id: string, companyId: number | string): Promise<void> => {
+  // Filtra por companyId para impedir exclusão cross-tenant
   const record = await QuickMessage.findOne({
-    where: { id }
+    where: { id, companyId }
   });
 
   if (!record) {

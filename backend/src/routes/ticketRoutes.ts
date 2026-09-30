@@ -17,7 +17,7 @@ ticketRoutes.get("/ticket/kanban", isAuth, checkPermission("kanban.view"), Ticke
 
 ticketRoutes.get("/ticketreport/reports", isAuth, checkPermission("reports.view"), TicketController.report);
 
-ticketRoutes.get("/tickets/u/:uuid", isAuth, TicketController.showFromUUID);
+ticketRoutes.get("/tickets/u/:uuid", isAuth, checkPermission("tickets.view"), TicketController.showFromUUID);
 
 ticketRoutes.post("/tickets", isAuth, checkPermission("tickets.create"), TicketController.store);
 
@@ -50,7 +50,7 @@ ticketRoutes.post("/tickets/merge-duplicates", isAuth, checkPermission("tickets.
 ticketRoutes.get("/tickets/:ticketId/session-window", isAuth, checkPermission("tickets.view"), TicketController.getSessionWindow);
 
 // Rotas para marcar notificações como lidas
-ticketRoutes.post("/tickets/:ticketId/mark-as-read", isAuth, TicketController.markNotificationAsRead);
-ticketRoutes.post("/tickets/mark-all-as-read", isAuth, TicketController.markAllNotificationsAsRead);
+ticketRoutes.post("/tickets/:ticketId/mark-as-read", isAuth, checkPermission("tickets.update"), TicketController.markNotificationAsRead);
+ticketRoutes.post("/tickets/mark-all-as-read", isAuth, checkPermission("tickets.update"), TicketController.markAllNotificationsAsRead);
 
 export default ticketRoutes;

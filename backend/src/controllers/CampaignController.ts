@@ -122,10 +122,11 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
       const formattedDate = currentDate.toISOString();
 
       try {
-        const contactTags = await ContactTag.findAll({ where: { tagId } });
+        // N2 (IDOR): tag e contatos precisam pertencer ao tenant autenticado
+        const contactTags = await ContactTag.findAll({ where: { tagId, companyId } });
         const contactIds = contactTags.map((contactTag) => contactTag.contactId);
 
-        const contacts = await Contact.findAll({ where: { id: contactIds } });
+        const contacts = await Contact.findAll({ where: { id: contactIds, companyId } });
 
         const randomName = `${campanhaNome} | TAG: ${tagId} - ${formattedDate}` // Implement your own function to generate a random name
         const contactList = await ContactList.create({ name: randomName, companyId: companyId });
@@ -195,8 +196,9 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
 
 export const show = async (req: Request, res: Response): Promise<Response> => {
   const { id } = req.params;
+  const { companyId } = req.user;
 
-  const record = await ShowService(id);
+  const record = await ShowService(id, companyId);
 
   return res.status(200).json(record);
 };
@@ -226,7 +228,8 @@ export const update = async (
 
   const record = await UpdateService({
     ...data,
-    id
+    id,
+    companyId // N2 (IDOR): tenant do token sobrescreve qualquer companyId do body
   });
 
   const io = getIO();
@@ -244,8 +247,9 @@ export const cancel = async (
   res: Response
 ): Promise<Response> => {
   const { id } = req.params;
+  const { companyId } = req.user;
 
-  await CancelService(+id);
+  await CancelService(+id, companyId);
 
   return res.status(204).json({ message: "Cancelamento realizado" });
 };
@@ -255,8 +259,9 @@ export const restart = async (
   res: Response
 ): Promise<Response> => {
   const { id } = req.params;
+  const { companyId } = req.user;
 
-  await RestartService(+id);
+  await RestartService(+id, companyId);
 
   return res.status(204).json({ message: "Reinício dos disparos" });
 };
@@ -268,7 +273,7 @@ export const remove = async (
   const { id } = req.params;
   const { companyId } = req.user;
 
-  await DeleteService(id);
+  await DeleteService(id, companyId);
 
   const io = getIO();
   io.of(`/workspace-${companyId}`)
@@ -284,8 +289,14 @@ export const findList = async (
   req: Request,
   res: Response
 ): Promise<Response> => {
+  const { companyId } = req.user;
   const params = req.query as FindParams;
-  const records: Campaign[] = await FindService(params);
+
+  // N2 (IDOR): ignora companyId da query — sempre o tenant do token
+  const records: Campaign[] = await FindService({
+    ...params,
+    companyId: String(companyId)
+  });
 
   return res.status(200).json(records);
 };
@@ -295,16 +306,23 @@ export const mediaUpload = async (
   res: Response
 ): Promise<Response> => {
   const { id } = req.params;
+  const { companyId } = req.user;
   const files = req.files as Express.Multer.File[];
   const file = head(files);
 
   try {
-    const campaign = await Campaign.findByPk(id);
+    // N2 (IDOR): só permite upload de mídia em campanha do próprio tenant
+    const campaign = await Campaign.findOne({ where: { id, companyId } });
+    if (!campaign || !file) {
+      throw new AppError("Campanha não encontrada", 404);
+    }
     campaign.mediaPath = file.filename;
-    campaign.mediaName = file.originalname;
+    // N2: sanitiza o nome original removendo separadores de caminho
+    campaign.mediaName = path.basename(file.originalname.replace(/\\/g, "/"));
     await campaign.save();
     return res.send({ mensagem: "Mensagem enviada" });
   } catch (err: any) {
+    if (err instanceof AppError) throw err;
     throw new AppError(err.message);
   }
 };
@@ -317,11 +335,23 @@ export const deleteMedia = async (
   const { id } = req.params;
 
   try {
-    const campaign = await Campaign.findByPk(id);
-    const filePath = path.resolve("public", `company${companyId}`, campaign.mediaPath);
-    const fileExists = fs.existsSync(filePath);
-    if (fileExists) {
-      fs.unlinkSync(filePath);
+    // N2 (IDOR): só permite excluir mídia de campanha do próprio tenant
+    const campaign = await Campaign.findOne({ where: { id, companyId } });
+    if (!campaign) {
+      throw new AppError("Campanha não encontrada", 404);
+    }
+
+    // N2 (path traversal): basename impede sair do diretório público do tenant
+    if (campaign.mediaPath) {
+      const filePath = path.resolve(
+        "public",
+        `company${companyId}`,
+        path.basename(campaign.mediaPath)
+      );
+      const fileExists = fs.existsSync(filePath);
+      if (fileExists) {
+        fs.unlinkSync(filePath);
+      }
     }
 
     campaign.mediaPath = null;
@@ -329,6 +359,7 @@ export const deleteMedia = async (
     await campaign.save();
     return res.send({ mensagem: "Arquivo excluído" });
   } catch (err: any) {
+    if (err instanceof AppError) throw err;
     throw new AppError(err.message);
   }
 };
@@ -338,10 +369,11 @@ export const detailedReport = async (
   res: Response
 ): Promise<Response> => {
   const { id } = req.params;
+  const { companyId } = req.user;
   const { status, search, pageNumber } = req.query as any;
 
   try {
-    const report = await GetDetailedReportService(+id, {
+    const report = await GetDetailedReportService(+id, companyId, {
       status,
       search,
       pageNumber
@@ -349,6 +381,7 @@ export const detailedReport = async (
 
     return res.status(200).json(report);
   } catch (err: any) {
+    if (err instanceof AppError) throw err;
     throw new AppError(err.message);
   }
 };
@@ -358,9 +391,10 @@ export const campaignCost = async (
   res: Response
 ): Promise<Response> => {
   const { id } = req.params;
+  const { companyId } = req.user;
 
   try {
-    const cost = await CalculateCampaignCost(+id);
+    const cost = await CalculateCampaignCost(+id, companyId);
 
     if (!cost) {
       return res.status(200).json({
@@ -371,6 +405,7 @@ export const campaignCost = async (
 
     return res.status(200).json({ cost });
   } catch (err: any) {
+    if (err instanceof AppError) throw err;
     throw new AppError(err.message);
   }
 };
@@ -401,7 +436,7 @@ export const clone = async (
   const { companyId } = req.user;
 
   try {
-    const record = await CloneCampaignService(id);
+    const record = await CloneCampaignService(id, companyId);
 
     const io = getIO();
     io.of(`/workspace-${companyId}`)
@@ -412,6 +447,7 @@ export const clone = async (
 
     return res.status(201).json(record);
   } catch (err: any) {
+    if (err instanceof AppError) throw err;
     throw new AppError(err.message);
   }
 };

@@ -23,9 +23,15 @@ interface dataUser {
 
 export const TicketsAttendance = async ({ initialDate, finalDate, companyId }: Request): Promise<Return> => { 
 
-  const sqlUsers = `select u.name from "Users" u where u."companyId" = ${companyId}`
+  // Segurança: companyId coagido a inteiro e datas passadas via bind (sem interpolação no SQL)
+  const companyIdNum = Number(companyId);
 
-  const users: dataUser[] = await sequelize.query(sqlUsers, { type: QueryTypes.SELECT });
+  const sqlUsers = `select u.name from "Users" u where u."companyId" = ?`
+
+  const users: dataUser[] = await sequelize.query(sqlUsers, {
+    replacements: [companyIdNum],
+    type: QueryTypes.SELECT
+  });
 
   const sql = `
   select
@@ -35,16 +41,19 @@ export const TicketsAttendance = async ({ initialDate, finalDate, companyId }: R
     "Tickets" tt
     left join "Users" u on u.id = tt."userId"
   where
-    tt."companyId" = ${companyId}
+    tt."companyId" = ?
     and tt."userId" is not null
-    and tt."createdAt" >= '${initialDate} 00:00:00'
-    and tt."createdAt" <= '${finalDate} 23:59:59'
+    and tt."createdAt" >= ?
+    and tt."createdAt" <= ?
   group by
     nome
   ORDER BY
     nome asc`
 
-  const data: DataReturn[] = await sequelize.query(sql, { type: QueryTypes.SELECT });
+  const data: DataReturn[] = await sequelize.query(sql, {
+    replacements: [companyIdNum, `${initialDate} 00:00:00`, `${finalDate} 23:59:59`],
+    type: QueryTypes.SELECT
+  });
 
   users.map(user => {
     let indexCreated = data.findIndex((item) => item.nome === user.name);

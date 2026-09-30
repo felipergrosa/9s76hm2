@@ -6,9 +6,11 @@ import ListFoldersByQueueService from "../services/QueueRAGSourceService/ListFol
 
 export const index = async (req: Request, res: Response): Promise<Response> => {
     const { queueId } = req.params;
+    const { companyId } = req.user;
 
     const folders = await ListFoldersByQueueService({
-        queueId: Number(queueId)
+        queueId: Number(queueId),
+        companyId
     });
 
     return res.status(200).json(folders);
@@ -22,7 +24,8 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     const ragSource = await LinkFolderToQueueService({
         queueId: Number(queueId),
         folderId: Number(folderId),
-        weight
+        weight,
+        companyId
     });
 
     const io = getIO();
@@ -42,7 +45,8 @@ export const remove = async (req: Request, res: Response): Promise<Response> => 
 
     await UnlinkFolderFromQueueService({
         queueId: Number(queueId),
-        folderId: Number(folderId)
+        folderId: Number(folderId),
+        companyId
     });
 
     const io = getIO();

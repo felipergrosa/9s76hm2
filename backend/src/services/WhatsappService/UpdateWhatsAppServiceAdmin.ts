@@ -123,6 +123,7 @@ const UpdateWhatsAppServiceAdmin = async ({
       where: {
         isDefault: true,
         id: { [Op.not]: whatsappId },
+        companyId,
       }
     });
     if (oldDefaultWhatsapp) {
@@ -130,7 +131,7 @@ const UpdateWhatsAppServiceAdmin = async ({
     }
   }
 
-  const whatsapp = await ShowWhatsAppServiceAdmin(whatsappId);
+  const whatsapp = await ShowWhatsAppServiceAdmin(whatsappId, companyId);
 
   // Guarda o token anterior para invalidar o cache do middleware tokenAuth
   const oldWhatsappToken = whatsapp.token;
@@ -143,7 +144,7 @@ const UpdateWhatsAppServiceAdmin = async ({
     complationMessage,
     outOfHoursMessage,
     isDefault,
-    companyId,
+    // companyId NUNCA é atualizado aqui — impede sequestro de conexão entre tenants
     token,
     maxUseBotQueues: maxUseBotQueues || 0,
     timeUseBotQueues: timeUseBotQueues || 0,

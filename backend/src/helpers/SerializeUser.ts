@@ -38,9 +38,10 @@ interface SerializedUser {
 
 export const SerializeUser = async (user: User): Promise<SerializedUser> => {
   // Gera um token de 32 bytes
-  const generateToken = (userId: number | string): string => {
-    // Gerar o token com base no userId e sua chave secreta
-    const token = jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: "1h" }); // Você pode definir o tempo de expiração conforme necessário
+  const generateToken = (userId: number | string, companyId: number): string => {
+    // Gerar o token com base no userId/companyId e a chave secreta.
+    // companyId é necessário para o binding de tenant no namespace do socket.
+    const token = jwt.sign({ userId, companyId }, process.env.JWT_SECRET, { expiresIn: "1h" }); // Você pode definir o tempo de expiração conforme necessário
     return token;
   };
 
@@ -65,7 +66,7 @@ export const SerializeUser = async (user: User): Promise<SerializedUser> => {
     defaultTicketsManagerWidth: user.defaultTicketsManagerWidth,
     userClosePendingTicket: user.userClosePendingTicket,
     showDashboard: user.showDashboard,
-    token: generateToken(user.id),
+    token: generateToken(user.id, user.companyId),
     allowGroup: user.allowGroup,
     allowRealTime: user.allowRealTime,
     allowConnections: user.allowConnections,

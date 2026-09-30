@@ -33,9 +33,13 @@ const maybeDecryptKey = (type: string, cfg: any) => {
   return cfg;
 };
 
-const fetchIntegrationById = async (id?: number | string | null) => {
+const fetchIntegrationById = async (id: number | string | null | undefined, companyId: number) => {
   if (!id && id !== 0) return null;
-  const integ = await QueueIntegrations.findByPk(id as any);
+  // findOne com companyId — findByPk puro permitiria resolver integração
+  // de outra empresa (IDOR)
+  const integ = await QueueIntegrations.findOne({
+    where: { id: id as any, companyId }
+  });
   if (!integ) return null;
   const cfg = maybeDecryptKey(integ.type, parseJson(integ.jsonContent));
   return { provider: integ.type as Provider, config: cfg } as ResolvedIntegration;
@@ -45,9 +49,11 @@ const ResolveAIIntegrationService = async ({ companyId, queueId, whatsappId, pre
   // 1) Se vier queueId, usar integrationId da fila
   try {
     if (queueId) {
-      const q = await Queue.findByPk(queueId as any);
+      const q = await Queue.findOne({
+        where: { id: queueId as any, companyId }
+      });
       if (q?.integrationId) {
-        const r = await fetchIntegrationById(q.integrationId);
+        const r = await fetchIntegrationById(q.integrationId, companyId);
         if (r?.config?.apiKey) {
           try { console.log("[IA][resolve] via queue", { queueId, provider: r.provider }); } catch {}
           return r;
@@ -59,11 +65,13 @@ const ResolveAIIntegrationService = async ({ companyId, queueId, whatsappId, pre
   // 2) Se vier whatsappId e a conexão tiver integrationId, usar
   try {
     if (whatsappId) {
-      const w = await Whatsapp.findByPk(whatsappId as any);
+      const w = await Whatsapp.findOne({
+        where: { id: whatsappId as any, companyId }
+      });
       // Alguns ambientes usam whatsapp.integrationId
       const anyW: any = w as any;
       if (anyW?.integrationId) {
-        const r = await fetchIntegrationById(anyW.integrationId);
+        const r = await fetchIntegrationById(anyW.integrationId, companyId);
         if (r?.config?.apiKey) {
           try { console.log("[IA][resolve] via whatsapp", { whatsappId, provider: r.provider }); } catch {}
           return r;

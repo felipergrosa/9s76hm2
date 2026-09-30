@@ -6,6 +6,7 @@ import {
   enhancePreviewImage
 } from "../services/WbotServices/LinkPreviewService";
 import logger from "../utils/logger";
+import assertPublicUrl from "../utils/assertPublicUrl";
 
 export const getLinkPreviewData = async (req: Request, res: Response): Promise<Response> => {
   const { url, fallbackImage } = req.body;
@@ -15,6 +16,9 @@ export const getLinkPreviewData = async (req: Request, res: Response): Promise<R
   }
 
   try {
+    // Anti-SSRF: só permite http/https com host público
+    await assertPublicUrl(url);
+
     const preview = await getLinkPreview(url);
     
     if (!preview) {
@@ -47,6 +51,13 @@ export const detectAndPreview = async (req: Request, res: Response): Promise<Res
     const url = detectUrl(text);
     
     if (!url) {
+      return res.json({ hasUrl: false });
+    }
+
+    // Anti-SSRF: só permite http/https com host público
+    try {
+      await assertPublicUrl(url);
+    } catch {
       return res.json({ hasUrl: false });
     }
     

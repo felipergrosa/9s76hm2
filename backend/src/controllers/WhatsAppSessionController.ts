@@ -9,6 +9,7 @@ import ClearContactSessionService from "../services/WbotServices/ClearContactSes
 import AppError from "../errors/AppError";
 import logger from "../utils/logger";
 import { acquireWbotLock } from "../libs/wbotMutex";
+import { sanitizeWhatsapp } from "../helpers/sanitizeWhatsapp";
 
 const store = async (req: Request, res: Response): Promise<Response> => {
   const { whatsappId } = req.params;
@@ -101,7 +102,7 @@ const remove = async (req: Request, res: Response): Promise<Response> => {
     io.of(`/workspace-${companyId}`)
       .emit(`company-${companyId}-whatsappSession`, {
         action: "update",
-        session: whatsapp
+        session: sanitizeWhatsapp(whatsapp)
       });
   }
 
@@ -172,11 +173,11 @@ export const clearWhatsAppSession = async (
     // Garantir limpeza do Redis
     await cacheLayer.delFromPattern(`sessions:${whatsappId}:*`);
 
-    // Emitir evento para frontend
+    // Emitir evento para frontend (sem segredos/tokens)
     io.of(`/workspace-${companyId}`)
       .emit(`company-${companyId}-whatsappSession`, {
         action: "update",
-        session: whatsapp
+        session: sanitizeWhatsapp(whatsapp)
       });
 
     logger.info(`[clearWhatsAppSession] Sessão ${whatsappId} limpa (arquivos apenas), mantendo conexão no banco`);

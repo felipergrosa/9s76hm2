@@ -19,6 +19,7 @@ import ShowCompanyService from "../services/CompanyService/ShowCompanyService";
 import { getWbot } from "../libs/wbot";
 import FindCompaniesWhatsappService from "../services/CompanyService/FindCompaniesWhatsappService";
 import User from "../models/User";
+import Plan from "../models/Plan";
 
 import { head } from "lodash";
 import ToggleChangeWidthService from "../services/UserServices/ToggleChangeWidthService";
@@ -27,7 +28,7 @@ import Setting from "../models/Setting";
 import fs from "fs";
 import path from "path";
 import multer from "multer";
-import { hasPermission } from "../helpers/PermissionAdapter";
+import { hasPermission, hasPermissionAsync } from "../helpers/PermissionAdapter";
 import {
   buildCompanyBase,
   buildUserBase,
@@ -60,8 +61,13 @@ export const list = async (req: Request, res: Response): Promise<Response> => {
   const { companyId } = req.query;
   const { companyId: userCompanyId } = req.user;
 
+  // SEGURANÇA: companyId da query só é honrado para super admin
+  // (verificado no usuário fresco do DB, não apenas no JWT).
+  const requestUser = await User.findByPk(req.user.id);
+  const isRequestSuper = requestUser?.super === true;
+
   const users = await SimpleListService({
-    companyId: companyId ? +companyId : userCompanyId,
+    companyId: isRequestSuper && companyId ? +companyId : userCompanyId,
     requestUserId: +req.user.id
   });
 
@@ -102,14 +108,23 @@ export const remove = async (
     throw new AppError("ERR_NO_PERMISSION", 403);
   }
 
+  // SEGURANÇA: usuário alvo é sempre buscado dentro da empresa do editor;
+  // apenas super admin (verificado no DB) pode remover usuário de outra empresa.
+  const requestUser = await User.findByPk(id);
+  const isRequestSuper = requestUser?.super === true;
+
   const user = await User.findOne({
-    where: { id: userId }
+    where: isRequestSuper ? { id: userId } : { id: userId, companyId }
   });
 
-  if (companyId !== user.companyId) {
+  if (!user) {
+    return res.status(404).json({ error: "Usuário não encontrado." });
+  }
+
+  if (companyId !== user.companyId && !isRequestSuper) {
     return res.status(400).json({ error: "Você não possui permissão para acessar este recurso!" });
   } else {
-    await DeleteUserService(userId, companyId);
+    await DeleteUserService(userId, user.companyId);
 
     const io = getIO();
     io.of(`/workspace-${companyId}`)
@@ -157,23 +172,32 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
 
   const { dateToClient } = useDate();
 
+  // SEGURANÇA (N2): decisões de autorização usam o usuário FRESCO do banco,
+  // não apenas os dados do JWT (profile/super podem estar desatualizados).
+  let requestUser: User | null = null;
   if (req.user !== undefined) {
-    const { companyId: cId } = req.user;
-    userCompanyId = cId;
+    requestUser = await User.findByPk(req.user.id);
+    userCompanyId = requestUser?.companyId ?? req.user.companyId;
   }
-
-  if (
-    req.url === "/signup" &&
-    (await CheckSettingsHelper("userCreation")) === "disabled"
-  ) {
-    throw new AppError("ERR_USER_CREATION_DISABLED", 403);
-  } else if (req.url !== "/signup" && req.user.profile !== "admin") {
-    throw new AppError("ERR_NO_PERMISSION", 403);
-  }
+  const isRequestSuper = requestUser?.super === true;
 
   // SEGURANÇA: Sanitiza campos privilegiados em rota pública /signup.
   // Previne escalação de privilégio por usuário auto-cadastrado.
   const isPublicSignup = req.url === "/signup";
+
+  if (
+    isPublicSignup &&
+    (await CheckSettingsHelper("userCreation")) === "disabled"
+  ) {
+    throw new AppError("ERR_USER_CREATION_DISABLED", 403);
+  } else if (
+    !isPublicSignup &&
+    requestUser?.profile !== "admin" &&
+    !isRequestSuper
+  ) {
+    throw new AppError("ERR_NO_PERMISSION", 403);
+  }
+
   const profile = isPublicSignup ? "user" : rawProfile;
   const permissions = isPublicSignup ? [] : rawPermissions;
   const allowedConnectionIds = isPublicSignup ? [] : rawAllowedConnectionIds;
@@ -186,9 +210,28 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     throw new AppError("ERR_NO_PERMISSION", 403);
   }
 
-  const companyUser = bodyCompanyId || userCompanyId;
+  // SEGURANÇA: no signup público o companyId do body é SEMPRE ignorado —
+  // o fluxo público cria uma empresa nova. companyId do body só é honrado
+  // quando o requisitante autenticado é super admin; demais usuários são
+  // forçados à própria empresa (evita criação cross-tenant).
+  const companyUser = isPublicSignup
+    ? null
+    : isRequestSuper
+      ? bodyCompanyId || userCompanyId
+      : userCompanyId;
 
   if (!companyUser) {
+
+    // SEGURANÇA: no signup público o planId do body é ignorado — usa o menor
+    // plano público cadastrado (evita auto-atribuição de plano superior).
+    let safePlanId = planId;
+    if (isPublicSignup) {
+      const defaultPlan = await Plan.findOne({
+        where: { isPublic: true },
+        order: [["users", "ASC"], ["id", "ASC"]]
+      });
+      safePlanId = defaultPlan?.id;
+    }
 
     const trialDays = parseInt(process.env.APP_TRIALEXPIRATION || "3", 10);
 
@@ -201,7 +244,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
       name: companyName,
       email: email,
       phone: phone,
-      planId: planId,
+      planId: safePlanId,
       status: true,
       dueDate: date,
       recurrence: "",
@@ -257,9 +300,9 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
   }
 
   if (companyUser) {
-    // Apenas Super Admin pode setar Super Admin na criação
+    // Apenas Super Admin pode setar Super Admin na criação (flag do DB, não do JWT)
     const { "super": superUser } = req.body;
-    if (superUser && !(req.user as any).super) {
+    if (superUser && !isRequestSuper) {
       throw new AppError("ERR_NO_PERMISSION - ONLY SUPER ADMIN", 403);
     }
 
@@ -289,12 +332,13 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
       allowedConnectionIds,
       isPrivate,
       color,
-      superUser
+      superUser,
+      requestUserIsSuper: isRequestSuper
     });
 
     const io = getIO();
-    io.of(`/workspace-${userCompanyId}`)
-      .emit(`company-${userCompanyId}-user`, {
+    io.of(`/workspace-${companyUser}`)
+      .emit(`company-${companyUser}-user`, {
         action: "create",
         user
       });
@@ -336,11 +380,11 @@ export const update = async (
     throw new AppError("ERR_NO_PERMISSION", 403);
   }
 
-  const { id: requestUserId, companyId, profile } = req.user as any;
+  const { id: requestUserId, companyId } = req.user as any;
   const { userId } = req.params;
-  const userData = req.body;
 
   // Buscar usuário completo do banco para ter acesso às permissões
+  // (decisões de autorização usam sempre o usuário FRESCO, não o JWT)
   const currentUser = await User.findByPk(requestUserId);
   if (!currentUser) {
     throw new AppError("ERR_USER_NOT_FOUND", 404);
@@ -350,25 +394,49 @@ export const update = async (
   // Admin pode editar qualquer usuário
   // Usuário comum pode editar próprio perfil se tiver permissão users.edit-own
   const isEditingOwnProfile = parseInt(userId) === parseInt(requestUserId);
-  const isAdmin = profile === "admin";
-  const canEditOwnProfile = hasPermission(currentUser, "users.edit-own");
-  const canEditUsers = hasPermission(currentUser, "users.edit");
+  const isAdmin = currentUser.profile === "admin";
+  const isRequestSuper = currentUser.super === true;
+  const canEditOwnProfile = await hasPermissionAsync(currentUser, "users.edit-own");
+  const canEditUsers = await hasPermissionAsync(currentUser, "users.edit");
 
-  if (!isAdmin && !canEditUsers && !(isEditingOwnProfile && canEditOwnProfile)) {
+  if (!isAdmin && !isRequestSuper && !canEditUsers && !(isEditingOwnProfile && canEditOwnProfile)) {
     throw new AppError("ERR_NO_PERMISSION", 403);
   }
 
-  // Apenas Super Admin pode setar Super Admin
+  // Apenas Super Admin pode setar Super Admin (verificado no DB)
   const { "super": superUser } = req.body;
-  if (superUser && !(req.user as any).super) {
+  if (superUser && !isRequestSuper) {
     throw new AppError("ERR_NO_PERMISSION - ONLY SUPER ADMIN", 403);
   }
+
+  // SEGURANÇA (N2): editor sem users.edit/admin recebe whitelist estrita de
+  // campos (auto-edição) — todo o restante do body é descartado para evitar
+  // mass-assignment/auto-escalada (profile, permissions, super, queues etc).
+  const SELF_EDIT_ALLOWED_FIELDS = new Set([
+    "name",
+    "password",
+    "defaultTheme",
+    "defaultMenu",
+    "language",
+    "color",
+    "farewellMessage",
+    "startWork",
+    "endWork"
+  ]);
+  const canEditPrivileged = isAdmin || isRequestSuper || canEditUsers;
+  const userData: any = {};
+  Object.keys(req.body || {}).forEach(key => {
+    if (canEditPrivileged || SELF_EDIT_ALLOWED_FIELDS.has(key)) {
+      userData[key] = req.body[key];
+    }
+  });
 
   const user = await UpdateUserService({
     userData: { ...userData, super: superUser }, // Pass super explicitly
     userId,
     companyId,
-    requestUserId: +requestUserId
+    requestUserId: +requestUserId,
+    requestUser: currentUser
   });
 
   const io = getIO();
@@ -386,7 +454,7 @@ export const mediaUpload = async (
   res: Response
 ): Promise<Response> => {
   const { userId } = req.params;
-  const { id: requestUserId, companyId, profile } = req.user as any;
+  const { id: requestUserId, companyId } = req.user as any;
   const files = req.files as Express.Multer.File[];
   const file = head(files);
 
@@ -398,16 +466,20 @@ export const mediaUpload = async (
 
   // Verificação de permissão para upload de avatar via media-upload
   const isEditingOwnProfile = parseInt(userId) === parseInt(requestUserId);
-  const isUserAdmin = profile === "admin";
-  const canEditOwnProfile = hasPermission(currentUser, "users.edit-own");
-  const canEditUsers = hasPermission(currentUser, "users.edit");
+  const isUserAdmin = currentUser.profile === "admin";
+  const isRequestSuper = currentUser.super === true;
+  const canEditOwnProfile = await hasPermissionAsync(currentUser, "users.edit-own");
+  const canEditUsers = await hasPermissionAsync(currentUser, "users.edit");
 
-  if (!isUserAdmin && !canEditUsers && !(isEditingOwnProfile && canEditOwnProfile)) {
+  if (!isUserAdmin && !isRequestSuper && !canEditUsers && !(isEditingOwnProfile && canEditOwnProfile)) {
     throw new AppError("ERR_NO_PERMISSION", 403);
   }
 
   try {
-    let user = await User.findByPk(userId);
+    // SEGURANÇA: usuário alvo confinado à empresa do editor (super pode cross-tenant)
+    let user = await User.findOne({
+      where: isRequestSuper ? { id: userId } : { id: userId, companyId }
+    });
     if (!user) throw new AppError("ERR_NO_USER_FOUND", 404);
 
     // Deriva username a partir do nome do usuário, sanetizando
@@ -462,7 +534,7 @@ export const mediaUpload = async (
 export const uploadAvatar = async (req: Request, res: Response): Promise<Response> => {
   const userId = req.params.userId;
   const file = req.file;
-  const { id: requestUserId, companyId, profile } = req.user;
+  const { id: requestUserId, companyId } = req.user;
 
   // Buscar usuário completo do banco para ter acesso às permissões
   const currentUser = await User.findByPk(requestUserId);
@@ -472,11 +544,12 @@ export const uploadAvatar = async (req: Request, res: Response): Promise<Respons
 
   // Verificação de permissão para upload de avatar
   const isEditingOwnProfile = parseInt(userId) === parseInt(requestUserId);
-  const isAdmin = profile === "admin";
-  const canEditOwnProfile = hasPermission(currentUser, "users.edit-own");
-  const canEditUsers = hasPermission(currentUser, "users.edit");
+  const isAdmin = currentUser.profile === "admin";
+  const isRequestSuper = currentUser.super === true;
+  const canEditOwnProfile = await hasPermissionAsync(currentUser, "users.edit-own");
+  const canEditUsers = await hasPermissionAsync(currentUser, "users.edit");
 
-  if (!isAdmin && !canEditUsers && !(isEditingOwnProfile && canEditOwnProfile)) {
+  if (!isAdmin && !isRequestSuper && !canEditUsers && !(isEditingOwnProfile && canEditOwnProfile)) {
     throw new AppError("ERR_NO_PERMISSION", 403);
   }
 
@@ -485,7 +558,10 @@ export const uploadAvatar = async (req: Request, res: Response): Promise<Respons
   }
 
   try {
-    const user = await User.findByPk(userId);
+    // SEGURANÇA: usuário alvo confinado à empresa do editor (super pode cross-tenant)
+    const user = await User.findOne({
+      where: isRequestSuper ? { id: userId } : { id: userId, companyId }
+    });
 
     if (!user) {
       return res.status(404).json({ error: "Usuário não encontrado." });
@@ -573,7 +649,7 @@ export const updateLanguage = async (req: Request, res: Response): Promise<Respo
   try {
     const { userId } = req.params;
     const { language } = req.body;
-    const { profile } = req.user;
+    const { companyId } = req.user;
 
     // Validação básica do idioma
     const validLanguages = ["pt-BR", "en", "es", "tr"];
@@ -581,13 +657,22 @@ export const updateLanguage = async (req: Request, res: Response): Promise<Respo
       return res.status(400).json({ error: "Invalid language. Must be one of: pt-BR, en, es, tr" });
     }
 
-    const user = await User.findByPk(userId);
+    // Usuário requisitante FRESCO do DB para decisões de autorização
+    const requestUser = await User.findByPk(req.user.id);
+    if (!requestUser) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // SEGURANÇA: usuário alvo confinado à empresa do editor (super pode cross-tenant)
+    const user = await User.findOne({
+      where: requestUser.super === true ? { id: userId } : { id: userId, companyId }
+    });
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
 
-    // ACRESCENTADO: Apenas admins podem alterar o idioma.
-    if (profile !== "admin") {
+    // ACRESCENTADO: Apenas admins podem alterar o idioma (verificado no DB).
+    if (requestUser.profile !== "admin" && requestUser.super !== true) {
       throw new AppError("ERR_NO_PERMISSION", 403);
     }
 

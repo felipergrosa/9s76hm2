@@ -9,6 +9,7 @@ import Whatsapp from "../models/Whatsapp";
 import { getWbotOrRecover, removeWbot, getWbotIsReconnecting } from "../libs/wbot";
 import { StartWhatsAppSessionUnified as StartWhatsAppSession } from "../services/WbotServices/StartWhatsAppSessionUnified";
 import { getIO } from "../libs/socket";
+import sanitizeWhatsapp from "../helpers/sanitizeWhatsapp";
 import logger from "../utils/logger";
 
 // Intervalo de verificação em milissegundos (5 minutos)
@@ -137,7 +138,7 @@ async function attemptReconnect(whatsapp: Whatsapp): Promise<boolean> {
         io.of(`/workspace-${companyId}`)
             .emit(`company-${companyId}-whatsappSession`, {
                 action: "update",
-                session: whatsapp
+                session: sanitizeWhatsapp(whatsapp)
             });
 
         return true;

@@ -4,6 +4,7 @@ import EmailCampaign from "../models/EmailCampaign";
 import EmailShipping from "../models/EmailShipping";
 import ContactListItem from "../models/ContactListItem";
 import { SendMail } from "../helpers/SendMail";
+import AppError from "../errors/AppError";
 import logger from "../utils/logger";
 
 const connection = process.env.REDIS_URI || "";
@@ -71,9 +72,11 @@ async function processEmailCampaign(job: any): Promise<void> {
     return;
   }
 
+  // N2 (cross-tenant): itens da lista restritos ao tenant da campanha
   const contacts = await ContactListItem.findAll({
     where: {
       contactListId: campaign.contactListId,
+      companyId: campaign.companyId,
       email: { [Op.ne]: null }
     }
   });
@@ -189,11 +192,19 @@ export async function scheduleEmailCampaignVerification(): Promise<void> {
 }
 
 /** Dispara o processamento imediato de uma campanha (botão "Enviar agora") */
-export async function startEmailCampaignNow(emailCampaignId: number): Promise<void> {
-  await EmailCampaign.update(
-    { status: "EM_ANDAMENTO" },
-    { where: { id: emailCampaignId } }
-  );
+export async function startEmailCampaignNow(
+  emailCampaignId: number,
+  companyId: number
+): Promise<void> {
+  // N2 (IDOR): só dispara se a campanha pertencer ao tenant autenticado —
+  // sem isso um id de outro tenant entraria na fila e reenviaria e-mails
+  const campaign = await EmailCampaign.findOne({
+    where: { id: emailCampaignId, companyId }
+  });
+  if (!campaign) {
+    throw new AppError("Campanha de e-mail não encontrada", 404);
+  }
+  await campaign.update({ status: "EM_ANDAMENTO" });
   await emailCampaignQueue.add(
     "ProcessEmailCampaign",
     { emailCampaignId } as ProcessEmailCampaignJob

@@ -4,6 +4,8 @@ import Invoices from "../../models/Invoices";
 interface Request {
   searchParam?: string;
   pageNumber?: string;
+  companyId?: number;
+  isSuper?: boolean;
 }
 
 interface Response {
@@ -14,9 +16,11 @@ interface Response {
 
 const ListInvoicesServices = async ({
   searchParam = "",
-  pageNumber = "1"
+  pageNumber = "1",
+  companyId,
+  isSuper
 }: Request): Promise<Response> => {
-  const whereCondition = {
+  const whereCondition: any = {
     [Op.or]: [
       {
         name: Sequelize.where(
@@ -27,6 +31,11 @@ const ListInvoicesServices = async ({
       }
     ]
   };
+
+  // Isolamento por empresa: não-super só enxerga faturas da própria empresa
+  if (!isSuper && companyId !== undefined) {
+    whereCondition.companyId = companyId;
+  }
   const limit = 20;
   const offset = limit * (+pageNumber - 1);
 

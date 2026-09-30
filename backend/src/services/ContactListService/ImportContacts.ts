@@ -2,6 +2,8 @@ import { head } from "lodash";
 import XLSX from "xlsx";
 import { has } from "lodash";
 import ContactListItem from "../../models/ContactListItem";
+import ContactList from "../../models/ContactList";
+import AppError from "../../errors/AppError";
 import CheckContactNumber from "../WbotServices/CheckNumber";
 import logger from "../../utils/logger";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
@@ -11,6 +13,14 @@ export async function ImportContacts(
   companyId: number,
   file: Express.Multer.File | undefined
 ) {
+  // Segurança: valida que a lista pertence à empresa antes de importar (IDOR)
+  const list = await ContactList.findOne({
+    where: { id: contactListId, companyId }
+  });
+  if (!list) {
+    throw new AppError("ERR_NO_CONTACTLIST_FOUND", 404);
+  }
+
   const workbook = XLSX.readFile(file?.path as string);
   const worksheet = head(Object.values(workbook.Sheets)) as any;
   const rows: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 0 });

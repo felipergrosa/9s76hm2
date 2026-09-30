@@ -20,13 +20,16 @@ const isValidStatus = (status: string): boolean => {
   return ["open", "closed", "pending", "group", "bot", "campaign"].includes(status);
 };
 
-const validateJWTPayload = (payload: any): { userId: string; iat?: number; exp?: number } => {
+const validateJWTPayload = (payload: any): { userId: string | number; companyId?: number; iat?: number; exp?: number } => {
   if (!payload || typeof payload !== "object") {
     throw new Error("Payload inválido");
   }
-  if (!payload.userId || !isValidUUID(payload.userId)) {
+  // Aceita userId (token de socket do SerializeUser) ou id (access token do CreateTokens).
+  const userId = payload.userId ?? payload.id;
+  if (!userId || !isValidUUID(userId)) {
     throw new Error("userId inválido");
   }
+  payload.userId = userId;
   return payload;
 };
 
@@ -70,6 +73,34 @@ let io: SocketIO;
 const heartbeatLastWrite = new Map<string, number>();
 const HEARTBEAT_WRITE_INTERVAL_MS = 60 * 1000; // 1 write por minuto por usuário
 const HEARTBEAT_MAP_MAX_SIZE = 1000;
+
+// Cache curto (60s) de userId -> companyId para tokens antigos de socket
+// emitidos antes do deploy (payload sem companyId).
+const userCompanyCache = new Map<string, { companyId: number; expires: number }>();
+const USER_COMPANY_CACHE_TTL_MS = 60 * 1000;
+
+const resolveUserCompanyId = async (userId: string | number): Promise<number | null> => {
+  const key = String(userId);
+  const cached = userCompanyCache.get(key);
+  if (cached && cached.expires > Date.now()) return cached.companyId;
+
+  // Importação dinâmica para evitar dependência circular
+  const { default: User } = await import("../models/User");
+  const user = await User.findByPk(userId, { attributes: ["companyId"] });
+  const companyId = user?.companyId ?? null;
+  if (companyId) {
+    if (userCompanyCache.size > 1000) userCompanyCache.clear();
+    userCompanyCache.set(key, { companyId, expires: Date.now() + USER_COMPANY_CACHE_TTL_MS });
+  }
+  return companyId;
+};
+
+// companyId efetivo da conexão: setado no middleware de auth ou derivado do namespace.
+const getSocketCompanyId = (socket: any): number | null => {
+  if (socket.data?.companyId) return Number(socket.data.companyId);
+  const match = socket.nsp?.name?.match(/workspace-(\d+)/);
+  return match ? Number(match[1]) : null;
+};
 
 export const initIO = (httpServer: Server): SocketIO => {
   io = new SocketIO(httpServer, {
@@ -129,11 +160,13 @@ export const initIO = (httpServer: Server): SocketIO => {
   }
 
   // Middleware de autenticação JWT obrigatória.
-  // Feature flag SOCKET_AUTH_PERMISSIVE permite rollback emergencial (não recomendado em produção).
-  const isSocketAuthPermissive = process.env.SOCKET_AUTH_PERMISSIVE === "true";
+  // Feature flag SOCKET_AUTH_PERMISSIVE permite rollback emergencial,
+  // mas é ignorada em produção (auth sempre obrigatória em prod).
+  const isSocketAuthPermissive = isDevelopment && process.env.SOCKET_AUTH_PERMISSIVE === "true";
   io.use((socket, next) => {
     try {
-      const token = socket.handshake.query.token as string;
+      // Aceita token via auth (recomendado) ou query (legado, mantido p/ compatibilidade).
+      const token = (socket.handshake.auth?.token || socket.handshake.query.token) as string;
       const origin = socket.handshake.headers.origin;
 
       if (!token) {
@@ -199,41 +232,62 @@ export const initIO = (httpServer: Server): SocketIO => {
     }
   });
 
-  // Middleware de autenticação JWT também para namespaces dinâmicos (Socket.io v3+)
+  // Middleware de autenticação JWT também para namespaces dinâmicos (Socket.io v3+).
+  // Cobre todas as conexões em /workspace-N (e, portanto, todos os eventos/joins).
   workspaces.use((socket, next) => {
-    try {
-      const token = socket.handshake.query.token as string;
-      const origin = socket.handshake.headers.origin;
-
-      if (!token) {
-        logger.warn(`[SOCKET AUTH WORKSPACE] Conexão sem token - origin=${origin}`);
-        if (isSocketAuthPermissive) {
-          logger.warn("[SOCKET AUTH WORKSPACE] SOCKET_AUTH_PERMISSIVE=true - permitindo conexão sem token");
-          return next();
-        }
-        return next(new SocketCompatibleAppError("Token de autenticação obrigatório", 401));
-      }
-
+    (async () => {
       try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || "dev-only-do-not-use-in-production");
-        const validatedPayload = validateJWTPayload(decoded);
-        socket.data.user = validatedPayload;
-        return next();
-      } catch (err) {
-        logger.warn(`[SOCKET AUTH WORKSPACE] Token inválido - origin=${origin} erro=${err.message}`);
+        // Aceita token via auth (recomendado) ou query (legado, mantido p/ compatibilidade).
+        const token = (socket.handshake.auth?.token || socket.handshake.query.token) as string;
+        const origin = socket.handshake.headers.origin;
+
+        if (!token) {
+          logger.warn(`[SOCKET AUTH WORKSPACE] Conexão sem token - origin=${origin}`);
+          if (isSocketAuthPermissive) {
+            logger.warn("[SOCKET AUTH WORKSPACE] SOCKET_AUTH_PERMISSIVE=true - permitindo conexão sem token");
+            return next();
+          }
+          return next(new SocketCompatibleAppError("Token de autenticação obrigatório", 401));
+        }
+
+        // Binding de tenant: o token precisa pertencer à company do namespace /workspace-N.
+        const nsMatch = socket.nsp.name.match(/workspace-(\d+)/);
+        const nsCompanyId = nsMatch ? Number(nsMatch[1]) : null;
+
+        try {
+          const decoded = jwt.verify(token, process.env.JWT_SECRET || "dev-only-do-not-use-in-production");
+          const validatedPayload = validateJWTPayload(decoded);
+
+          let tokenCompanyId = Number(validatedPayload.companyId);
+          if (!Number.isSafeInteger(tokenCompanyId) || tokenCompanyId <= 0) {
+            // Tokens antigos sem companyId: resolve via banco (com cache curto).
+            tokenCompanyId = await resolveUserCompanyId(validatedPayload.userId);
+          }
+
+          if (!nsCompanyId || !tokenCompanyId || tokenCompanyId !== nsCompanyId) {
+            logger.warn(`[SOCKET AUTH WORKSPACE] Tenant mismatch - namespace=${socket.nsp.name} userId=${validatedPayload.userId}`);
+            return next(new SocketCompatibleAppError("Namespace não autorizado para este usuário", 403));
+          }
+
+          socket.data.user = { ...validatedPayload, companyId: tokenCompanyId };
+          socket.data.companyId = tokenCompanyId;
+          return next();
+        } catch (err) {
+          logger.warn(`[SOCKET AUTH WORKSPACE] Token inválido - origin=${origin} erro=${err.message}`);
+          if (isSocketAuthPermissive) {
+            logger.warn("[SOCKET AUTH WORKSPACE] SOCKET_AUTH_PERMISSIVE=true - permitindo token inválido");
+            return next();
+          }
+          return next(new SocketCompatibleAppError("Token inválido ou expirado", 401));
+        }
+      } catch (e) {
+        logger.error(`[SOCKET AUTH WORKSPACE] Erro inesperado no middleware: ${e.message}`);
         if (isSocketAuthPermissive) {
-          logger.warn("[SOCKET AUTH WORKSPACE] SOCKET_AUTH_PERMISSIVE=true - permitindo token inválido");
           return next();
         }
-        return next(new SocketCompatibleAppError("Token inválido ou expirado", 401));
+        return next(new SocketCompatibleAppError("Falha na autenticação do socket", 401));
       }
-    } catch (e) {
-      logger.error(`[SOCKET AUTH WORKSPACE] Erro inesperado no middleware: ${e.message}`);
-      if (isSocketAuthPermissive) {
-        return next();
-      }
-      return next(new SocketCompatibleAppError("Falha na autenticação do socket", 401));
-    }
+    })();
   });
 
   workspaces.on("connection", (socket) => {
@@ -245,7 +299,8 @@ export const initIO = (httpServer: Server): SocketIO => {
       // Eventos perdidos durante a desconexão serão reenviados automaticamente
     } else {
       try {
-        logger.info(`[SOCKET] Cliente conectado ao namespace ${socket.nsp.name} (IP: ${clientIp}) query=${JSON.stringify(socket.handshake.query)}`);
+        // Nunca logar handshake.query completo: contém o token JWT.
+        logger.info(`[SOCKET] Cliente conectado ao namespace ${socket.nsp.name} (IP: ${clientIp}) userId=${socket.data.user?.userId ?? "n/a"}`);
       } catch { }
     }
 
@@ -266,6 +321,31 @@ export const initIO = (httpServer: Server): SocketIO => {
         callback?.("ID de ticket inválido");
         return;
       }
+
+      // Valida que o ticket pertence à company do namespace antes do join.
+      const companyId = getSocketCompanyId(socket);
+      if (!companyId) {
+        callback?.("companyId não encontrado");
+        return;
+      }
+      try {
+        // Importação dinâmica para evitar dependência circular
+        const { default: Ticket } = await import("../models/Ticket");
+        const numericId = Number(normalizedId);
+        const where = Number.isInteger(numericId) && numericId > 0
+          ? { id: numericId, companyId }
+          : { uuid: normalizedId, companyId };
+        const ticket = await Ticket.findOne({ where, attributes: ["id"] });
+        if (!ticket) {
+          callback?.("Ticket não encontrado");
+          return;
+        }
+      } catch (e) {
+        logger.warn(`[SOCKET JOIN] Falha ao validar ticket ${normalizedId} em ${socket.nsp.name}: ${(e as Error).message}`);
+        callback?.("Erro ao validar ticket");
+        return;
+      }
+
       await socket.join(normalizedId);
       // Reduzir logs: só logar em modo debug
       if (process.env.SOCKET_DEBUG === "true") {
@@ -296,10 +376,17 @@ export const initIO = (httpServer: Server): SocketIO => {
 
         const normalizedTicketId = String(ticketId).trim();
         const numericTicketId = Number(normalizedTicketId);
+        const companyId = getSocketCompanyId(socket);
 
+        if (!companyId) {
+          callback?.({ error: "Ticket não encontrado" });
+          return;
+        }
+
+        // Filtro por companyId: ticket de outro tenant retorna 404 silencioso.
         const ticket = Number.isInteger(numericTicketId) && numericTicketId > 0
-          ? await Ticket.findByPk(numericTicketId, { attributes: ["id", "uuid"] })
-          : await Ticket.findOne({ where: { uuid: normalizedTicketId }, attributes: ["id", "uuid"] });
+          ? await Ticket.findOne({ where: { id: numericTicketId, companyId }, attributes: ["id", "uuid"] })
+          : await Ticket.findOne({ where: { uuid: normalizedTicketId, companyId }, attributes: ["id", "uuid"] });
 
         if (!ticket) {
           callback?.({ error: "Ticket não encontrado" });
@@ -372,6 +459,11 @@ export const initIO = (httpServer: Server): SocketIO => {
 
     // Diagnóstico: verifica se o socket está em uma sala e quantos sockets existem nela
     socket.on("debugCheckRoom", async (roomId: string, callback?: (data: any) => void) => {
+      // Endpoint de diagnóstico: só responde com SOCKET_DEBUG=true (evita enumeração de salas).
+      if (process.env.SOCKET_DEBUG !== "true") {
+        callback?.({ error: "debug disabled" });
+        return;
+      }
       try {
         const room = (roomId ?? "").toString().trim();
         if (!room) {
@@ -401,7 +493,9 @@ export const initIO = (httpServer: Server): SocketIO => {
     // Heartbeat: atualiza lastActivityAt do usuário em tempo real
     socket.on("userHeartbeat", async (data: { userId: number | string }, callback?: (result: any) => void) => {
       try {
-        const { userId } = data;
+        // SEGURANÇA: usa o userId autenticado do token; o userId do payload do
+        // cliente só serve de fallback no modo permissivo (dev), quando não há auth.
+        const userId = socket.data.user?.userId ?? data?.userId;
         if (!userId) {
           callback?.({ error: "userId obrigatório" });
           return;
@@ -445,7 +539,8 @@ export const initIO = (httpServer: Server): SocketIO => {
           attributes: ["id", "online", "lastActivityAt", "status", "companyId"]
         });
 
-        if (!user) {
+        // Confere tenant: heartbeat só altera usuário da mesma company do namespace.
+        if (!user || user.companyId !== companyId) {
           callback?.({ error: "Usuário não encontrado" });
           return;
         }
@@ -464,7 +559,7 @@ export const initIO = (httpServer: Server): SocketIO => {
               lastActivityAt: now,
               status: null // Limpar status "ausente" se existir
             },
-            { where: { id: userId }, silent: true }
+            { where: { id: userId, companyId }, silent: true }
           );
 
           // Emitir evento Socket.IO para atualizar frontend
@@ -477,7 +572,7 @@ export const initIO = (httpServer: Server): SocketIO => {
           // Apenas atualizar lastActivityAt
           await User.update(
             { lastActivityAt: now },
-            { where: { id: userId }, silent: true }
+            { where: { id: userId, companyId }, silent: true }
           );
         }
 

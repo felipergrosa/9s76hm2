@@ -4,19 +4,24 @@ import logger from "../utils/logger";
 
 const GRAPH = "https://graph.facebook.com/v19.0";
 
+// Fail fast: sem segredo para assinar o state OAuth o fluxo não pode operar.
+// Nunca usar segredo hardcoded como fallback.
+const META_STATE_SECRET = process.env.APP_SECRET_META_STATE || process.env.JWT_SECRET;
+if (!META_STATE_SECRET) {
+  throw new Error("[MetaOAuth] APP_SECRET_META_STATE ou JWT_SECRET precisa estar configurado");
+}
+
 // ponytail: state is HMAC-signed JSON {companyId, channel, nonce, exp}
 export const createOAuthState = (companyId: number, channel: string): string => {
   const payload = JSON.stringify({ companyId, channel, nonce: crypto.randomBytes(8).toString("hex"), exp: Date.now() + 30 * 60 * 1000 });
-  const secret = process.env.APP_SECRET_META_STATE || process.env.JWT_SECRET || "whaticket-oauth";
-  const sig = crypto.createHmac("sha256", secret).update(payload).digest("hex");
+  const sig = crypto.createHmac("sha256", META_STATE_SECRET).update(payload).digest("hex");
   return Buffer.from(JSON.stringify({ payload, sig })).toString("base64url");
 };
 
 export const verifyOAuthState = (state: string): { companyId: number; channel: string } | null => {
   try {
     const { payload, sig } = JSON.parse(Buffer.from(state, "base64url").toString("utf-8"));
-    const secret = process.env.APP_SECRET_META_STATE || process.env.JWT_SECRET || "whaticket-oauth";
-    const expected = crypto.createHmac("sha256", secret).update(payload).digest("hex");
+    const expected = crypto.createHmac("sha256", META_STATE_SECRET).update(payload).digest("hex");
     if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
     const data = JSON.parse(payload);
     if (Date.now() > data.exp) return null;

@@ -25,7 +25,10 @@ interface SyncResult {
  * 2. Remove contatos que NÃO atendem mais ao filtro
  */
 const SyncContactListBySavedFilterService = async ({ contactListId, companyId }: Request): Promise<SyncResult> => {
-  const list = await ContactList.findByPk(contactListId);
+  // Segurança: escopo por empresa para evitar IDOR entre tenants
+  const list = await ContactList.findOne({
+    where: { id: contactListId, companyId }
+  });
   if (!list) {
     logger.warn(`Lista ${contactListId} não encontrada para sincronização`);
     return { added: 0, duplicated: 0, errors: 0, removed: 0 };
@@ -63,6 +66,7 @@ const SyncContactListBySavedFilterService = async ({ contactListId, companyId }:
       const itemsToRemove = await ContactListItem.findAll({
         where: {
           contactListId,
+          companyId,
           canonicalNumber: {
             [Op.notIn]: Array.from(validCanonicalNumbers)
           },
@@ -79,7 +83,7 @@ const SyncContactListBySavedFilterService = async ({ contactListId, companyId }:
         );
 
         await ContactListItem.destroy({
-          where: { id: { [Op.in]: idsToRemove } }
+          where: { id: { [Op.in]: idsToRemove }, companyId }
         });
 
         removed = itemsToRemove.length;

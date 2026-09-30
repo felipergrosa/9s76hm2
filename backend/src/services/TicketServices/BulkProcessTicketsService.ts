@@ -118,6 +118,17 @@ const BulkProcessTicketsService = async (
     }
   }
 
+  // Validar usuário atribuído (tenant) se fornecido
+  if (assignedUserId) {
+    const assignedUser = await User.findOne({
+      where: { id: assignedUserId, companyId }
+    });
+
+    if (!assignedUser) {
+      throw new AppError("Usuário atribuído não encontrado", 404);
+    }
+  }
+
   // Buscar tickets válidos
   const tickets = await Ticket.findAll({
     where: {

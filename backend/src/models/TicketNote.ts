@@ -13,6 +13,7 @@ import {
 import Contact from "./Contact";
 import User from "./User";
 import Ticket from "./Ticket";
+import Company from "./Company";
 
 @Table
 class TicketNote extends Model<TicketNote> {
@@ -44,6 +45,13 @@ class TicketNote extends Model<TicketNote> {
 
   @BelongsTo(() => Ticket)
   ticket: Ticket;
+
+  @ForeignKey(() => Company)
+  @Column
+  companyId: number;
+
+  @BelongsTo(() => Company)
+  company: Company;
 
   @CreatedAt
   createdAt: Date;

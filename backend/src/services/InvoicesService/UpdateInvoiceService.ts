@@ -4,12 +4,16 @@ import Invoice from "../../models/Invoices";
 interface InvoiceData {
   status: string;
   id?: number | string;
+  companyId?: number;
 }
 
 const UpdateInvoiceService = async (InvoiceData: InvoiceData): Promise<Invoice> => {
-  const { id, status } = InvoiceData;
+  const { id, status, companyId } = InvoiceData;
 
-  const invoice = await Invoice.findByPk(id);
+  // Quando companyId é informado, a fatura precisa pertencer à empresa (anti cross-tenant)
+  const invoice = companyId !== undefined
+    ? await Invoice.findOne({ where: { id, companyId } })
+    : await Invoice.findByPk(id);
 
   if (!invoice) {
     throw new AppError("ERR_NO_INVOICE_FOUND", 404);

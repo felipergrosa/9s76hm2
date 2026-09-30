@@ -40,7 +40,11 @@ class TranscribeAudioMessageService {
     let ticket: Ticket | null = null;
 
     if (ticketId) {
-      ticket = await Ticket.findByPk(ticketId, { attributes: ["id", "queueId", "whatsappId", "contactId"] });
+      // Validação de tenant: ticket deve pertencer à empresa
+      ticket = await Ticket.findOne({
+        where: { id: ticketId, companyId },
+        attributes: ["id", "queueId", "whatsappId", "contactId"]
+      });
       // Toggle por fila: se desabilitado, não transcreve
       if (ticket?.queueId) {
         const q = await Queue.findByPk(ticket.queueId, { attributes: ["id", "sttEnabled"] });
@@ -55,13 +59,20 @@ class TranscribeAudioMessageService {
 
     // Se vier com subpasta (ex: contact1676/arquivo.ogg), respeita
     if (safeRel.includes("/")) {
-      candidates.push(path.resolve(companyFolder, safeRel));
+      const resolved = path.resolve(companyFolder, safeRel);
+      // Segurança: bloqueia path traversal para fora da pasta da empresa
+      if (resolved.startsWith(companyFolder + path.sep)) {
+        candidates.push(resolved);
+      }
     }
 
     // Fallback legado: companyX/arquivo
     candidates.push(path.resolve(companyFolder, path.basename(safeRel)));
 
-    const filePath = candidates.find(p => fs.existsSync(p));
+    // Segurança extra: só considera caminhos dentro da pasta da empresa
+    const filePath = candidates.find(
+      p => p.startsWith(companyFolder + path.sep) && fs.existsSync(p)
+    );
     if (!filePath) {
       try {
         console.error(`[STT] Arquivo não encontrado (companyId=${companyId}, ticketId=${ticketId})`, {

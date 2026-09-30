@@ -1,6 +1,7 @@
 import { Sequelize, Op, literal, QueryTypes } from "sequelize";
 import Contact from "../../models/Contact";
 import ContactListItem from "../../models/ContactListItem";
+import ContactList from "../../models/ContactList";
 import logger from "../../utils/logger";
 import CheckContactNumber from "../WbotServices/CheckNumber";
 import sequelize from "../../database";
@@ -89,6 +90,14 @@ const AddFilteredContactsToListService = async ({
 
     if (!companyId) {
       throw new Error('ID da empresa não informado');
+    }
+
+    // Segurança: garante que a lista pertence à empresa antes de inserir itens (IDOR)
+    const list = await ContactList.findOne({
+      where: { id: contactListId, companyId }
+    });
+    if (!list) {
+      throw new Error('Lista de contatos não encontrada');
     }
 
     if (!filters || Object.keys(filters).length === 0) {
@@ -336,9 +345,9 @@ const AddFilteredContactsToListService = async ({
       const countResult: any = await sequelize.query(countSql, { replacements: repl, type: QueryTypes.SELECT });
       logger.info(`[AddFilteredContacts] Total de contatos que atendem ao filtro: ${countResult[0]?.total || 0}`);
 
-      const before = await ContactListItem.count({ where: { contactListId } });
+      const before = await ContactListItem.count({ where: { contactListId, companyId } });
       await sequelize.query(insertSql, { replacements: repl, type: QueryTypes.INSERT });
-      const after = await ContactListItem.count({ where: { contactListId } });
+      const after = await ContactListItem.count({ where: { contactListId, companyId } });
       const added = Math.max(0, after - before);
       logger.info(`Resultado da adição (INSERT SELECT): ${added} adicionados`);
 
@@ -658,7 +667,7 @@ const AddFilteredContactsToListService = async ({
     const shouldValidate = String(process.env.CONTACT_FILTER_VALIDATE_WHATSAPP || 'false').toLowerCase() === 'true';
     const validationConcurrency = Number(process.env.CONTACT_FILTER_VALIDATION_CONCURRENCY || 10);
 
-    const countBefore = await ContactListItem.count({ where: { contactListId } });
+    const countBefore = await ContactListItem.count({ where: { contactListId, companyId } });
 
     if (shouldValidate) {
       const payload: any[] = [];
@@ -752,7 +761,7 @@ const AddFilteredContactsToListService = async ({
     }
 
 
-    const countAfter = await ContactListItem.count({ where: { contactListId } });
+    const countAfter = await ContactListItem.count({ where: { contactListId, companyId } });
     const added = Math.max(0, countAfter - countBefore);
     const duplicated = Math.max(0, candidates.length - added);
     const errors = 0;

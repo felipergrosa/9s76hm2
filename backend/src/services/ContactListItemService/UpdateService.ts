@@ -5,15 +5,19 @@ import CheckContactNumber from "../WbotServices/CheckNumber";
 
 interface Data {
   id: number | string;
+  companyId: number | string;
   name: string;
   number: string;
   email?: string;
 }
 
 const UpdateService = async (data: Data): Promise<ContactListItem> => {
-  const { id, name, number, email } = data;
+  const { id, companyId, name, number, email } = data;
 
-  const record = await ContactListItem.findByPk(id);
+  // Segurança: escopo por empresa para evitar IDOR entre tenants
+  const record = await ContactListItem.findOne({
+    where: { id, companyId }
+  });
 
   if (!record) {
     throw new AppError("ERR_NO_CONTACTLISTITEM_FOUND", 404);

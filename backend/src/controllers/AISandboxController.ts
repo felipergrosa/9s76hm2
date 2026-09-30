@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import crypto from "crypto";
 import AIAgent from "../models/AIAgent";
 import FunnelStage from "../models/FunnelStage";
+import Whatsapp from "../models/Whatsapp";
 import AIOrchestrator from "../services/IA/AIOrchestrator";
 
 type SandboxRole = "customer" | "assistant";
@@ -88,6 +89,18 @@ export const createSession = async (req: Request, res: Response) => {
 
   if (!isSimulate && !groupId && !toNumber) {
     return res.status(400).json({ error: "Informe groupId (Baileys) ou toNumber (Official) quando simulate=false" });
+  }
+
+  // Envio real (simulate=false): o whatsappId precisa ser uma conexão do
+  // tenant — caso contrário o sandbox poderia disparar mensagens por uma
+  // conexão de outra empresa.
+  if (!isSimulate && whatsappId) {
+    const whatsapp = await Whatsapp.findOne({
+      where: { id: Number(whatsappId), companyId }
+    });
+    if (!whatsapp) {
+      return res.status(404).json({ error: "Conexão WhatsApp não encontrada" });
+    }
   }
 
   const agent = await AIAgent.findOne({

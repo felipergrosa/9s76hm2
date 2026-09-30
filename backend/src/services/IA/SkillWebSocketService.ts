@@ -10,6 +10,9 @@ import { getIO } from "../../libs/socket";
 import logger from "../../utils/logger";
 import { skillCache } from "./SkillCacheService";
 import { Server as SocketIO } from "socket.io";
+import jwt from "jsonwebtoken";
+import authConfig from "../../config/auth";
+import User from "../../models/User";
 
 interface SkillEventPayload {
   skillId: number;
@@ -55,32 +58,70 @@ class SkillWebSocketService {
     skillsIo.on("connection", (socket) => {
       logger.info(`[SkillWS] Cliente conectado: ${socket.id}`);
 
-      // Autenticação via token
-      socket.on("authenticate", (data: { companyId: number; token: string }) => {
-        const { companyId, token } = data;
-        
-        // Validar token (simplificado - usar middleware real em produção)
-        if (!companyId || !token) {
+      // Autenticação via token JWT — o companyId é derivado do token/BD,
+      // nunca confiando no valor enviado pelo cliente.
+      socket.on("authenticate", async (data: { token: string }) => {
+        const { token } = data;
+
+        if (!token) {
           socket.emit("error", { message: "Autenticação requerida" });
           return;
         }
 
-        socket.join(`company:${companyId}`);
-        logger.info(`[SkillWS] Cliente autenticado: ${socket.id}, empresa: ${companyId}`);
-        socket.emit("authenticated", { success: true });
+        try {
+          const payload: any = jwt.verify(token, authConfig.secret);
+          const userId = payload?.id || payload?.userId;
+          if (!userId) {
+            throw new Error("payload sem userId");
+          }
+
+          // companyId do token; fallback no banco para tokens antigos
+          let companyId: number | undefined = payload?.companyId;
+          if (!companyId) {
+            const user = await User.findByPk(userId, { attributes: ["id", "companyId"] });
+            companyId = user?.companyId;
+          }
+          if (!companyId) {
+            throw new Error("companyId não resolvido");
+          }
+
+          socket.data.companyId = companyId;
+          socket.data.userId = userId;
+          socket.join(`company:${companyId}`);
+          logger.info(`[SkillWS] Cliente autenticado: ${socket.id}, empresa: ${companyId}`);
+          socket.emit("authenticated", { success: true, companyId });
+        } catch (err: any) {
+          logger.warn(`[SkillWS] Falha de autenticação: ${socket.id} - ${err?.message}`);
+          socket.emit("error", { message: "Token inválido ou expirado" });
+        }
       });
 
+      // Handlers abaixo exigem autenticação prévia; o companyId usado é
+      // sempre o do socket autenticado, ignorando o enviado pelo cliente.
+      const getAuthedCompanyId = (): number | null =>
+        (socket.data?.companyId as number) || null;
+
       // Entrar em sala de agente específico
-      socket.on("subscribe:agent", (data: { agentId: number; companyId: number }) => {
-        const { agentId, companyId } = data;
+      socket.on("subscribe:agent", (data: { agentId: number }) => {
+        const companyId = getAuthedCompanyId();
+        if (!companyId) {
+          socket.emit("error", { message: "Autenticação requerida" });
+          return;
+        }
+        const { agentId } = data;
         socket.join(`agent:${companyId}:${agentId}`);
         logger.debug(`[SkillWS] Inscrito em agente: ${agentId}, empresa: ${companyId}`);
         socket.emit("subscribed", { agentId, companyId });
       });
 
       // Sair da sala de agente
-      socket.on("unsubscribe:agent", (data: { agentId: number; companyId: number }) => {
-        const { agentId, companyId } = data;
+      socket.on("unsubscribe:agent", (data: { agentId: number }) => {
+        const companyId = getAuthedCompanyId();
+        if (!companyId) {
+          socket.emit("error", { message: "Autenticação requerida" });
+          return;
+        }
+        const { agentId } = data;
         socket.leave(`agent:${companyId}:${agentId}`);
         logger.debug(`[SkillWS] Desinscrito de agente: ${agentId}`);
         socket.emit("unsubscribed", { agentId, companyId });
@@ -88,7 +129,12 @@ class SkillWebSocketService {
 
       // Request de sync - verificar se há mudanças
       socket.on("sync:request", async (data: SyncRequestPayload) => {
-        const { companyId, agentId, currentVersion } = data;
+        const companyId = getAuthedCompanyId();
+        if (!companyId) {
+          socket.emit("sync:error", { message: "Autenticação requerida" });
+          return;
+        }
+        const { agentId, currentVersion } = data;
         
         try {
           const hasChanges = await skillCache.hasChanges(companyId, agentId);
@@ -124,7 +170,12 @@ class SkillWebSocketService {
 
       // Force refresh
       socket.on("sync:force", async (data: SyncRequestPayload) => {
-        const { companyId, agentId } = data;
+        const companyId = getAuthedCompanyId();
+        if (!companyId) {
+          socket.emit("sync:error", { message: "Autenticação requerida" });
+          return;
+        }
+        const { agentId } = data;
         
         try {
           await skillCache.refreshAsync(companyId, agentId);

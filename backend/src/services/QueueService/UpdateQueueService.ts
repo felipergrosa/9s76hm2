@@ -90,7 +90,7 @@ const UpdateQueueService = async (
   if (chatbots) {
     await Promise.all(
       chatbots.map(async bot => {
-        await Chatbot.upsert({ ...bot, queueId: queue.id });
+        await Chatbot.upsert({ ...bot, queueId: queue.id, companyId });
       })
     );
 
@@ -99,7 +99,7 @@ const UpdateQueueService = async (
         const stillExists = chatbots.findIndex(bot => bot.id === oldBot.id);
 
         if (stillExists === -1) {
-          await Chatbot.destroy({ where: { id: oldBot.id } });
+          await Chatbot.destroy({ where: { id: oldBot.id, companyId } });
         }
       })
     );

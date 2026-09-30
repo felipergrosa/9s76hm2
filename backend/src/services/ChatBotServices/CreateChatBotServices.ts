@@ -1,4 +1,5 @@
 import Chatbot from "../../models/Chatbot";
+import validateChatbotRefs from "./validateChatbotRefs";
 
 interface ChatbotData {
   name: string;
@@ -13,9 +14,13 @@ interface ChatbotData {
 }
 
 const CreateChatBotServices = async (
-  chatBotData: ChatbotData
+  chatBotData: ChatbotData,
+  companyId: number
 ): Promise<Chatbot> => {
-  const chatBot = await Chatbot.create(chatBotData);
+  // Referências opcionais precisam pertencer ao mesmo tenant
+  await validateChatbotRefs(chatBotData, companyId);
+
+  const chatBot = await Chatbot.create({ ...chatBotData, companyId });
   return chatBot;
 };
 

@@ -81,7 +81,7 @@ export default async function DashboardDataService(
             from traking tt1
             left join "Tickets" t1 on t1.id = tt1."ticketId"
             left join "Contacts" ct1 on ct1.id = t1."contactId"
-            where ct1."createdAt" between '${params.date_from} 00:00:00' and '${params.date_to} 23:59:59'
+            where ct1."createdAt" between ? and ?
             group by 1
             having count(tt1.id) = 1
           ) leads
@@ -172,10 +172,12 @@ export default async function DashboardDataService(
     replacements.push(`${params.date_to} 23:59:59`);
   }
 
+  // Ordem dos "?" após o filtro de período:
+  // supportHappening, supportPending, leads (date_from/date_to), attendants
   replacements.push(companyId);
   replacements.push(companyId);
-  replacements.push(companyId);
-  replacements.push(companyId);
+  replacements.push(`${params.date_from} 00:00:00`);
+  replacements.push(`${params.date_to} 23:59:59`);
   replacements.push(companyId);
 
   const finalQuery = query.replace("-- filterPeriod", where);

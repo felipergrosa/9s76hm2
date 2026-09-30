@@ -1,9 +1,13 @@
 import ContactListItem from "../../models/ContactListItem";
 import AppError from "../../errors/AppError";
 
-const DeleteService = async (id: string): Promise<void> => {
+const DeleteService = async (
+  id: string,
+  companyId: string | number
+): Promise<void> => {
+  // Segurança: escopo por empresa para evitar IDOR entre tenants
   const record = await ContactListItem.findOne({
-    where: { id }
+    where: { id, companyId }
   });
 
   if (!record) {

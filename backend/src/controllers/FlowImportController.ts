@@ -8,6 +8,13 @@ import { v4 as uuid } from "uuid";
 // CORREÇÃO 1: Importando o modelo CORRETO com o NOME e CAMINHO corretos.
 import { FlowBuilderModel } from "../models/FlowBuilder";
 
+// Extensões de mídia permitidas dentro do .zip (bloqueia html/svg/js —
+// stored XSS via arquivo servido em /public)
+const ALLOWED_MEDIA_EXTENSIONS = new Set([
+  "jpg", "jpeg", "png", "gif", "webp",
+  "mp4", "mp3", "ogg", "pdf", "txt"
+]);
+
 // Interface para o conteúdo esperado do flow.json
 interface FlowJson {
   name: string;
@@ -41,6 +48,17 @@ const FlowImportController = async (req: Request, res: Response) => {
 
     // 3. Extrai as mídias e atualiza os caminhos dentro do JSON
     const mediaEntries = zip.getEntries().filter(entry => entry.entryName.startsWith("media/") && !entry.isDirectory);
+
+    // Rejeita mídias com extensão não permitida (ex.: .html/.svg/.js)
+    const invalidEntry = mediaEntries.find(entry => {
+      const ext = path.extname(entry.entryName).replace(".", "").toLowerCase();
+      return !ALLOWED_MEDIA_EXTENSIONS.has(ext);
+    });
+    if (invalidEntry) {
+      return res.status(400).json({
+        error: `Tipo de arquivo não permitido no pacote: ${invalidEntry.entryName}`
+      });
+    }
 
     mediaEntries.forEach(entry => {
       const originalPath = entry.entryName;

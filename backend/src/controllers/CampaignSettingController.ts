@@ -68,7 +68,8 @@ export const update = async (
 
   const record = await UpdateServiceCampaignSettings({
     id,
-    value: normalizedValue as any
+    value: normalizedValue as any,
+    companyId
   } as any);
 
   const io = getIO();

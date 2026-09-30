@@ -10,9 +10,11 @@ import {
   ForeignKey,
   BelongsTo,
   HasMany,
-  Default
+  Default,
+  BeforeValidate
 } from "sequelize-typescript";
 import Queue from "./Queue";
+import Company from "./Company";
 import User from "./User";
 import QueueIntegrations from "./QueueIntegrations";
 import Files from "./Files";
@@ -91,6 +93,24 @@ class Chatbot extends Model<Chatbot> {
   @Default(false)
   @Column
   closeTicket: boolean;
+
+  @ForeignKey(() => Company)
+  @Column
+  companyId: number;
+
+  @BelongsTo(() => Company)
+  company: Company;
+
+  // Fallback de tenant: linhas criadas via associação (ex.: Queue.create com
+  // chatbots embutidos) não trazem companyId — resolve a partir da fila.
+  @BeforeValidate
+  static async fillCompanyIdFromQueue(instance: Chatbot): Promise<void> {
+    if (instance.companyId || !instance.queueId) return;
+    const queue = await Queue.findByPk(instance.queueId, { attributes: ["id", "companyId"] });
+    if (queue) {
+      instance.companyId = queue.companyId;
+    }
+  }
 }
 
 export default Chatbot;

@@ -2,10 +2,14 @@ import AppError from "../../errors/AppError";
 import Chatbot from "../../models/Chatbot";
 import User from "../../models/User";
 
-const ShowChatBotServices = async (id: number | string): Promise<Chatbot> => {
+const ShowChatBotServices = async (
+  id: number | string,
+  companyId: number
+): Promise<Chatbot> => {
   const queue = await Chatbot.findOne({
     where: {
-      id
+      id,
+      companyId
     },
     order: [
       [{ model: Chatbot, as: "mainChatbot" }, "id", "ASC"],

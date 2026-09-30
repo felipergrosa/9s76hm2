@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import GetTemplateDefinition from "../services/MetaServices/GetTemplateDefinition";
 import AppError from "../errors/AppError";
+import Whatsapp from "../models/Whatsapp";
 
 export const getTemplateDefinition = async (
     req: Request,
@@ -9,9 +10,20 @@ export const getTemplateDefinition = async (
     try {
         const { whatsappId, templateName } = req.params;
         const { language = "pt_BR" } = req.query;
+        const { companyId } = req.user;
 
         if (!whatsappId || !templateName) {
             throw new AppError("whatsappId e templateName são obrigatórios", 400);
+        }
+
+        // Escopo por empresa: a definição do template só pode ser lida
+        // via conexão que pertence ao tenant do usuário.
+        const whatsapp = await Whatsapp.findOne({
+            where: { id: whatsappId, companyId },
+            attributes: ["id"]
+        });
+        if (!whatsapp) {
+            throw new AppError("ERR_NO_WAPP_FOUND", 404);
         }
 
         const definition = await GetTemplateDefinition(

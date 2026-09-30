@@ -432,8 +432,12 @@ export async function ImportContactsService(
             let systemTagId = null;
 
             if (mapping.systemTagId) {
-              // Use existing system tag
-              systemTagId = mapping.systemTagId;
+              // Use existing system tag — só se pertencer à empresa (evita tag de outro tenant)
+              const existingTag = await Tag.findOne({
+                where: { id: mapping.systemTagId, companyId },
+                attributes: ["id"]
+              });
+              systemTagId = existingTag ? existingTag.id : null;
             } else if (mapping.newTagName && !dryRun) {
               // Create new tag (apenas fora do dry-run)
               const [newTag] = await Tag.findOrCreate({
@@ -478,7 +482,12 @@ export async function ImportContactsService(
         if (mapping) {
           let systemTagId = null as any;
           if (mapping.systemTagId) {
-            systemTagId = mapping.systemTagId;
+            // Só aceita tag existente na mesma empresa (evita tag de outro tenant)
+            const existingTag = await Tag.findOne({
+              where: { id: mapping.systemTagId, companyId },
+              attributes: ["id"]
+            });
+            systemTagId = existingTag ? existingTag.id : null;
           } else if (mapping.newTagName && !dryRun) {
             const [newTag] = await Tag.findOrCreate({
               where: { name: mapping.newTagName, companyId },

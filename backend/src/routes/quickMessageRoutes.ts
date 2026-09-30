@@ -10,11 +10,11 @@ const upload = multer(uploadConfig);
 
 const routes = express.Router();
 
-routes.get("/quick-messages/list", isAuth, QuickMessageController.findList);
+routes.get("/quick-messages/list", isAuth, checkPermission("quick-messages.view"), QuickMessageController.findList);
 
-routes.get("/quick-messages", isAuth, QuickMessageController.index);
+routes.get("/quick-messages", isAuth, checkPermission("quick-messages.view"), QuickMessageController.index);
 
-routes.get("/quick-messages/:id", isAuth, QuickMessageController.show);
+routes.get("/quick-messages/:id", isAuth, checkPermission("quick-messages.view"), QuickMessageController.show);
 
 routes.post("/quick-messages", isAuth, checkPermission("quick-messages.create"), QuickMessageController.store);
 
@@ -40,6 +40,7 @@ routes.post(
   routes.post(
     "/quick-messages/:id/increment-use",
     isAuth,
+    checkPermission("quick-messages.view"),
     QuickMessageController.incrementUse
   );
   

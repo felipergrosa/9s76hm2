@@ -1,4 +1,6 @@
+import EmailCampaign from "../../models/EmailCampaign";
 import EmailShipping from "../../models/EmailShipping";
+import AppError from "../../errors/AppError";
 
 interface Response {
   total: number;
@@ -8,7 +10,18 @@ interface Response {
   failed: number;
 }
 
-const GetReportService = async (emailCampaignId: string | number): Promise<Response> => {
+const GetReportService = async (
+  emailCampaignId: string | number,
+  companyId: number
+): Promise<Response> => {
+  // N2 (IDOR): garante que a campanha pertence ao tenant antes de expor o relatório
+  const campaign = await EmailCampaign.findOne({
+    where: { id: emailCampaignId, companyId }
+  });
+  if (!campaign) {
+    throw new AppError("Campanha de e-mail não encontrada", 404);
+  }
+
   const shippings = await EmailShipping.findAll({
     where: { emailCampaignId },
     attributes: ["status"]

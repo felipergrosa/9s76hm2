@@ -1,7 +1,6 @@
 import { Router } from "express";
 import isAuth from "../middleware/isAuth";
 import { checkPermission } from "../middleware/checkPermission";
-import envTokenAuth from "../middleware/envTokenAuth";
 import multer from "multer";
 
 import * as SettingController from "../controllers/SettingController";
@@ -27,7 +26,9 @@ settingRoutes.get("/setting/:settingKey", isAuth, checkPermission("settings.view
 
 settingRoutes.put("/setting/:settingKey", isAuth, checkPermission("settings.edit"), SettingController.updateOne);
 
-settingRoutes.get("/public-settings/:settingKey", envTokenAuth, SettingController.publicShow);
+// Endpoint realmente público (branding pré-login): só serve chaves da
+// whitelist de GetPublicSettingService (cores/logo/appName) — sem segredos.
+settingRoutes.get("/public-settings/:settingKey", SettingController.publicShow);
 
 settingRoutes.post(
   "/settings-whitelabel/logo",

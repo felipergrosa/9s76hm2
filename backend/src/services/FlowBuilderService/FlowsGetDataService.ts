@@ -1,6 +1,7 @@
 import { WebhookModel } from "../../models/Webhook";
 import User from "../../models/User";
 import { FlowBuilderModel } from "../../models/FlowBuilder";
+import { sanitizeFlowSecrets } from "./flowSecrets";
 
 interface Request {
   companyId: number;
@@ -26,6 +27,13 @@ const FlowsGetDataService = async ({
           }
         });
         let flow = rows[0]
+
+        // Não expõe credenciais de nós "openai" ao frontend
+        if (flow) {
+          const json: any = flow.toJSON();
+          json.flow = sanitizeFlowSecrets(json.flow);
+          return { flow: json } as Response;
+        }
 
         return {
             flow: flow

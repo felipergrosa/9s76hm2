@@ -1670,7 +1670,7 @@ async function verifyAndFinalizeCampaign(campaign) {
     }
   } else if (totalToSend === 0) {
     // Fallback: se não há registros em CampaignShipping, verifica se a lista tem contatos
-    const listTotal = listIds.length > 0 ? await ContactListItem.count({ where: { contactListId: listIds } }) : 0;
+    const listTotal = listIds.length > 0 ? await ContactListItem.count({ where: { contactListId: listIds, companyId } }) : 0;
     logger.warn(`[verifyAndFinalizeCampaign] Campanha ${campaignId} - nenhum registro em CampaignShipping. Lista tem ${listTotal} contatos (possivelmente todos filtrados por tags).`);
     // Se a lista tem contatos mas nenhum foi pra CampaignShipping = todos filtrados
     if (listTotal > 0) {
@@ -1725,8 +1725,9 @@ async function handleProcessCampaign(job) {
       }
 
       // IMPORTANTE: Carregar contatos de TODAS as listas e deduplicar por número
+      // N2 (cross-tenant): itens injetados por outro tenant são ignorados
       const allContactsRaw = await ContactListItem.findAll({
-        where: { contactListId: listIds },
+        where: { contactListId: listIds, companyId: campaign.companyId },
         attributes: ["id", "name", "number", "canonicalNumber", "email", "isWhatsappValid", "isGroup"]
       });
 

@@ -6,7 +6,15 @@ import AppError from "../../errors/AppError";
 import ShowUserService from "./ShowUserService";
 import Company from "../../models/Company";
 import User from "../../models/User";
+import Queue from "../../models/Queue";
+import Whatsapp from "../../models/Whatsapp";
+import Tag from "../../models/Tag";
 import { serviceCache } from "../../utils/serviceCache";
+import {
+  AVAILABLE_PERMISSIONS,
+  getAllAvailablePermissions,
+  hasPermissionAsync
+} from "../../helpers/PermissionAdapter";
 
 interface UserData {
   email?: string;
@@ -45,6 +53,8 @@ interface Request {
   userId: string | number;
   companyId: number;
   requestUserId: number;
+  // Usuário requisitante FRESCO do DB — base de toda decisão de autorização
+  requestUser: User;
 }
 
 interface Response {
@@ -58,9 +68,29 @@ const UpdateUserService = async ({
   userData,
   userId,
   companyId,
-  requestUserId
+  requestUserId,
+  requestUser
 }: Request): Promise<Response | undefined> => {
-  const user = await ShowUserService(userId, companyId);
+  // Capacidades do editor — sempre derivadas do usuário FRESCO do banco
+  const isRequestSuper = requestUser?.super === true;
+  const isRequestAdmin = requestUser?.profile === "admin";
+  const canEditUsersPerm = requestUser
+    ? await hasPermissionAsync(requestUser, "users.edit")
+    : false;
+  const canEditPrivileged = isRequestSuper || isRequestAdmin || canEditUsersPerm;
+
+  // SEGURANÇA: super admin pode editar usuário de outra empresa — resolve a
+  // empresa do usuário alvo antes do ShowUserService (que filtra por companyId)
+  let targetCompanyId = companyId;
+  if (isRequestSuper) {
+    const target = await User.findByPk(userId);
+    if (!target) {
+      throw new AppError("ERR_NO_USER_FOUND", 404);
+    }
+    targetCompanyId = target.companyId;
+  }
+
+  const user = await ShowUserService(userId, targetCompanyId);
 
   const schema = Yup.object().shape({
     name: Yup.string().min(2),
@@ -134,8 +164,9 @@ const UpdateUserService = async ({
     dataToUpdate.whatsappId = !userData.whatsappId ? null : userData.whatsappId;
   }
 
-  // Atualiza super apenas se enviado
-  if ((userData as any).hasOwnProperty("super")) {
+  // Atualiza super apenas se enviado com valor definido
+  // (o controller sempre inclui a chave, possivelmente undefined)
+  if ((userData as any).super !== undefined) {
     (dataToUpdate as any).super = (userData as any).super;
   }
 
@@ -151,12 +182,107 @@ const UpdateUserService = async ({
     (dataToUpdate as any).isPrivate = userData.isPrivate;
   }
 
+  if (!canEditPrivileged) {
+    // SEGURANÇA (N2): editor sem users.edit/admin só pode alterar campos do
+    // próprio perfil — qualquer campo privilegiado que tenha passado é
+    // descartado aqui (defesa em profundidade à whitelist do controller).
+    const SELF_EDIT_ALLOWED = new Set([
+      "name",
+      "password",
+      "defaultTheme",
+      "defaultMenu",
+      "language",
+      "color",
+      "farewellMessage",
+      "startWork",
+      "endWork"
+    ]);
+    Object.keys(dataToUpdate).forEach(key => {
+      if (!SELF_EDIT_ALLOWED.has(key)) {
+        delete (dataToUpdate as any)[key];
+      }
+    });
+  } else {
+    // SEGURANÇA: concessão de profile "admin" ou flag super é exclusiva de
+    // requestUser super. Elevar um usuário a admin/super não pode ser feita
+    // por admin comum nem por quem só tem users.edit.
+    if (userData.profile === "admin" && user.profile !== "admin" && !isRequestSuper) {
+      throw new AppError("ERR_NO_PERMISSION - SOMENTE SUPER ADMIN PODE CONCEDER ADMIN", 403);
+    }
+    // Qualquer ALTERAÇÃO da flag super (conceder ou rebaixar) exige requestUser super
+    if (
+      (userData as any).super !== undefined &&
+      (userData as any).super !== (user as any).super &&
+      !isRequestSuper
+    ) {
+      throw new AppError("ERR_NO_PERMISSION - ONLY SUPER ADMIN", 403);
+    }
+
+    // SEGURANÇA: permissions precisam pertencer ao catálogo conhecido.
+    // Requisitante não-super não pode conceder permissões do grupo super.
+    if (dataToUpdate.permissions) {
+      const catalog = new Set(getAllAvailablePermissions());
+      const superGroup = new Set<string>(AVAILABLE_PERMISSIONS.super);
+      for (const p of dataToUpdate.permissions) {
+        if (!catalog.has(p)) {
+          throw new AppError(`Permissão desconhecida: ${p}`, 400);
+        }
+        if (!isRequestSuper && superGroup.has(p)) {
+          throw new AppError("ERR_NO_PERMISSION - PERMISSAO RESTRITA A SUPER ADMIN", 403);
+        }
+      }
+    }
+
+    // SEGURANÇA: IDs referenciados precisam pertencer à empresa do usuário alvo
+    // (evita vincular filas/conexões/tags/usuários de outro tenant).
+    const uniqueIds = (arr: number[]) => Array.from(new Set((arr || []).map(Number)));
+    if (queueIds !== undefined && Array.isArray(queueIds) && queueIds.length > 0) {
+      const found = await Queue.count({ where: { id: queueIds, companyId: targetCompanyId } });
+      if (found !== uniqueIds(queueIds).length) {
+        throw new AppError("ERR_QUEUE_NOT_FOUND", 400);
+      }
+    }
+    if (dataToUpdate.whatsappId) {
+      const whatsapp = await Whatsapp.findOne({
+        where: { id: dataToUpdate.whatsappId, companyId: targetCompanyId }
+      });
+      if (!whatsapp) {
+        throw new AppError("ERR_WAPP_NOT_FOUND", 400);
+      }
+    }
+    if (dataToUpdate.allowedConnectionIds && dataToUpdate.allowedConnectionIds.length > 0) {
+      const found = await Whatsapp.count({
+        where: { id: dataToUpdate.allowedConnectionIds, companyId: targetCompanyId }
+      });
+      if (found !== uniqueIds(dataToUpdate.allowedConnectionIds).length) {
+        throw new AppError("ERR_WAPP_NOT_FOUND", 400);
+      }
+    }
+    if (dataToUpdate.allowedContactTags && dataToUpdate.allowedContactTags.length > 0) {
+      const found = await Tag.count({
+        where: { id: dataToUpdate.allowedContactTags, companyId: targetCompanyId }
+      });
+      if (found !== uniqueIds(dataToUpdate.allowedContactTags).length) {
+        throw new AppError("ERR_TAG_NOT_FOUND", 400);
+      }
+    }
+    if ((dataToUpdate as any).managedUserIds && (dataToUpdate as any).managedUserIds.length > 0) {
+      const found = await User.count({
+        where: { id: (dataToUpdate as any).managedUserIds, companyId: targetCompanyId }
+      });
+      if (found !== uniqueIds((dataToUpdate as any).managedUserIds).length) {
+        throw new AppError("ERR_NO_USER_FOUND", 400);
+      }
+    }
+  }
+
   await user.update(dataToUpdate);
 
   // Invalida o cache do usuário usado pelo middleware checkPermission (chave user:{id})
   serviceCache.invalidate(`user:${user.id}`);
 
-  if (queueIds !== undefined) {
+  // Filas são campo privilegiado: só atualizáveis por users.edit/admin/super
+  if (queueIds !== undefined && canEditPrivileged) {
     await user.$set("queues", queueIds);
   }
 
@@ -165,11 +291,19 @@ const UpdateUserService = async ({
   const company = await Company.findByPk(user.companyId);
   const oldUserEmail = user.email;
 
-  if (company.email === oldUserEmail) {
-    await company.update({
-      email,
-      password
-    })
+  // Sincroniza credenciais da empresa-dona apenas com campos efetivamente
+  // aplicados ao usuário (evita mass-assignment de e-mail em auto-edição)
+  if (company && company.email === oldUserEmail) {
+    const companySync: any = {};
+    if (dataToUpdate.email !== undefined) {
+      companySync.email = dataToUpdate.email;
+    }
+    if (dataToUpdate.password !== undefined) {
+      companySync.password = dataToUpdate.password;
+    }
+    if (Object.keys(companySync).length > 0) {
+      await company.update(companySync);
+    }
   }
 
   const serializedUser = {

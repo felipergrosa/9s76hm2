@@ -7,6 +7,7 @@ import { getIO } from "../../libs/socket";
 import wbotMonitor from "./wbotMonitor";
 import logger from "../../utils/logger";
 import * as Sentry from "@sentry/node";
+import sanitizeWhatsapp from "../../helpers/sanitizeWhatsapp";
 
 /**
  * Inicia sessão WhatsApp usando adapters (Baileys ou Official API)
@@ -37,7 +38,7 @@ export const StartWhatsAppSessionUnified = async (
   io.of(`/workspace-${companyId}`)
     .emit(`company-${companyId}-whatsappSession`, {
       action: "update",
-      session: whatsapp
+      session: sanitizeWhatsapp(whatsapp)
     });
 
   try {
@@ -118,7 +119,7 @@ export const StartWhatsAppSessionUnified = async (
           io.of(`/workspace-${companyId}`)
             .emit(`company-${companyId}-whatsappSession`, {
               action: "update",
-              session: whatsapp
+              session: sanitizeWhatsapp(whatsapp)
             });
         });
 
@@ -140,7 +141,7 @@ export const StartWhatsAppSessionUnified = async (
         io.of(`/workspace-${companyId}`)
           .emit(`company-${companyId}-whatsappSession`, {
             action: "update",
-            session: whatsapp
+            session: sanitizeWhatsapp(whatsapp)
           });
 
       } catch (err) {
@@ -163,7 +164,7 @@ export const StartWhatsAppSessionUnified = async (
     io.of(`/workspace-${companyId}`)
       .emit(`company-${companyId}-whatsappSession`, {
         action: "update",
-        session: whatsapp
+        session: sanitizeWhatsapp(whatsapp)
       });
 
     throw err;

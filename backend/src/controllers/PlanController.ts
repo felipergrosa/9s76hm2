@@ -220,17 +220,11 @@ export const update = async (
     );
 
     return res.status(200).json(plan);
-  } else if (PlanCompany.toString() !== id) {
-    return res.status(400).json({ error: "Você não possui permissão para acessar este recurso!" });
   }
 
-  // const io = getIO();
-  // io.of(companyId.toString())
-  // .emit("plan", {
-  //   action: "update",
-  //   plan
-  // });
-
+  // SEGURANÇA: não-super nunca atualiza plano — resposta explícita
+  // (antes caía sem resposta quando PlanCompany === id → request pendurada)
+  return res.status(403).json({ error: "Você não possui permissão para acessar este recurso!" });
 };
 
 export const remove = async (
@@ -248,8 +242,8 @@ export const remove = async (
   if (requestUser.super === true) {
     const plan = await DeletePlanService(id);
     return res.status(200).json(plan);
-  } else if (companyId.toString() !== id) {
-    return res.status(400).json({ error: "Você não possui permissão para acessar este recurso!" });
   }
 
+  // SEGURANÇA: não-super nunca remove plano — resposta explícita (evita hang)
+  return res.status(403).json({ error: "Você não possui permissão para acessar este recurso!" });
 };

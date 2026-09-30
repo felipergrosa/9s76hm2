@@ -1,6 +1,7 @@
 import * as Yup from "yup";
 import AppError from "../../errors/AppError";
 import ContactListItem from "../../models/ContactListItem";
+import ContactList from "../../models/ContactList";
 import logger from "../../utils/logger";
 import CheckContactNumber from "../WbotServices/CheckNumber";
 import { isValidCanonicalPhoneNumber, safeNormalizePhoneNumber } from "../../utils/phone";
@@ -26,6 +27,14 @@ const CreateService = async (data: Data): Promise<ContactListItem> => {
     await contactListItemSchema.validate({ name });
   } catch (err: any) {
     throw new AppError(err.message);
+  }
+
+  // Segurança: garante que a lista pertence à empresa autenticada (IDOR)
+  const list = await ContactList.findOne({
+    where: { id: data.contactListId, companyId: data.companyId }
+  });
+  if (!list) {
+    throw new AppError("ERR_NO_CONTACTLIST_FOUND", 404);
   }
 
   const isGroup = (data as any)?.isGroup === true;

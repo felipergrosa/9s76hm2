@@ -1,14 +1,16 @@
 import Campaign from "../../models/Campaign";
 import CampaignShipping from "../../models/CampaignShipping";
+import AppError from "../../errors/AppError";
 import { campaignQueue } from "../../queues";
 import { Op } from "sequelize";
 import logger from "../../utils/logger";
 
-export async function RestartService(id: number) {
-  const campaign = await Campaign.findByPk(id);
-  
+export async function RestartService(id: number, companyId: number) {
+  // N2 (IDOR): só reinicia campanha do próprio tenant
+  const campaign = await Campaign.findOne({ where: { id, companyId } });
+
   if (!campaign) {
-    throw new Error("Campanha não encontrada");
+    throw new AppError("Campanha não encontrada", 404);
   }
 
   // Log detalhado da campanha

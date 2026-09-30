@@ -4,6 +4,7 @@ import CampaignShipping from "../../models/CampaignShipping";
 import Whatsapp from "../../models/Whatsapp";
 import WhatsappTemplate from "../../models/WhatsappTemplate";
 import { getSendCostBrl } from "../MetaServices/WabaPricingService";
+import AppError from "../../errors/AppError";
 import moment from "moment";
 
 // Tabela de preços Meta (Brasil) - Atualizar conforme necessário
@@ -78,9 +79,12 @@ interface MonthlyReport {
  * Calcula custo de uma campanha específica
  */
 export const CalculateCampaignCost = async (
-  campaignId: number
+  campaignId: number,
+  companyId: number
 ): Promise<CostCalculation | null> => {
-  const campaign = await Campaign.findByPk(campaignId, {
+  // N2 (IDOR): restringe a campanha ao tenant autenticado
+  const campaign = await Campaign.findOne({
+    where: { id: campaignId, companyId },
     include: [
       {
         model: Whatsapp,
@@ -90,7 +94,7 @@ export const CalculateCampaignCost = async (
   });
 
   if (!campaign) {
-    throw new Error("Campanha não encontrada");
+    throw new AppError("Campanha não encontrada", 404);
   }
 
   const whatsapp = campaign.whatsapp;

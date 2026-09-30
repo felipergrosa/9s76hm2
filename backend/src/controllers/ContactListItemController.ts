@@ -87,8 +87,10 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
 
 export const show = async (req: Request, res: Response): Promise<Response> => {
   const { id } = req.params;
+  const { companyId } = req.user;
 
-  const record = await ShowService(id);
+  // Segurança: escopo por empresa para evitar IDOR entre tenants
+  const record = await ShowService(id, companyId);
 
   return res.status(200).json(record);
 };
@@ -114,7 +116,8 @@ export const update = async (
 
   const record = await UpdateService({
     ...data,
-    id
+    id,
+    companyId
   });
 
   const io = getIO();
@@ -134,7 +137,7 @@ export const remove = async (
   const { id } = req.params;
   const { companyId } = req.user;
 
-  await DeleteService(id);
+  await DeleteService(id, companyId);
 
   const io = getIO();
   io.of(`/workspace-${companyId}`)
@@ -153,9 +156,10 @@ export const findList = async (
   const { companyId } = req.user;
   const params = req.query as unknown as FindParams;
 
+  // Segurança: companyId autenticado por último para não ser sobrescrito pela query
   const records = await FindService({
-    companyId,
-    ...params
+    ...params,
+    companyId
   });
 
   return res.status(200).json(records);
@@ -193,7 +197,10 @@ export const addFilteredContacts = async (
     // Opcionalmente salvar o filtro na lista para sincronização futura
     if (saveFilter) {
       try {
-        const list = await ContactList.findByPk(parseInt(contactListId, 10));
+        // Segurança: só grava savedFilter se a lista pertencer à empresa
+        const list = await ContactList.findOne({
+          where: { id: parseInt(contactListId, 10), companyId }
+        });
         if (list) {
           list.set("savedFilter", filters);
           await list.save();
@@ -247,6 +254,14 @@ export const addManualContacts = async (
 
     if (!Array.isArray(contactIds) || contactIds.length === 0) {
       return res.status(400).json({ error: "Lista de contatos é obrigatória" });
+    }
+
+    // Segurança: garante que a lista pertence à empresa antes de inserir itens (IDOR)
+    const list = await ContactList.findOne({
+      where: { id: parseInt(contactListId, 10), companyId }
+    });
+    if (!list) {
+      return res.status(404).json({ error: "Lista de contatos não encontrada" });
     }
 
     logger.info('Adicionando contatos manualmente à lista', {

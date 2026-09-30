@@ -1,7 +1,9 @@
 import TicketNote from "../../models/TicketNote";
 
-const FindAllTicketNotesService = async (): Promise<TicketNote[]> => {
-  const ticketNote = await TicketNote.findAll();
+const FindAllTicketNotesService = async (companyId: number): Promise<TicketNote[]> => {
+  const ticketNote = await TicketNote.findAll({
+    where: { companyId }
+  });
   return ticketNote;
 };
 

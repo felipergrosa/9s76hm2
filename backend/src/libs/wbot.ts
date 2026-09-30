@@ -23,6 +23,7 @@ import { Boom } from "@hapi/boom";
 import AppError from "../errors/AppError";
 import { getIO } from "./socket";
 import { StartWhatsAppSessionUnified as StartWhatsAppSession } from "../services/WbotServices/StartWhatsAppSessionUnified";
+import sanitizeWhatsapp from "../helpers/sanitizeWhatsapp";
 import DeleteBaileysService from "../services/BaileysServices/DeleteBaileysService";
 import cacheLayer from "./cache";
 import ImportWhatsAppMessageService from "../services/WhatsappService/ImportWhatsAppMessageService";
@@ -810,7 +811,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
               setTimeout(async () => {
                 const wpp = await Whatsapp.findByPk(whatsappId);
                 io?.of(`/workspace-${companyId}`).emit(`importMessages-${wpp.companyId}`, { action: "update", status: { this: -1, all: -1 } });
-                io?.of(`/workspace-${companyId}`).emit(`company-${companyId}-whatsappSession`, { action: "update", session: wpp });
+                io?.of(`/workspace-${companyId}`).emit(`company-${companyId}-whatsappSession`, { action: "update", session: sanitizeWhatsapp(wpp) });
               }, 500);
 
               setTimeout(async () => {
@@ -819,7 +820,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                   ImportWhatsAppMessageService(wpp.id);
                   wpp.update({ statusImportMessages: "Running" });
                 }
-                io?.of(`/workspace-${companyId}`).emit(`company-${companyId}-whatsappSession`, { action: "update", session: wpp });
+                io?.of(`/workspace-${companyId}`).emit(`company-${companyId}-whatsappSession`, { action: "update", session: sanitizeWhatsapp(wpp) });
               }, 1000 * 45);
             });
           }
@@ -984,7 +985,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 io?.of(`/workspace-${companyId}`)
                   .emit(`company-${whatsapp.companyId}-whatsappSession`, {
                     action: "update",
-                    session: whatsapp
+                    session: sanitizeWhatsapp(whatsapp)
                   });
                 await releaseWbotLock(id);
                 removeWbot(id, false);
@@ -1022,7 +1023,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                   io?.of(`/workspace-${companyId}`)
                     .emit(`company-${whatsapp.companyId}-whatsappSession`, {
                       action: "update",
-                      session: whatsapp
+                      session: sanitizeWhatsapp(whatsapp)
                     });
                 } catch { }
 
@@ -1209,7 +1210,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 io?.of(`/workspace-${companyId}`)
                   .emit(`company-${whatsapp.companyId}-whatsappSession`, {
                     action: "update",
-                    session: whatsapp
+                    session: sanitizeWhatsapp(whatsapp)
                   });
                 await releaseWbotLock(id);
                 removeWbot(id, false);
@@ -1245,7 +1246,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
               io?.of(`/workspace-${companyId}`)
                 .emit(`company-${whatsapp.companyId}-whatsappSession`, {
                   action: "update",
-                  session: whatsapp
+                  session: sanitizeWhatsapp(whatsapp)
                 });
 
               const sessionIndex = sessions.findIndex(
@@ -1367,7 +1368,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 io?.of(`/workspace-${companyId}`)
                   .emit(`company-${whatsapp.companyId}-whatsappSession`, {
                     action: "update",
-                    session: whatsappUpdate
+                    session: sanitizeWhatsapp(whatsappUpdate)
                   });
                 // Garantir a remoção caso uma versão anterior tenha deixado o socket no pool.
                 await removeWbot(id, false);
@@ -1418,7 +1419,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 io?.of(`/workspace-${companyId}`)
                   .emit(`company-${whatsapp.companyId}-whatsappSession`, {
                     action: "update",
-                    session: whatsapp
+                    session: sanitizeWhatsapp(whatsapp)
                   });
               }
             }

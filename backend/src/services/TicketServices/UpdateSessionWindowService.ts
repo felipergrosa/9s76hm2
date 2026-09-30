@@ -79,10 +79,13 @@ export const UpdateSessionWindow = async (
  * Obtém o status atual da janela de sessão de um ticket
  */
 export const GetSessionWindowStatus = async (
-  ticketId: number
+  ticketId: number,
+  companyId?: number
 ): Promise<SessionWindowStatus> => {
   try {
-    const ticket = await Ticket.findByPk(ticketId, {
+    // Quando companyId é informado, restringe a busca ao tenant (anti cross-tenant)
+    const ticket = await Ticket.findOne({
+      where: companyId ? { id: ticketId, companyId } : { id: ticketId },
       include: [{ model: Whatsapp, as: "whatsapp" }]
     });
 

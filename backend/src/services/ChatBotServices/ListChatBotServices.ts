@@ -1,12 +1,13 @@
 import { Op } from "sequelize";
 import Chatbot from "../../models/Chatbot";
 
-const ListChatBotService = async (): Promise<Chatbot[]> => {
+const ListChatBotService = async (companyId: number): Promise<Chatbot[]> => {
   const chatBot = await Chatbot.findAll({
     where: {
       queueId: {
         [Op.or]: [null]
-      }
+      },
+      companyId
     },
     order: [["id", "ASC"]]
   });

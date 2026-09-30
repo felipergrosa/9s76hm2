@@ -13,6 +13,7 @@ import SyncTagService from "../services/TagServices/SyncTagsService";
 import Tag from "../models/Tag";
 import KanbanListService from "../services/TagServices/KanbanListService";
 import ContactTag from "../models/ContactTag";
+import User from "../models/User";
 import ListAllTagsService from "../services/TagServices/ListAllTagsService";
 import InMemoryCache from "../helpers/InMemoryCache";
 
@@ -64,6 +65,14 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     userId = requestUserId;
   }
 
+  // Valida que o userId informado pertence à mesma empresa (evita tag vinculada a usuário de outro tenant)
+  if (userId) {
+    const owner = await User.findOne({ where: { id: userId, companyId } });
+    if (!owner) {
+      throw new AppError("ERR_NO_USER_FOUND", 404);
+    }
+  }
+
   const tag = await CreateService({
     name,
     color,
@@ -93,8 +102,9 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
 
 export const show = async (req: Request, res: Response): Promise<Response> => {
   const { tagId } = req.params;
+  const { companyId } = req.user;
 
-  const tag = await ShowService(tagId);
+  const tag = await ShowService(tagId, companyId);
 
   return res.json(tag);
 };
@@ -109,8 +119,8 @@ export const update = async (
 
   // Usuários não-admin só podem editar tags transacionais (sem #)
   if (profile !== "admin") {
-    // Busca a tag atual
-    const currentTag = await ShowService(tagId);
+    // Busca a tag atual (já filtrada por empresa)
+    const currentTag = await ShowService(tagId, companyId);
 
     // Não pode editar tag de permissão (#)
     if (currentTag.name && currentTag.name.startsWith("#")) {
@@ -123,7 +133,15 @@ export const update = async (
     }
   }
 
-  const tag = await UpdateService({ tagData, id: tagId });
+  // Valida que o userId informado pertence à mesma empresa (evita tag vinculada a usuário de outro tenant)
+  if (tagData.userId) {
+    const owner = await User.findOne({ where: { id: tagData.userId, companyId } });
+    if (!owner) {
+      throw new AppError("ERR_NO_USER_FOUND", 404);
+    }
+  }
+
+  const tag = await UpdateService({ tagData, id: tagId, companyId });
 
   // Invalida cache de tags da empresa
   InMemoryCache.delPattern(`tags:*:${companyId}:*`);
@@ -147,14 +165,14 @@ export const remove = async (
 
   // Usuários não-admin só podem deletar tags transacionais (sem #)
   if (profile !== "admin") {
-    const currentTag = await ShowService(tagId);
+    const currentTag = await ShowService(tagId, companyId);
 
     if (currentTag.name && currentTag.name.startsWith("#")) {
       throw new AppError("Usuários não-admin não podem deletar tags de permissão (#)", 403);
     }
   }
 
-  await DeleteService(tagId);
+  await DeleteService(tagId, companyId);
 
   // Invalida cache de tags da empresa
   InMemoryCache.delPattern(`tags:*:${companyId}:*`);
@@ -324,14 +342,18 @@ export const removeContactTag = async (
   const { tagId, contactId } = req.params;
   const { companyId } = req.user;
 
+  // Valida que a tag pertence à empresa antes de remover a associação (evita cross-tenant)
+  await ShowService(tagId, companyId);
+
   await ContactTag.destroy({
     where: {
       tagId,
-      contactId
+      contactId,
+      companyId
     }
   });
 
-  const tag = await ShowService(tagId);
+  const tag = await ShowService(tagId, companyId);
 
   const io = getIO();
   io.of(`/workspace-${companyId}`)

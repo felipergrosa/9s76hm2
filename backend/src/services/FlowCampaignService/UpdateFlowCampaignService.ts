@@ -1,3 +1,4 @@
+import AppError from "../../errors/AppError";
 import { FlowBuilderModel } from "../../models/FlowBuilder";
 import { FlowCampaignModel } from "../../models/FlowCampaign";
 import { WebhookModel } from "../../models/Webhook";
@@ -22,12 +23,25 @@ const UpdateFlowCampaignService = async ({
 }: Request): Promise<String> => {
   try {
 
+    // flowId novo também precisa pertencer ao tenant
+    if (flowId) {
+      const flowExists = await FlowBuilderModel.findOne({
+        where: { id: flowId, company_id: companyId }
+      });
+      if (!flowExists) {
+        throw new AppError("ERR_NO_FLOW_FOUND", 404);
+      }
+    }
+
     const flow = await FlowCampaignModel.update({ name, phrase, flowId, status }, {
-      where: {id: id}
+      where: {id: id, companyId}
     });
 
     return 'ok';
   } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
     console.error("Erro ao inserir o usuário:", error);
 
     return error

@@ -9,7 +9,22 @@ const metaTemplateRoutes = express.Router();
 // Upload em memória para mídia do HEADER do template (campo "headerFile")
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 100 * 1024 * 1024 }
+  // Vídeos de header da Meta podem ser grandes — manter 100MB
+  limits: { fileSize: 100 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    // Whitelist de MIME aceitos para mídia de HEADER de template
+    const allowedMimes = [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "video/mp4",
+      "application/pdf"
+    ];
+    if (allowedMimes.includes(file.mimetype) || file.mimetype.startsWith("audio/")) {
+      return cb(null, true);
+    }
+    return cb(new Error(`Tipo de arquivo não permitido para header de template: ${file.mimetype}`));
+  }
 });
 
 // Tarifas por envio (pricing_analytics) — antes de /:whatsappId para não conflitar

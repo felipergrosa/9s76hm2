@@ -4,8 +4,7 @@ import Whatsapp from "../models/Whatsapp";
 import { handleMessage } from "../services/FacebookServices/facebookMessageListener";
 import { extractCommentFromWebhook, replyCommentWithDM } from "../services/FacebookServices/CommentToDMService";
 import {
-  checkMetaWebhookSignature,
-  WEBHOOK_SIGNATURE_ENFORCE
+  checkMetaWebhookSignature
 } from "../services/WebhookService/CheckMetaWebhookSignature";
 
 export const index = async (req: Request, res: Response): Promise<Response> => {
@@ -41,14 +40,16 @@ export const webHook = async (
     const { body } = req;
 
     const signatureHeader = req.headers["x-hub-signature-256"] as string | undefined;
+    // Fail-closed: com secret configurado, assinatura inválida rejeita;
+    // em produção sem nenhum secret, também rejeita.
     const isSignatureValid = await checkMetaWebhookSignature(
       req.rawBody,
       signatureHeader,
       "Facebook/Instagram"
     );
 
-    if (!isSignatureValid && WEBHOOK_SIGNATURE_ENFORCE) {
-      logger.warn(`[Webhook] Requisição rejeitada: assinatura HMAC inválida (enforce ativo)`);
+    if (!isSignatureValid) {
+      logger.warn(`[Webhook] Requisição rejeitada: assinatura HMAC inválida`);
       return res.status(403).json({ message: "Forbidden" });
     }
 

@@ -7,6 +7,7 @@ interface TicketNoteData {
   userId: number | string;
   contactId: number | string;
   ticketId: number | string;
+  companyId: number | string;
 }
 
 const CreateTicketNoteService = async (

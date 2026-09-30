@@ -5,6 +5,13 @@ import { SerializeUser } from "../../helpers/SerializeUser";
 import User from "../../models/User";
 import Plan from "../../models/Plan";
 import Company from "../../models/Company";
+import Queue from "../../models/Queue";
+import Whatsapp from "../../models/Whatsapp";
+import Tag from "../../models/Tag";
+import {
+  AVAILABLE_PERMISSIONS,
+  getAllAvailablePermissions
+} from "../../helpers/PermissionAdapter";
 
 interface Request {
   email: string;
@@ -35,6 +42,9 @@ interface Request {
   isPrivate?: boolean;
   superUser?: boolean;
   color?: string;
+  // Flag do requisitante (vinda do DB) — controla concessão de admin/super
+  // e permissões do grupo super
+  requestUserIsSuper?: boolean;
 }
 
 interface Response {
@@ -72,8 +82,70 @@ const CreateUserService = async ({
   allowedConnectionIds = [],
   isPrivate = false,
   superUser = false,
-  color = ""
+  color = "",
+  requestUserIsSuper = false
 }: Request): Promise<Response> => {
+  // SEGURANÇA (N2): profile "admin" e flag super só podem ser concedidos por
+  // requisitante super admin (defesa em profundidade — o controller já bloqueia).
+  if (profile === "admin" && !requestUserIsSuper) {
+    throw new AppError("ERR_NO_PERMISSION - SOMENTE SUPER ADMIN PODE CONCEDER ADMIN", 403);
+  }
+  if (superUser && !requestUserIsSuper) {
+    throw new AppError("ERR_NO_PERMISSION - ONLY SUPER ADMIN", 403);
+  }
+
+  // SEGURANÇA: permissions precisam pertencer ao catálogo conhecido —
+  // wildcards/chaves fora do catálogo são rejeitadas, e permissões do grupo
+  // super só podem ser concedidas por requisitante super.
+  if (permissions && permissions.length > 0) {
+    const catalog = new Set(getAllAvailablePermissions());
+    const superGroup = new Set<string>(AVAILABLE_PERMISSIONS.super);
+    for (const p of permissions) {
+      if (!catalog.has(p)) {
+        throw new AppError(`Permissão desconhecida: ${p}`, 400);
+      }
+      if (!requestUserIsSuper && superGroup.has(p)) {
+        throw new AppError("ERR_NO_PERMISSION - PERMISSAO RESTRITA A SUPER ADMIN", 403);
+      }
+    }
+  }
+
+  // SEGURANÇA: IDs referenciados precisam pertencer à empresa do usuário criado
+  // (evita vincular filas/conexões/tags/usuários de outro tenant).
+  const uniqueIds = (arr: number[]) => Array.from(new Set((arr || []).map(Number)));
+  if (companyId !== undefined) {
+    if (queueIds.length > 0) {
+      const found = await Queue.count({ where: { id: queueIds, companyId } });
+      if (found !== uniqueIds(queueIds).length) {
+        throw new AppError("ERR_QUEUE_NOT_FOUND", 400);
+      }
+    }
+    if (whatsappId) {
+      const whatsapp = await Whatsapp.findOne({ where: { id: whatsappId, companyId } });
+      if (!whatsapp) {
+        throw new AppError("ERR_WAPP_NOT_FOUND", 400);
+      }
+    }
+    if (allowedConnectionIds.length > 0) {
+      const found = await Whatsapp.count({ where: { id: allowedConnectionIds, companyId } });
+      if (found !== uniqueIds(allowedConnectionIds).length) {
+        throw new AppError("ERR_WAPP_NOT_FOUND", 400);
+      }
+    }
+    if (allowedContactTags.length > 0) {
+      const found = await Tag.count({ where: { id: allowedContactTags, companyId } });
+      if (found !== uniqueIds(allowedContactTags).length) {
+        throw new AppError("ERR_TAG_NOT_FOUND", 400);
+      }
+    }
+    if (managedUserIds.length > 0) {
+      const found = await User.count({ where: { id: managedUserIds, companyId } });
+      if (found !== uniqueIds(managedUserIds).length) {
+        throw new AppError("ERR_NO_USER_FOUND", 400);
+      }
+    }
+  }
+
   if (companyId !== undefined) {
     const company = await Company.findOne({
       where: {

@@ -109,8 +109,9 @@ async function processCampaign(job: any): Promise<void> {
     }
 
     // Busca TODOS os contatos de TODAS as listas de uma vez
+    // N2 (cross-tenant): itens injetados por outro tenant são ignorados
     const allContactsRaw = await ContactListItem.findAll({
-      where: { contactListId: listIds },
+      where: { contactListId: listIds, companyId: campaign.companyId },
       include: [
         {
           model: Contact,

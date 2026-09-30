@@ -42,10 +42,13 @@ type UpdateInvoiceData = {
 
 export const index = async (req: Request, res: Response): Promise<Response> => {
   const { searchParam, pageNumber } = req.query as IndexQuery;
+  const { companyId, super: isSuper } = req.user as any;
 
   const { invoices, count, hasMore } = await ListInvoicesServices({
     searchParam,
-    pageNumber
+    pageNumber,
+    companyId,
+    isSuper
   });
 
   return res.json({ invoices, count, hasMore });
@@ -54,8 +57,9 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
 
 export const show = async (req: Request, res: Response): Promise<Response> => {
   const { id } = req.params;
+  const { companyId, super: isSuper } = req.user as any;
 
-  const invoice = await ShowInvoceService(id);
+  const invoice = await ShowInvoceService(id, isSuper ? undefined : companyId);
 
   return res.status(200).json(invoice);
 };
@@ -92,12 +96,15 @@ export const update = async (
     throw new AppError(err.message);
   }
 
-  const { id, status } = InvoiceData;
+  // Segurança: id vem da URL (nunca do body) e a fatura precisa pertencer à empresa do usuário
+  const { id } = req.params;
+  const { status } = InvoiceData;
+  const { companyId, super: isSuper } = req.user as any;
 
   const plan = await UpdateInvoiceService({
     id,
     status,
-
+    companyId: isSuper ? undefined : companyId
   });
 
   // const io = getIO();

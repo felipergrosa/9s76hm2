@@ -9,9 +9,14 @@ import Queue from "../../models/Queue";
  * Serviço para clonar uma campanha existente
  * Cria uma cópia com status INATIVA e nome prefixado
  */
-const CloneCampaignService = async (campaignId: string | number): Promise<Campaign> => {
-    // Buscar campanha original
-    const original = await Campaign.findByPk(campaignId);
+const CloneCampaignService = async (
+    campaignId: string | number,
+    companyId: number
+): Promise<Campaign> => {
+    // N2 (IDOR): só clona campanha do próprio tenant
+    const original = await Campaign.findOne({
+        where: { id: campaignId, companyId }
+    });
 
     if (!original) {
         throw new AppError("ERR_CAMPAIGN_NOT_FOUND", 404);

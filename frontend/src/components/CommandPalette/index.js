@@ -122,7 +122,8 @@ const NAV_ITEMS = [
   { id: "nav-ai-agents", name: "Agentes de IA", to: "/ai-agents", permission: "ai-agents.view" },
   { id: "nav-ai-training", name: "Treinamento de IA", to: "/ai-training", permission: "ai-training.view" },
   { id: "nav-ai-settings", name: "Configurações de IA", to: "/ai-settings", permission: "ai-settings.view" },
-  { id: "nav-flowbuilders", name: "Flow Builder", to: "/flowbuilders", permission: "flowbuilders.view" },
+  // backend usa a chave singular "flowbuilder.view" (PermissionAdapter)
+  { id: "nav-flowbuilders", name: "Flow Builder", to: "/flowbuilders", permission: "flowbuilder.view" },
   { id: "nav-queues", name: "Filas", to: "/queues", permission: "queues.view" },
   { id: "nav-announcements", name: "Informativos", to: "/announcements", permission: "announcements.view" },
   { id: "nav-financeiro", name: "Financeiro", to: "/financeiro", permission: "financeiro.view" },

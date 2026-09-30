@@ -17,14 +17,14 @@ ticketNoteRoutes.get("/ticket-notes", isAuth, checkPermission("tickets.view"), T
 
 ticketNoteRoutes.get("/ticket-notes/:id", isAuth, checkPermission("tickets.view"), TicketNoteController.show);
 
-ticketNoteRoutes.post("/ticket-notes", isAuth, checkPermission("tickets.edit"), TicketNoteController.store);
+ticketNoteRoutes.post("/ticket-notes", isAuth, checkPermission("tickets.update"), TicketNoteController.store);
 
-ticketNoteRoutes.put("/ticket-notes/:id", isAuth, checkPermission("tickets.edit"), TicketNoteController.update);
+ticketNoteRoutes.put("/ticket-notes/:id", isAuth, checkPermission("tickets.update"), TicketNoteController.update);
 
 ticketNoteRoutes.delete(
   "/ticket-notes/:id",
   isAuth,
-  checkPermission("tickets.edit"),
+  checkPermission("tickets.update"),
   TicketNoteController.remove
 );
 

@@ -1,5 +1,6 @@
 import { WASocket } from "@whiskeysockets/baileys";
 import Contact from "../../models/Contact";
+import Whatsapp from "../../models/Whatsapp";
 import { getWbotOrRecover } from "../../libs/wbot";
 import logger from "../../utils/logger";
 import { Op, literal } from "sequelize";
@@ -187,6 +188,14 @@ const ValidateContactNumbersService = async ({
     mode,
     offset = 0
 }: ValidateRequest): Promise<ValidateContactNumbersResult> => {
+    // Segurança: valida que a sessão WhatsApp pertence à empresa antes de usar (IDOR)
+    const whatsapp = await Whatsapp.findOne({
+        where: { id: whatsappId, companyId }
+    });
+    if (!whatsapp) {
+        throw new Error("ERR_WAPP_NOT_FOUND");
+    }
+
     // CORREÇÃO: Usar getWbotOrRecover para aguardar sessão durante reconexão
     const wbot = await getWbotOrRecover(whatsappId, 30000);
     if (!wbot) {

@@ -19,10 +19,13 @@ interface FlowData {
 
 const FlowExportController = async (req: Request, res: Response) => {
   const { id } = req.params;
+  const { companyId } = req.user;
 
   try {
-    // CORREÇÃO 2: Buscamos o fluxo usando apenas o FlowBuilderModel, sem includes.
-    const flowInstance = await FlowBuilderModel.findByPk(id);
+    // Busca restrita ao tenant — evita exportar fluxo de outra empresa (IDOR)
+    const flowInstance = await FlowBuilderModel.findOne({
+      where: { id, company_id: companyId }
+    });
 
     if (!flowInstance) {
       return res.status(404).json({ error: "Fluxo não encontrado." });

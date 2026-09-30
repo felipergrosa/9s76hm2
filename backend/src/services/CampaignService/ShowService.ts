@@ -7,8 +7,13 @@ import Whatsapp from "../../models/Whatsapp";
 import User from "../../models/User";
 import Queue from "../../models/Queue";
 
-const ShowService = async (id: string | number): Promise<Campaign> => {
-  const record = await Campaign.findByPk(id, {
+const ShowService = async (
+  id: string | number,
+  companyId: number
+): Promise<Campaign> => {
+  // N2 (IDOR): restringe a busca ao tenant autenticado
+  const record = await Campaign.findOne({
+    where: { id, companyId },
     include: [
       { model: CampaignShipping },
       { model: ContactList, attributes: ["id", "name"] }, // Removido include de ContactListItem

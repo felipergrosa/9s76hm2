@@ -7,7 +7,9 @@ import ShowChatBotServices from "../services/ChatBotServices/ShowChatBotServices
 import UpdateChatBotServices from "../services/ChatBotServices/UpdateChatBotServices";
 
 export const index = async (req: Request, res: Response): Promise<Response> => {
-  const queues = await ListChatBotServices();
+  const { companyId } = req.user;
+
+  const queues = await ListChatBotServices(companyId);
 
   return res.status(200).json(queues);
 };
@@ -16,7 +18,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
   const { name, color, greetingMessage, queueType, optIntegrationId, optQueueId, optUserId, optFileId, closeTicket } = req.body;
   const { companyId } = req.user;
 
-  const chatbot = await CreateChatBotServices({ name, color, greetingMessage, queueType, optIntegrationId, optQueueId, optUserId, optFileId, closeTicket });
+  const chatbot = await CreateChatBotServices({ name, color, greetingMessage, queueType, optIntegrationId, optQueueId, optUserId, optFileId, closeTicket }, companyId);
   const io = getIO();
   io.of(`/workspace-${companyId}`)
     .emit(`company-${companyId}-chatbot`, {
@@ -29,8 +31,9 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
 
 export const show = async (req: Request, res: Response): Promise<Response> => {
   const { chatbotId } = req.params;
+  const { companyId } = req.user;
 
-  const queue = await ShowChatBotServices(chatbotId);
+  const queue = await ShowChatBotServices(chatbotId, companyId);
   return res.status(200).json(queue);
 };
 
@@ -41,7 +44,7 @@ export const update = async (
   const { chatbotId } = req.params;
   const { companyId } = req.user;
 
-  const chatbot = await UpdateChatBotServices(chatbotId, req.body);
+  const chatbot = await UpdateChatBotServices(chatbotId, req.body, companyId);
 
   const io = getIO();
   io.of(`/workspace-${companyId}`)
@@ -60,7 +63,7 @@ export const remove = async (
   const { chatbotId } = req.params;
   const { companyId } = req.user;
 
-  await DeleteChatBotServices(chatbotId);
+  await DeleteChatBotServices(chatbotId, companyId);
 
   const io = getIO();
   io.of(`/workspace-${companyId}`)

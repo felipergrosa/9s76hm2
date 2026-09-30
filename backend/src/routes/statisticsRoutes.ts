@@ -19,6 +19,8 @@ statisticsRoutes.get(
   "/contacts-report",
   isAuth,
   checkPermission("reports.view"),
+  // Gate adicional: o relatório devolve PII em massa — exige permissão de exportação de contatos
+  checkPermission("contacts.export"),
   StatisticsController.ContactsReport
 );
 

@@ -27,6 +27,7 @@ import formatBody from "../../helpers/Mustache";
 import { Mutex } from "async-mutex";
 import logger from "../../utils/logger";
 import ApplyUserPersonalTagService from "../ContactServices/ApplyUserPersonalTagService";
+import AppError from "../../errors/AppError";
 
 interface TicketData {
   status?: string;
@@ -148,6 +149,23 @@ const UpdateTicketService = async ({
 
     let ticket = await ShowTicketService(ticketId, companyId);
 
+    // Validação de tenant ANTES de qualquer escrita:
+    // fila e usuário informados devem pertencer à mesma empresa
+    let queue;
+    if (!isNil(queueId)) {
+      queue = await Queue.findOne({ where: { id: queueId, companyId } });
+      if (!queue) {
+        throw new AppError("ERR_QUEUE_NOT_FOUND", 404);
+      }
+    }
+
+    if (!isNil(userId) && Number(userId) !== 0) {
+      const targetUser = await User.findOne({ where: { id: userId, companyId } });
+      if (!targetUser) {
+        throw new AppError("ERR_NO_USER_FOUND", 404);
+      }
+    }
+
     if (ticket.channel === "whatsapp" && ticket.whatsappId) {
       await SetTicketMessagesAsRead(ticket);
     }
@@ -205,11 +223,6 @@ const UpdateTicketService = async ({
 
       // await CheckContactOpenTickets(ticket.contactId, ticket.whatsappId );
       isBot = false;
-    }
-
-    let queue;
-    if (!isNil(queueId)) {
-      queue = await Queue.findByPk(queueId);
     }
 
     const nextStatus = status ?? ticket.status;

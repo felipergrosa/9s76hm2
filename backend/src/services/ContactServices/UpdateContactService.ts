@@ -257,6 +257,17 @@ const UpdateContactService = async ({
         // upsert() não dispara hooks de instância no Sequelize v5 (Postgres) —
         // valida explicitamente aqui antes de gravar.
         validateCustomFieldTypedValue(info);
+        // Segurança: id vindo do cliente só é aceito no upsert se o registro
+        // já pertencer a este contato (evita sobrescrever campo de outro contato)
+        if (info.id) {
+          const ownsField = await ContactCustomField.findOne({
+            where: { id: info.id, contactId: contact.id },
+            attributes: ["id"]
+          });
+          if (!ownsField) {
+            delete info.id;
+          }
+        }
         await ContactCustomField.upsert({ ...info, contactId: contact.id });
       })
     );

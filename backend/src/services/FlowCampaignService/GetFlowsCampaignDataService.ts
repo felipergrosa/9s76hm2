@@ -22,7 +22,8 @@ const GetFlowsCampaignDataService = async ({
         // Realiza a consulta com paginação usando findAndCountAll
         const { count, rows } = await FlowCampaignModel.findAndCountAll({
           where: {
-            id: idFlow
+            id: idFlow,
+            companyId
           }
         });
         

@@ -15,6 +15,7 @@ import formatBody from "../../helpers/Mustache";
 interface Request {
   messageId: string;
   body: string;
+  companyId?: number;
 }
 
 /**
@@ -109,9 +110,12 @@ const editMessageBaileys = async (
 const EditWhatsAppMessage = async ({
   messageId,
   body,
+  companyId,
 }: Request): Promise<{ ticket: Ticket, message: Message }> => {
 
-  const message = await Message.findByPk(messageId, {
+  // Quando companyId é informado, restringe a busca ao tenant (anti cross-tenant)
+  const message = await Message.findOne({
+    where: companyId ? { id: messageId, companyId } : { id: messageId },
     include: [
       {
         model: Ticket,

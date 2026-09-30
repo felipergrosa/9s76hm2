@@ -1,8 +1,12 @@
 import DripSequence from "../../models/DripSequence";
 import AppError from "../../errors/AppError";
 
-const DeleteService = async (id: string | number): Promise<void> => {
-  const record = await DripSequence.findByPk(id);
+const DeleteService = async (
+  id: string | number,
+  companyId: number
+): Promise<void> => {
+  // N2 (IDOR): só localiza/exclui follow-up do próprio tenant
+  const record = await DripSequence.findOne({ where: { id, companyId } });
 
   if (!record) {
     throw new AppError("Sequência de drip não encontrada", 404);

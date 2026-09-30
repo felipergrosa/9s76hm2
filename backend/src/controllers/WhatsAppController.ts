@@ -23,6 +23,8 @@ import UpdateWhatsAppServiceAdmin from "../services/WhatsappService/UpdateWhatsA
 import ListAllWhatsAppsService from "../services/WhatsappService/ListAllWhatsAppService";
 import ListFilterWhatsAppsService from "../services/WhatsappService/ListFilterWhatsAppsService";
 import User from "../models/User";
+import { sanitizeWhatsapp } from "../helpers/sanitizeWhatsapp";
+import logger from "../utils/logger";
 
 interface WhatsappData {
   name: string;
@@ -92,7 +94,7 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
     }
   }
 
-  return res.status(200).json(whatsapps);
+  return res.status(200).json(whatsapps.map(sanitizeWhatsapp));
 };
 
 export const indexFilter = async (req: Request, res: Response): Promise<Response> => {
@@ -101,7 +103,7 @@ export const indexFilter = async (req: Request, res: Response): Promise<Response
 
   const whatsapps = await ListFilterWhatsAppsService({ companyId, session, channel });
 
-  return res.status(200).json(whatsapps);
+  return res.status(200).json(whatsapps.map(sanitizeWhatsapp));
 };
 
 export const store = async (req: Request, res: Response): Promise<Response> => {
@@ -216,7 +218,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     `company-${companyId}-whatsapp`,
     {
       action: "update",
-      whatsapp
+      whatsapp: sanitizeWhatsapp(whatsapp)
     }
   );
 
@@ -226,12 +228,12 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
       `company-${companyId}-whatsapp`,
       {
         action: "update",
-        whatsapp: oldDefaultWhatsapp
+        whatsapp: sanitizeWhatsapp(oldDefaultWhatsapp)
       }
     );
   }
 
-  return res.status(200).json(whatsapp);
+  return res.status(200).json(sanitizeWhatsapp(whatsapp));
 
 };
 
@@ -357,15 +359,19 @@ export const storeFacebook = async (
           `company-${companyId}-whatsapp`,
           {
             action: "update",
-            whatsapp
+            whatsapp: sanitizeWhatsapp(whatsapp)
           }
         );
 
       }
     }
-    return res.status(200);
-  } catch (error) {
-    console.log(error);
+    return res.status(200).json({ message: "Facebook pages connected." });
+  } catch (error: any) {
+    // Log sanitizado: error.config carrega access_token na URL/params — nunca logar
+    logger.error(
+      `[storeFacebook] ${error?.message || error} ` +
+      `(status=${error?.response?.status ?? "n/a"}, meta=${JSON.stringify(error?.response?.data?.error ?? null)})`
+    );
     return res.status(400).json({
       error: "Facebook page not found"
     });
@@ -381,7 +387,7 @@ export const show = async (req: Request, res: Response): Promise<Response> => {
   const whatsapp = await ShowWhatsAppService(whatsappId, companyId, session);
 
 
-  return res.status(200).json(whatsapp);
+  return res.status(200).json(sanitizeWhatsapp(whatsapp));
 };
 
 export const update = async (
@@ -402,23 +408,33 @@ export const update = async (
   io.of(`/workspace-${companyId}`)
     .emit(`company-${companyId}-whatsapp`, {
       action: "update",
-      whatsapp
+      whatsapp: sanitizeWhatsapp(whatsapp)
     });
 
   if (oldDefaultWhatsapp) {
     io.of(`/workspace-${companyId}`)
       .emit(`company-${companyId}-whatsapp`, {
         action: "update",
-        whatsapp: oldDefaultWhatsapp
+        whatsapp: sanitizeWhatsapp(oldDefaultWhatsapp)
       });
   }
 
-  return res.status(200).json(whatsapp);
+  return res.status(200).json(sanitizeWhatsapp(whatsapp));
 
 };
 
 export const closedTickets = async (req: Request, res: Response) => {
   const { whatsappId } = req.params
+  const { companyId } = req.user;
+
+  // Confirma que a conexão pertence à empresa antes de fechar tickets importados
+  const whatsapp = await Whatsapp.findOne({
+    where: { id: whatsappId, companyId },
+    attributes: ["id"]
+  });
+  if (!whatsapp) {
+    throw new AppError("ERR_NO_WAPP_FOUND", 404);
+  }
 
   closeTicketsImported(whatsappId)
 
@@ -461,15 +477,18 @@ export const remove = async (
   if (whatsapp.channel === "facebook" || whatsapp.channel === "instagram") {
     const { facebookUserToken } = whatsapp;
 
+    // companyId no where: token de outra empresa não pode ser afetado
     const getAllSameToken = await Whatsapp.findAll({
       where: {
-        facebookUserToken
+        facebookUserToken,
+        companyId
       }
     });
 
     await Whatsapp.destroy({
       where: {
-        facebookUserToken
+        facebookUserToken,
+        companyId
       }
     });
 
@@ -510,8 +529,14 @@ export const restart = async (
 export const listAll = async (req: Request, res: Response): Promise<Response> => {
   const { companyId } = req.user;
   const { session } = req.query as QueryParams;
-  const whatsapps = await ListAllWhatsAppsService({ session });
-  return res.status(200).json(whatsapps);
+  // Super admin pode listar conexões de todas as empresas;
+  // demais usuários ficam restritos à própria empresa.
+  const isSuper = Boolean((req.user as any)?.super);
+  const whatsapps = await ListAllWhatsAppsService({
+    session,
+    companyId: isSuper ? undefined : companyId
+  });
+  return res.status(200).json(whatsapps.map(sanitizeWhatsapp));
 };
 
 export const updateAdmin = async (
@@ -532,18 +557,18 @@ export const updateAdmin = async (
   io.of(`/workspace-${companyId}`)
     .emit(`admin-whatsapp`, {
       action: "update",
-      whatsapp
+      whatsapp: sanitizeWhatsapp(whatsapp)
     });
 
   if (oldDefaultWhatsapp) {
     io.of(`/workspace-${companyId}`)
       .emit(`admin-whatsapp`, {
         action: "update",
-        whatsapp: oldDefaultWhatsapp
+        whatsapp: sanitizeWhatsapp(oldDefaultWhatsapp)
       });
   }
 
-  return res.status(200).json(whatsapp);
+  return res.status(200).json(sanitizeWhatsapp(whatsapp));
 };
 
 export const removeAdmin = async (
@@ -574,16 +599,19 @@ export const removeAdmin = async (
   if (whatsapp.channel === "facebook" || whatsapp.channel === "instagram") {
     const { facebookUserToken } = whatsapp;
 
+    // companyId no where: token de outra empresa não pode ser afetado
     const getAllSameToken = await Whatsapp.findAll({
 
       where: {
-        facebookUserToken
+        facebookUserToken,
+        companyId
       }
     });
 
     await Whatsapp.destroy({
       where: {
-        facebookUserToken
+        facebookUserToken,
+        companyId
       }
     });
 
@@ -604,10 +632,10 @@ export const showAdmin = async (req: Request, res: Response): Promise<Response> 
   const { whatsappId } = req.params;
   const { companyId } = req.user;
   // console.log("SHOWING WHATSAPP ADMIN", whatsappId)
-  const whatsapp = await ShowWhatsAppServiceAdmin(whatsappId);
+  const whatsapp = await ShowWhatsAppServiceAdmin(whatsappId, companyId);
 
 
-  return res.status(200).json(whatsapp);
+  return res.status(200).json(sanitizeWhatsapp(whatsapp));
 };
 
 /**
@@ -642,6 +670,16 @@ export const syncFullHistory = async (req: Request, res: Response): Promise<Resp
  */
 export const getSyncProgressStatus = async (req: Request, res: Response): Promise<Response> => {
   const { whatsappId } = req.params;
+  const { companyId } = req.user;
+
+  // Escopo por empresa: progresso de sync de outra empresa não vaza
+  const whatsapp = await Whatsapp.findOne({
+    where: { id: whatsappId, companyId },
+    attributes: ["id"]
+  });
+  if (!whatsapp) {
+    throw new AppError("ERR_NO_WAPP_FOUND", 404);
+  }
 
   const progress = getSyncProgress(Number(whatsappId));
 

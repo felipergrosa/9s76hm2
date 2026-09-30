@@ -9,6 +9,7 @@ import CompaniesSettings from "../../models/CompaniesSettings";
 import FindOrCreateTicketService from "./FindOrCreateTicketService";
 import ShowTicketService from "./ShowTicketService";
 import Ticket from "../../models/Ticket";
+import User from "../../models/User";
 
 interface Request {
   contactId: number;
@@ -38,6 +39,15 @@ const CreateTicketService = async ({
 
 
   const userIdNumber = userId ? Number(userId) : null;
+
+  // Validação de tenant: usuário atribuído deve pertencer à empresa
+  if (userIdNumber) {
+    const targetUser = await User.findOne({ where: { id: userIdNumber, companyId } });
+    if (!targetUser) {
+      throw new AppError("ERR_NO_USER_FOUND", 404);
+    }
+  }
+
   defaultWhatsapp = userIdNumber ? await GetDefaultWhatsAppByUser(userIdNumber) : null;
 
   if (whatsapp) {

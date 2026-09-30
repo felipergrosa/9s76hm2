@@ -112,12 +112,16 @@ export const addReaction = async (req: Request, res: Response): Promise<Response
     const { type } = req.body;
     const { companyId, id } = req.user;
 
-    const message = await Message.findByPk(messageId);
+    // Validação de tenant ANTES de qualquer escrita
+    const message = await Message.findOne({ where: { id: messageId, companyId } });
     if (!message) {
       throw new AppError("Mensagem não encontrada", 404);
     }
 
-    const ticket = await Ticket.findByPk(message.ticketId, { include: ["contact"] });
+    const ticket = await Ticket.findOne({
+      where: { id: message.ticketId, companyId },
+      include: ["contact"]
+    });
     if (!ticket) {
       throw new AppError("Ticket não encontrado", 404);
     }
@@ -155,9 +159,11 @@ export const addReaction = async (req: Request, res: Response): Promise<Response
 export const sendListMessage = async (req: Request, res: Response): Promise<Response> => {
   const { ticketId } = req.params;
   const { title, text, buttonText, footer, sections } = req.body;
+  const { companyId } = req.user;
 
   try {
-    const ticket = await Ticket.findByPk(ticketId);
+    // Validação de tenant ANTES de qualquer envio
+    const ticket = await Ticket.findOne({ where: { id: ticketId, companyId } });
     if (!ticket) {
       throw new AppError("Ticket not found", 404);
     }
@@ -200,7 +206,8 @@ export const sendListMessage = async (req: Request, res: Response): Promise<Resp
       },
     };
 
-    console.debug("Sending list message:", JSON.stringify(listMessage, null, 2));
+    // Log reduzido: não expor payload completo da mensagem
+    console.debug(`Sending list message: ticketId=${ticket.id}, sections=${sections.length}`);
 
     const timestamp = Number(Math.round(Date.now() / 1000));
     console.debug("Timestamp:", timestamp);
@@ -245,9 +252,11 @@ export const sendListMessage = async (req: Request, res: Response): Promise<Resp
 export const sendCopyMessage = async (req: Request, res: Response): Promise<Response> => {
   const { ticketId } = req.params;
   const { title, description, buttonText, copyText } = req.body;
+  const { companyId } = req.user;
 
   try {
-    const ticket = await Ticket.findByPk(ticketId);
+    // Validação de tenant ANTES de qualquer envio
+    const ticket = await Ticket.findOne({ where: { id: ticketId, companyId } });
     if (!ticket) {
       throw new AppError("Ticket not found", 404);
     }
@@ -326,9 +335,11 @@ export const sendCopyMessage = async (req: Request, res: Response): Promise<Resp
 export const sendCALLMessage = async (req: Request, res: Response): Promise<Response> => {
   const { ticketId } = req.params;
   const { title, description, buttonText, copyText } = req.body;
+  const { companyId } = req.user;
 
   try {
-    const ticket = await Ticket.findByPk(ticketId);
+    // Validação de tenant ANTES de qualquer envio
+    const ticket = await Ticket.findOne({ where: { id: ticketId, companyId } });
     if (!ticket) {
       throw new AppError("Ticket not found", 404);
     }
@@ -407,9 +418,11 @@ export const sendCALLMessage = async (req: Request, res: Response): Promise<Resp
 export const sendURLMessage = async (req: Request, res: Response): Promise<Response> => {
   const { ticketId } = req.params;
   const { image, title, description, buttonText, copyText } = req.body;
+  const { companyId } = req.user;
 
   try {
-    const ticket = await Ticket.findByPk(ticketId);
+    // Validação de tenant ANTES de qualquer envio
+    const ticket = await Ticket.findOne({ where: { id: ticketId, companyId } });
     if (!ticket) {
       throw new AppError("Ticket not found", 404);
     }
@@ -545,9 +558,11 @@ export const sendPIXMessage = async (req: Request, res: Response): Promise<Respo
     copyButtonText?: string;
     sendKey: string;
   } = req.body;
+  const { companyId } = req.user;
 
   try {
-    const ticket = await Ticket.findByPk(ticketId);
+    // Validação de tenant ANTES de qualquer envio
+    const ticket = await Ticket.findOne({ where: { id: ticketId, companyId } });
     if (!ticket) {
       throw new AppError("Ticket not found", 404);
     }
@@ -957,16 +972,8 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     }
     return res.status(200).json({ message: "Mensagem enviada com sucesso" });
   } catch (error: any) {
-    // Log detalhado para debug
-    console.error("Erro ao armazenar mensagem:", error);
-    console.error("Stack:", error.stack);
-    console.error("Erro completo:", JSON.stringify({
-      message: error.message,
-      code: error.code,
-      statusCode: error.statusCode,
-      name: error.name,
-      data: error.data
-    }));
+    // Log reduzido: apenas mensagem e status, sem corpo/payload da requisição
+    console.error(`Erro ao armazenar mensagem: ${error.message} (status=${error.statusCode || error.code || "n/a"})`);
     
     return res.status(error.statusCode || 400).json({ 
       error: error.message,
@@ -985,7 +992,7 @@ export const forwardMessage = async (req: Request, res: Response): Promise<Respo
     return res.status(400).json({ message: "MessageId or ContactId not found" });
   }
 
-  const message = await ShowMessageService(sourceMessageId);
+  const message = await ShowMessageService(sourceMessageId, companyId);
   const contact = await ShowContactService(contactId, companyId);
 
   if (!message) {
@@ -1061,7 +1068,13 @@ export const forwardMessage = async (req: Request, res: Response): Promise<Respo
     const relativePath = mediaUrl.includes(publicPrefix)
       ? mediaUrl.split(publicPrefix)[1]
       : fileName;
-    const filePath = path.join(publicFolder, `company${createTicket.companyId}`, relativePath);
+    const companyFolder = path.resolve(publicFolder, `company${createTicket.companyId}`);
+    const filePath = path.resolve(companyFolder, relativePath);
+
+    // Segurança: impede path traversal para fora da pasta da empresa
+    if (!filePath.startsWith(companyFolder + path.sep)) {
+      return res.status(400).json({ message: "Mídia inválida para encaminhamento" });
+    }
 
     const mediaSrc = {
       fieldname: "medias",
@@ -1099,7 +1112,7 @@ export const forwardToExternalNumber = async (req: Request, res: Response): Prom
 
   try {
     const requestUser = await User.findByPk(userId);
-    const message = await ShowMessageService(sourceMessageId);
+    const message = await ShowMessageService(sourceMessageId, companyId);
 
     if (!message) {
       return res.status(404).json({ error: "Mensagem não encontrada" });
@@ -1127,10 +1140,11 @@ export const forwardToExternalNumber = async (req: Request, res: Response): Prom
 
     let whatsapp: Whatsapp;
     if (whatsappId) {
-      whatsapp = await Whatsapp.findByPk(whatsappId);
+      // Validação de tenant: conexão deve pertencer à empresa do usuário
+      whatsapp = await Whatsapp.findOne({ where: { id: whatsappId, companyId } });
     } else {
       const originalTicket = await ShowTicketService(message.ticketId, companyId);
-      whatsapp = await Whatsapp.findByPk(originalTicket.whatsappId);
+      whatsapp = await Whatsapp.findOne({ where: { id: originalTicket.whatsappId, companyId } });
     }
 
     if (!whatsapp) {
@@ -1188,7 +1202,13 @@ export const forwardToExternalNumber = async (req: Request, res: Response): Prom
         relativePath = message.mediaUrl.substring(1);
       }
 
-      const filePath = path.join(publicFolder, relativePath);
+      const companyFolder = path.resolve(publicFolder, `company${companyId}`);
+      const filePath = path.resolve(publicFolder, relativePath);
+
+      // Segurança: impede path traversal para fora da pasta da empresa
+      if (!filePath.startsWith(companyFolder + path.sep)) {
+        return res.status(400).json({ error: "Mídia inválida para encaminhamento" });
+      }
 
       if (fs.existsSync(filePath)) {
         const mediaSrc = {
@@ -1242,8 +1262,9 @@ export const remove = async (req: Request, res: Response): Promise<Response> => 
   const { companyId } = req.user;
 
   try {
-    // Buscar ticket primeiro para passar ao serviço unificado
-    const message = await Message.findByPk(messageId, {
+    // Buscar mensagem validando tenant (companyId) antes de qualquer escrita
+    const message = await Message.findOne({
+      where: { id: messageId, companyId },
       include: [
         {
           model: Ticket,
@@ -1311,7 +1332,7 @@ export const edit = async (req: Request, res: Response): Promise<Response> => {
   const { body }: MessageData = req.body;
 
   try {
-    const { ticket, message } = await EditWhatsAppMessage({ messageId, body });
+    const { ticket, message } = await EditWhatsAppMessage({ messageId, body, companyId });
 
     if (!ticket || !ticket.uuid) {
       return res.status(400).json({ error: "Ticket inválido ou sem UUID" });
@@ -1406,6 +1427,12 @@ export const syncMessages = async (req: Request, res: Response): Promise<Respons
   const { companyId } = req.user;
 
   try {
+    // Validação de tenant ANTES de iniciar a sincronização
+    const ticket = await Ticket.findOne({ where: { id: ticketId, companyId } });
+    if (!ticket) {
+      return res.status(404).json({ success: false, error: "Ticket não encontrado" });
+    }
+
     const result = await ImportContactHistoryService({
       ticketId,
       companyId,
@@ -1446,6 +1473,12 @@ export const importHistory = async (req: Request, res: Response): Promise<Respon
   }
 
   try {
+    // Validação de tenant ANTES de enfileirar a importação
+    const ticket = await Ticket.findOne({ where: { id: ticketId, companyId } });
+    if (!ticket) {
+      return res.status(404).json({ success: false, error: "Ticket não encontrado" });
+    }
+
     // Adicionar à queue assíncrona (não bloqueia request)
     const { queueImportHistory } = require("../services/MessageServices/ImportHistoryQueue");
     
@@ -1769,17 +1802,14 @@ export const resyncTicketHistory = async (req: Request, res: Response): Promise<
   const { companyId } = req.user;
 
   try {
-    // Buscar ticket para verificar se existe
-    const ticket = await Ticket.findByPk(ticketId, {
+    // Buscar ticket validando tenant (companyId) antes de qualquer operação
+    const ticket = await Ticket.findOne({
+      where: { id: ticketId, companyId },
       include: [{ model: Whatsapp, as: "whatsapp" }]
     });
 
     if (!ticket) {
       return res.status(404).json({ error: "Ticket não encontrado" });
-    }
-
-    if (ticket.companyId !== companyId) {
-      return res.status(403).json({ error: "Ticket não pertence a esta empresa" });
     }
 
     if (ticket.channel !== "whatsapp") {

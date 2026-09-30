@@ -6,6 +6,7 @@ import ContactListItem from "../../models/ContactListItem";
 import Whatsapp from "../../models/Whatsapp";
 import ContactList from "../../models/ContactList";
 import logger from "../../utils/logger";
+import AppError from "../../errors/AppError";
 import { CalculateCampaignCost } from "./CalculateCostService";
 
 interface ReportFilters {
@@ -51,6 +52,7 @@ interface DetailedReportResponse {
 
 const GetDetailedReportService = async (
   campaignId: number,
+  companyId: number,
   filters: ReportFilters = {}
 ): Promise<DetailedReportResponse> => {
   const { status, search, pageNumber = "1" } = filters;
@@ -58,8 +60,9 @@ const GetDetailedReportService = async (
   const limit = 50;
   const offset = limit * (+pageNumber - 1);
 
-  // Busca a campanha com suas relações
-  const campaign = await Campaign.findByPk(campaignId, {
+  // Busca a campanha com suas relações — N2 (IDOR): restrita ao tenant
+  const campaign = await Campaign.findOne({
+    where: { id: campaignId, companyId },
     include: [
       { model: ContactList },
       { model: Whatsapp, attributes: ["id", "name"] }
@@ -67,7 +70,7 @@ const GetDetailedReportService = async (
   });
 
   if (!campaign) {
-    throw new Error("Campanha não encontrada");
+    throw new AppError("Campanha não encontrada", 404);
   }
 
   // Monta filtros dinâmicos
@@ -217,7 +220,7 @@ const GetDetailedReportService = async (
   // Calcular custo se for API Oficial
   let cost = null;
   try {
-    cost = await CalculateCampaignCost(campaignId);
+    cost = await CalculateCampaignCost(campaignId, companyId);
   } catch (error) {
     logger.warn("[GetDetailedReportService] Erro ao calcular custo", { error });
   }

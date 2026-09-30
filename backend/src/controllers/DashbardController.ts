@@ -29,9 +29,19 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
   return res.status(200).json(dashboardData);
 };
 
+// companyId sempre vem do token autenticado; apenas superadmin pode consultar outra empresa via query
+const resolveCompanyId = (req: Request): number => {
+  const queryCompanyId = Number((req.query as IndexQuery).companyId);
+  if ((req.user as any).super && Number.isInteger(queryCompanyId) && queryCompanyId > 0) {
+    return queryCompanyId;
+  }
+  return req.user.companyId;
+};
+
 export const reportsUsers = async (req: Request, res: Response): Promise<Response> => {
 
-  const { initialDate, finalDate, companyId } = req.query as IndexQuery
+  const { initialDate, finalDate } = req.query as IndexQuery
+  const companyId = resolveCompanyId(req);
 
   const { data } = await TicketsAttendance({ initialDate, finalDate, companyId });
 
@@ -41,7 +51,8 @@ export const reportsUsers = async (req: Request, res: Response): Promise<Respons
 
 export const reportsDay = async (req: Request, res: Response): Promise<Response> => {
 
-  const { initialDate, finalDate, companyId } = req.query as IndexQuery
+  const { initialDate, finalDate } = req.query as IndexQuery
+  const companyId = resolveCompanyId(req);
 
   const { count, data } = await TicketsDayService({ initialDate, finalDate, companyId });
 
