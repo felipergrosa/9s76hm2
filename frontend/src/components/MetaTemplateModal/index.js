@@ -53,7 +53,9 @@ import {
   Title as TitleIcon,
   Videocam as VideocamIcon
 } from "@material-ui/icons";
-import { Megaphone as CampaignIcon } from "lucide-react";
+import { Megaphone as CampaignIcon, Sparkles } from "lucide-react";
+import ChatAssistantPanel from "../ChatAssistantPanel";
+import usePermissions from "../../hooks/usePermissions";
 
 import api from "../../services/api";
 import { i18n } from "../../translate/i18n";
@@ -650,6 +652,9 @@ const MetaTemplateModal = ({ open, onClose, whatsappId, template, onSaved }) => 
   const [allowCategoryChange, setAllowCategoryChange] = useState(true);
   const [saving, setSaving] = useState(false);
   const [emojiAnchor, setEmojiAnchor] = useState(null);
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const { hasPermission } = usePermissions();
+  const canUseAIAssistant = hasPermission("ai-chat-assistant.use");
   // Custo estimado por envio (R$) indexado por categoria — vem de /pricing
   const [costByCategory, setCostByCategory] = useState({});
 
@@ -1659,6 +1664,17 @@ const MetaTemplateModal = ({ open, onClose, whatsappId, template, onSaved }) => 
                     >
                       {tt("toolbar.addVariable", "Adicionar variável")}
                     </Button>
+                    {canUseAIAssistant && (
+                      <Tooltip title={tt("toolbar.assistant", "Assistente de IA — melhorar, corrigir, traduzir ou criar")}>
+                        <IconButton
+                          size="small"
+                          color={assistantOpen ? "primary" : "default"}
+                          onClick={() => setAssistantOpen(prev => !prev)}
+                        >
+                          <Sparkles size={18} />
+                        </IconButton>
+                      </Tooltip>
+                    )}
                     <span className={classes.charCounter}>
                       {(touched.bodyText && errors.bodyText) || `${values.bodyText.length}/1024`}
                     </span>
@@ -1684,6 +1700,42 @@ const MetaTemplateModal = ({ open, onClose, whatsappId, template, onSaved }) => 
                       ))}
                     </Box>
                   </Menu>
+
+                  {assistantOpen && (
+                    <Box mt={1} style={{ position: "relative" }}>
+                      <ChatAssistantPanel
+                        open={assistantOpen}
+                        onClose={() => setAssistantOpen(false)}
+                        dialogMode
+                        title={tt("assistant.title", "Assistente — Corpo do template")}
+                        assistantContext="campaign"
+                        targetField="bodyText"
+                        inputMessage={values.bodyText || ""}
+                        setInputMessage={val =>
+                          setFieldValue(
+                            "bodyText",
+                            typeof val === "function"
+                              ? val(values.bodyText || "")
+                              : String(val || "").slice(0, 1024)
+                          )
+                        }
+                        whatsappId={whatsappId || null}
+                        actions={["apply", "append"]}
+                        contextSummary={tt(
+                          "assistant.summary",
+                          "Corpo de template Meta (WhatsApp oficial). Máx. 1024 caracteres. Use variáveis posicionais {{1}}, {{2}}… quando fizer sentido e formatação WhatsApp (*negrito*, _itálico_, ~tachado~). Sem links encurtados nem conteúdo proibido pela Meta."
+                        )}
+                        onApply={(action, text) => {
+                          const sanitized = String(text || "").replace(/\n{3,}/g, "\n\n").trim().slice(0, 1024);
+                          const cur = values.bodyText || "";
+                          setFieldValue(
+                            "bodyText",
+                            action === "append" && cur ? `${cur}\n\n${sanitized}`.slice(0, 1024) : sanitized
+                          );
+                        }}
+                      />
+                    </Box>
+                  )}
 
                   {extractVars(values.bodyText).map(v => (
                     <TextField

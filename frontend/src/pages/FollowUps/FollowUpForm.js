@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, lazy, Suspense } from "react";
 import { useParams, useHistory } from "react-router-dom";
 import { toast } from "react-toastify";
 
@@ -29,12 +29,19 @@ import ArrowBackIcon from "@material-ui/icons/ArrowBack";
 import SettingsIcon from "@material-ui/icons/Settings";
 import MessageIcon from "@material-ui/icons/Message";
 import FlagIcon from "@material-ui/icons/Flag";
+import Tooltip from "@material-ui/core/Tooltip";
+import { Sparkles, Zap } from "lucide-react";
 
 import api from "../../services/api";
 import TemplateVariableMapper from "../../components/TemplateVariableMapper";
+import QuickMessagePicker from "../../components/QuickMessagePicker";
 import toastError from "../../errors/toastError";
 import useWhatsApps from "../../hooks/useWhatsApps";
+import usePermissions from "../../hooks/usePermissions";
 import MetaTemplateModal from "../../components/MetaTemplateModal";
+
+const ChatAssistantPanel = lazy(() => import("../../components/ChatAssistantPanel"));
+const WhatsAppPopover = lazy(() => import("../../components/WhatsAppPopover"));
 
 const STEP_LABELS = ["Configuração", "Etapas", "Ação final"];
 
@@ -203,6 +210,11 @@ const FollowUpForm = () => {
   const [metaTemplates, setMetaTemplates] = useState([]);
   const [tplModalOpen, setTplModalOpen] = useState(false);
   const [tplStepIndex, setTplStepIndex] = useState(null);
+  const [assistantStepIndex, setAssistantStepIndex] = useState(null);
+  const [quickPickerStepIndex, setQuickPickerStepIndex] = useState(null);
+
+  const { hasPermission } = usePermissions();
+  const canUseAIAssistant = hasPermission("ai-chat-assistant.use");
 
   const selectedWhatsapp = whatsApps.find(w => w.id === Number(form.whatsappId));
   const isOfficial = selectedWhatsapp?.channelType === "official";
@@ -367,6 +379,49 @@ const FollowUpForm = () => {
   const handleStepChange = (index, field, value) => {
     setSteps(prev => prev.map((s, i) => (i === index ? { ...s, [field]: value } : s)));
   };
+
+  const insertIntoStepMessage = (index, text) => {
+    handleStepChange(index, "message", (steps[index]?.message || "") + text);
+  };
+
+  // setInputMessage do assistente aceita valor ou updater fn — normaliza aqui
+  const setStepMessageFromAssistant = index => val =>
+    handleStepChange(
+      index,
+      "message",
+      typeof val === "function" ? val(steps[index]?.message || "") : val
+    );
+
+  // Barra de ferramentas da mensagem: emojis, respostas rápidas e assistente IA.
+  // Assistente fica fora quando a conexão é oficial — lá ele vive só no
+  // MetaTemplateModal (regra do produto: API oficial trabalha com templates).
+  const renderMessageToolbar = index => (
+    <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 4 }}>
+      <Suspense fallback={null}>
+        <WhatsAppPopover
+          onSelectEmoji={emoji => insertIntoStepMessage(index, emoji)}
+        />
+      </Suspense>
+      <Tooltip title="Respostas rápidas">
+        <IconButton size="small" onClick={() => setQuickPickerStepIndex(index)}>
+          <Zap size={20} />
+        </IconButton>
+      </Tooltip>
+      {canUseAIAssistant && !isOfficial && (
+        <Tooltip title="Assistente de IA — melhorar, corrigir, traduzir ou criar">
+          <IconButton
+            size="small"
+            color={assistantStepIndex === index ? "primary" : "default"}
+            onClick={() =>
+              setAssistantStepIndex(prev => (prev === index ? null : index))
+            }
+          >
+            <Sparkles size={20} />
+          </IconButton>
+        </Tooltip>
+      )}
+    </div>
+  );
 
   const openTemplateModal = index => {
     setTplStepIndex(index);
@@ -593,6 +648,7 @@ const FollowUpForm = () => {
                             variant="outlined" size="small" multiline rows={2} fullWidth
                             style={{ marginTop: 8 }}
                           />
+                          {renderMessageToolbar(index)}
                         </>
                       ) : (
                         <>
@@ -602,6 +658,7 @@ const FollowUpForm = () => {
                             onChange={e => handleStepChange(index, "message", e.target.value)}
                             variant="outlined" size="small" multiline rows={2} fullWidth
                           />
+                          {renderMessageToolbar(index)}
                           {metaTemplates.length > 0 && (
                             <FormControl variant="outlined" size="small" fullWidth style={{ marginTop: 8 }}>
                               <InputLabel>Template Meta (opcional)</InputLabel>
@@ -644,6 +701,25 @@ const FollowUpForm = () => {
                     </Grid>
                     {/* Preview do template + mapeamento de variáveis — igual
                         ao "Compor Conteúdo" de campaigns/new */}
+                    {assistantStepIndex === index && (
+                      <Grid item xs={12} style={{ marginTop: 8, position: "relative" }}>
+                        <Suspense fallback={<CircularProgress size={24} />}>
+                          <ChatAssistantPanel
+                            open
+                            dialogMode
+                            title={`Assistente — Etapa ${index + 1}`}
+                            assistantContext="campaign"
+                            targetField={`step-${index}-message`}
+                            inputMessage={step.message || ""}
+                            setInputMessage={setStepMessageFromAssistant(index)}
+                            whatsappId={form.whatsappId || null}
+                            actions={["apply", "append"]}
+                            contextSummary={`Follow-up "${form.name || "sem nome"}", etapa ${index + 1} de ${steps.length}. Variáveis disponíveis: {{name}}, {{firstName}}.`}
+                            onClose={() => setAssistantStepIndex(null)}
+                          />
+                        </Suspense>
+                      </Grid>
+                    )}
                     {step.metaTemplateName && (
                       <Grid item xs={12} style={{ marginTop: 8 }}>
                         <TemplateVariableMapper
@@ -917,6 +993,21 @@ const FollowUpForm = () => {
           }}
         />
       )}
+
+      {/* Seletor de respostas rápidas — insere o texto na etapa aberta */}
+      <QuickMessagePicker
+        open={quickPickerStepIndex !== null}
+        onClose={() => setQuickPickerStepIndex(null)}
+        onSelect={text => {
+          if (quickPickerStepIndex === null) return;
+          const cur = steps[quickPickerStepIndex]?.message || "";
+          handleStepChange(
+            quickPickerStepIndex,
+            "message",
+            cur ? `${cur}\n\n${text}` : text
+          );
+        }}
+      />
     </div>
   );
 };
