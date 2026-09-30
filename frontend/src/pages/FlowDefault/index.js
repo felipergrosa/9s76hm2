@@ -16,6 +16,7 @@ import Title from "../../components/Title";
 import MainContainer from "../../components/MainContainer";
 import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
+import usePermissions from "../../hooks/usePermissions";
 import NewTicketModal from "../../components/NewTicketModal";
 import { SocketContext } from "../../context/Socket/SocketContext";
 
@@ -134,6 +135,8 @@ const FlowDefault = () => {
   const [reloadData, setReloadData] = useState(false);
 
  const { user, socket } = useContext(AuthContext);
+ const { hasPermission } = usePermissions();
+ const canEdit = hasPermission("flowbuilder.edit");
 
   useEffect(() => {
     dispatch({ type: "RESET" });
@@ -325,11 +328,13 @@ const FlowDefault = () => {
       >
         <Stack sx={{ padding: '12px', position: 'relative' }}>
           <Stack sx={{ position: 'absolute', right: 0 }}>
-            <Button onClick={() => handleSaveDefault()} variant="contained" sx={{
-              backgroundColor: colorPrimary(), '&:hover': {
-                backgroundColor: `${colorPrimary()}90`
-              }
-            }}>Salvar</Button>
+            {canEdit && (
+              <Button onClick={() => handleSaveDefault()} variant="contained" sx={{
+                backgroundColor: colorPrimary(), '&:hover': {
+                  backgroundColor: `${colorPrimary()}90`
+                }
+              }}>Salvar</Button>
+            )}
           </Stack>
           <Stack gap={'12px'}>
             <Typography fontSize={18} fontWeight={700}>Fluxo de boas vindas</Typography>

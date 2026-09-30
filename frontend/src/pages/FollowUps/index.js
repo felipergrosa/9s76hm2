@@ -37,6 +37,7 @@ import api from "../../services/api";
 import TableRowSkeleton from "../../components/TableRowSkeleton";
 import ConfirmationModal from "../../components/ConfirmationModal";
 import toastError from "../../errors/toastError";
+import usePermissions from "../../hooks/usePermissions";
 
 const reducer = (state, action) => {
   switch (action.type) {
@@ -179,6 +180,10 @@ const FollowUps = () => {
   const [records, dispatch] = useReducer(reducer, []);
   const [deleting, setDeleting] = useState(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission("drip-sequences.create");
+  const canEdit = hasPermission("drip-sequences.edit");
+  const canDelete = hasPermission("drip-sequences.delete");
 
   useEffect(() => {
     setLoading(true);
@@ -248,14 +253,16 @@ const FollowUps = () => {
           </Typography>
         </Box>
         <MainHeaderButtonsWrapper>
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={() => history.push("/follow-ups/new")}
-            startIcon={<AddIcon />}
-          >
-            Novo follow-up
-          </Button>
+          {canCreate && (
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={() => history.push("/follow-ups/new")}
+              startIcon={<AddIcon />}
+            >
+              Novo follow-up
+            </Button>
+          )}
         </MainHeaderButtonsWrapper>
       </MainHeader>
 
@@ -370,22 +377,26 @@ const FollowUps = () => {
                         <PeopleIcon fontSize="small" />
                       </IconButton>
                     </Tooltip>
-                    <Tooltip title="Editar">
-                      <IconButton size="small" onClick={() => history.push(`/follow-ups/${record.id}`)}>
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Excluir">
-                      <IconButton
-                        size="small"
-                        onClick={() => {
-                          setDeleting(record);
-                          setConfirmOpen(true);
-                        }}
-                      >
-                        <DeleteOutlineIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
+                    {canEdit && (
+                      <Tooltip title="Editar">
+                        <IconButton size="small" onClick={() => history.push(`/follow-ups/${record.id}`)}>
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                    {canDelete && (
+                      <Tooltip title="Excluir">
+                        <IconButton
+                          size="small"
+                          onClick={() => {
+                            setDeleting(record);
+                            setConfirmOpen(true);
+                          }}
+                        >
+                          <DeleteOutlineIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

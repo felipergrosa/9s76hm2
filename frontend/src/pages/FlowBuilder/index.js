@@ -29,6 +29,7 @@ import MainContainer from "../../components/MainContainer";
 import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import { Can } from "../../components/Can";
+import usePermissions from "../../hooks/usePermissions";
 import NewTicketModal from "../../components/NewTicketModal";
 import { SocketContext } from "../../context/Socket/SocketContext";
 import WebhookModal from "../../components/WebhookModal";
@@ -138,6 +139,10 @@ const FlowBuilder = () => {
   const [hasMore, setHasMore] = useState(false);
   const [reloadData, setReloadData] = useState(false);
   const { user, socket } = useContext(AuthContext);
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission("flowbuilder.create");
+  const canEdit = hasPermission("flowbuilder.edit");
+  const canDelete = hasPermission("flowbuilder.delete");
 
   useEffect(() => {
     dispatch({ type: "RESET" });
@@ -344,20 +349,22 @@ const FlowBuilder = () => {
               )
             }}
           />
-          <Button
-            variant="contained"
-            onClick={handleOpenContactModal}
-            style={{
-              textTransform: "none",
-              backgroundColor: theme.palette.primary.main,
-              color: "#fff"
-            }}
-          >
-            <Stack direction={"row"} gap={1}>
-              <AddCircle />
-              {"Adicionar Fluxo"}
-            </Stack>
-          </Button>
+          {canCreate && (
+            <Button
+              variant="contained"
+              onClick={handleOpenContactModal}
+              style={{
+                textTransform: "none",
+                backgroundColor: theme.palette.primary.main,
+                color: "#fff"
+              }}
+            >
+              <Stack direction={"row"} gap={1}>
+                <AddCircle />
+                {"Adicionar Fluxo"}
+              </Stack>
+            </Button>
+          )}
         </MainHeaderButtonsWrapper>
       </MainHeader>
       <Paper
@@ -478,22 +485,30 @@ const FlowBuilder = () => {
                 "aria-labelledby": "basic-button"
               }}
             >
-              <MenuItem onClick={() => {
-                handleClose()
-                hadleEditContact()
-                }}>Editar nome</MenuItem>
-              <MenuItem onClick={() => {
-                handleClose()
-                exportLink()
-                }}>Editar fluxo</MenuItem>
-              <MenuItem onClick={() => {
-                handleClose()
-                setConfirmDuplicateOpen(true);
-                }}>Duplicar</MenuItem>
-              <MenuItem onClick={() => {
-                handleClose()
-                setConfirmOpen(true);
-                }}>Excluir</MenuItem>
+              {canEdit && (
+                <MenuItem onClick={() => {
+                  handleClose()
+                  hadleEditContact()
+                  }}>Editar nome</MenuItem>
+              )}
+              {canEdit && (
+                <MenuItem onClick={() => {
+                  handleClose()
+                  exportLink()
+                  }}>Editar fluxo</MenuItem>
+              )}
+              {canCreate && (
+                <MenuItem onClick={() => {
+                  handleClose()
+                  setConfirmDuplicateOpen(true);
+                  }}>Duplicar</MenuItem>
+              )}
+              {canDelete && (
+                <MenuItem onClick={() => {
+                  handleClose()
+                  setConfirmOpen(true);
+                  }}>Excluir</MenuItem>
+              )}
             </Menu>
             {loading && (
               <Stack

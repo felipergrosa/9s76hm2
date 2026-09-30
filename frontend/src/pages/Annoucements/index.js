@@ -34,6 +34,7 @@ import { isArray } from "lodash";
 
 
 import { AuthContext } from "../../context/Auth/AuthContext";
+import usePermissions from "../../hooks/usePermissions";
 
 const reducer = (state, action) => {
   if (action.type === "LOAD_ANNOUNCEMENTS") {
@@ -110,6 +111,10 @@ const Announcements = () => {
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [searchParam, setSearchParam] = useState("");
   const [announcements, dispatch] = useReducer(reducer, []);
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission("announcements.create");
+  const canEdit = hasPermission("announcements.edit");
+  const canDelete = hasPermission("announcements.delete");
 
   // trava para nao acessar pagina que não pode  
   useEffect(() => {
@@ -279,14 +284,16 @@ const Announcements = () => {
                 />
               </Grid>
               <Grid xs={6} sm={6} item>
-                <Button
-                  fullWidth
-                  variant="contained"
-                  onClick={handleOpenAnnouncementModal}
-                  color="primary"
-                >
-                  {i18n.t("announcements.buttons.add")}
-                </Button>
+                {canCreate && (
+                  <Button
+                    fullWidth
+                    variant="contained"
+                    onClick={handleOpenAnnouncementModal}
+                    color="primary"
+                  >
+                    {i18n.t("announcements.buttons.add")}
+                  </Button>
+                )}
               </Grid>
             </Grid>
           </Grid>
@@ -332,22 +339,26 @@ const Announcements = () => {
                     {announcement.status ? i18n.t("announcements.active") : i18n.t("announcements.inactive")}
                   </TableCell>
                   <TableCell align="center">
-                    <IconButton
-                      size="small"
-                      onClick={() => handleEditAnnouncement(announcement)}
-                    >
-                      <EditIcon />
-                    </IconButton>
+                    {canEdit && (
+                      <IconButton
+                        size="small"
+                        onClick={() => handleEditAnnouncement(announcement)}
+                      >
+                        <EditIcon />
+                      </IconButton>
+                    )}
 
-                    <IconButton
-                      size="small"
-                      onClick={(e) => {
-                        setConfirmModalOpen(true);
-                        setDeletingAnnouncement(announcement);
-                      }}
-                    >
-                      <DeleteOutlineIcon />
-                    </IconButton>
+                    {canDelete && (
+                      <IconButton
+                        size="small"
+                        onClick={(e) => {
+                          setConfirmModalOpen(true);
+                          setDeletingAnnouncement(announcement);
+                        }}
+                      >
+                        <DeleteOutlineIcon />
+                      </IconButton>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

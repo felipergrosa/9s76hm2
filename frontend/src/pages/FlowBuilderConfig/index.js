@@ -36,6 +36,7 @@ import MainHeaderButtonsWrapper from "../../components/MainHeaderButtonsWrapper"
 import MainContainer from "../../components/MainContainer";
 import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
+import usePermissions from "../../hooks/usePermissions";
 import {
   SpeedDial,
   SpeedDialAction,
@@ -161,6 +162,9 @@ export const FlowBuilderConfig = () => {
   const storageItems = useNodeStorage();
 
   const { user } = useContext(AuthContext);
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission("flowbuilder.create");
+  const canEdit = hasPermission("flowbuilder.edit");
 
   const [loading, setLoading] = useState(false);
   const [pageNumber, setPageNumber] = useState(1);
@@ -896,15 +900,17 @@ export const FlowBuilderConfig = () => {
           )}
         </Box>
         <MainHeaderButtonsWrapper>
-          <Button
-            variant="contained"
-            color="primary"
-            sx={{ textTransform: "none", mr: 1 }}
-            startIcon={<UploadFileIcon />}
-            onClick={() => setImportModal(true)}
-          >
-            Importar
-          </Button>
+          {canCreate && (
+            <Button
+              variant="contained"
+              color="primary"
+              sx={{ textTransform: "none", mr: 1 }}
+              startIcon={<UploadFileIcon />}
+              onClick={() => setImportModal(true)}
+            >
+              Importar
+            </Button>
+          )}
           <Button
             variant="contained"
             color="primary"
@@ -914,30 +920,36 @@ export const FlowBuilderConfig = () => {
           >
             Exportar
           </Button>
-          <Button
-            variant="outlined"
-            color="primary"
-            sx={{ textTransform: "none", mr: 1 }}
-            onClick={() => saveFlow("draft")}
-          >
-            Salvar como rascunho
-          </Button>
-          <Button
-            variant="contained"
-            color="primary"
-            sx={{ textTransform: "none", mr: 1 }}
-            onClick={() => saveFlow("published")}
-          >
-            Publicar
-          </Button>
-          <Button
-            variant="contained"
-            color="primary"
-            sx={{ textTransform: "none" }}
-            onClick={() => saveFlow()}
-          >
-            Salvar
-          </Button>
+          {canEdit && (
+            <Button
+              variant="outlined"
+              color="primary"
+              sx={{ textTransform: "none", mr: 1 }}
+              onClick={() => saveFlow("draft")}
+            >
+              Salvar como rascunho
+            </Button>
+          )}
+          {canEdit && (
+            <Button
+              variant="contained"
+              color="primary"
+              sx={{ textTransform: "none", mr: 1 }}
+              onClick={() => saveFlow("published")}
+            >
+              Publicar
+            </Button>
+          )}
+          {canEdit && (
+            <Button
+              variant="contained"
+              color="primary"
+              sx={{ textTransform: "none" }}
+              onClick={() => saveFlow()}
+            >
+              Salvar
+            </Button>
+          )}
         </MainHeaderButtonsWrapper>
       </MainHeader>
       {!loading && (

@@ -36,6 +36,7 @@ import EmailCampaignModal from "../../components/EmailCampaignModal";
 import ConfirmationModal from "../../components/ConfirmationModal";
 import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
+import usePermissions from "../../hooks/usePermissions";
 
 const reducer = (state, action) => {
   switch (action.type) {
@@ -197,6 +198,10 @@ const EmailCampaigns = () => {
   const [selectedId, setSelectedId] = useState(null);
   const [deleting, setDeleting] = useState(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission("email-campaigns.create");
+  const canEdit = hasPermission("email-campaigns.edit");
+  const canDelete = hasPermission("email-campaigns.delete");
 
   useEffect(() => {
     setLoading(true);
@@ -301,14 +306,16 @@ const EmailCampaigns = () => {
               entrega.
             </span>
           </div>
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<AddIcon size={18} />}
-            onClick={handleOpenModal}
-          >
-            Nova campanha
-          </Button>
+          {canCreate && (
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<AddIcon size={18} />}
+              onClick={handleOpenModal}
+            >
+              Nova campanha
+            </Button>
+          )}
         </Box>
 
         {/* Toolbar: busca */}
@@ -362,41 +369,45 @@ const EmailCampaigns = () => {
                       <AssessmentIcon size={18} />
                     </IconButton>
                   </Tooltip>
-                  {["INATIVA", "PROGRAMADA"].includes(record.status) && (
+                  {canEdit && ["INATIVA", "PROGRAMADA"].includes(record.status) && (
                     <Tooltip title="Enviar agora">
                       <IconButton size="small" onClick={() => handleSendNow(record.id)}>
                         <SendIcon size={18} />
                       </IconButton>
                     </Tooltip>
                   )}
-                  {["PROGRAMADA", "EM_ANDAMENTO"].includes(record.status) && (
+                  {canEdit && ["PROGRAMADA", "EM_ANDAMENTO"].includes(record.status) && (
                     <Tooltip title="Cancelar">
                       <IconButton size="small" onClick={() => handleCancel(record.id)}>
                         <CancelIcon size={18} />
                       </IconButton>
                     </Tooltip>
                   )}
-                  <Tooltip title="Editar">
-                    <span>
-                      <IconButton size="small" onClick={() => handleEdit(record)} disabled={record.status === "EM_ANDAMENTO"}>
-                        <EditIcon size={18} />
-                      </IconButton>
-                    </span>
-                  </Tooltip>
-                  <Tooltip title="Excluir">
-                    <span>
-                      <IconButton
-                        size="small"
-                        onClick={() => {
-                          setDeleting(record);
-                          setConfirmOpen(true);
-                        }}
-                        disabled={record.status === "EM_ANDAMENTO"}
-                      >
-                        <DeleteOutlineIcon size={18} />
-                      </IconButton>
-                    </span>
-                  </Tooltip>
+                  {canEdit && (
+                    <Tooltip title="Editar">
+                      <span>
+                        <IconButton size="small" onClick={() => handleEdit(record)} disabled={record.status === "EM_ANDAMENTO"}>
+                          <EditIcon size={18} />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  )}
+                  {canDelete && (
+                    <Tooltip title="Excluir">
+                      <span>
+                        <IconButton
+                          size="small"
+                          onClick={() => {
+                            setDeleting(record);
+                            setConfirmOpen(true);
+                          }}
+                          disabled={record.status === "EM_ANDAMENTO"}
+                        >
+                          <DeleteOutlineIcon size={18} />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  )}
                 </TableCell>
               </TableRow>
             ))}

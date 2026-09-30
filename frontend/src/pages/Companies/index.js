@@ -38,6 +38,7 @@ import toastError from "../../errors/toastError"; //
 import { AuthContext } from "../../context/Auth/AuthContext"; //
 import { useDate } from "../../hooks/useDate"; //
 import usePlans from "../../hooks/usePlans"; // // Importação mantida, mesmo que não usada diretamente
+import usePermissions from "../../hooks/usePermissions";
 import moment from "moment"; //
 
 const reducer = (state, action) => {
@@ -175,6 +176,10 @@ const Companies = () => {
     // const { getPlanCompany } = usePlans(); //
     //   const socketManager = useContext(SocketContext); //
     const { user, socket } = useContext(AuthContext); //
+    const { hasPermission } = usePermissions();
+    const canCreate = hasPermission("companies.create");
+    const canEdit = hasPermission("companies.edit");
+    const canDelete = hasPermission("companies.delete");
 
 
     useEffect(() => {
@@ -374,15 +379,17 @@ const Companies = () => {
                                 />
                             </Grid>
                             <Grid item xs={12} sm="auto">
-                                <Button
-                                    fullWidth={isMobile}
-                                    variant="contained"
-                                    color="primary"
-                                    onClick={handleOpenCompanyModal}
-                                    style={{ minHeight: 44 }}
-                                >
-                                    {i18n.t("compaies.buttons.add")}
-                                </Button>
+                                {canCreate && (
+                                    <Button
+                                        fullWidth={isMobile}
+                                        variant="contained"
+                                        color="primary"
+                                        onClick={handleOpenCompanyModal}
+                                        style={{ minHeight: 44 }}
+                                    >
+                                        {i18n.t("compaies.buttons.add")}
+                                    </Button>
+                                )}
                             </Grid>
                         </Grid>
                     </Grid>
@@ -442,24 +449,28 @@ const Companies = () => {
                                 </div>
                             </div>
                             <div className={classes.cardActions}>
-                                <IconButton
-                                    size="small"
-                                    className={classes.actionButton}
-                                    onClick={() => handleEditCompany(company)} //
-                                >
-                                    <EditIcon />
-                                </IconButton>
+                                {canEdit && (
+                                    <IconButton
+                                        size="small"
+                                        className={classes.actionButton}
+                                        onClick={() => handleEditCompany(company)} //
+                                    >
+                                        <EditIcon />
+                                    </IconButton>
+                                )}
 
-                                <IconButton
-                                    size="small"
-                                    className={classes.actionButton}
-                                    onClick={() => { // Modificado para não passar o evento 'e' se não for usado
-                                        setConfirmModalOpen(true); //
-                                        setDeletingCompany(company); //
-                                    }}
-                                >
-                                    <DeleteOutlineIcon />
-                                </IconButton>
+                                {canDelete && (
+                                    <IconButton
+                                        size="small"
+                                        className={classes.actionButton}
+                                        onClick={() => { // Modificado para não passar o evento 'e' se não for usado
+                                            setConfirmModalOpen(true); //
+                                            setDeletingCompany(company); //
+                                        }}
+                                    >
+                                        <DeleteOutlineIcon />
+                                    </IconButton>
+                                )}
                             </div>
                         </Card>
                     ))}
@@ -511,22 +522,26 @@ const Companies = () => {
                                         <TableCell align="center">{datetimeToClient(company.updatedAtFolder)}</TableCell>
                                         <TableCell align="center">
                                             {/* Descomentado os botões de ação */}
-                                            <IconButton
-                                                size="small"
-                                                onClick={() => handleEditCompany(company)} //
-                                            >
-                                                <EditIcon />
-                                            </IconButton>
+                                            {canEdit && (
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={() => handleEditCompany(company)} //
+                                                >
+                                                    <EditIcon />
+                                                </IconButton>
+                                            )}
 
-                                            <IconButton
-                                                size="small"
-                                                onClick={() => { // Modificado para não passar o evento 'e' se não for usado
-                                                    setConfirmModalOpen(true); //
-                                                    setDeletingCompany(company); //
-                                                }}
-                                            >
-                                                <DeleteOutlineIcon />
-                                            </IconButton>
+                                            {canDelete && (
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={() => { // Modificado para não passar o evento 'e' se não for usado
+                                                        setConfirmModalOpen(true); //
+                                                        setDeletingCompany(company); //
+                                                    }}
+                                                >
+                                                    <DeleteOutlineIcon />
+                                                </IconButton>
+                                            )}
                                         </TableCell>
                                     </TableRow>
                                 ))}

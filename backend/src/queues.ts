@@ -987,7 +987,7 @@ async function applyCampaignTagFilters(contacts: ContactListItem[], campaign: an
 
 async function getContact(id) {
   return await ContactListItem.findByPk(id, {
-    attributes: ["id", "name", "number", "email", "isGroup"]
+    attributes: ["id", "name", "number", "email", "isGroup", "companyId"]
   });
 }
 
@@ -1871,6 +1871,12 @@ async function handlePrepareContact(job) {
       return;
     }
 
+    // Isolamento multi-tenant: contato do job precisa pertencer à empresa da campanha
+    if (contact.companyId !== campaign.companyId) {
+      logger.error(`[PrepareContact] Contato ${contactId} (empresa ${contact.companyId}) não pertence à empresa da campanha ${campaignId} (${campaign.companyId}). Job descartado.`);
+      return;
+    }
+
     const campaignShipping: any = {};
     campaignShipping.number = contact.number;
     campaignShipping.contactId = contactId;
@@ -2036,6 +2042,12 @@ async function handleDispatchCampaign(job) {
       return;
     }
 
+    // Isolamento multi-tenant: a conexão usada no disparo precisa ser da empresa da campanha
+    if (whatsapp.companyId !== campaign.companyId) {
+      logger.error(`campaignQueue -> DispatchCampaign -> whatsapp ${selectedWhatsappId} pertence à empresa ${whatsapp.companyId}, esperado ${campaign.companyId}. Job descartado.`);
+      return;
+    }
+
     const isOfficial = whatsapp.channelType === "official";
     const hasMetaTemplate = Boolean((campaign as any).metaTemplateName);
 
@@ -2084,6 +2096,12 @@ async function handleDispatchCampaign(job) {
 
     if (!campaignShipping || !campaignShipping.number) {
       logger.error(`campaignQueue -> DispatchCampaign -> error: campaignShipping not found or number missing (id=${campaignShippingId})`);
+      return;
+    }
+
+    // Isolamento multi-tenant: registro de envio precisa pertencer à campanha do job
+    if (campaignShipping.campaignId !== campaignId) {
+      logger.error(`campaignQueue -> DispatchCampaign -> registro ${campaignShippingId} pertence à campanha ${campaignShipping.campaignId}, esperado ${campaignId}. Job descartado.`);
       return;
     }
 

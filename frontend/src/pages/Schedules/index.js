@@ -20,6 +20,7 @@ import moment from "moment";
 // import { SocketContext } from "../../context/Socket/SocketContext";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import usePlans from "../../hooks/usePlans";
+import usePermissions from "../../hooks/usePermissions";
 import { Calendar, momentLocalizer } from "react-big-calendar";
 import "moment/locale/pt-br";
 import "react-big-calendar/lib/css/react-big-calendar.css";
@@ -157,6 +158,10 @@ const Schedules = () => {
   const [contactId, setContactId] = useState(+getUrlParam("contactId"));
 
   const { getPlanCompany } = usePlans();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission("schedules.create");
+  const canEdit = hasPermission("schedules.edit");
+  const canDelete = hasPermission("schedules.delete");
 
   useEffect(() => {
     async function fetchData() {
@@ -342,13 +347,15 @@ const Schedules = () => {
               ),
             }}
           />
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={handleOpenScheduleModal}
-          >
-            {i18n.t("schedules.buttons.add")}
-          </Button>
+          {canCreate && (
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={handleOpenScheduleModal}
+            >
+              {i18n.t("schedules.buttons.add")}
+            </Button>
+          )}
         </MainHeaderButtonsWrapper>
       </MainHeader>
       <Paper className={classes.mainPaper} variant="outlined" onScroll={handleScroll}>
@@ -363,17 +370,21 @@ const Schedules = () => {
             title: (
               <div key={schedule.id} className="event-container">
                 <div style={eventTitleStyle}>{schedule?.contact?.name}</div>
-                <DeleteOutlineIcon
-                  onClick={() => handleDeleteSchedule(schedule.id)}
-                  className="delete-icon"
-                />
-                <EditIcon
-                  onClick={() => {
-                    handleEditSchedule(schedule);
-                    setScheduleModalOpen(true);
-                  }}
-                  className="edit-icon"
-                />
+                {canDelete && (
+                  <DeleteOutlineIcon
+                    onClick={() => handleDeleteSchedule(schedule.id)}
+                    className="delete-icon"
+                  />
+                )}
+                {canEdit && (
+                  <EditIcon
+                    onClick={() => {
+                      handleEditSchedule(schedule);
+                      setScheduleModalOpen(true);
+                    }}
+                    className="edit-icon"
+                  />
+                )}
               </div>
             ),
             start: new Date(schedule.sendAt),

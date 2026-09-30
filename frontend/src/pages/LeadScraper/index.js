@@ -40,6 +40,7 @@ import ConfirmationModal from "../../components/ConfirmationModal";
 import ApifyTokenModal from "../../components/ApifyTokenModal";
 import LeadMapPicker from "../../components/LeadMapPicker";
 import useUsersList from "../../hooks/useUsersList";
+import usePermissions from "../../hooks/usePermissions";
 
 const STATUS = {
   done:    { label: "Concluído",  bg: "#e8f5e9", color: "#2e7d32" },
@@ -345,6 +346,8 @@ export default function LeadScraper() {
   const [engineStatus, setEngineStatus] = useState(null);
   const [apifyModalOpen, setApifyModalOpen] = useState(false);
   const { users: walletUsers, loadUsersForSelection } = useUsersList(false);
+  const { hasPermission } = usePermissions();
+  const canImport = hasPermission("contacts.import");
   const pollRef = useRef(null);
 
   const [keyword, setKeyword] = useState("");
@@ -929,14 +932,16 @@ export default function LeadScraper() {
                 />
               </Box>
               <Box mt={2}>
-                <Button
-                  variant="contained" color="primary"
-                  startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <SearchIcon />}
-                  onClick={startMapsJob} disabled={loading}
-                  style={{ textTransform: "none", fontWeight: 600 }}
-                >
-                  Iniciar Busca no Maps
-                </Button>
+                {canImport && (
+                  <Button
+                    variant="contained" color="primary"
+                    startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <SearchIcon />}
+                    onClick={startMapsJob} disabled={loading}
+                    style={{ textTransform: "none", fontWeight: 600 }}
+                  >
+                    Iniciar Busca no Maps
+                  </Button>
+                )}
               </Box>
               <Box className={classes.helpToggle} onClick={() => setHelpOpen(o => !o)}>
                 <HelpIcon style={{ fontSize: 15 }} />
@@ -997,14 +1002,16 @@ export default function LeadScraper() {
                     }
                   />
                   <Box mt={2}>
-                    <Button
-                      variant="contained" color="primary"
-                      startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <CnpjIcon />}
-                      onClick={startCnpjJob} disabled={loading}
-                      style={{ textTransform: "none", fontWeight: 600 }}
-                    >
-                      Enriquecer CNPJs
-                    </Button>
+                    {canImport && (
+                      <Button
+                        variant="contained" color="primary"
+                        startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <CnpjIcon />}
+                        onClick={startCnpjJob} disabled={loading}
+                        style={{ textTransform: "none", fontWeight: 600 }}
+                      >
+                        Enriquecer CNPJs
+                      </Button>
+                    )}
                   </Box>
                   <Box className={classes.helpToggle} onClick={() => setHelpOpen(o => !o)}>
                     <HelpIcon style={{ fontSize: 15 }} />
@@ -1200,14 +1207,16 @@ export default function LeadScraper() {
                   </Box>
 
                   <Box className={classes.fullRow}>
-                    <Button
-                      variant="contained" color="primary"
-                      startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <SearchIcon />}
-                      onClick={startCnpjSearchJob} disabled={loading}
-                      style={{ textTransform: "none", fontWeight: 600 }}
-                    >
-                      Pesquisar CNPJs
-                    </Button>
+                    {canImport && (
+                      <Button
+                        variant="contained" color="primary"
+                        startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <SearchIcon />}
+                        onClick={startCnpjSearchJob} disabled={loading}
+                        style={{ textTransform: "none", fontWeight: 600 }}
+                      >
+                        Pesquisar CNPJs
+                      </Button>
+                    )}
                   </Box>
 
                   <Box className={`${classes.fullRow}`}>
@@ -1267,15 +1276,17 @@ export default function LeadScraper() {
                   ]}
                 />
                 <Box mt={2} style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                  <Button
-                    variant="contained" color="primary"
-                    startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <FollowersIcon />}
-                    onClick={startFollowersJob}
-                    disabled={loading || !engineStatus?.apify?.configured}
-                    style={{ textTransform: "none", fontWeight: 600 }}
-                  >
-                    Buscar Seguidores
-                  </Button>
+                  {canImport && (
+                    <Button
+                      variant="contained" color="primary"
+                      startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <FollowersIcon />}
+                      onClick={startFollowersJob}
+                      disabled={loading || !engineStatus?.apify?.configured}
+                      style={{ textTransform: "none", fontWeight: 600 }}
+                    >
+                      Buscar Seguidores
+                    </Button>
+                  )}
                   <Typography variant="caption" color="textSecondary">
                     ~3s entre páginas · contas privadas são ignoradas
                   </Typography>
@@ -1426,14 +1437,16 @@ export default function LeadScraper() {
                 </Box>
 
                 <Box className={classes.fullRow}>
-                  <Button
-                    variant="contained" color="primary"
-                    startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <ConselhoIcon />}
-                    onClick={startConselhoJob} disabled={loading}
-                    style={{ textTransform: "none", fontWeight: 600 }}
-                  >
-                    Buscar no Conselho
-                  </Button>
+                  {canImport && (
+                    <Button
+                      variant="contained" color="primary"
+                      startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <ConselhoIcon />}
+                      onClick={startConselhoJob} disabled={loading}
+                      style={{ textTransform: "none", fontWeight: 600 }}
+                    >
+                      Buscar no Conselho
+                    </Button>
+                  )}
                 </Box>
               </Box>
             </TabPanel>
@@ -1548,14 +1561,16 @@ export default function LeadScraper() {
               </Box>
 
               <Box mt={2}>
-                <Button
-                  variant="contained" color="primary"
-                  startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <GlobalIcon />}
-                  onClick={startGlobalJob} disabled={loading}
-                  style={{ textTransform: "none", fontWeight: 600 }}
-                >
-                  Buscar em todas as fontes
-                </Button>
+                {canImport && (
+                  <Button
+                    variant="contained" color="primary"
+                    startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <GlobalIcon />}
+                    onClick={startGlobalJob} disabled={loading}
+                    style={{ textTransform: "none", fontWeight: 600 }}
+                  >
+                    Buscar em todas as fontes
+                  </Button>
+                )}
               </Box>
               <Box className={classes.helpToggle} onClick={() => setHelpOpen(o => !o)}>
                 <HelpIcon style={{ fontSize: 15 }} />
@@ -1588,17 +1603,19 @@ export default function LeadScraper() {
             <Box display="flex" justifyContent="space-between" alignItems="center" style={{ marginBottom: 12, flexShrink: 0 }}>
               <Typography variant="subtitle1" style={{ fontWeight: 700 }}>Histórico de Buscas</Typography>
               <Box display="flex" alignItems="center">
-                <Tooltip title="Limpar histórico">
-                  <span>
-                    <IconButton
-                      size="small"
-                      onClick={() => setConfirmDelete({ type: "all" })}
-                      disabled={!jobs.some(j => j.status === "done" || j.status === "error" || j.status === "cancelled")}
-                    >
-                      <ClearIcon fontSize="small" />
-                    </IconButton>
-                  </span>
-                </Tooltip>
+                {canImport && (
+                  <Tooltip title="Limpar histórico">
+                    <span>
+                      <IconButton
+                        size="small"
+                        onClick={() => setConfirmDelete({ type: "all" })}
+                        disabled={!jobs.some(j => j.status === "done" || j.status === "error" || j.status === "cancelled")}
+                      >
+                        <ClearIcon fontSize="small" />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                )}
                 <Tooltip title="Recarregar">
                   <IconButton size="small" onClick={loadJobs}><RefreshIcon fontSize="small" /></IconButton>
                 </Tooltip>
@@ -1652,7 +1669,7 @@ export default function LeadScraper() {
                         {j.totalFound || 0} leads
                       </Typography>
                     </Box>
-                    {(j.status === "pending" || j.status === "running") && (
+                    {canImport && (j.status === "pending" || j.status === "running") && (
                       <Tooltip title="Parar busca">
                         <IconButton
                           size="small"
@@ -1663,7 +1680,7 @@ export default function LeadScraper() {
                         </IconButton>
                       </Tooltip>
                     )}
-                    {(j.status === "done" || j.status === "error" || j.status === "cancelled") && (
+                    {canImport && (j.status === "done" || j.status === "error" || j.status === "cancelled") && (
                       <Tooltip title="Excluir busca">
                         <IconButton
                           size="small"
@@ -1711,7 +1728,7 @@ export default function LeadScraper() {
                   fontWeight: 700, fontSize: 11,
                 }}
               />
-              {isRunning && (
+              {canImport && isRunning && (
                 <Tooltip title="Parar busca — leads já coletados serão mantidos">
                   <Button
                     size="small"
@@ -2028,17 +2045,19 @@ export default function LeadScraper() {
                   clearOnEscape
                   style={{ minWidth: 200 }}
                 />
-                <Button
-                  variant="contained" color="primary"
-                  startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <ImportIcon />}
-                  onClick={importSelected}
-                  disabled={loading || (activeJob.status !== "done" && activeJob.status !== "cancelled")}
-                  style={{ textTransform: "none", fontWeight: 600, whiteSpace: "nowrap" }}
-                >
-                  {someSelected
-                    ? `Importar ${selectedIndices.length} lead${selectedIndices.length !== 1 ? "s" : ""}`
-                    : `Importar todos (${results.length})`}
-                </Button>
+                {canImport && (
+                  <Button
+                    variant="contained" color="primary"
+                    startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <ImportIcon />}
+                    onClick={importSelected}
+                    disabled={loading || (activeJob.status !== "done" && activeJob.status !== "cancelled")}
+                    style={{ textTransform: "none", fontWeight: 600, whiteSpace: "nowrap" }}
+                  >
+                    {someSelected
+                      ? `Importar ${selectedIndices.length} lead${selectedIndices.length !== 1 ? "s" : ""}`
+                      : `Importar todos (${results.length})`}
+                  </Button>
+                )}
               </Box>
             </>
           ) : null}

@@ -37,6 +37,7 @@ import { Chip, Tooltip, Typography, Box, Divider } from "@material-ui/core";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import { MoreHoriz, Info } from "@material-ui/icons";
 import ContactTagListModal from "../../components/ContactTagListModal";
+import usePermissions from "../../hooks/usePermissions";
 
 const reducer = (state, action) => {
   switch (action.type) {
@@ -102,6 +103,10 @@ const Tags = () => {
   const [searchParam, setSearchParam] = useState("");
   const [tags, dispatch] = useReducer(reducer, []);
   const [tagModalOpen, setTagModalOpen] = useState(false);
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission("tags.create");
+  const canEdit = hasPermission("tags.edit");
+  const canDelete = hasPermission("tags.delete");
 
   // Função para categorizar tags baseado na quantidade de #
   const categorizeTags = (tags) => {
@@ -254,13 +259,15 @@ const Tags = () => {
               ),
             }}
           />
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={handleOpenTagModal}
-          >
-            {i18n.t("tags.buttons.add")}
-          </Button>
+          {canCreate && (
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={handleOpenTagModal}
+            >
+              {i18n.t("tags.buttons.add")}
+            </Button>
+          )}
         </MainHeaderButtonsWrapper>
       </MainHeader>
       <Paper
@@ -342,18 +349,22 @@ const Tags = () => {
                           </IconButton>
                         </TableCell>
                         <TableCell align="center">
-                          <IconButton size="small" onClick={() => handleEditTag(tag)}>
-                            <EditIcon />
-                          </IconButton>
-                          <IconButton
-                            size="small"
-                            onClick={() => {
-                              setConfirmModalOpen(true);
-                              setDeletingTag(tag);
-                            }}
-                          >
-                            <DeleteOutlineIcon />
-                          </IconButton>
+                          {canEdit && (
+                            <IconButton size="small" onClick={() => handleEditTag(tag)}>
+                              <EditIcon />
+                            </IconButton>
+                          )}
+                          {canDelete && (
+                            <IconButton
+                              size="small"
+                              onClick={() => {
+                                setConfirmModalOpen(true);
+                                setDeletingTag(tag);
+                              }}
+                            >
+                              <DeleteOutlineIcon />
+                            </IconButton>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}

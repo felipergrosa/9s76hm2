@@ -98,6 +98,8 @@ const FileLists = () => {
     //   const socketManager = useContext(SocketContext);
     const { user, socket } = useContext(AuthContext);
     const { hasPermission } = usePermissions();
+    const canUpload = hasPermission("files.upload");
+    const canDelete = hasPermission("files.delete");
 
 
     const [loading, setLoading] = useState(false);
@@ -237,13 +239,15 @@ const FileLists = () => {
                                     ),
                                 }}
                             />
-                            <Button
-                                variant="contained"
-                                color="primary"
-                                onClick={handleOpenFileListModal}
-                            >
-                                {i18n.t("files.buttons.add")}
-                            </Button>
+                            {canUpload && (
+                                <Button
+                                    variant="contained"
+                                    color="primary"
+                                    onClick={handleOpenFileListModal}
+                                >
+                                    {i18n.t("files.buttons.add")}
+                                </Button>
+                            )}
                         </MainHeaderButtonsWrapper>
                     </MainHeader>
                     <Paper
@@ -268,19 +272,23 @@ const FileLists = () => {
                                                 {fileList.name}
                                             </TableCell>
                                             <TableCell align="center">
-                                                <IconButton size="small" onClick={() => handleEditFileList(fileList)}>
-                                                    <EditIcon />
-                                                </IconButton>
+                                                {canUpload && (
+                                                    <IconButton size="small" onClick={() => handleEditFileList(fileList)}>
+                                                        <EditIcon />
+                                                    </IconButton>
+                                                )}
 
-                                                <IconButton
-                                                    size="small"
-                                                    onClick={(e) => {
-                                                        setConfirmModalOpen(true);
-                                                        setDeletingFileList(fileList);
-                                                    }}
-                                                >
-                                                    <DeleteOutlineIcon />
-                                                </IconButton>
+                                                {canDelete && (
+                                                    <IconButton
+                                                        size="small"
+                                                        onClick={(e) => {
+                                                            setConfirmModalOpen(true);
+                                                            setDeletingFileList(fileList);
+                                                        }}
+                                                    >
+                                                        <DeleteOutlineIcon />
+                                                    </IconButton>
+                                                )}
                                             </TableCell>
                                         </TableRow>
                                     ))}

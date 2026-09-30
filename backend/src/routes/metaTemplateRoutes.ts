@@ -1,14 +1,28 @@
 import express from "express";
 import multer from "multer";
+import fs from "fs";
+import path from "path";
 import isAuth from "../middleware/isAuth";
 import { checkPermission } from "../middleware/checkPermission";
 import * as MetaTemplateController from "../controllers/MetaTemplateController";
 
 const metaTemplateRoutes = express.Router();
 
-// Upload em memória para mídia do HEADER do template (campo "headerFile")
+// Upload em DISCO para mídia do HEADER do template (campo "headerFile").
+// memoryStorage manteria até 100MB por upload em RAM — vetor de exaustão.
+// O arquivo já cai na pasta final do tenant; o controller só lê e registra o path.
 const upload = multer({
-  storage: multer.memoryStorage(),
+  storage: multer.diskStorage({
+    destination: (req, _file, cb) => {
+      const dir = path.resolve("public", `company${(req.user as any).companyId}`, "meta-templates");
+      fs.mkdirSync(dir, { recursive: true });
+      cb(null, dir);
+    },
+    filename: (_req, file, cb) => {
+      const safeName = `${Date.now()}_${String(file.originalname).replace(/[^\w.\-]/g, "_")}`;
+      cb(null, safeName);
+    }
+  }),
   // Vídeos de header da Meta podem ser grandes — manter 100MB
   limits: { fileSize: 100 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {

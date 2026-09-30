@@ -49,6 +49,7 @@ import MetaTemplateModal from "../../components/MetaTemplateModal";
 import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import { WhatsAppsContext } from "../../context/WhatsApp/WhatsAppsContext";
+import usePermissions from "../../hooks/usePermissions";
 
 const reducer = (state, action) => {
   switch (action.type) {
@@ -310,6 +311,10 @@ const MetaTemplates = () => {
   const [checkedIds, setCheckedIds] = useState([]);
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission("meta-templates.create");
+  const canEdit = hasPermission("meta-templates.edit");
+  const canDelete = hasPermission("meta-templates.delete");
 
   // Apenas conexões oficiais (Meta WhatsApp Business API)
   const officialWhatsApps = useMemo(
@@ -553,15 +558,17 @@ const MetaTemplates = () => {
               </IconButton>
             </span>
           </Tooltip>
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={handleOpenTemplateModal}
-            disabled={!selectedWhatsAppId}
-            startIcon={<AddIcon />}
-          >
-            {i18n.t("metaTemplates.buttons.add")}
-          </Button>
+          {canCreate && (
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={handleOpenTemplateModal}
+              disabled={!selectedWhatsAppId}
+              startIcon={<AddIcon />}
+            >
+              {i18n.t("metaTemplates.buttons.add")}
+            </Button>
+          )}
         </MainHeaderButtonsWrapper>
       </MainHeader>
       <Paper className={classes.mainPaper} variant="outlined">
@@ -674,17 +681,19 @@ const MetaTemplates = () => {
                 count: checkedIds.length,
               })}
             </Typography>
-            <Button
-              size="small"
-              color="secondary"
-              startIcon={<DeleteOutlineIcon />}
-              onClick={() => {
-                setDeletingBulk(true);
-                setConfirmModalOpen(true);
-              }}
-            >
-              {i18n.t("metaTemplates.buttons.delete")}
-            </Button>
+            {canDelete && (
+              <Button
+                size="small"
+                color="secondary"
+                startIcon={<DeleteOutlineIcon />}
+                onClick={() => {
+                  setDeletingBulk(true);
+                  setConfirmModalOpen(true);
+                }}
+              >
+                {i18n.t("metaTemplates.buttons.delete")}
+              </Button>
+            )}
             <Box flex={1} />
             <Button size="small" onClick={() => setCheckedIds([])}>
               {i18n.t("metaTemplates.bulk.clear", { defaultValue: "Limpar seleção" })}
@@ -696,13 +705,15 @@ const MetaTemplates = () => {
           <TableHead>
             <TableRow>
               <TableCell padding="checkbox">
-                <Checkbox
-                  size="small"
-                  indeterminate={someChecked && !allFilteredChecked}
-                  checked={allFilteredChecked}
-                  onChange={toggleAllFiltered}
-                  disabled={filteredTemplates.length === 0}
-                />
+                {canDelete && (
+                  <Checkbox
+                    size="small"
+                    indeterminate={someChecked && !allFilteredChecked}
+                    checked={allFilteredChecked}
+                    onChange={toggleAllFiltered}
+                    disabled={filteredTemplates.length === 0}
+                  />
+                )}
               </TableCell>
               <TableCell className={classes.headCell}>
                 {i18n.t("metaTemplates.table.name")}
@@ -738,11 +749,13 @@ const MetaTemplates = () => {
                 {filteredTemplates.map((template) => (
                   <TableRow key={template.id} className={classes.rowHover} hover={false}>
                     <TableCell padding="checkbox" className={classes.bodyCell}>
-                      <Checkbox
-                        size="small"
-                        checked={checkedIds.includes(template.id)}
-                        onChange={() => toggleChecked(template.id)}
-                      />
+                      {canDelete && (
+                        <Checkbox
+                          size="small"
+                          checked={checkedIds.includes(template.id)}
+                          onChange={() => toggleChecked(template.id)}
+                        />
+                      )}
                     </TableCell>
                     <TableCell className={classes.bodyCell}>
                       <div className={classes.templateName}>{template.name}</div>
@@ -785,26 +798,30 @@ const MetaTemplates = () => {
                       {template.rejected_reason || "—"}
                     </TableCell>
                     <TableCell align="center" className={classes.bodyCell}>
-                      <Tooltip title={i18n.t("metaTemplates.buttons.edit")}>
-                        <IconButton
-                          size="small"
-                          onClick={() => handleEditTemplate(template)}
-                        >
-                          <EditIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title={i18n.t("metaTemplates.buttons.delete")}>
-                        <IconButton
-                          size="small"
-                          onClick={() => {
-                            setDeletingBulk(false);
-                            setDeletingTemplate(template);
-                            setConfirmModalOpen(true);
-                          }}
-                        >
-                          <DeleteOutlineIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
+                      {canEdit && (
+                        <Tooltip title={i18n.t("metaTemplates.buttons.edit")}>
+                          <IconButton
+                            size="small"
+                            onClick={() => handleEditTemplate(template)}
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                      {canDelete && (
+                        <Tooltip title={i18n.t("metaTemplates.buttons.delete")}>
+                          <IconButton
+                            size="small"
+                            onClick={() => {
+                              setDeletingBulk(false);
+                              setDeletingTemplate(template);
+                              setConfirmModalOpen(true);
+                            }}
+                          >
+                            <DeleteOutlineIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

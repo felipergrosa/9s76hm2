@@ -43,6 +43,7 @@ import { AddCircle, Build, DevicesFold, TextFields } from "@mui/icons-material";
 import { CircularProgress, Grid, Stack } from "@mui/material";
 import { Can } from "../../components/Can";
 import { AuthContext } from "../../context/Auth/AuthContext";
+import usePermissions from "../../hooks/usePermissions";
 import CampaignModalPhrase from "../../components/CampaignModalPhrase";
 import { colorBackgroundTable, colorLineTable, colorLineTableHover, colorTopTable } from "../../styles/styles";
 
@@ -110,6 +111,10 @@ const CampaignsPhrase = () => {
   const history = useHistory();
 
   const { user } = useContext(AuthContext);
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission("phrase-campaigns.create");
+  const canEdit = hasPermission("phrase-campaigns.edit");
+  const canDelete = hasPermission("phrase-campaigns.delete");
 
   const [loading, setLoading] = useState(true);
   const [pageNumber, setPageNumber] = useState(1);
@@ -210,21 +215,23 @@ const CampaignsPhrase = () => {
                 /> */}
               </Grid>
               <Grid xs={6} sm={6} item>
-                <Button
-                  fullWidth
-                  variant="contained"
-                  onClick={() => {
-                    setCampaignFlowSelected();
-                    setModalOpenPhrase(true);
-                  }}
-                  color="primary"
-                  style={{ textTransform: "none" }}
-                >
-                  <Stack direction={"row"} gap={1}>
-                    <AddCircle />
-                    {"Campanha"}
-                  </Stack>
-                </Button>
+                {canCreate && (
+                  <Button
+                    fullWidth
+                    variant="contained"
+                    onClick={() => {
+                      setCampaignFlowSelected();
+                      setModalOpenPhrase(true);
+                    }}
+                    color="primary"
+                    style={{ textTransform: "none" }}
+                  >
+                    <Stack direction={"row"} gap={1}>
+                      <AddCircle />
+                      {"Campanha"}
+                    </Stack>
+                  </Button>
+                )}
               </Grid>
             </Grid>
           </Grid>
@@ -285,30 +292,28 @@ const CampaignsPhrase = () => {
                     </Stack>
                   </Grid>
                   <Grid item xs={4} align="end">
-                    <IconButton
-                      size="small"
-                      onClick={() => {
-                        setCampaignFlowSelected(flow.id);
-                        setModalOpenPhrase(true);
-                      }}
-                    >
-                      <EditIcon style={{ color: "#ededed" }} />
-                    </IconButton>
-                    <Can
-                      user={user}
-                      perform="contacts.delete"
-                      yes={() => (
-                        <IconButton
-                          size="small"
-                          onClick={e => {
-                            setConfirmModalOpen(true);
-                            setDeletingContact(flow);
-                          }}
-                        >
-                          <DeleteOutlineIcon style={{ color: "#ededed" }} />
-                        </IconButton>
-                      )}
-                    />
+                    {canEdit && (
+                      <IconButton
+                        size="small"
+                        onClick={() => {
+                          setCampaignFlowSelected(flow.id);
+                          setModalOpenPhrase(true);
+                        }}
+                      >
+                        <EditIcon style={{ color: "#ededed" }} />
+                      </IconButton>
+                    )}
+                    {canDelete && (
+                      <IconButton
+                        size="small"
+                        onClick={e => {
+                          setConfirmModalOpen(true);
+                          setDeletingContact(flow);
+                        }}
+                      >
+                        <DeleteOutlineIcon style={{ color: "#ededed" }} />
+                      </IconButton>
+                    )}
                   </Grid>
                 </Grid>
               ))}

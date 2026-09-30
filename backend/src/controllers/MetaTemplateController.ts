@@ -323,31 +323,34 @@ export const store = async (
 
   let components = parseComponents(req.body.components);
 
-  // Se veio arquivo de mídia, sobe para a Meta e injeta o handle no HEADER
+  // Se veio arquivo de mídia, sobe para a Meta e injeta o handle no HEADER.
+  // O multer (diskStorage) já gravou o arquivo na pasta final do tenant.
   const file = req.file as Express.Multer.File | undefined;
   let headerMediaPath: string | undefined;
   if (file) {
-    const headerHandle = await UploadTemplateHeaderMedia({
-      whatsapp,
-      fileBuffer: file.buffer,
-      fileName: file.originalname,
-      mimeType: file.mimetype
-    });
+    try {
+      const headerHandle = await UploadTemplateHeaderMedia({
+        whatsapp,
+        fileBuffer: fs.readFileSync(file.path),
+        fileName: file.originalname,
+        mimeType: file.mimetype
+      });
 
-    // Persiste o arquivo localmente — a Meta não devolve a mídia de exemplo
-    // depois, e o header_handle não é baixável. Sem o arquivo local seria
-    // impossível reenviar a mídia no envio do template.
-    const dir = path.resolve("public", `company${companyId}`, "meta-templates");
-    fs.mkdirSync(dir, { recursive: true });
-    const safeName = `${Date.now()}_${String(file.originalname).replace(/[^\w.\-]/g, "_")}`;
-    fs.writeFileSync(path.join(dir, safeName), file.buffer);
-    headerMediaPath = `meta-templates/${safeName}`;
+      // Persiste o path local — a Meta não devolve a mídia de exemplo depois,
+      // e o header_handle não é baixável. Sem o arquivo local seria impossível
+      // reenviar a mídia no envio do template.
+      headerMediaPath = `meta-templates/${file.filename}`;
 
-    components = upsertHeaderComponent(
-      components,
-      headerFormatFromMime(file.mimetype),
-      headerHandle
-    );
+      components = upsertHeaderComponent(
+        components,
+        headerFormatFromMime(file.mimetype),
+        headerHandle
+      );
+    } catch (err) {
+      // Falha no upload para a Meta: remove o arquivo para não deixar órfão
+      fs.unlink(file.path, () => {});
+      throw err;
+    }
   }
 
   validateTemplatePayload({ name, category, language, components });
@@ -408,29 +411,31 @@ export const update = async (
   // Sem arquivo, o frontend preserva o example.header_handle existente.
   const file = req.file as Express.Multer.File | undefined;
   if (file) {
-    const headerHandle = await UploadTemplateHeaderMedia({
-      whatsapp,
-      fileBuffer: file.buffer,
-      fileName: file.originalname,
-      mimeType: file.mimetype
-    });
+    try {
+      const headerHandle = await UploadTemplateHeaderMedia({
+        whatsapp,
+        fileBuffer: fs.readFileSync(file.path),
+        fileName: file.originalname,
+        mimeType: file.mimetype
+      });
 
-    const dir = path.resolve("public", `company${companyId}`, "meta-templates");
-    fs.mkdirSync(dir, { recursive: true });
-    const safeName = `${Date.now()}_${String(file.originalname).replace(/[^\w.\-]/g, "_")}`;
-    fs.writeFileSync(path.join(dir, safeName), file.buffer);
-    const headerMediaPath = `meta-templates/${safeName}`;
+      const headerMediaPath = `meta-templates/${file.filename}`;
 
-    components = upsertHeaderComponent(
-      components,
-      headerFormatFromMime(file.mimetype),
-      headerHandle
-    );
+      components = upsertHeaderComponent(
+        components,
+        headerFormatFromMime(file.mimetype),
+        headerHandle
+      );
 
     await WhatsappTemplate.update(
       { headerMediaPath },
       { where: { whatsappId: Number(whatsappId), companyId, metaTemplateId: templateId } }
     );
+    } catch (err) {
+      // Falha no upload/update: remove o arquivo para não deixar órfão
+      fs.unlink(file.path, () => {});
+      throw err;
+    }
   }
 
   await UpdateWabaTemplate({

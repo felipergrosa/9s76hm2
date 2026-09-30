@@ -29,6 +29,7 @@ import { i18n } from "../../translate/i18n";
 
 import { getAIAgents, deleteAIAgent } from "../../services/aiAgents";
 import AIAgentModal from "../../components/AIAgentModal";
+import usePermissions from "../../hooks/usePermissions";
 
 const reducer = (state, action) => {
     if (action.type === "LOAD_AGENTS") {
@@ -74,6 +75,10 @@ const AIAgents = () => {
     const [selectedAgent, setSelectedAgent] = useState(null);
     const [confirmModalOpen, setConfirmModalOpen] = useState(false);
     const [deletingAgent, setDeletingAgent] = useState(null);
+    const { hasPermission } = usePermissions();
+    const canCreate = hasPermission("ai-agents.create");
+    const canEdit = hasPermission("ai-agents.edit");
+    const canDelete = hasPermission("ai-agents.delete");
 
     useEffect(() => {
         loadAgents();
@@ -165,14 +170,16 @@ const AIAgents = () => {
             <MainHeader>
                 <Title>Agentes de IA</Title>
                 <MainHeaderButtonsWrapper>
-                    <Button
-                        variant="contained"
-                        color="primary"
-                        onClick={handleOpenAgentModal}
-                        startIcon={<AddIcon />}
-                    >
-                        Novo Agente
-                    </Button>
+                    {canCreate && (
+                        <Button
+                            variant="contained"
+                            color="primary"
+                            onClick={handleOpenAgentModal}
+                            startIcon={<AddIcon />}
+                        >
+                            Novo Agente
+                        </Button>
+                    )}
                 </MainHeaderButtonsWrapper>
             </MainHeader>
 
@@ -220,21 +227,25 @@ const AIAgents = () => {
                                         />
                                     </TableCell>
                                     <TableCell align="center">
-                                        <IconButton
-                                            size="small"
-                                            onClick={() => handleEditAgent(agent)}
-                                        >
-                                            <EditIcon />
-                                        </IconButton>
-                                        <IconButton
-                                            size="small"
-                                            onClick={() => {
-                                                setDeletingAgent(agent);
-                                                setConfirmModalOpen(true);
-                                            }}
-                                        >
-                                            <DeleteIcon />
-                                        </IconButton>
+                                        {canEdit && (
+                                            <IconButton
+                                                size="small"
+                                                onClick={() => handleEditAgent(agent)}
+                                            >
+                                                <EditIcon />
+                                            </IconButton>
+                                        )}
+                                        {canDelete && (
+                                            <IconButton
+                                                size="small"
+                                                onClick={() => {
+                                                    setDeletingAgent(agent);
+                                                    setConfirmModalOpen(true);
+                                                }}
+                                            >
+                                                <DeleteIcon />
+                                            </IconButton>
+                                        )}
                                     </TableCell>
                                 </TableRow>
                             ))}

@@ -17,6 +17,7 @@ import Title from "../../components/Title";
 
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
+import usePermissions from "../../hooks/usePermissions";
 
 const useStyles = makeStyles(theme => ({
   mainPaper: {
@@ -54,6 +55,8 @@ const LeadsImport = () => {
   const [validateNumber, setValidateNumber] = useState(false);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
+  const { hasPermission } = usePermissions();
+  const canImport = hasPermission("contacts.import");
 
   const handleFileChange = e => {
     const file = e.target.files?.[0];
@@ -144,14 +147,16 @@ const LeadsImport = () => {
           label="Validar números no WhatsApp antes de importar (mais lento)"
         />
 
-        <Button
-          variant="contained"
-          color="primary"
-          onClick={handleImport}
-          disabled={loading}
-        >
-          {loading ? "Importando..." : "Importar Leads"}
-        </Button>
+        {canImport && (
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={handleImport}
+            disabled={loading}
+          >
+            {loading ? "Importando..." : "Importar Leads"}
+          </Button>
+        )}
 
         {result && (
           <Paper variant="outlined" style={{ padding: 16 }}>

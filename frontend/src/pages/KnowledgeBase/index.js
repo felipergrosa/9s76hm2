@@ -14,6 +14,7 @@ import {
 import { toast } from "react-toastify";
 import api from "../../services/api";
 import MainContainer from "../../components/MainContainer";
+import usePermissions from "../../hooks/usePermissions";
 
 const useStyles = makeStyles(theme => ({
   root: { padding: theme.spacing(3) },
@@ -117,6 +118,9 @@ export default function KnowledgeBase() {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [saving, setSaving] = useState(false);
+  const { hasPermission } = usePermissions();
+  // Indexar/remover documentos exige ai-settings.edit no backend (ragRoutes)
+  const canManageDocs = hasPermission("ai-settings.edit");
 
   const cat = CATEGORIES[tab];
 
@@ -180,9 +184,11 @@ export default function KnowledgeBase() {
           <Tooltip title="Recarregar">
             <IconButton onClick={load} style={{ color: "rgba(255,255,255,0.8)" }}><RefreshIcon /></IconButton>
           </Tooltip>
-          <Button variant="contained" className={classes.heroBtnPrimary} startIcon={<AddIcon />} onClick={openDialog}>
-            Novo Documento
-          </Button>
+          {canManageDocs && (
+            <Button variant="contained" className={classes.heroBtnPrimary} startIcon={<AddIcon />} onClick={openDialog}>
+              Novo Documento
+            </Button>
+          )}
         </Box>
       </Box>
 
@@ -226,9 +232,11 @@ export default function KnowledgeBase() {
               <Typography variant="body2" color="textSecondary">
                 Adicione textos, regras ou catálogos para o agente consultar durante conversas.
               </Typography>
-              <Button variant="outlined" color="primary" startIcon={<AddIcon />} onClick={openDialog}>
-                Adicionar primeiro documento
-              </Button>
+              {canManageDocs && (
+                <Button variant="outlined" color="primary" startIcon={<AddIcon />} onClick={openDialog}>
+                  Adicionar primeiro documento
+                </Button>
+              )}
             </Box>
           ) : (
             docs.map(doc => {
@@ -252,11 +260,13 @@ export default function KnowledgeBase() {
 
                   <Box className={classes.docActions}>
                     <Chip label={docCat.label} size="small" className={classes[docCat.chipCls]} />
-                    <Tooltip title="Remover documento">
-                      <IconButton size="small" onClick={() => handleDelete(doc.id)}>
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
+                    {canManageDocs && (
+                      <Tooltip title="Remover documento">
+                        <IconButton size="small" onClick={() => handleDelete(doc.id)}>
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    )}
                   </Box>
                 </Box>
               );
