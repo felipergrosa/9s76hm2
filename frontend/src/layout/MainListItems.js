@@ -628,17 +628,6 @@ const MainListItems = ({ collapsed, drawerClose }) => {
         />
       )}
 
-      {/* 3. ADMINISTRAÇÃO (SUPER) — console SaaS: empresas, conexões, planos... */}
-      {user.super && (
-        <ListItemLink
-          to="/admin"
-          primary={i18n.t("mainDrawer.listItems.administration") || "Administração"}
-          icon={<AdminIcon size={20} />}
-          viewMode={viewMode}
-          tooltip={collapsed}
-        />
-      )}
-
       {/* 4. ENVIO EM MASSA (CAMPANHAS) */}
       {showCampaigns && hasPermission("campaigns.view") && (
         <>
@@ -950,6 +939,17 @@ const MainListItems = ({ collapsed, drawerClose }) => {
           to="/financeiro"
           primary={i18n.t("mainDrawer.listItems.financeiro")}
           icon={<LocalAtmIcon />}
+          viewMode={viewMode}
+          tooltip={collapsed}
+        />
+      )}
+
+      {/* 11.1 ADMINISTRAÇÃO (SUPER) — console SaaS: empresas, conexões, planos... */}
+      {user.super && (
+        <ListItemLink
+          to="/admin"
+          primary={i18n.t("mainDrawer.listItems.administration") || "Administração"}
+          icon={<AdminIcon size={20} />}
           viewMode={viewMode}
           tooltip={collapsed}
         />

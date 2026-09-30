@@ -1,25 +1,30 @@
 import React, { useEffect, useState, useContext, useRef } from "react";
 
-import Grid from "@material-ui/core/Grid";
-import FormControl from "@material-ui/core/FormControl";
-import TextField from "@material-ui/core/TextField";
-import useSettings from "../../hooks/useSettings";
-import { toast } from 'react-toastify';
-import { makeStyles } from "@material-ui/core/styles";
-import { grey, blue } from "@material-ui/core/colors";
-import OnlyForSuperUser from "../OnlyForSuperUser";
-import useAuth from "../../hooks/useAuth.js/index.js";
-
 import {
+  Grid,
+  FormControl,
+  TextField,
+  Paper,
+  Typography,
   IconButton,
   InputAdornment,
   Select,
   MenuItem,
   InputLabel,
+  Tooltip,
+  makeStyles,
 } from "@material-ui/core";
 
-import { Colorize, AttachFile, Delete } from "@material-ui/icons";
-import ColorPicker from "../ColorPicker";
+import {
+  Colorize,
+  CloudUpload,
+  Delete,
+} from "@material-ui/icons";
+
+import { toast } from "react-toastify";
+import useSettings from "../../hooks/useSettings";
+import OnlyForSuperUser from "../OnlyForSuperUser";
+import useAuth from "../../hooks/useAuth.js/index.js";
 import ColorModeContext from "../../layout/themeContext";
 import api from "../../services/api";
 import { getBackendUrl } from "../../config";
@@ -30,114 +35,142 @@ import defaultLogoFavicon from "../../assets/favicon.ico";
 import ColorBoxModal from "../ColorBoxModal/index.js";
 
 const useStyles = makeStyles((theme) => ({
-  container: {
-    paddingTop: theme.spacing(4),
-    paddingBottom: theme.spacing(4),
+  section: {
+    borderRadius: 12,
+    padding: theme.spacing(3),
+    border: `1px solid ${theme.palette.divider}`,
+    backgroundColor: theme.palette.background.paper,
+    boxShadow: theme.palette.type === "dark"
+      ? "0 1px 4px rgba(0,0,0,0.4)"
+      : "0 1px 4px rgba(0,0,0,0.06)",
   },
-  fixedHeightPaper: {
-    padding: theme.spacing(2),
-    display: "flex",
-    overflow: "auto",
-    flexDirection: "column",
-    height: 240,
+  sectionTitle: {
+    fontSize: "0.95rem",
+    fontWeight: 700,
+    marginBottom: 2,
   },
-  tab: {
-    borderRadius: 4,
-    width: "100%",
-    "& .MuiTab-wrapper": {
-      color: "#128c7e"
-    },
-    "& .MuiTabs-flexContainer": {
-      justifyContent: "center"
-    }
-
-
-  },
-  paper: {
-    padding: theme.spacing(2),
-    display: "flex",
-    alignItems: "center",
-    marginBottom: 12,
-    width: "100%",
-  },
-  cardAvatar: {
-    fontSize: "55px",
-    color: grey[500],
-    backgroundColor: "#ffffff",
-    width: theme.spacing(7),
-    height: theme.spacing(7),
-  },
-  cardTitle: {
-    fontSize: "18px",
-    color: blue[700],
-  },
-  cardSubtitle: {
-    color: grey[600],
-    fontSize: "14px",
-  },
-  alignRight: {
-    textAlign: "right",
+  sectionDesc: {
+    fontSize: 13,
+    color: theme.palette.text.secondary,
+    marginBottom: theme.spacing(2.5),
   },
   fullWidth: {
     width: "100%",
   },
-  selectContainer: {
-    width: "100%",
-    textAlign: "left",
-  },
-  colorAdorment: {
+  colorSwatch: {
     width: 20,
     height: 20,
+    borderRadius: 5,
+    border: `1px solid ${theme.palette.divider}`,
   },
-
   uploadInput: {
     display: "none",
   },
-
-  appLogoLightPreviewDiv: {
-    backgroundColor: "white",
-    padding: "10px",
-    borderStyle: "solid",
-    borderWidth: "1px",
-    borderColor: "#424242",
+  logoCard: {
+    borderRadius: 10,
+    border: `1px dashed ${theme.palette.divider}`,
+    padding: theme.spacing(2),
+    display: "flex",
+    flexDirection: "column",
+    gap: theme.spacing(1.5),
+    height: "100%",
+    transition: "border-color .15s ease",
+    "&:hover": {
+      borderColor: theme.palette.primary.main,
+    },
+  },
+  logoCardLabel: {
+    fontSize: 13,
+    fontWeight: 600,
+    color: theme.palette.text.secondary,
+  },
+  logoPreview: {
+    borderRadius: 8,
+    padding: theme.spacing(2),
     textAlign: "center",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 80,
   },
-
-  appLogoDarkPreviewDiv: {
-    backgroundColor: "#424242",
-    padding: "10px",
-    borderStyle: "solid",
-    borderWidth: "1px",
-    borderColor: "white",
-    textAlign: "center",
+  logoPreviewLight: {
+    backgroundColor: "#ffffff",
+    border: `1px solid ${theme.palette.divider}`,
   },
-
-  appLogoFaviconPreviewDiv: {
-    padding: "10px",
-    borderStyle: "solid",
-    borderWidth: "1px",
-    borderColor: "black",
-    textAlign: "center",
+  logoPreviewDark: {
+    backgroundColor: "#303030",
   },
-
-  appLogoLightPreviewImg: {
-    width: "100%",
+  logoPreviewFavicon: {
+    backgroundColor: theme.palette.type === "dark" ? "#303030" : "#f5f5f5",
+    border: `1px solid ${theme.palette.divider}`,
+  },
+  logoImg: {
+    maxWidth: "100%",
     maxHeight: 72,
-    content: "url(" + theme.calculatedLogoLight() + ")"
   },
-
-  appLogoDarkPreviewImg: {
-    width: "100%",
-    maxHeight: 72,
-    content: "url(" + theme.calculatedLogoDark() + ")"
+  logoActions: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
-
-  appLogoFaviconPreviewImg: {
-    width: "100%",
-    maxHeight: 72,
-    content: "url(" + ((theme.appLogoFavicon) ? theme.appLogoFavicon : "") + ")"
-  }
+  logoHint: {
+    fontSize: 11,
+    color: theme.palette.text.disabled,
+  },
 }));
+
+// Card reutilizável de upload de imagem (logo claro/escuro/favicon)
+function LogoUploadCard({
+  label,
+  hint,
+  previewClass,
+  imgSrc,
+  fileValue,
+  inputRef,
+  inputId,
+  onUpload,
+  onDelete,
+}) {
+  const classes = useStyles();
+
+  return (
+    <div className={classes.logoCard}>
+      <Typography className={classes.logoCardLabel}>{label}</Typography>
+      <div className={`${classes.logoPreview} ${previewClass}`}>
+        {fileValue ? (
+          <img className={classes.logoImg} src={imgSrc} alt={`${label}-preview`} />
+        ) : (
+          <Typography className={classes.logoHint}>Nenhuma imagem enviada</Typography>
+        )}
+      </div>
+      <div className={classes.logoActions}>
+        <Typography className={classes.logoHint}>{hint}</Typography>
+        <div>
+          {fileValue && (
+            <Tooltip title="Remover">
+              <IconButton size="small" onClick={onDelete}>
+                <Delete fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
+          <input
+            type="file"
+            id={inputId}
+            ref={inputRef}
+            accept="image/*"
+            className={classes.uploadInput}
+            onChange={onUpload}
+          />
+          <Tooltip title="Enviar imagem">
+            <IconButton size="small" color="primary" onClick={() => inputRef.current.click()}>
+              <CloudUpload fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function Whitelabel(props) {
   const { settings } = props;
@@ -160,24 +193,18 @@ export default function Whitelabel(props) {
   const { update } = useSettings();
 
   function updateSettingsLoaded(key, value) {
-    if (key === 'primaryColorLight' || key === 'primaryColorDark' || key === 'appName') {
+    if (key === "primaryColorLight" || key === "primaryColorDark" || key === "appName") {
       localStorage.setItem(key, value);
-    };
+    }
 
     // Usar função de atualização para garantir que usa o estado mais recente
-    setSettingsLoaded(prev => {
-      const newSettings = { ...prev };
-      newSettings[key] = value;
-      return newSettings;
-    });
+    setSettingsLoaded((prev) => ({ ...prev, [key]: value }));
   }
 
   useEffect(() => {
-    getCurrentUserInfo().then(
-      (u) => {
-        setCurrentUser(u);
-      }
-    );
+    getCurrentUserInfo().then((u) => {
+      setCurrentUser(u);
+    });
 
     if (Array.isArray(settings) && settings.length) {
       const primaryColorLight = settings.find((s) => s.key === "primaryColorLight")?.value;
@@ -203,7 +230,7 @@ export default function Whitelabel(props) {
         appLogoDark,
         appLogoFavicon,
         appName,
-        viewMode
+        viewMode,
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -231,326 +258,241 @@ export default function Whitelabel(props) {
     formData.append("mode", mode);
     formData.append("file", file);
 
-    await api.post("/settings-whitelabel/logo", formData, {
-      onUploadProgress: (event) => {
-        let progress = Math.round(
-          (event.loaded * 100) / event.total
-        );
-        console.log(
-          `A imagem  está ${progress}% carregada... `
-        );
-      },
-    }).then((response) => {
-      updateSettingsLoaded(`appLogo${mode}`, response.data);
-      colorMode[`setAppLogo${mode}`](getBackendUrl() + "/public/" + response.data);
-    }).catch((err) => {
-      console.error(
-        `Houve um problema ao realizar o upload da imagem.`
-      );
-      console.log(err);
-    });
+    await api
+      .post("/settings-whitelabel/logo", formData, {
+        onUploadProgress: (event) => {
+          let progress = Math.round((event.loaded * 100) / event.total);
+          console.log(`A imagem está ${progress}% carregada... `);
+        },
+      })
+      .then((response) => {
+        updateSettingsLoaded(`appLogo${mode}`, response.data);
+        colorMode[`setAppLogo${mode}`](getBackendUrl() + "/public/" + response.data);
+        toast.success("Imagem enviada com sucesso.");
+      })
+      .catch((err) => {
+        console.error("Houve um problema ao realizar o upload da imagem.");
+        toast.error("Não foi possível enviar a imagem.");
+      });
   };
 
+  const logoUrl = (file) =>
+    file ? `${getBackendUrl()}/public/${file}` : "";
+
   return (
-    <>
-      <Grid spacing={3} container>
-        {/* <Grid xs={12} item>
-                    <Title>Configurações Gerais</Title>
-                </Grid> */}
-        <OnlyForSuperUser
-          user={currentUser}
-          yes={() => (
-            <>
-              <Grid xs={12} sm={6} md={4} item>
-                <FormControl className={classes.selectContainer}>
-                  <TextField
-                    id="primary-color-light-field"
-                    label="Cor Primária Modo Claro"
-                    variant="standard"
-                    value={settingsLoaded.primaryColorLight || ""}
-                    onClick={() => setPrimaryColorLightModalOpen(true)}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <div
-                            style={{ backgroundColor: settingsLoaded.primaryColorLight }}
-                            className={classes.colorAdorment}
-                          ></div>
-                        </InputAdornment>
-                      ),
-                      endAdornment: (
-                        <IconButton
-                          size="small"
-                          color="default"
-                          onClick={() => setPrimaryColorLightModalOpen(true)}
-                        >
-                          <Colorize />
-                        </IconButton>
-                      ),
-                    }}
-                  />
-                </FormControl>
-                <ColorBoxModal
-                  open={primaryColorLightModalOpen}
-                  handleClose={() => setPrimaryColorLightModalOpen(false)}
-                  onChange={(color) => {
-                    // Validar que color e color.hex existem antes de salvar
-                    if (color && color.hex) {
-                      handleSaveSetting("primaryColorLight", `#${color.hex}`);
-                      colorMode.setPrimaryColorLight(`#${color.hex}`);
-                    }
-                  }}
-                  currentColor={settingsLoaded.primaryColorLight}
-                />
+    <Grid spacing={3} container>
+      <OnlyForSuperUser
+        user={currentUser}
+        yes={() => (
+          <>
+            {/* IDENTIDADE */}
+            <Grid xs={12} item>
+              <Paper className={classes.section} elevation={0}>
+                <Typography className={classes.sectionTitle}>Identidade</Typography>
+                <Typography className={classes.sectionDesc}>
+                  Nome exibido no sistema e estilo visual padrão do painel.
+                </Typography>
+                <Grid spacing={2} container>
+                  <Grid xs={12} sm={6} item>
+                    <TextField
+                      id="appname-field"
+                      label="Nome do sistema"
+                      variant="outlined"
+                      size="small"
+                      fullWidth
+                      name="appName"
+                      value={appName}
+                      inputRef={appNameInput}
+                      onChange={(e) => setAppName(e.target.value)}
+                      onBlur={async () => {
+                        await handleSaveSetting("appName", appName);
+                        colorMode.setAppName(appName || "Multi100");
+                      }}
+                    />
+                  </Grid>
+                  <Grid xs={12} sm={6} item>
+                    <FormControl variant="outlined" size="small" fullWidth>
+                      <InputLabel id="viewmode-label">Estilo Visual</InputLabel>
+                      <Select
+                        labelId="viewmode-label"
+                        id="viewmode-select"
+                        label="Estilo Visual"
+                        value={settingsLoaded.viewMode || "classic"}
+                        onChange={async (e) => {
+                          const value = e.target.value;
+                          await handleSaveSetting("viewMode", value);
+                          colorMode.setViewMode(value);
+                        }}
+                      >
+                        <MenuItem value="classic">Clássico</MenuItem>
+                        <MenuItem value="modern">Moderno (Deep UI)</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                </Grid>
+              </Paper>
+            </Grid>
 
-              </Grid>
-              <Grid xs={12} sm={6} md={4} item>
+            {/* CORES */}
+            <Grid xs={12} item>
+              <Paper className={classes.section} elevation={0}>
+                <Typography className={classes.sectionTitle}>Cores</Typography>
+                <Typography className={classes.sectionDesc}>
+                  Cor primária aplicada aos temas claro e escuro de todos os tenants.
+                </Typography>
+                <Grid spacing={2} container>
+                  <Grid xs={12} sm={6} item>
+                    <TextField
+                      id="primary-color-light-field"
+                      label="Cor Primária — Modo Claro"
+                      variant="outlined"
+                      size="small"
+                      fullWidth
+                      value={settingsLoaded.primaryColorLight || ""}
+                      onClick={() => setPrimaryColorLightModalOpen(true)}
+                      InputProps={{
+                        readOnly: true,
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <div
+                              style={{ backgroundColor: settingsLoaded.primaryColorLight || "transparent" }}
+                              className={classes.colorSwatch}
+                            />
+                          </InputAdornment>
+                        ),
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <IconButton
+                              size="small"
+                              onClick={() => setPrimaryColorLightModalOpen(true)}
+                            >
+                              <Colorize fontSize="small" />
+                            </IconButton>
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+                    <ColorBoxModal
+                      open={primaryColorLightModalOpen}
+                      handleClose={() => setPrimaryColorLightModalOpen(false)}
+                      onChange={(color) => {
+                        if (color && color.hex) {
+                          handleSaveSetting("primaryColorLight", `#${color.hex}`);
+                          colorMode.setPrimaryColorLight(`#${color.hex}`);
+                        }
+                      }}
+                      currentColor={settingsLoaded.primaryColorLight}
+                    />
+                  </Grid>
+                  <Grid xs={12} sm={6} item>
+                    <TextField
+                      id="primary-color-dark-field"
+                      label="Cor Primária — Modo Escuro"
+                      variant="outlined"
+                      size="small"
+                      fullWidth
+                      value={settingsLoaded.primaryColorDark || ""}
+                      onClick={() => setPrimaryColorDarkModalOpen(true)}
+                      InputProps={{
+                        readOnly: true,
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <div
+                              style={{ backgroundColor: settingsLoaded.primaryColorDark || "transparent" }}
+                              className={classes.colorSwatch}
+                            />
+                          </InputAdornment>
+                        ),
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <IconButton
+                              size="small"
+                              onClick={() => setPrimaryColorDarkModalOpen(true)}
+                            >
+                              <Colorize fontSize="small" />
+                            </IconButton>
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+                    <ColorBoxModal
+                      open={primaryColorDarkModalOpen}
+                      handleClose={() => setPrimaryColorDarkModalOpen(false)}
+                      onChange={(color) => {
+                        if (color && color.hex) {
+                          handleSaveSetting("primaryColorDark", `#${color.hex}`);
+                          colorMode.setPrimaryColorDark(`#${color.hex}`);
+                        }
+                      }}
+                      currentColor={settingsLoaded.primaryColorDark}
+                    />
+                  </Grid>
+                </Grid>
+              </Paper>
+            </Grid>
 
-                <FormControl className={classes.selectContainer}>
-                  <TextField
-                    id="primary-color-dark-field"
-                    label="Cor Primária Modo Escuro"
-                    variant="standard"
-                    value={settingsLoaded.primaryColorDark || ""}
-                    onClick={() => setPrimaryColorDarkModalOpen(true)}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <div
-                            style={{ backgroundColor: settingsLoaded.primaryColorDark }}
-                            className={classes.colorAdorment}
-                          ></div>
-                        </InputAdornment>
-                      ),
-                      endAdornment: (
-                        <IconButton
-                          size="small"
-                          color="default"
-                          onClick={() => setPrimaryColorDarkModalOpen(true)}
-                        >
-                          <Colorize />
-                        </IconButton>
-                      ),
-                    }}
-                  />
-                </FormControl>
-                <ColorBoxModal
-                  open={primaryColorDarkModalOpen}
-                  handleClose={() => setPrimaryColorDarkModalOpen(false)}
-                  onChange={(color) => {
-                    // Validar que color e color.hex existem antes de salvar
-                    if (color && color.hex) {
-                      handleSaveSetting("primaryColorDark", `#${color.hex}`);
-                      colorMode.setPrimaryColorDark(`#${color.hex}`);
-                    }
-                  }}
-                  currentColor={settingsLoaded.primaryColorDark}
-                />
-              </Grid>
-
-              <Grid xs={12} sm={6} md={4} item>
-                <FormControl className={classes.selectContainer}>
-                  <TextField
-                    id="appname-field"
-                    label="Nome do sistema"
-                    variant="standard"
-                    name="appName"
-                    value={appName}
-                    inputRef={appNameInput}
-                    onChange={(e) => {
-                      setAppName(e.target.value);
-                    }}
-                    onBlur={async (_) => {
-                      await handleSaveSetting("appName", appName);
-                      colorMode.setAppName(appName || "Multi100");
-                    }}
-                  />
-                </FormControl>
-              </Grid>
-              <Grid xs={12} sm={6} md={4} item>
-                <FormControl className={classes.selectContainer} variant="standard">
-                  <InputLabel id="viewmode-label">Estilo Visual</InputLabel>
-                  <Select
-                    labelId="viewmode-label"
-                    id="viewmode-select"
-                    value={settingsLoaded.viewMode || "classic"}
-                    onChange={async (e) => {
-                      const value = e.target.value;
-                      await handleSaveSetting("viewMode", value);
-                      colorMode.setViewMode(value);
-                    }}
-                  >
-                    <MenuItem value="classic">Clássico</MenuItem>
-                    <MenuItem value="modern">Moderno (Deep UI)</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid xs={12} sm={6} md={4} item>
-                <FormControl className={classes.selectContainer}>
-                  <TextField
-                    id="logo-light-upload-field"
-                    label="Logotipo claro"
-                    variant="standard"
-                    value={settingsLoaded.appLogoLight || ""}
-                    InputProps={{
-                      endAdornment: (
-                        <>
-                          {settingsLoaded.appLogoLight &&
-                            <IconButton
-                              size="small"
-                              color="default"
-                              onClick={() => {
-                                handleSaveSetting("appLogoLight", "");
-                                colorMode.setAppLogoLight(defaultLogoLight);
-                              }
-                              }
-                            >
-                              <Delete />
-                            </IconButton>
-                          }
-                          <input
-                            type="file"
-                            id="upload-logo-light-button"
-                            ref={logoLightInput}
-                            className={classes.uploadInput}
-                            onChange={(e) => uploadLogo(e, "Light")}
-                          />
-                          <label htmlFor="upload-logo-light-button">
-                            <IconButton
-                              size="small"
-                              color="default"
-                              onClick={
-                                () => {
-                                  logoLightInput.current.click();
-                                }
-                              }
-                            >
-                              <AttachFile />
-                            </IconButton>
-                          </label>
-                        </>
-                      ),
-                    }}
-                  />
-                </FormControl>
-              </Grid>
-              <Grid xs={12} sm={6} md={4} item>
-                <FormControl className={classes.selectContainer}>
-                  <TextField
-                    id="logo-dark-upload-field"
-                    label="Logotipo escuro"
-                    variant="standard"
-                    value={settingsLoaded.appLogoDark || ""}
-                    InputProps={{
-                      endAdornment: (
-                        <>
-                          {settingsLoaded.appLogoDark &&
-                            <IconButton
-                              size="small"
-                              color="default"
-                              onClick={() => {
-                                handleSaveSetting("appLogoDark", "");
-                                colorMode.setAppLogoDark(defaultLogoDark);
-                              }
-                              }
-                            >
-                              <Delete />
-                            </IconButton>
-                          }
-                          <input
-                            type="file"
-                            id="upload-logo-dark-button"
-                            ref={logoDarkInput}
-                            className={classes.uploadInput}
-                            onChange={(e) => uploadLogo(e, "Dark")}
-                          />
-                          <label htmlFor="upload-logo-dark-button">
-                            <IconButton
-                              size="small"
-                              color="default"
-                              onClick={
-                                () => {
-                                  logoDarkInput.current.click();
-                                }
-                              }
-                            >
-                              <AttachFile />
-                            </IconButton>
-                          </label>
-                        </>
-                      ),
-                    }}
-                  />
-                </FormControl>
-              </Grid>
-              <Grid xs={12} sm={6} md={4} item>
-                <FormControl className={classes.selectContainer}>
-                  <TextField
-                    id="logo-favicon-upload-field"
-                    label="Favicon"
-                    variant="standard"
-                    value={settingsLoaded.appLogoFavicon || ""}
-                    InputProps={{
-                      endAdornment: (
-                        <>
-                          {settingsLoaded.appLogoFavicon &&
-                            <IconButton
-                              size="small"
-                              color="default"
-                              onClick={() => {
-                                handleSaveSetting("appLogoFavicon", "");
-                                colorMode.setAppLogoFavicon(defaultLogoFavicon);
-                              }
-                              }
-                            >
-                              <Delete />
-                            </IconButton>
-                          }
-                          <input
-                            type="file"
-                            id="upload-logo-favicon-button"
-                            ref={logoFaviconInput}
-                            className={classes.uploadInput}
-                            onChange={(e) => uploadLogo(e, "Favicon")}
-                          />
-                          <label htmlFor="upload-logo-favicon-button">
-                            <IconButton
-                              size="small"
-                              color="default"
-                              onClick={
-                                () => {
-                                  logoFaviconInput.current.click();
-                                }
-                              }
-                            >
-                              <AttachFile />
-                            </IconButton>
-                          </label>
-                        </>
-                      ),
-                    }}
-                  />
-                </FormControl>
-              </Grid>
-              <Grid xs={12} sm={6} md={4} item>
-                <div className={classes.appLogoLightPreviewDiv}>
-                  <img className={classes.appLogoLightPreviewImg} alt="light-logo-preview" />
-                </div>
-              </Grid>
-              <Grid xs={12} sm={6} md={4} item>
-                <div className={classes.appLogoDarkPreviewDiv}>
-                  <img className={classes.appLogoDarkPreviewImg} alt="dark-logo-preview" />
-                </div>
-              </Grid>
-              <Grid xs={12} sm={6} md={4} item>
-                <div className={classes.appLogoFaviconPreviewDiv}>
-                  <img className={classes.appLogoFaviconPreviewImg} alt="favicon-preview" />
-                </div>
-              </Grid>
-            </>
-          )}
-        />
-      </Grid>
-    </>
+            {/* LOGOTIPOS */}
+            <Grid xs={12} item>
+              <Paper className={classes.section} elevation={0}>
+                <Typography className={classes.sectionTitle}>Logotipos e favicon</Typography>
+                <Typography className={classes.sectionDesc}>
+                  Imagens exibidas no login, menu lateral e aba do navegador. PNG ou SVG com fundo transparente recomendado.
+                </Typography>
+                <Grid spacing={2} container>
+                  <Grid xs={12} sm={6} md={4} item>
+                    <LogoUploadCard
+                      label="Logotipo claro"
+                      hint="Exibido no tema claro"
+                      previewClass={classes.logoPreviewLight}
+                      imgSrc={logoUrl(settingsLoaded.appLogoLight)}
+                      fileValue={settingsLoaded.appLogoLight}
+                      inputRef={logoLightInput}
+                      inputId="upload-logo-light-button"
+                      onUpload={(e) => uploadLogo(e, "Light")}
+                      onDelete={() => {
+                        handleSaveSetting("appLogoLight", "");
+                        colorMode.setAppLogoLight(defaultLogoLight);
+                      }}
+                    />
+                  </Grid>
+                  <Grid xs={12} sm={6} md={4} item>
+                    <LogoUploadCard
+                      label="Logotipo escuro"
+                      hint="Exibido no tema escuro"
+                      previewClass={classes.logoPreviewDark}
+                      imgSrc={logoUrl(settingsLoaded.appLogoDark)}
+                      fileValue={settingsLoaded.appLogoDark}
+                      inputRef={logoDarkInput}
+                      inputId="upload-logo-dark-button"
+                      onUpload={(e) => uploadLogo(e, "Dark")}
+                      onDelete={() => {
+                        handleSaveSetting("appLogoDark", "");
+                        colorMode.setAppLogoDark(defaultLogoDark);
+                      }}
+                    />
+                  </Grid>
+                  <Grid xs={12} sm={6} md={4} item>
+                    <LogoUploadCard
+                      label="Favicon"
+                      hint="Ícone da aba do navegador"
+                      previewClass={classes.logoPreviewFavicon}
+                      imgSrc={logoUrl(settingsLoaded.appLogoFavicon)}
+                      fileValue={settingsLoaded.appLogoFavicon}
+                      inputRef={logoFaviconInput}
+                      inputId="upload-logo-favicon-button"
+                      onUpload={(e) => uploadLogo(e, "Favicon")}
+                      onDelete={() => {
+                        handleSaveSetting("appLogoFavicon", "");
+                        colorMode.setAppLogoFavicon(defaultLogoFavicon);
+                      }}
+                    />
+                  </Grid>
+                </Grid>
+              </Paper>
+            </Grid>
+          </>
+        )}
+      />
+    </Grid>
   );
 }

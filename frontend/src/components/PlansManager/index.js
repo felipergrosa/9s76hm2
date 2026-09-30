@@ -3,6 +3,11 @@ import {
     makeStyles,
     Paper,
     Grid,
+    Box,
+    Button,
+    Dialog,
+    DialogTitle,
+    DialogContent,
     TextField,
     Table,
     TableHead,
@@ -19,7 +24,7 @@ import { Formik, Form, Field } from 'formik';
 import ButtonWithSpinner from "../ButtonWithSpinner";
 import ConfirmationModal from "../ConfirmationModal";
 
-import { Edit as EditIcon } from "@material-ui/icons";
+import { Edit as EditIcon, Add as AddIcon } from "@material-ui/icons";
 
 import { toast } from "react-toastify";
 import usePlans from "../../hooks/usePlans";
@@ -372,7 +377,7 @@ export function PlanManagerForm(props) {
 
                         <Grid sm={3} md={2} item>
                             <ButtonWithSpinner className={classes.fullWidth} loading={loading} onClick={() => onCancel()} variant="contained">
-                                {i18n.t("plans.form.clear")}
+                                Cancelar
                             </ButtonWithSpinner>
                         </Grid>
                         {record.id !== undefined ? (
@@ -504,6 +509,7 @@ export default function PlansManager() {
     const { list, save, update, remove } = usePlans()
 
     const [showConfirmDialog, setShowConfirmDialog] = useState(false)
+    const [modalOpen, setModalOpen] = useState(false)
     const [loading, setLoading] = useState(false)
     const [records, setRecords] = useState([])
     const [record, setRecord] = useState({
@@ -546,7 +552,6 @@ export default function PlansManager() {
 
     const handleSubmit = async (data) => {
         setLoading(true)
-        console.log(data)
         try {
             if (data.id !== undefined) {
                 await update(data)
@@ -554,7 +559,7 @@ export default function PlansManager() {
                 await save(data)
             }
             await loadPlans()
-            handleCancel()
+            handleCloseModal()
             toast.success('Operação realizada com sucesso!')
         } catch (e) {
             toast.error('Não foi possível realizar a operação. Verifique se já existe uma plano com o mesmo nome ou se os campos foram preenchidos corretamente')
@@ -567,7 +572,7 @@ export default function PlansManager() {
         try {
             await remove(record.id)
             await loadPlans()
-            handleCancel()
+            handleCloseModal()
             toast.success('Operação realizada com sucesso!')
         } catch (e) {
             toast.error('Não foi possível realizar a operação')
@@ -577,6 +582,11 @@ export default function PlansManager() {
 
     const handleOpenDeleteDialog = () => {
         setShowConfirmDialog(true)
+    }
+
+    const handleCloseModal = () => {
+        setModalOpen(false)
+        handleCancel()
     }
 
     const handleCancel = () => {
@@ -633,27 +643,48 @@ export default function PlansManager() {
             useIntegrations,
             isPublic: data.isPublic
         })
+        setModalOpen(true)
     }
 
     return (
         <Paper className={classes.mainPaper} elevation={0}>
-            <Grid spacing={2} container>
-                <Grid xs={12} item>
+            <Box display="flex" justifyContent="flex-end" mb={2}>
+                <Button
+                    variant="contained"
+                    color="primary"
+                    startIcon={<AddIcon />}
+                    onClick={() => {
+                        handleCancel()
+                        setModalOpen(true)
+                    }}
+                >
+                    Novo plano
+                </Button>
+            </Box>
+            <PlansManagerGrid
+                records={records}
+                onSelect={handleSelect}
+            />
+            <Dialog
+                open={modalOpen}
+                onClose={handleCloseModal}
+                maxWidth="lg"
+                fullWidth
+                scroll="body"
+            >
+                <DialogTitle>
+                    {record.id !== undefined ? "Editar plano" : "Novo plano"}
+                </DialogTitle>
+                <DialogContent dividers>
                     <PlanManagerForm
                         initialValue={record}
                         onDelete={handleOpenDeleteDialog}
                         onSubmit={handleSubmit}
-                        onCancel={handleCancel}
+                        onCancel={handleCloseModal}
                         loading={loading}
                     />
-                </Grid>
-                <Grid xs={12} item>
-                    <PlansManagerGrid
-                        records={records}
-                        onSelect={handleSelect}
-                    />
-                </Grid>
-            </Grid>
+                </DialogContent>
+            </Dialog>
             <ConfirmationModal
                 title="Exclusão de Registro"
                 open={showConfirmDialog}
