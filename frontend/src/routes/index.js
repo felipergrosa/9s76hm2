@@ -1,5 +1,5 @@
 import React, { useEffect, useState, lazy, Suspense } from "react";
-import { BrowserRouter, Switch } from "react-router-dom";
+import { BrowserRouter, Switch, Redirect } from "react-router-dom";
 
 import LoggedInLayout from "../layout";
 import { AuthProvider } from "../context/Auth/AuthContext";
@@ -51,7 +51,6 @@ const Connections = lazy(() => import("../pages/Connections"));
 const SettingsCustom = lazy(() => import("../pages/SettingsCustom"));
 const Financeiro = lazy(() => import("../pages/Financeiro"));
 const Users = lazy(() => import("../pages/Users"));
-const Roles = lazy(() => import("../pages/Roles"));
 const ContactImportPage = lazy(() => import("../pages/Contacts/import"));
 const ChatMoments = lazy(() => import("../pages/Moments"));
 const Queues = lazy(() => import("../pages/Queues"));
@@ -191,7 +190,8 @@ const Routes = () => {
                 <Route exact path="/helps/instagram" component={InstagramTutorial} isPrivate />
                 <Route exact path="/helps/webchat" component={WebChatTutorial} isPrivate />
                 <Route exact path="/users" component={Users} isPrivate />
-                <PrivateRoute exact path="/roles" component={Roles} permission="roles.view" />
+                {/* /roles virou aba dentro de /users — redirect para bookmarks antigos */}
+                <Route exact path="/roles" render={() => <Redirect to="/users" />} isPrivate />
                 <PrivateRoute exact path="/meta-templates" component={MetaTemplates} permission="meta-templates.view" />
                 <PrivateRoute exact path="/lead-scraper" component={LeadScraper} permission="contacts.import" />
                 <Route exact path="/knowledge-base" component={KnowledgeBase} isPrivate />

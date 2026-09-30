@@ -51,7 +51,6 @@ import {
   Workflow as ShapeLine,
   Webhook as Webhook,
   Bot as SmartToy,
-  ShieldCheck as RolesIcon,
   ScanSearch as LeadScraperIcon,
   Repeat as FollowUpIcon,
   BookOpen as KnowledgeBaseIcon,
@@ -585,8 +584,8 @@ const MainListItems = ({ collapsed, drawerClose }) => {
       <Divider />
       <ListSubheader inset>{i18n.t("mainDrawer.listItems.administration")}</ListSubheader>
 
-      {/* 1. USUÁRIOS */}
-      {hasPermission("users.view") && (
+      {/* 1. USUÁRIOS — página unifica usuários + perfis de acesso (abas) */}
+      {(hasPermission("users.view") || hasPermission("roles.view")) && (
         <ListItemLink
           to="/users"
           primary={i18n.t("mainDrawer.listItems.users")}
@@ -596,16 +595,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
         />
       )}
 
-      {/* 1.1 PERFIS DE ACESSO (ROLES) */}
-      {hasPermission("roles.view") && (
-        <ListItemLink
-          to="/roles"
-          primary="Perfis de Acesso"
-          icon={<RolesIcon />}
-          viewMode={viewMode}
-          tooltip={collapsed}
-        />
-      )}
+      {/* PERFIS DE ACESSO movidos para aba dentro de /users */}
 
       {/* CAMPOS CUSTOMIZADOS (ADMIN) */}
       <ListItemLink

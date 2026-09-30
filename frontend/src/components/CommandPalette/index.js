@@ -113,8 +113,8 @@ const NAV_ITEMS = [
   { id: "nav-quick-messages", name: "Respostas Rápidas", to: "/quick-messages", permission: "quick-messages.view" },
   { id: "nav-schedules", name: "Agendamentos", to: "/schedules", permission: "schedules.view" },
   { id: "nav-tags", name: "Tags", to: "/tags", permission: "tags.view" },
-  { id: "nav-users", name: "Usuários", to: "/users", permission: "users.view" },
-  { id: "nav-roles", name: "Perfis de Acesso", to: "/roles", permission: "roles.view" },
+  // /users abriga também a aba de perfis — visível com users.view OU roles.view
+  { id: "nav-users", name: "Usuários", to: "/users", permission: "users.view", anyPermission: ["users.view", "roles.view"] },
   { id: "nav-connections", name: "Conexões", to: "/connections", permission: "connections.view" },
   { id: "nav-campaigns", name: "Campanhas", to: "/campaigns", permission: "campaigns.view" },
   { id: "nav-email-campaigns", name: "Campanhas de E-mail", to: "/email-campaigns", permission: "email-campaigns.view" },
@@ -134,7 +134,13 @@ const CommandPaletteActions = ({ children }) => {
   const { hasPermission } = usePermissions();
 
   const actions = useMemo(() => {
-    return NAV_ITEMS.filter((item) => !item.permission || hasPermission(item.permission)).map(
+    return NAV_ITEMS.filter((item) => {
+      // anyPermission: item visível se o usuário tiver QUALQUER uma das permissões
+      if (item.anyPermission) {
+        return item.anyPermission.some((p) => hasPermission(p));
+      }
+      return !item.permission || hasPermission(item.permission);
+    }).map(
       (item) => ({
         id: item.id,
         name: item.name,
