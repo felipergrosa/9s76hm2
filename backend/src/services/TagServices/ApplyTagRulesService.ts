@@ -29,8 +29,11 @@ const ApplyTagRulesService = async ({
     whereRule.tagId = tagId;
   }
 
+  // ORDER BY tagId garante que execuções concorrentes (hook por contato)
+  // travem as linhas de TagRules sempre na mesma ordem — evita deadlock
   const rules = await TagRule.findAll({
     where: whereRule,
+    order: [["tagId", "ASC"], ["id", "ASC"]],
     include: [{ model: Tag, as: "tag", attributes: ["id", "name"] }]
   });
 
