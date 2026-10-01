@@ -1,3 +1,4 @@
+import { Op } from "sequelize";
 import { getIO } from "../../libs/socket";
 import Contact from "../../models/Contact";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
@@ -170,8 +171,13 @@ const CreateOrUpdateContactServiceForImport = async ({
   let contact: Contact | null;
   let eventType: "create" | "update" = "update";
 
+  // A constraint única do banco é (number, companyId) — por isso o lookup
+  // precisa casar number OU canonicalNumber, senão contato existente com
+  // canonicalNumber nulo/divergente cai no INSERT e estoura 23505.
   contact = await Contact.findOne({
-    where: isGroup ? { number: rawString.trim(), companyId } : { companyId, canonicalNumber: number }
+    where: isGroup
+      ? { number: rawString.trim(), companyId }
+      : { companyId, [Op.or]: [{ canonicalNumber: number }, { number }] }
   });
 
   if (contact) {
@@ -215,17 +221,38 @@ const CreateOrUpdateContactServiceForImport = async ({
         });
     }
   } else {
-    contact = await Contact.create({
-      ...contactData,
-      canonicalNumber: isGroup ? null : number
-    });
+    let created = false;
+    try {
+      contact = await Contact.create({
+        ...contactData,
+        canonicalNumber: isGroup ? null : number
+      });
+      created = true;
+    } catch (err: any) {
+      // Concorrência ou divergência number/canonicalNumber: se o unique
+      // (number, companyId) estourou, converte para update no registro real.
+      if (err?.name !== "SequelizeUniqueConstraintError" && err?.original?.code !== "23505") {
+        throw err;
+      }
+      contact = await Contact.findOne({
+        where: { companyId, [Op.or]: [{ number }, { canonicalNumber: number }] }
+      });
+      if (!contact) throw err;
+      const retryName = (name || "").trim();
+      await contact.update({
+        ...contactData,
+        name: retryName || contact.name,
+        isGroupParticipant: false,
+        ...(isGroup ? {} : { number, canonicalNumber: number })
+      });
+    }
 
-    eventType = "create";
+    eventType = created ? "create" : "update";
 
     if (!silentMode) { // Emitir evento apenas se não estiver em modo silencioso
       io.of(`/workspace-${companyId}`)
         .emit(`company-${companyId}-contact`, {
-          action: "create",
+          action: eventType,
           contact
         });
     }
