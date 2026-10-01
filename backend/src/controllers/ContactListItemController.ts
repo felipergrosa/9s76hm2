@@ -213,20 +213,12 @@ export const addFilteredContacts = async (
       }
     }
 
-    // Após inserir, busca a primeira página da lista para enviar via socket
-    const { contacts } = await ListService({
-      searchParam: "",
-      pageNumber: "1",
-      companyId,
-      contactListId: parseInt(contactListId, 10)
-    });
-
+    // Frontend refaz o fetch ao receber "reload" — não enviar registros no socket
     const io = getIO();
     io.of(`/workspace-${companyId}`)
-      .emit(`company-${companyId}-ContactListItem`, {
-        action: "reload",
-        records: contacts
-      });
+      .emit(`company-${companyId}-ContactListItem`, { action: "reload" });
+    io.of(`/workspace-${companyId}`)
+      .emit(`company-${companyId}-ContactListItem-${parseInt(contactListId, 10)}`, { action: "reload" });
 
     return res.status(200).json(result);
   } catch (error: any) {
@@ -325,20 +317,12 @@ export const addManualContacts = async (
       errors: contactIds.length - contacts.length
     };
 
-    // Recarregar lista via socket
-    const { contacts: updatedContacts } = await ListService({
-      searchParam: "",
-      pageNumber: "1",
-      companyId,
-      contactListId: parseInt(contactListId, 10)
-    });
-
+    // Recarregar lista via socket — frontend refaz o fetch no "reload"
     const io = getIO();
     io.of(`/workspace-${companyId}`)
-      .emit(`company-${companyId}-ContactListItem`, {
-        action: "reload",
-        records: updatedContacts
-      });
+      .emit(`company-${companyId}-ContactListItem`, { action: "reload" });
+    io.of(`/workspace-${companyId}`)
+      .emit(`company-${companyId}-ContactListItem-${parseInt(contactListId, 10)}`, { action: "reload" });
 
     return res.status(200).json(result);
   } catch (error: any) {

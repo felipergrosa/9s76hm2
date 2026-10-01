@@ -632,7 +632,8 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
       try {
         const { data } = await api.post(
           `/contact-list-items/${contactListId}/add-filtered-contacts`,
-          { filters, saveFilter: saveFilterFlag }
+          { filters, saveFilter: saveFilterFlag },
+          { timeout: 120000 } // inserção em massa pode exceder o timeout global de 30s
         );
 
         toast.success(

@@ -2591,7 +2591,7 @@ export const uniqueValues = async (req: AuthenticatedRequest, res: Response): Pr
 
       let values = [...new Set(results.map((r: any) => r[columnName]).filter(Boolean))];
 
-      if (field === "representativeCode" || field === "segment") {
+      if (field === "representativeCode" || field === "segment" || field === "bzEmpresa") {
         values = collapseCodeNameVariants(values);
       }
 
@@ -2666,7 +2666,7 @@ export const uniqueValues = async (req: AuthenticatedRequest, res: Response): Pr
       segments: collapseCodeNameVariants(segments),
       channels,
       representatives: collapseCodeNameVariants(representatives),
-      companies
+      companies: collapseCodeNameVariants(companies)
     });
 
   } catch (error: any) {

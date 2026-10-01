@@ -267,11 +267,29 @@ const ListContactsService = async ({
     };
   }
 
+  // Campos "código nome" (rep/segmento/empresa): casa pelo prefixo numérico
+  // para cobrir variantes antigas do mesmo código (pré-propagação);
+  // valores sem código caem no IN literal
+  const codeNameCondition = (column: string, values: string[]) => {
+    const codes = Array.from(new Set(
+      values.map(v => String(v).trim().match(/^(\d+)/)?.[1]).filter(Boolean) as string[]
+    ));
+    const literals = values.filter(v => !/^\s*\d+/.test(String(v).trim()));
+    const parts: any[] = [];
+    if (codes.length) {
+      parts.push(Sequelize.where(
+        literal(`substring("${column}" from '^\\s*(\\d+)')`),
+        { [Op.in]: codes }
+      ));
+    }
+    if (literals.length) {
+      parts.push({ [column]: { [Op.in]: literals } });
+    }
+    return parts.length === 1 ? parts[0] : { [Op.or]: parts };
+  };
+
   if (Array.isArray(representativeCode) && representativeCode.length > 0) {
-    whereCondition = {
-      ...whereCondition,
-      representativeCode: { [Op.in]: representativeCode }
-    };
+    additionalWhere.push(codeNameCondition("representativeCode", representativeCode));
   }
 
   if (Array.isArray(city) && city.length > 0) {
@@ -296,18 +314,20 @@ const ListContactsService = async ({
   }
 
   if (Array.isArray(bzEmpresa) && bzEmpresa.length > 0) {
-    const likeConditions = bzEmpresa
-      .map(item => item.trim())
-      .filter(item => item.length > 0)
-      .map(item => ({ bzEmpresa: { [Op.iLike]: `%${item}%` } }));
-
-    if (likeConditions.length === 1) {
-      whereCondition = {
-        ...whereCondition,
-        ...likeConditions[0]
-      };
-    } else if (likeConditions.length > 1) {
-      additionalWhere.push({ [Op.or]: likeConditions });
+    const items = bzEmpresa.map(item => item.trim()).filter(item => item.length > 0);
+    const codes = items.filter(v => /^\d+/.test(v));
+    const noCode = items.filter(v => !/^\d+/.test(v));
+    const parts: any[] = [];
+    if (codes.length) {
+      parts.push(codeNameCondition("bzEmpresa", codes));
+    }
+    if (noCode.length) {
+      parts.push({ [Op.or]: noCode.map(item => ({ bzEmpresa: { [Op.iLike]: `%${item}%` } })) });
+    }
+    if (parts.length === 1) {
+      additionalWhere.push(parts[0]);
+    } else if (parts.length > 1) {
+      additionalWhere.push({ [Op.or]: parts });
     }
   }
 
@@ -365,10 +385,7 @@ const ListContactsService = async ({
       : normalize(segment);
 
     if (Array.isArray(segNorm) && segNorm.length > 0) {
-      whereCondition = {
-        ...whereCondition,
-        segment: { [Op.in]: segNorm }
-      };
+      additionalWhere.push(codeNameCondition("segment", segNorm));
     } else if (typeof segNorm === "string" && segNorm !== "") {
       whereCondition = {
         ...whereCondition,

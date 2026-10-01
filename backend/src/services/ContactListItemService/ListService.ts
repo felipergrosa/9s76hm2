@@ -1,4 +1,5 @@
 import { Sequelize, Op } from "sequelize";
+import { safeNormalizePhoneNumber } from "../../utils/phone";
 import ContactListItem from "../../models/ContactListItem";
 import Contact from "../../models/Contact";
 import Tag from "../../models/Tag";
@@ -106,16 +107,37 @@ const ListService = async ({
   // Pós-processamento: garantir que TODOS os itens tenham o Contact associado
   // Isso é crítico quando itens são inseridos via filtro (INSERT direto) sem associação
   const rowsAny: any[] = contacts as any[];
-  
+
   // Primeiro, identificar quais itens precisam de busca
   const itemsNeedingContact = rowsAny.filter(item => !item.contact);
-  
+
+  // Gera as chaves candidatas para um item: canonical salvo, dígitos do number,
+  // normalização completa e variantes com/sem o 55 (mesma lógica do fix-links)
+  const candidateKeysFor = (item: any): string[] => {
+    const keys: string[] = [];
+    const push = (v?: string | null) => {
+      const d = (v || "").replace(/\D/g, "");
+      if (d && !keys.includes(d)) keys.push(d);
+    };
+    push(item.canonicalNumber);
+    push(item.number);
+    try {
+      const { canonical } = safeNormalizePhoneNumber(item.number || "");
+      push(canonical);
+    } catch { /* ignora número inválido */ }
+    // Variantes com/sem código do país 55
+    [...keys].forEach(k => {
+      if (k.startsWith("55")) push(k.slice(2));
+      else push(`55${k}`);
+    });
+    return keys;
+  };
+
   if (itemsNeedingContact.length > 0) {
-    // Usar canonicalNumber para busca (mais preciso)
-    const canonicalNumbers = itemsNeedingContact
-      .map(item => item.canonicalNumber || (item.number || "").replace(/\D/g, ""))
-      .filter(n => n);
-    
+    // Buscar contatos por canonicalNumber OU pelas variantes
+    const allKeys = Array.from(new Set(itemsNeedingContact.flatMap(candidateKeysFor)));
+    const canonicalNumbers = allKeys.filter(n => n);
+
     if (canonicalNumbers.length > 0) {
       // Buscar contatos usando canonicalNumber
       const foundContacts = await Contact.findAll({
@@ -148,25 +170,35 @@ const ListService = async ({
         ]
       });
 
-      // Criar mapa canonicalNumber -> contato
+      // Criar mapa de chaves -> contato (canonicalNumber, number e variantes ±55)
       const contactMap = new Map<string, any>();
+      const register = (key: string | null | undefined, contact: any) => {
+        const d = (key || "").replace(/\D/g, "");
+        if (d && !contactMap.has(d)) contactMap.set(d, contact);
+      };
       foundContacts.forEach(contact => {
         const canonical = (contact as any).canonicalNumber;
+        const number = (contact as any).number;
+        register(canonical, contact);
+        register(number, contact);
         if (canonical) {
-          contactMap.set(canonical, contact);
+          register(canonical.startsWith("55") ? canonical.slice(2) : `55${canonical}`, contact);
+        }
+        if (number) {
+          const d = number.replace(/\D/g, "");
+          register(d.startsWith("55") ? d.slice(2) : `55${d}`, contact);
         }
       });
 
-      // Associar contatos aos itens
-      let matched = 0;
+      // Associar contatos aos itens tentando todas as chaves candidatas
       itemsNeedingContact.forEach(item => {
-        const canonical = item.canonicalNumber || (item.number || "").replace(/\D/g, "");
-        const found = contactMap.get(canonical);
-
-        if (found) {
-          item.setDataValue && item.setDataValue("contact", found);
-          if (!item.contact) (item as any).contact = found;
-          matched++;
+        for (const key of candidateKeysFor(item)) {
+          const found = contactMap.get(key);
+          if (found) {
+            item.setDataValue && item.setDataValue("contact", found);
+            if (!item.contact) (item as any).contact = found;
+            break;
+          }
         }
       });
     }

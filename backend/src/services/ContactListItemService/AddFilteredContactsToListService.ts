@@ -6,6 +6,7 @@ import logger from "../../utils/logger";
 import CheckContactNumber from "../WbotServices/CheckNumber";
 import sequelize from "../../database";
 import { isValidCanonicalPhoneNumber, safeNormalizePhoneNumber } from "../../utils/phone";
+import { buildContactFilterSql } from "./contactFilterSql";
 
 interface FilterParams {
   channel?: string[];
@@ -25,6 +26,9 @@ interface FilterParams {
   minVlUltCompra?: number | string; // valor mínimo da última compra
   maxVlUltCompra?: number | string; // valor máximo da última compra
   bzEmpresa?: string | string[]; // filtro por empresa (array ou string)
+  whatsappIds?: number[] | string[]; // conexão WhatsApp de origem
+  walletIds?: number[] | string[];   // carteira (tags pessoais # dos usuários)
+  whatsappInvalid?: boolean | string; // true = somente inválidos
 }
 
 interface Request {
@@ -167,11 +171,15 @@ const AddFilteredContactsToListService = async ({
       (filters.situation && filters.situation.length > 0) ||
       (filters.bzEmpresa && String(filters.bzEmpresa).trim()) ||
       (filters.tags && filters.tags.length > 0) ||
+      ((filters as any).excludeTags && (filters as any).excludeTags.length > 0) ||
       (filters.foundationMonths && filters.foundationMonths.length > 0) ||
       filters.minCreditLimit || filters.maxCreditLimit ||
       (filters as any).dtUltCompraStart || (filters as any).dtUltCompraEnd ||
       (filters as any).minVlUltCompra != null || (filters as any).maxVlUltCompra != null ||
-      ((filters as any).florder !== undefined && (filters as any).florder !== null)
+      ((filters as any).florder !== undefined && (filters as any).florder !== null) ||
+      ((filters as any).whatsappIds && (filters as any).whatsappIds.length > 0) ||
+      ((filters as any).walletIds && (filters as any).walletIds.length > 0) ||
+      ((filters as any).whatsappInvalid === true || (filters as any).whatsappInvalid === 'true')
     );
 
     if (!hasEffectiveFilters) {
@@ -183,137 +191,9 @@ const AddFilteredContactsToListService = async ({
     const shouldValidateWhatsappEarly = String(process.env.CONTACT_FILTER_VALIDATE_WHATSAPP || 'false').toLowerCase() === 'true';
 
     if (directSQL && !shouldValidateWhatsappEarly) {
-      const conds: string[] = ['c."companyId" = :companyId'];
-      const repl: any = { companyId, contactListId };
-
-      // Regra: só inserir contatos com número canônico válido, EXCLUINDO GRUPOS
-      // Grupos não devem aparecer em listas de contatos
-      conds.push('c."isGroup" = false');
-      conds.push('c."canonicalNumber" IS NOT NULL');
-      conds.push('LENGTH(c."canonicalNumber") BETWEEN 10 AND 16');
-
-      const addIn = (col: string, arr?: string[]) => {
-        if (arr && arr.length > 0) {
-          // Adiciona IS NOT NULL para evitar que NULL passe pelo filtro (NULL IN (...) retorna NULL, não FALSE)
-          conds.push(`c.${col} IS NOT NULL`);
-          conds.push(`c.${col} IN (:${col.replace(/\W/g, '_')})`);
-          repl[col.replace(/\W/g, '_')] = arr;
-        }
-      };
-
-      // Só adiciona filtros se há filtros efetivos
-      if (hasEffectiveFilters) {
-        addIn('"channel"', filters.channel);
-        addIn('"representativeCode"', filters.representativeCode);
-        addIn('"city"', filters.city);
-        addIn('"region"', filters.region);
-        addIn('"segment"', filters.segment);
-        addIn('"situation"', filters.situation);
-
-        // Filtro de empresa (pode ser string ou array)
-        if (filters.bzEmpresa) {
-          const bzEmpresaArr = normalizeStringArray((filters as any).bzEmpresa);
-          if (bzEmpresaArr.length > 0) {
-            if (bzEmpresaArr.length === 1) {
-              repl.bzEmpresa = `%${bzEmpresaArr[0].trim()}%`;
-              conds.push('c."bzEmpresa" ILIKE :bzEmpresa');
-            } else {
-              // Múltiplas empresas: usa OR
-              const orConds = bzEmpresaArr.map((e, i) => {
-                const key = `bzEmpresa${i}`;
-                repl[key] = `%${e.trim()}%`;
-                return `c."bzEmpresa" ILIKE :${key}`;
-              });
-              conds.push(`(${orConds.join(' OR ')})`);
-            }
-          }
-        }
-
-        if ((filters as any).florder !== undefined && (filters as any).florder !== null) {
-          const raw = (filters as any).florder;
-          const s = String(raw).trim().toLowerCase();
-          const b = (typeof raw === 'boolean') ? raw : ["true", "1", "sim", "yes"].includes(s) ? true : ["false", "0", "nao", "não", "no"].includes(s) ? false : null;
-          if (b !== null) {
-            repl.florder = b;
-            conds.push('c."florder" = :florder');
-          }
-        }
-
-        if ((filters as any).dtUltCompraStart) {
-          repl.dtStart = (filters as any).dtUltCompraStart;
-          conds.push('c."dtUltCompra" >= :dtStart');
-        }
-        if ((filters as any).dtUltCompraEnd) {
-          repl.dtEnd = (filters as any).dtUltCompraEnd;
-          conds.push('c."dtUltCompra" <= :dtEnd');
-        }
-
-        if ((filters as any).minVlUltCompra != null) {
-          const v = Number((filters as any).minVlUltCompra);
-          if (!Number.isNaN(v)) {
-            repl.minV = v;
-            conds.push('c."vlUltCompra" >= :minV');
-          }
-        }
-        if ((filters as any).maxVlUltCompra != null) {
-          const v = Number((filters as any).maxVlUltCompra);
-          if (!Number.isNaN(v)) {
-            repl.maxV = v;
-            conds.push('c."vlUltCompra" <= :maxV');
-          }
-        }
-
-        if (filters.foundationMonths && filters.foundationMonths.length > 0) {
-          const months = filters.foundationMonths.map(n => Number(n)).filter(n => Number.isInteger(n) && n >= 1 && n <= 12);
-          if (months.length > 0) {
-            conds.push('c."foundationDate" IS NOT NULL');
-            conds.push(`EXTRACT(MONTH FROM c."foundationDate") IN (${months.join(',')})`);
-          }
-        }
-
-        if (filters.minCreditLimit || filters.maxCreditLimit) {
-          const parseMoney = (val: string): number => {
-            const raw = String(val).trim().replace(/\s+/g, '').replace(/R\$?/gi, '');
-            let num: number;
-            if (raw.includes(',')) num = parseFloat(raw.replace(/\./g, '').replace(/,/g, '.')); else num = parseFloat(raw);
-            return isNaN(num) ? 0 : num;
-          };
-          const hasMin = typeof filters.minCreditLimit !== 'undefined' && filters.minCreditLimit !== '';
-          const hasMax = typeof filters.maxCreditLimit !== 'undefined' && filters.maxCreditLimit !== '';
-          const minValue = hasMin ? parseMoney(filters.minCreditLimit as string) : undefined;
-          const maxValue = hasMax ? parseMoney(filters.maxCreditLimit as string) : undefined;
-          const creditLimitSql = `CAST(CASE WHEN TRIM(c."creditLimit") = '' THEN NULL WHEN POSITION(',' IN TRIM(c."creditLimit")) > 0 THEN REPLACE(REPLACE(REPLACE(TRIM(REPLACE(c."creditLimit", 'R$', '')), '.', ''), ',', '.'), ' ', '') ELSE REPLACE(TRIM(REPLACE(c."creditLimit", 'R$', '')), ' ', '') END AS NUMERIC)`;
-          if (hasMin && hasMax) {
-            repl.minCredit = minValue;
-            repl.maxCredit = maxValue;
-            conds.push(`${creditLimitSql} BETWEEN :minCredit AND :maxCredit`);
-          } else if (hasMin) {
-            repl.minCredit = minValue;
-            conds.push(`${creditLimitSql} >= :minCredit`);
-          } else if (hasMax) {
-            repl.maxCredit = maxValue;
-            conds.push(`${creditLimitSql} <= :maxCredit`);
-          }
-        }
-
-        // Filtro de tags (inclusivo - contato DEVE ter TODAS as tags)
-        if (filters.tags && filters.tags.length > 0) {
-          repl.tagIds = filters.tags;
-          repl.tagsLen = filters.tags.length;
-          conds.push(`c."id" IN (SELECT "contactId" FROM (SELECT "contactId", COUNT(DISTINCT "tagId") AS tag_count FROM "ContactTags" WHERE "tagId" IN (:tagIds) GROUP BY "contactId") t WHERE t.tag_count = :tagsLen)`);
-        }
-
-        // Filtro de tags (exclusivo - contato NÃO DEVE ter NENHUMA das tags)
-        if ((filters as any).excludeTags && (filters as any).excludeTags.length > 0) {
-          const excludeTagIds: number[] = ((filters as any).excludeTags as any[])
-            .map((t: any) => typeof t === "string" ? parseInt(t, 10) : Number(t))
-            .filter((t: number) => Number.isInteger(t));
-          if (excludeTagIds.length > 0) {
-            repl.excludeTagIds = excludeTagIds;
-            conds.push(`c."id" NOT IN (SELECT DISTINCT "contactId" FROM "ContactTags" WHERE "tagId" IN (:excludeTagIds))`);
-          }
-        }
-      }
+      // Builder compartilhado — mesmas regras usadas pelo sync diário
+      const { conds, repl } = buildContactFilterSql(companyId, filters);
+      repl.contactListId = contactListId;
 
       const whereSql = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
 
@@ -593,6 +473,42 @@ const AddFilteredContactsToListService = async ({
       } else if (hasMax && maxV != null) {
         whereConditions.push(Sequelize.where(literal('"vlUltCompra"'), { [Op.lte]: maxV }));
         logger.info(`Filtro vlUltCompra máximo: ${maxV}`);
+      }
+    }
+
+    // Filtro por conexão WhatsApp de origem
+    if ((filters as any).whatsappIds && (filters as any).whatsappIds.length > 0) {
+      const waIds = (Array.isArray((filters as any).whatsappIds) ? (filters as any).whatsappIds : [(filters as any).whatsappIds])
+        .map((v: any) => Number(v))
+        .filter((v: number) => Number.isInteger(v) && v > 0);
+      if (waIds.length > 0) {
+        whereConditions.push({ whatsappId: { [Op.in]: waIds } });
+      }
+    }
+
+    // Filtro de WhatsApp inválido (aceita whatsappInvalid=true ou isWhatsappValid=false)
+    const waInvalid = (filters as any).whatsappInvalid === true || (filters as any).whatsappInvalid === 'true'
+      || (filters as any).isWhatsappValid === false || (filters as any).isWhatsappValid === 'false';
+    if (waInvalid) {
+      whereConditions.push({ isWhatsappValid: false });
+    }
+
+    // Filtro de carteira: contato deve ter tag pessoal (#) de algum usuário selecionado
+    if ((filters as any).walletIds && (filters as any).walletIds.length > 0) {
+      const wIds = (Array.isArray((filters as any).walletIds) ? (filters as any).walletIds : [(filters as any).walletIds])
+        .map((v: any) => Number(v))
+        .filter((v: number) => Number.isInteger(v) && v > 0);
+      if (wIds.length > 0) {
+        const cid = Number(companyId);
+        whereConditions.push(literal(`EXISTS (
+          SELECT 1 FROM "ContactTags" ct
+          JOIN "Users" u ON ct."tagId" = ANY(u."allowedContactTags")
+          JOIN "Tags" t ON t.id = ct."tagId"
+          WHERE ct."contactId" = "Contact"."id"
+            AND u."id" IN (${wIds.join(",")})
+            AND u."companyId" = ${cid}
+            AND t."name" LIKE '#%' AND t."name" NOT LIKE '##%'
+        )`));
       }
     }
 

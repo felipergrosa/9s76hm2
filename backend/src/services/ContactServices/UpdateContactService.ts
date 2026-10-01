@@ -382,11 +382,12 @@ const UpdateContactService = async ({
   await contact.update(updateData);
 
   // Propaga renomeação de "código - nome" para as outras variantes do mesmo código
-  if (representativeCode !== undefined || segment !== undefined) {
+  if (representativeCode !== undefined || segment !== undefined || bzEmpresa !== undefined) {
     await PropagateCodeNameVariantService({
       companyId,
       representativeCode: representativeCode !== undefined ? updateData.representativeCode : undefined,
-      segment: segment !== undefined ? updateData.segment : undefined
+      segment: segment !== undefined ? updateData.segment : undefined,
+      bzEmpresa: bzEmpresa !== undefined ? updateData.bzEmpresa : undefined
     });
   }
 

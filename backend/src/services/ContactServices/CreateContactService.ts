@@ -429,7 +429,8 @@ const CreateContactService = async ({
     await PropagateCodeNameVariantService({
       companyId,
       representativeCode: contactData.representativeCode,
-      segment: contactData.segment
+      segment: contactData.segment,
+      bzEmpresa: contactData.bzEmpresa
     });
 
     return merged;
@@ -479,7 +480,8 @@ const CreateContactService = async ({
   await PropagateCodeNameVariantService({
     companyId,
     representativeCode: contactData.representativeCode,
-    segment: contactData.segment
+    segment: contactData.segment,
+    bzEmpresa: contactData.bzEmpresa
   });
 
   return contact;

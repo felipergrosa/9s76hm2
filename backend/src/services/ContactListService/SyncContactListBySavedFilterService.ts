@@ -2,6 +2,7 @@ import ContactList from "../../models/ContactList";
 import ContactListItem from "../../models/ContactListItem";
 import Contact from "../../models/Contact";
 import AddFilteredContactsToListService from "../ContactListItemService/AddFilteredContactsToListService";
+import { buildContactFilterSql } from "../ContactListItemService/contactFilterSql";
 import logger from "../../utils/logger";
 import { Op, QueryTypes } from "sequelize";
 import sequelize from "../../database";
@@ -107,132 +108,9 @@ const SyncContactListBySavedFilterService = async ({ contactListId, companyId }:
  * Obtém os canonicalNumbers de todos os contatos que atendem ao filtro
  */
 async function getValidCanonicalNumbersForFilter(companyId: number, filters: any): Promise<Set<string>> {
-  const conds: string[] = ['c."companyId" = :companyId'];
-  const repl: any = { companyId };
-
-  // Apenas contatos com canonicalNumber válido, EXCLUINDO GRUPOS
-  conds.push('c."isGroup" = false');
-  conds.push('c."canonicalNumber" IS NOT NULL');
-  conds.push('LENGTH(c."canonicalNumber") BETWEEN 10 AND 16');
-
-
-  // Aplicar os mesmos filtros do AddFilteredContactsToListService
-  const addIn = (col: string, arr?: string[]) => {
-    if (arr && arr.length > 0) {
-      const key = col.replace(/\W/g, '_');
-      // Adiciona IS NOT NULL para evitar que NULL passe pelo filtro (NULL IN (...) retorna NULL, não FALSE)
-      conds.push(`c.${col} IS NOT NULL`);
-      conds.push(`c.${col} IN (:${key})`);
-      repl[key] = arr;
-    }
-  };
-
-  // Normaliza arrays
-  const normalizeArr = (val: any): string[] => {
-    if (!val) return [];
-    if (Array.isArray(val)) return val.map(v => String(v).trim()).filter(Boolean);
-    if (typeof val === 'string') {
-      try {
-        const parsed = JSON.parse(val);
-        if (Array.isArray(parsed)) return parsed.map(v => String(v).trim()).filter(Boolean);
-      } catch { }
-      if (val.includes(',')) return val.split(',').map(s => s.trim()).filter(Boolean);
-      return [val.trim()].filter(Boolean);
-    }
-    return [];
-  };
-
-  addIn('"channel"', normalizeArr(filters.channel));
-  addIn('"representativeCode"', normalizeArr(filters.representativeCode));
-  addIn('"city"', normalizeArr(filters.city));
-  addIn('"region"', normalizeArr(filters.region));
-  addIn('"segment"', normalizeArr(filters.segment));
-  addIn('"situation"', normalizeArr(filters.situation));
-
-  if (filters.bzEmpresa) {
-    const bzEmpresaArr = normalizeArr(filters.bzEmpresa);
-    if (bzEmpresaArr.length > 0) {
-      if (bzEmpresaArr.length === 1) {
-        repl.bzEmpresa = `%${bzEmpresaArr[0].trim()}%`;
-        conds.push('c."bzEmpresa" ILIKE :bzEmpresa');
-      } else {
-        // Múltiplas empresas: usa OR
-        const orConds = bzEmpresaArr.map((e, i) => {
-          const key = `bzEmpresa${i}`;
-          repl[key] = `%${e.trim()}%`;
-          return `c."bzEmpresa" ILIKE :${key}`;
-        });
-        conds.push(`(${orConds.join(' OR ')})`);
-      }
-    }
-  }
-
-  if (filters.florder !== undefined && filters.florder !== null) {
-    const s = String(filters.florder).toLowerCase();
-    const b = typeof filters.florder === 'boolean' ? filters.florder
-      : ["true", "1", "sim", "yes"].includes(s) ? true
-        : ["false", "0", "nao", "não", "no"].includes(s) ? false : null;
-    if (b !== null) {
-      repl.florder = b;
-      conds.push('c."florder" = :florder');
-    }
-  }
-
-  if (filters.dtUltCompraStart) {
-    repl.dtStart = filters.dtUltCompraStart;
-    conds.push('c."dtUltCompra" >= :dtStart');
-  }
-  if (filters.dtUltCompraEnd) {
-    repl.dtEnd = filters.dtUltCompraEnd;
-    conds.push('c."dtUltCompra" <= :dtEnd');
-  }
-
-  if (filters.foundationMonths && Array.isArray(filters.foundationMonths) && filters.foundationMonths.length > 0) {
-    const months = filters.foundationMonths.map((n: any) => Number(n)).filter((n: number) => n >= 1 && n <= 12);
-    if (months.length > 0) {
-      conds.push('c."foundationDate" IS NOT NULL');
-      conds.push(`EXTRACT(MONTH FROM c."foundationDate") IN (${months.join(',')})`);
-    }
-  }
-
-  if (filters.minCreditLimit || filters.maxCreditLimit) {
-    const parseMoney = (val: string): number => {
-      const raw = String(val).trim().replace(/\s+/g, '').replace(/R\$?/gi, '');
-      if (raw.includes(',')) return parseFloat(raw.replace(/\./g, '').replace(/,/g, '.'));
-      return parseFloat(raw);
-    };
-    const creditSql = `CAST(CASE WHEN TRIM(c."creditLimit") = '' THEN NULL WHEN POSITION(',' IN TRIM(c."creditLimit")) > 0 THEN REPLACE(REPLACE(REPLACE(TRIM(REPLACE(c."creditLimit", 'R$', '')), '.', ''), ',', '.'), ' ', '') ELSE REPLACE(TRIM(REPLACE(c."creditLimit", 'R$', '')), ' ', '') END AS NUMERIC)`;
-
-    if (filters.minCreditLimit) {
-      repl.minCredit = parseMoney(filters.minCreditLimit);
-      conds.push(`${creditSql} >= :minCredit`);
-    }
-    if (filters.maxCreditLimit) {
-      repl.maxCredit = parseMoney(filters.maxCreditLimit);
-      conds.push(`${creditSql} <= :maxCredit`);
-    }
-  }
-
-  if (filters.tags && Array.isArray(filters.tags) && filters.tags.length > 0) {
-    const tagIds = filters.tags.map((t: any) => Number(t)).filter((t: number) => Number.isInteger(t));
-    if (tagIds.length > 0) {
-      repl.tagIds = tagIds;
-      repl.tagsLen = tagIds.length;
-      conds.push(`c."id" IN (SELECT "contactId" FROM (SELECT "contactId", COUNT(DISTINCT "tagId") AS tag_count FROM "ContactTags" WHERE "tagId" IN (:tagIds) GROUP BY "contactId") t WHERE t.tag_count = :tagsLen)`);
-    }
-  }
-
-  // Filtro de tags (exclusivo - contato NÃO DEVE ter NENHUMA das tags)
-  if ((filters as any).excludeTags && Array.isArray((filters as any).excludeTags) && (filters as any).excludeTags.length > 0) {
-    const excludeTagIds: number[] = ((filters as any).excludeTags as any[])
-      .map((t: any) => Number(t))
-      .filter((t: number) => Number.isInteger(t));
-    if (excludeTagIds.length > 0) {
-      repl.excludeTagIds = excludeTagIds;
-      conds.push(`c."id" NOT IN (SELECT DISTINCT "contactId" FROM "ContactTags" WHERE "tagId" IN (:excludeTagIds))`);
-    }
-  }
-
+  // Builder compartilhado com AddFilteredContactsToListService — evita drift
+  // entre o filtro que adiciona e o que remove itens da lista
+  const { conds, repl } = buildContactFilterSql(companyId, filters);
   const whereSql = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
   const sql = `SELECT c."canonicalNumber" FROM "Contacts" c ${whereSql}`;
 

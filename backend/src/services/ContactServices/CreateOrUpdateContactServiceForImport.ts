@@ -262,11 +262,12 @@ const CreateOrUpdateContactServiceForImport = async ({
     }
   }
 
-  // Normaliza variantes "código - nome" (rep/segmento renomeados no ERP)
+  // Normaliza variantes "código - nome" (rep/segmento/empresa renomeados no ERP)
   await PropagateCodeNameVariantService({
     companyId,
     representativeCode: contactData.representativeCode,
-    segment: contactData.segment
+    segment: contactData.segment,
+    bzEmpresa: contactData.bzEmpresa
   });
 
   // Dispara webhook para n8n (exceto em modo silencioso)

@@ -526,14 +526,20 @@ const ContactListItems = () => {
       (Array.isArray(f.channel) && f.channel.length > 0) ||
       (Array.isArray(f.representativeCode) && f.representativeCode.length > 0) ||
       (Array.isArray(f.city) && f.city.length > 0) ||
+      (Array.isArray(f.region) && f.region.length > 0) ||
       (Array.isArray(f.segment) && f.segment.length > 0) ||
       (Array.isArray(f.situation) && f.situation.length > 0) ||
+      (f.bzEmpresa && (Array.isArray(f.bzEmpresa) ? f.bzEmpresa.length > 0 : String(f.bzEmpresa).trim())) ||
       (Array.isArray(f.foundationMonths) && f.foundationMonths.length > 0) ||
       (!!f.minCreditLimit || !!f.maxCreditLimit) ||
       (typeof f.florder !== 'undefined') ||
       (!!f.dtUltCompraStart || !!f.dtUltCompraEnd) ||
       (f.minVlUltCompra != null || f.maxVlUltCompra != null) ||
-      (Array.isArray(f.tags) && f.tags.length > 0)
+      (Array.isArray(f.tags) && f.tags.length > 0) ||
+      (Array.isArray(f.excludeTags) && f.excludeTags.length > 0) ||
+      (Array.isArray(f.walletIds) && f.walletIds.length > 0) ||
+      (Array.isArray(f.whatsappIds) && f.whatsappIds.length > 0) ||
+      (f.whatsappInvalid === true || f.isWhatsappValid === false)
     );
     if (!hasAny) return null;
 
@@ -541,6 +547,7 @@ const ContactListItems = () => {
     if (Array.isArray(f.channel) && f.channel.length) parts.push({ label: 'Canal', values: f.channel });
     if (Array.isArray(f.representativeCode) && f.representativeCode.length) parts.push({ label: 'Representante', values: f.representativeCode });
     if (Array.isArray(f.city) && f.city.length) parts.push({ label: 'Cidade', values: f.city });
+    if (Array.isArray(f.region) && f.region.length) parts.push({ label: 'Região', values: f.region });
     const segmentValues = Array.isArray(f.segment) ? f.segment : (typeof f.segment === 'string' && f.segment ? [f.segment] : []);
     if (segmentValues.length) parts.push({ label: 'Segmento', values: segmentValues });
     if (Array.isArray(f.situation) && f.situation.length) parts.push({ label: 'Situação', values: f.situation });
@@ -633,7 +640,13 @@ const ContactListItems = () => {
       (typeof f.florder !== 'undefined'),
       (!!f.dtUltCompraStart || !!f.dtUltCompraEnd),
       (f.minVlUltCompra != null || f.maxVlUltCompra != null),
-      (Array.isArray(f.tags) && f.tags.length > 0)
+      (Array.isArray(f.tags) && f.tags.length > 0),
+      (Array.isArray(f.region) && f.region.length > 0),
+      (f.bzEmpresa && (Array.isArray(f.bzEmpresa) ? f.bzEmpresa.length > 0 : !!String(f.bzEmpresa).trim())),
+      (Array.isArray(f.excludeTags) && f.excludeTags.length > 0),
+      (Array.isArray(f.walletIds) && f.walletIds.length > 0),
+      (Array.isArray(f.whatsappIds) && f.whatsappIds.length > 0),
+      (f.whatsappInvalid === true || f.isWhatsappValid === false)
     ].filter(Boolean).length;
 
     return (
@@ -698,10 +711,30 @@ const ContactListItems = () => {
                 {(f.minVlUltCompra != null || f.maxVlUltCompra != null) && (
                   <div><strong>Valor da última compra:</strong> {fmtCurrency(f.minVlUltCompra)} – {fmtCurrency(f.maxVlUltCompra)}</div>
                 )}
+                {Array.isArray(f.region) && f.region.length > 0 && (
+                  <div><strong>Região:</strong> {f.region.join(', ')}</div>
+                )}
+                {f.bzEmpresa && (Array.isArray(f.bzEmpresa) ? f.bzEmpresa.length > 0 : !!String(f.bzEmpresa).trim()) && (
+                  <div><strong>Empresa:</strong> {Array.isArray(f.bzEmpresa) ? f.bzEmpresa.join(', ') : f.bzEmpresa}</div>
+                )}
                 {Array.isArray(f.tags) && f.tags.length > 0 && (
                   <div><strong>Tags:</strong> {(allTags.length
                     ? allTags.filter(t => f.tags.includes(t.id)).map(t => t.name)
                     : f.tags.map(id => `#${id}`)).join(', ')}</div>
+                )}
+                {Array.isArray(f.excludeTags) && f.excludeTags.length > 0 && (
+                  <div><strong>Tags excluídas:</strong> {(allTags.length
+                    ? allTags.filter(t => f.excludeTags.includes(t.id)).map(t => t.name)
+                    : f.excludeTags.map(id => `#${id}`)).join(', ')}</div>
+                )}
+                {Array.isArray(f.walletIds) && f.walletIds.length > 0 && (
+                  <div><strong>Carteira:</strong> {f.walletIds.length} responsável(is)</div>
+                )}
+                {Array.isArray(f.whatsappIds) && f.whatsappIds.length > 0 && (
+                  <div><strong>Conexão:</strong> {f.whatsappIds.length} selecionada(s)</div>
+                )}
+                {(f.whatsappInvalid === true || f.isWhatsappValid === false) && (
+                  <div><strong>WhatsApp:</strong> Somente inválidos</div>
                 )}
               </div>
             </div>
