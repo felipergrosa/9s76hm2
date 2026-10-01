@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback, useContext, useEffect } from "react";
+import React, { useState, useCallback, useContext, useEffect, useMemo } from "react";
 import { toast } from "react-toastify";
 import { add, format, parseISO } from "date-fns";
 
@@ -12,6 +12,10 @@ import { green } from "@material-ui/core/colors";
 import {
   Button,
   TableBody,
+  TableRow,
+  TableCell,
+  TableHead,
+  TableSortLabel,
   IconButton,
   Table,
   Paper,
@@ -24,6 +28,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Select,
 } from "@material-ui/core";
 
 import {
@@ -42,6 +47,8 @@ import {
   Chat as WebChatIcon,
   Sync,
   Assessment,
+  ArrowUpward,
+  ArrowDownward,
 } from "@material-ui/icons";
 
 import MainContainer from "../../components/MainContainer";
@@ -80,8 +87,17 @@ const useStyles = makeStyles((theme) => ({
     gridTemplateColumns: "1fr",
     gap: theme.spacing(2),
     [theme.breakpoints.up("sm")]: {
-      gridTemplateColumns: "repeat(auto-fill, minmax(330px, 1fr))",
+      display: "none",
     },
+  },
+  desktopTableWrapper: {
+    [theme.breakpoints.down("sm")]: {
+      display: "none",
+    },
+  },
+  sortableHeader: {
+    whiteSpace: "nowrap",
+    fontWeight: 600,
   },
   card: {
     borderRadius: 14,
@@ -224,6 +240,46 @@ const Connections = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
   const { whatsApps, loading } = useContext(WhatsAppsContext);
+
+  // Ordenação compartilhada (tabela desktop + cards mobile)
+  const [orderBy, setOrderBy] = useState("id");
+  const [orderDir, setOrderDir] = useState("asc");
+
+  const handleSort = useCallback((key) => {
+    setOrderBy(prev => {
+      if (prev === key) {
+        setOrderDir(d => (d === "asc" ? "desc" : "asc"));
+        return prev;
+      }
+      setOrderDir("asc");
+      return key;
+    });
+  }, []);
+
+  const sortedWhatsApps = useMemo(() => {
+    const list = [...(whatsApps || [])];
+    const dir = orderDir === "asc" ? 1 : -1;
+    const val = (w) => {
+      switch (orderBy) {
+        case "id": return Number(w.id) || 0;
+        case "channel": return channelInfo(w).label.toLowerCase();
+        case "name": return (w.name || "").toLowerCase();
+        case "number": return String(w.number || w.facebookPageUserId || "").toLowerCase();
+        case "status": return statusInfo(w).label.toLowerCase();
+        case "updatedAt": return w.updatedAt ? new Date(w.updatedAt).getTime() : 0;
+        case "isDefault": return w.isDefault ? 1 : 0;
+        default: return 0;
+      }
+    };
+    list.sort((a, b) => {
+      const va = val(a);
+      const vb = val(b);
+      if (va < vb) return -1 * dir;
+      if (va > vb) return 1 * dir;
+      return 0;
+    });
+    return list;
+  }, [whatsApps, orderBy, orderDir]);
 
   const [whatsAppModalOpen, setWhatsAppModalOpen] = useState(false);
   const [, setStatusImport] = useState([]);
@@ -961,7 +1017,6 @@ const Connections = () => {
 
 
           <Paper className={classes.mainPaper} variant="outlined">
-            {/* Grid de cards unificado (mobile + desktop) */}
             {loading ? (
               <Table>
                 <TableBody>
@@ -969,8 +1024,41 @@ const Connections = () => {
                 </TableBody>
               </Table>
             ) : (
+              <>
+              {/* Controle de ordenação — visível apenas no mobile (desktop ordena pelo cabeçalho) */}
+              {isMobile && (
+                <Box
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="flex-end"
+                  mb={1}
+                  style={{ gap: 8 }}
+                >
+                  <Select
+                    native
+                    value={orderBy}
+                    onChange={(e) => handleSort(e.target.value)}
+                    style={{ fontSize: "0.85rem" }}
+                  >
+                    <option value="id">ID</option>
+                    <option value="channel">Canal</option>
+                    <option value="name">{i18n.t("connections.table.name")}</option>
+                    <option value="number">{i18n.t("connections.table.number")}</option>
+                    <option value="status">{i18n.t("connections.table.status")}</option>
+                    <option value="updatedAt">{i18n.t("connections.table.lastUpdate")}</option>
+                  </Select>
+                  <IconButton
+                    size="small"
+                    onClick={() => setOrderDir(d => (d === "asc" ? "desc" : "asc"))}
+                  >
+                    {orderDir === "asc" ? <ArrowUpward fontSize="small" /> : <ArrowDownward fontSize="small" />}
+                  </IconButton>
+                </Box>
+              )}
+
+              {/* Cards — mobile */}
               <div className={classes.connectionsGrid}>
-                {whatsApps?.map((whatsApp) => {
+                {sortedWhatsApps?.map((whatsApp) => {
                   const info = channelInfo(whatsApp);
                   const st = statusInfo(whatsApp);
                   const isMeta = whatsApp.channel === "facebook" || whatsApp.channel === "instagram";
@@ -1083,6 +1171,129 @@ const Connections = () => {
                   );
                 })}
               </div>
+
+              {/* Tabela — desktop, colunas ordenáveis */}
+              <div className={classes.desktopTableWrapper}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      {[
+                        { key: "id", label: "ID" },
+                        { key: "channel", label: "Channel" },
+                        { key: "name", label: i18n.t("connections.table.name") },
+                        { key: "number", label: i18n.t("connections.table.number") },
+                        { key: "status", label: i18n.t("connections.table.status") },
+                        { key: "updatedAt", label: i18n.t("connections.table.lastUpdate") },
+                        { key: "isDefault", label: i18n.t("connections.table.default") },
+                      ].map(col => (
+                        <TableCell
+                          key={col.key}
+                          align="center"
+                          className={classes.sortableHeader}
+                          sortDirection={orderBy === col.key ? orderDir : false}
+                        >
+                          <TableSortLabel
+                            active={orderBy === col.key}
+                            direction={orderBy === col.key ? orderDir : "asc"}
+                            onClick={() => handleSort(col.key)}
+                          >
+                            {col.label}
+                          </TableSortLabel>
+                        </TableCell>
+                      ))}
+                      <TableCell align="center" className={classes.sortableHeader}>
+                        {i18n.t("connections.table.actions")}
+                      </TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {sortedWhatsApps?.map((whatsApp) => {
+                      const info = channelInfo(whatsApp);
+                      const st = statusInfo(whatsApp);
+                      const isMeta = whatsApp.channel === "facebook" || whatsApp.channel === "instagram";
+
+                      return (
+                        <TableRow key={whatsApp.id} hover>
+                          <TableCell align="center">#{whatsApp.id}</TableCell>
+                          <TableCell align="center">
+                            <Tooltip title={info.label}>
+                              <span className={classes.channelAvatar} style={{ backgroundColor: `${info.color}1a`, width: 32, height: 32, borderRadius: 8, margin: "0 auto" }}>
+                                {IconChannel(whatsApp.channel, whatsApp.channelType)}
+                              </span>
+                            </Tooltip>
+                          </TableCell>
+                          <TableCell align="center">
+                            <Box display="flex" alignItems="center" justifyContent="center" style={{ gap: 6 }}>
+                              <span>{whatsApp.name}</span>
+                            </Box>
+                          </TableCell>
+                          <TableCell align="center">
+                            {whatsApp.number && whatsApp.channel === 'whatsapp'
+                              ? formatSerializedId(whatsApp.number)
+                              : (whatsApp.number || (isMeta ? `#${whatsApp.facebookPageUserId}` : "—"))}
+                          </TableCell>
+                          <TableCell align="center">
+                            <Chip
+                              label={st.label}
+                              size="small"
+                              className={classes.statusChip}
+                              style={{ color: st.color, backgroundColor: st.bg }}
+                              icon={whatsApp.status === "OPENING" ? (
+                                <CircularProgress size={14} style={{ color: st.color, marginLeft: 8 }} />
+                              ) : undefined}
+                            />
+                          </TableCell>
+                          <TableCell align="center">{whatsApp.updatedAt ? format(parseISO(whatsApp.updatedAt), "dd/MM/yy HH:mm") : "—"}</TableCell>
+                          <TableCell align="center">
+                            {whatsApp.isDefault ? <CheckCircle style={{ color: green[500] }} /> : "—"}
+                          </TableCell>
+                          <TableCell align="center">
+                            <Box display="flex" alignItems="center" justifyContent="center">
+                              {renderActionButtons(whatsApp)}
+                              <Can
+                                user={user}
+                                perform="connections.create"
+                                yes={() => (
+                                  <>
+                                    <IconButton size="small" onClick={() => handleEditWhatsApp(whatsApp)}>
+                                      <Edit />
+                                    </IconButton>
+                                    {isMeta && (
+                                      <Tooltip title="Diagnosticar webhook/token Meta">
+                                        <IconButton size="small" onClick={() => handleMetaHealth(whatsApp)}>
+                                          <Assessment />
+                                        </IconButton>
+                                      </Tooltip>
+                                    )}
+                                    {whatsApp.channel === 'whatsapp' && whatsApp.channelType === "official" && (
+                                      <IconButton
+                                        size="small"
+                                        onClick={(e) => {
+                                          e.stopPropagation && e.stopPropagation();
+                                          handleOpenMetaMenu(e);
+                                        }}
+                                      >
+                                        <MoreVert />
+                                      </IconButton>
+                                    )}
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => handleOpenConfirmationModal("delete", whatsApp.id)}
+                                    >
+                                      <DeleteOutline />
+                                    </IconButton>
+                                  </>
+                                )}
+                              />
+                            </Box>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+              </>
             )}
           </Paper>
 
