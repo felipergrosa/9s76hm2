@@ -584,7 +584,7 @@ export const showFromUUID = async (
 
   const ticket: Ticket = await ShowTicketUUIDService(uuid, companyId);
 
-  if (ticket.channel === "whatsapp" && ticket.whatsappId && ticket.unreadMessages > 0) {
+  if (ticket.whatsappId && ticket.unreadMessages > 0) {
     await SetTicketMessagesAsRead(ticket);
   }
   await CreateLogTicketService({
@@ -816,7 +816,7 @@ export const markNotificationAsRead = async (
   }
 
   // Marcar mensagens como lidas (zera unreadMessages)
-  if (ticket.channel === "whatsapp" && ticket.whatsappId && ticket.unreadMessages > 0) {
+  if (ticket.whatsappId && ticket.unreadMessages > 0) {
     await SetTicketMessagesAsRead(ticket);
   }
 
@@ -843,7 +843,7 @@ export const markAllNotificationsAsRead = async (
 
   // Filtra apenas tickets elegíveis (mesmas condições do loop serial anterior)
   const eligibleTickets = tickets.filter(
-    ticket => ticket.channel === "whatsapp" && ticket.whatsappId && ticket.unreadMessages > 0
+    ticket => ticket.whatsappId && ticket.unreadMessages > 0
   );
 
   // Marcar tickets como lidos em paralelo, em lotes de 5 para não sobrecarregar

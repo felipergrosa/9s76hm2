@@ -43,6 +43,8 @@ export const sanitizeMessageForLog = (msg: any): any => {
 };
 
 const logger = pino({
+  // LOG_LEVEL=debug reabilita logs de auditoria por-request (ex.: API contacts/sync)
+  level: process.env.LOG_LEVEL || "info",
   ...(process.env.NODE_ENV === "test"
     ? {}
     : {

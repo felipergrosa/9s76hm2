@@ -115,17 +115,17 @@ const SessionSchema = Yup.object().shape({
   wabaPhoneNumberId: Yup.string().when("channelType", {
     is: "official",
     then: Yup.string().required("Phone Number ID é obrigatório para API Oficial"),
-    otherwise: Yup.string()
+    otherwise: Yup.string().nullable()
   }),
   wabaAccessToken: Yup.string().when("channelType", {
     is: "official",
     then: Yup.string().required("Access Token é obrigatório para API Oficial"),
-    otherwise: Yup.string()
+    otherwise: Yup.string().nullable()
   }),
   wabaBusinessAccountId: Yup.string().when("channelType", {
     is: "official",
     then: Yup.string().required("Business Account ID é obrigatório para API Oficial"),
-    otherwise: Yup.string()
+    otherwise: Yup.string().nullable()
   }),
   color: Yup.string()
     .matches(/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/, "Cor inválida")

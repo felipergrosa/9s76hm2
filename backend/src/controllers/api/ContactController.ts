@@ -136,7 +136,7 @@ export const sync = async (req: Request, res: Response): Promise<Response> => {
   if (!company) {
     throw new AppError("Empresa não encontrada", 404);
   }
-  logger.info(`[API contacts/sync] Acesso via COMPANY_TOKEN ao companyId=${companyId}`);
+  logger.debug(`[API contacts/sync] Acesso via COMPANY_TOKEN ao companyId=${companyId}, ip=${req.ip}`);
 
   // Normaliza silentMode vindo do body (true, "true", etc.)
   const rawSilentMode = (req.body as any)?.silentMode;
@@ -441,7 +441,7 @@ export const remove = async (req: Request, res: Response): Promise<Response> => 
     if (!company) {
       throw new AppError("Empresa não encontrada", 404);
     }
-    logger.info(`[API contacts/delete] Acesso via COMPANY_TOKEN ao companyId=${companyId}, contactId=${id}`);
+    logger.debug(`[API contacts/delete] Acesso via COMPANY_TOKEN ao companyId=${companyId}, contactId=${id}, ip=${req.ip}`);
 
     if (!id) {
       throw new AppError("ID do contato é obrigatório", 400);

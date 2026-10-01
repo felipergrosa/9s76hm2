@@ -48,8 +48,11 @@ const SetTicketMessagesAsRead = async (ticket: Ticket): Promise<void> => {
     // Zera mensagens não lidas para tickets open, group OU pending (quando usuário abre a conversa)
     if (["open", "group", "pending", "bot", "campaign"].includes(ticket.status) && whatsapp && ticket.unreadMessages > 0) {
       try {
-        // Para conexões oficiais, não há Baileys; apenas atualiza banco/cache e emite evento.
-        if (whatsapp.channelType === "official") {
+        // Canais sem sessão Baileys (API Oficial, Facebook, Instagram,
+        // webchat): não há ack remoto — apenas atualiza banco/cache e
+        // emite o evento para limpar a notificação.
+        if (whatsapp.channelType === "official" ||
+            (whatsapp.channel && whatsapp.channel !== "whatsapp")) {
           // CQRS: Usar MessageCommandService para marcar como lidas
           await markMessagesAsReadByTicket(ticket.id, ticket.uuid, ticket.companyId);
 

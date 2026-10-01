@@ -779,7 +779,9 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
 
   const shouldMarkAsRead = markAsRead !== "false";
 
-  if (shouldMarkAsRead && ticket.channel === "whatsapp" && ticket.whatsappId) {
+  // Qualquer canal com conexão marca leitura ao abrir (whatsapp, facebook,
+  // instagram, webchat) — antes só whatsapp, deixando notificações presas.
+  if (shouldMarkAsRead && ticket.whatsappId) {
     await SetTicketMessagesAsRead(ticket);
   }
 
@@ -853,7 +855,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     }
   }
 
-  if (ticket.channel === "whatsapp" && ticket.whatsappId) {
+  if (ticket.whatsappId) {
     await SetTicketMessagesAsRead(ticket);
   }
 
