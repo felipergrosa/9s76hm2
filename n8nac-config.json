@@ -1,0 +1,24 @@
+{
+  "version": 4,
+  "activeEnvironmentId": "n8n",
+  "environmentTargets": [
+    {
+      "id": "n8n-nobreluminarias",
+      "name": "n8n.nobreluminarias",
+      "kind": "external-instance",
+      "url": "https://n8n.nobreluminarias.com.br"
+    }
+  ],
+  "environments": [
+    {
+      "id": "n8n",
+      "name": "n8n",
+      "syncSlug": "n8n",
+      "environmentTargetId": "n8n-nobreluminarias",
+      "projectId": "personal",
+      "projectName": "Personal",
+      "workflowsPath": "workflows/n8n",
+      "folderSync": true
+    }
+  ]
+}

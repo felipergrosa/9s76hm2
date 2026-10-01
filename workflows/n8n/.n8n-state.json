@@ -1,0 +1,24 @@
+{
+  "workflows": {
+    "8VjNDtjUtwgeE6qA": {
+      "lastSyncedHash": "82baa6a64573876fea751ed0eb128b2020eccdfd0c8edd82848d70e625b9aca7",
+      "lastSyncedAt": "2026-10-01T14:12:05.369Z",
+      "filename": "Atualiza Cadastro Nobre_whaticket.workflow.ts"
+    },
+    "XoCApUU4UOnmjYi4": {
+      "lastSyncedHash": "737b9a995c8d228c21ccfb1b667cfa3caf76bfde6aaa327dfef83b876035e38b",
+      "lastSyncedAt": "2026-10-01T14:24:41.749Z",
+      "filename": "Sincroniza Whaticket para Nobre.workflow.ts"
+    },
+    "190oc7uwtrLMiQxN": {
+      "lastSyncedHash": "7c601727663c5bcd5b966d635b27f0f64abb6d4a92eeed144458d2198382038e",
+      "lastSyncedAt": "2026-05-22T15:48:28.116Z",
+      "filename": "NOBRE Busca Pedidos Olist SQLServer.workflow.ts"
+    },
+    "MgEvR607KndViqxV": {
+      "lastSyncedHash": "2a496eba15701576d40bff97862f76f19120f9fd8a9ccf5eacdc73ea73f98896",
+      "lastSyncedAt": "2026-05-22T15:48:31.624Z",
+      "filename": "ZEUS Busca Pedidos Olist SQLServer.workflow.ts"
+    }
+  }
+}
