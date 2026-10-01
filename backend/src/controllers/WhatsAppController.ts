@@ -9,6 +9,7 @@ import AppError from "../errors/AppError";
 import DeleteBaileysService from "../services/BaileysServices/DeleteBaileysService";
 import ShowCompanyService from "../services/CompanyService/ShowCompanyService";
 import { getAccessTokenFromPage, getPageProfile, subscribeApp } from "../services/FacebookServices/graphAPI";
+import { subscribePageWebhook } from "../services/MetaOAuthService";
 import ShowPlanService from "../services/PlanService/ShowPlanService";
 import { StartWhatsAppSessionUnified } from "../services/WbotServices/StartWhatsAppSessionUnified";
 
@@ -783,5 +784,70 @@ export const metaHealth = async (req: Request, res: Response): Promise<Response>
   }
 
   return res.status(200).json(result);
+};
+
+/**
+ * Re-executa a assinatura webhook da página (POST /{page-id}/subscribed_apps)
+ * e devolve o estado atualizado. Auto-cura para conexões Meta cuja
+ * subscribed_apps falhou/expirou sem refazer o OAuth.
+ * POST /whatsapp/:whatsappId/meta-resubscribe
+ */
+export const metaResubscribe = async (req: Request, res: Response): Promise<Response> => {
+  const { whatsappId } = req.params;
+  const { companyId } = req.user;
+
+  const whatsapp = await Whatsapp.findOne({
+    where: { id: whatsappId, companyId },
+    attributes: [
+      "id", "name", "channel", "channelType",
+      "metaPageId", "metaPageAccessToken",
+      "facebookUserToken", "facebookPageUserId"
+    ]
+  });
+  if (!whatsapp) {
+    throw new AppError("ERR_NO_WAPP_FOUND", 404);
+  }
+
+  const channel = whatsapp.channel || whatsapp.channelType;
+  if (channel !== "facebook" && channel !== "instagram") {
+    return res.status(400).json({ error: "Reassinatura disponível apenas para conexões Facebook/Instagram" });
+  }
+
+  const pageId = whatsapp.metaPageId || whatsapp.facebookPageUserId;
+  const token = whatsapp.metaPageAccessToken || whatsapp.facebookUserToken;
+  if (!pageId || !token) {
+    return res.status(400).json({ error: "Conexão sem pageId/token — refaça via OAuth." });
+  }
+
+  await subscribePageWebhook(pageId, token, channel);
+  logger.info(`[metaResubscribe] companyId=${companyId} whatsappId=${whatsappId} pageId=${pageId} channel=${channel}`);
+
+  // Retorna o estado pós-assinatura (mesma consulta do meta-health)
+  try {
+    const { data } = await axios.get(`https://graph.facebook.com/v19.0/${pageId}`, {
+      params: { access_token: token, fields: "id,name,subscribed_apps{subscribed_fields}" },
+      timeout: 15000
+    });
+    const apps = data?.subscribed_apps?.data || [];
+    const myAppId = process.env.META_APP_ID || process.env.FACEBOOK_APP_ID;
+    const mine = myAppId ? apps.filter((a: any) => String(a.id) === String(myAppId)) : apps;
+    const fields = new Set<string>();
+    mine.forEach((a: any) => (a.subscribed_fields || []).forEach((f: string) => fields.add(f)));
+    return res.status(200).json({
+      success: true,
+      pageId,
+      pageName: data.name,
+      subscribed: fields.has("messages"),
+      subscribedFields: [...fields]
+    });
+  } catch (err: any) {
+    const metaErr = err?.response?.data?.error;
+    return res.status(200).json({
+      success: false,
+      pageId,
+      subscribed: false,
+      error: metaErr?.message || err.message
+    });
+  }
 };
 

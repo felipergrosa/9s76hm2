@@ -23,6 +23,7 @@ whatsappRoutes.post("/whatsapp/", isAuth, checkPermission("connections.create"),
 whatsappRoutes.post("/facebook/", isAuth, checkPermission("connections.create"), WhatsAppController.storeFacebook);
 whatsappRoutes.get("/whatsapp/:whatsappId", isAuth, checkPermission("connections.view"), WhatsAppController.show);
 whatsappRoutes.get("/whatsapp/:whatsappId/meta-health", isAuth, checkPermission("connections.view"), WhatsAppController.metaHealth);
+whatsappRoutes.post("/whatsapp/:whatsappId/meta-resubscribe", isAuth, checkPermission("connections.edit"), WhatsAppController.metaResubscribe);
 whatsappRoutes.put("/whatsapp/:whatsappId", isAuth, checkPermission("connections.edit"), WhatsAppController.update);
 whatsappRoutes.delete("/whatsapp/:whatsappId", isAuth, checkPermission("connections.delete"), WhatsAppController.remove);
 whatsappRoutes.post("/closedimported/:whatsappId", isAuth, checkPermission("connections.edit"), WhatsAppController.closedTickets);

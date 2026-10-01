@@ -10,7 +10,20 @@ export const StartAllWhatsAppsSessions = async (
     const whatsapps = await ListWhatsAppsService({ companyId });
     if (whatsapps.length > 0) {
       const promises = whatsapps.map(async (whatsapp) => {
-        if (whatsapp.channel === "whatsapp" && whatsapp.status !== "DISCONNECTED") {
+        const isWhatsAppChannel = whatsapp.channel === "whatsapp" || !whatsapp.channel;
+        const isOfficial = whatsapp.channelType === "official";
+        // API oficial é stateless (não depende de QR/sessão Baileys): uma falha
+        // transitória de inicialização marcava a conexão como DISCONNECTED e ela
+        // nunca mais era reiniciada. Com credenciais presentes, sempre tentar
+        // subir — se o token estiver inválido, initialize() falha e o status
+        // volta a DISCONNECTED corretamente.
+        const officialRecoverable =
+          isOfficial && !!(whatsapp.wabaPhoneNumberId && whatsapp.wabaAccessToken);
+
+        if (
+          isWhatsAppChannel &&
+          (whatsapp.status !== "DISCONNECTED" || officialRecoverable)
+        ) {
           return StartWhatsAppSessionUnified(whatsapp, companyId);
         }
       });

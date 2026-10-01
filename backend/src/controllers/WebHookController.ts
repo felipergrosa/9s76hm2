@@ -50,8 +50,18 @@ export const webHook = async (
     );
 
     if (!isSignatureValid) {
-      logger.warn(`[Webhook] Requisição rejeitada: assinatura HMAC inválida`);
+      logger.warn(
+        `[Webhook] Requisição rejeitada: assinatura HMAC inválida ` +
+        `(object=${body?.object || "?"} hasRawBody=${!!req.rawBody} hasSignature=${!!signatureHeader})`
+      );
       return res.status(403).json({ message: "Forbidden" });
+    }
+
+    // Log de recebimento: permite distinguir "Meta não entrega" de
+    // "entrega mas falha no processamento" nos logs de produção.
+    if (body?.object) {
+      const entries = Array.isArray(body.entry) ? body.entry.length : 0;
+      logger.info(`[Webhook] Recebido object=${body.object} entries=${entries}`);
     }
 
     if (body.object === "page" || body.object === "instagram") {
@@ -78,7 +88,16 @@ export const webHook = async (
         }
 
         entry.messaging?.forEach((data: any) => {
-          handleMessage(getTokenPage, data, channel, getTokenPage.companyId);
+          // Erros async do listener não podem cair em unhandledRejection —
+          // loga com contexto mínimo (sem conteúdo da mensagem).
+          Promise.resolve(
+            handleMessage(getTokenPage, data, channel, getTokenPage.companyId)
+          ).catch(err => {
+            logger.error(
+              `[Webhook] Erro ao processar mensagem ${channel} ` +
+              `(whatsappId=${getTokenPage.id} entryId=${entry.id}): ${err?.message || err}`
+            );
+          });
         });
 
         // Handover protocol (só Facebook/Page): quando outro app é o receptor
@@ -99,7 +118,14 @@ export const webHook = async (
                 }
               });
             }
-            handleMessage(getTokenPage, data, channel, getTokenPage.companyId);
+            Promise.resolve(
+              handleMessage(getTokenPage, data, channel, getTokenPage.companyId)
+            ).catch(err => {
+              logger.error(
+                `[Webhook] Erro ao processar standby ${channel} ` +
+                `(whatsappId=${getTokenPage.id} entryId=${entry.id}): ${err?.message || err}`
+              );
+            });
           });
         }
 

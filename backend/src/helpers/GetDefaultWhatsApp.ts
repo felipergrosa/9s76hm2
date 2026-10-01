@@ -1,8 +1,18 @@
+import { Op } from "sequelize";
 import AppError from "../errors/AppError";
 import Whatsapp from "../models/Whatsapp";
 import GetDefaultWhatsAppByUser from "./GetDefaultWhatsAppByUser";
 
 const CONNECTED_STATUS = "CONNECTED";
+
+// Conexões capazes de falar WhatsApp (Baileys ou API Oficial).
+// Facebook/Instagram/WebChat aparecem como CONNECTED mas não têm socket
+// Baileys — selecioná-las quebrava validação de números e envios com
+// timeouts de 30s por contato.
+const WHATSAPP_CHANNEL_FILTER = {
+  [Op.or]: [{ channel: "whatsapp" }, { channel: null }],
+  channelType: { [Op.or]: ["baileys", "official", null] }
+};
 
 const GetDefaultWhatsApp = async (
   whatsappId?: number,
@@ -22,29 +32,31 @@ const GetDefaultWhatsApp = async (
 
     if (!connection) {
       connection = await Whatsapp.findOne({
-        where: { status: CONNECTED_STATUS, companyId }
+        where: { status: CONNECTED_STATUS, companyId, ...WHATSAPP_CHANNEL_FILTER }
       });
     }
   } else {
     connection = await Whatsapp.findOne({
-      where: { status: CONNECTED_STATUS, companyId, isDefault: true }
+      where: { status: CONNECTED_STATUS, companyId, isDefault: true, ...WHATSAPP_CHANNEL_FILTER }
     });
 
     if (!connection) {
       connection = await Whatsapp.findOne({
-        where: { status: CONNECTED_STATUS, companyId }
+        where: { status: CONNECTED_STATUS, companyId, ...WHATSAPP_CHANNEL_FILTER }
       });
     }
   }
 
   if (userId) {
     const whatsappByUser = await GetDefaultWhatsAppByUser(userId);
-    if (whatsappByUser) {
-      connection = whatsappByUser.status === CONNECTED_STATUS ? whatsappByUser : connection || whatsappByUser;
+    if (whatsappByUser && whatsappByUser.status === CONNECTED_STATUS &&
+        (!whatsappByUser.channel || whatsappByUser.channel === "whatsapp")) {
+      connection = whatsappByUser;
     }
-    if (!connection || connection.status !== CONNECTED_STATUS) {
+    if (!connection || connection.status !== CONNECTED_STATUS ||
+        (connection.channel && connection.channel !== "whatsapp")) {
       const connectedFallback = await Whatsapp.findOne({
-        where: { status: CONNECTED_STATUS, companyId }
+        where: { status: CONNECTED_STATUS, companyId, ...WHATSAPP_CHANNEL_FILTER }
       });
       if (connectedFallback) {
         connection = connectedFallback;

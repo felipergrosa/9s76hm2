@@ -22,37 +22,43 @@ import {
   Tooltip,
   CircularProgress,
   Box,
-  Chip,
-  Grid,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
   Select,
+  TextField,
+  InputAdornment,
+  FormControl,
 } from "@material-ui/core";
 
 import {
-  Edit,
-  CheckCircle,
-  CropFree,
-  DeleteOutline,
   Facebook,
   Instagram,
   WhatsApp,
-  MoreVert,
-  Replay,
-  Autorenew,
-  DeleteSweep,
-  PowerSettingsNew,
   Chat as WebChatIcon,
-  Sync,
-  Assessment,
-  ArrowUpward,
-  ArrowDownward,
 } from "@material-ui/icons";
+import {
+  Search as SearchIcon,
+  Pencil as EditIcon,
+  Trash2 as DeleteIcon,
+  QrCode as QrIcon,
+  RefreshCw as ReconnectIcon,
+  RotateCcw as NewQrIcon,
+  Eraser as ClearSessionIcon,
+  Power as DisconnectIcon,
+  RefreshCcw as SyncIcon,
+  CheckCircle2 as CheckIcon,
+  MoreVertical as MoreIcon,
+  Activity as HealthIcon,
+  ArrowUp as SortAscIcon,
+  ArrowDown as SortDescIcon,
+  Plus as AddIcon,
+  LifeBuoy as SupportIcon,
+  RotateCw as RestartIcon,
+} from "lucide-react";
 
 import MainContainer from "../../components/MainContainer";
-import MainHeader from "../../components/MainHeader";
 import Title from "../../components/Title";
 import TableRowSkeleton from "../../components/TableRowSkeleton";
 
@@ -72,20 +78,128 @@ import ForbiddenPage from "../../components/ForbiddenPage";
 import { Can } from "../../components/Can";
 import usePermissions from "../../hooks/usePermissions";
 
+// ===== Estilos no padrão do gerenciador de Campanhas/Templates Meta =====
 const useStyles = makeStyles((theme) => ({
-  mainPaper: {
+  paper: {
     flex: 1,
-    // padding: theme.spacing(1),
-    padding: theme.padding,
-    ...theme.scrollbarStyles,
+    padding: 0,
+    overflow: "hidden",
+    borderRadius: 12,
+    border: `1px solid ${theme.palette.divider}`,
+    backgroundColor: theme.palette.background.paper,
+  },
+  header: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing(2),
+    flexWrap: "wrap",
+    padding: theme.spacing(2, 2.5),
+  },
+  headerText: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+  },
+  subtitle: {
+    color: theme.palette.text.secondary,
+    fontSize: "0.85rem",
+  },
+  headerActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1),
+    flexWrap: "wrap",
+  },
+  toolbar: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1.5),
+    flexWrap: "wrap",
+    padding: theme.spacing(1.5, 2.5),
+    borderTop: `1px solid ${theme.palette.divider}`,
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    background:
+      theme.palette.type === "dark"
+        ? theme.palette.background.default
+        : "#fafafa",
+  },
+  searchField: {
+    minWidth: 220,
+    flex: "1 1 280px",
+    maxWidth: 380,
+  },
+  filterSelect: {
+    minWidth: 150,
+  },
+  headCell: {
+    fontWeight: 600,
+    fontSize: "0.72rem",
+    letterSpacing: "0.06em",
+    textTransform: "uppercase",
+    color: theme.palette.text.secondary,
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    background:
+      theme.palette.type === "dark"
+        ? theme.palette.background.default
+        : "#fafafa",
+    whiteSpace: "nowrap",
+  },
+  bodyCell: {
+    fontSize: "0.85rem",
+    paddingTop: theme.spacing(1.25),
+    paddingBottom: theme.spacing(1.25),
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    verticalAlign: "middle",
+  },
+  rowHover: {
+    "&:hover": {
+      backgroundColor: theme.palette.action.hover,
+    },
+    transition: "background-color 120ms ease",
+  },
+  connName: {
+    fontWeight: 600,
+    fontSize: "0.9rem",
+    lineHeight: 1.35,
+  },
+  mutedText: {
+    color: theme.palette.text.secondary,
+    fontSize: "0.78rem",
+    marginTop: 2,
+  },
+  actionsCell: {
+    whiteSpace: "nowrap",
+  },
+  emptyState: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing(1),
+    padding: theme.spacing(8, 2),
+    color: theme.palette.text.secondary,
+    textAlign: "center",
   },
   buttonProgress: {
     color: green[500],
   },
-  connectionsGrid: {
+  channelAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 9,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+    "& svg": { fontSize: 18 },
+  },
+  // Cards mobile
+  mobileList: {
     display: "grid",
     gridTemplateColumns: "1fr",
-    gap: theme.spacing(2),
+    gap: theme.spacing(1.5),
+    padding: theme.spacing(1.5),
     [theme.breakpoints.up("sm")]: {
       display: "none",
     },
@@ -95,24 +209,14 @@ const useStyles = makeStyles((theme) => ({
       display: "none",
     },
   },
-  sortableHeader: {
-    whiteSpace: "nowrap",
-    fontWeight: 600,
-  },
   card: {
-    borderRadius: 14,
-    padding: theme.spacing(2),
-    boxShadow: "0 6px 18px rgba(0,0,0,0.08)",
+    borderRadius: 12,
+    padding: theme.spacing(1.75),
     border: `1px solid ${theme.palette.divider}`,
     display: "flex",
     flexDirection: "column",
     gap: theme.spacing(1.25),
     background: theme.palette.background.paper,
-    transition: "box-shadow .2s ease, transform .2s ease",
-    "&:hover": {
-      boxShadow: "0 10px 28px rgba(0,0,0,0.14)",
-      transform: "translateY(-2px)",
-    },
   },
   cardHeader: {
     display: "flex",
@@ -126,16 +230,6 @@ const useStyles = makeStyles((theme) => ({
     gap: theme.spacing(1.25),
     minWidth: 0,
   },
-  channelAvatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-    "& svg": { fontSize: 22 },
-  },
   cardName: {
     fontWeight: 700,
     fontSize: "1rem",
@@ -145,30 +239,26 @@ const useStyles = makeStyles((theme) => ({
     whiteSpace: "nowrap",
     maxWidth: 190,
   },
-  statusChip: {
-    height: 24,
-    fontWeight: 600,
-    fontSize: "0.72rem",
-    flexShrink: 0,
-  },
   cardMeta: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
     gap: theme.spacing(1),
   },
   metaLabel: {
-    fontSize: "0.85rem",
+    fontSize: "0.72rem",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
     color: theme.palette.text.secondary,
   },
   metaValue: {
-    fontSize: "0.95rem",
+    fontSize: "0.9rem",
     fontWeight: 600,
     wordBreak: "break-word",
   },
   cardActions: {
     display: "flex",
     alignItems: "center",
-    gap: theme.spacing(1),
+    gap: theme.spacing(0.5),
     flexWrap: "wrap",
   },
   actionButton: {
@@ -213,25 +303,102 @@ const channelInfo = (whatsApp) => {
   return { label: "WhatsApp · Baileys", color: "#25D366" };
 };
 
-// Chip de status com texto (mais legível que o ícone sozinho)
+// Status → chip tailwind (padrão das telas de Campanhas/Templates Meta)
 const statusInfo = (whatsApp) => {
   const isBaileys = !whatsApp.channelType || whatsApp.channelType === "baileys";
   switch (whatsApp.status) {
     case "CONNECTED":
-      return { label: "Conectado", color: "#2e7d32", bg: "rgba(46,125,50,.12)" };
+      return {
+        label: "Conectado",
+        cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200",
+      };
     case "OPENING":
-      return { label: "Conectando…", color: "#1565c0", bg: "rgba(21,101,192,.12)" };
+      return {
+        label: "Conectando…",
+        cls: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+      };
     case "qrcode":
       return isBaileys
-        ? { label: "Aguardando QR Code", color: "#b26a00", bg: "rgba(255,152,0,.14)" }
-        : { label: "Desconectado", color: "#c62828", bg: "rgba(198,40,40,.12)" };
+        ? {
+            label: "Aguardando QR Code",
+            cls: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
+          }
+        : {
+            label: "Desconectado",
+            cls: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+          };
     case "TIMEOUT":
-      return { label: "Timeout", color: "#b26a00", bg: "rgba(255,152,0,.14)" };
+      return {
+        label: "Timeout",
+        cls: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
+      };
     case "PAIRING":
-      return { label: "Pareando", color: "#1565c0", bg: "rgba(21,101,192,.12)" };
+      return {
+        label: "Pareando",
+        cls: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+      };
     default:
-      return { label: "Desconectado", color: "#c62828", bg: "rgba(198,40,40,.12)" };
+      return {
+        label: "Desconectado",
+        cls: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+      };
   }
+};
+
+const ConnectionStatusChip = ({ whatsApp }) => {
+  const st = statusInfo(whatsApp);
+  return (
+    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${st.cls}`}>
+      {st.label}
+    </span>
+  );
+};
+
+// Badge "#id" com a cor configurada na conexão (whatsApp.color)
+const ConnectionIdBadge = ({ whatsApp }) => {
+  const theme = useTheme();
+  const color = whatsApp.color;
+  const style = color
+    ? { backgroundColor: color, color: theme.palette.getContrastText(color) }
+    : {
+        backgroundColor: "transparent",
+        color: theme.palette.text.secondary,
+        border: `1px solid ${theme.palette.divider}`,
+      };
+  return (
+    <span
+      style={{
+        ...style,
+        display: "inline-flex",
+        alignItems: "center",
+        padding: "2px 8px",
+        borderRadius: 999,
+        fontSize: "0.72rem",
+        fontWeight: 700,
+        lineHeight: 1.4,
+        whiteSpace: "nowrap",
+      }}
+    >
+      #{whatsApp.id}
+    </span>
+  );
+};
+
+// Chip pequeno com o tipo da conexão WhatsApp (API Oficial / Baileys)
+const ChannelTypeTag = ({ whatsApp }) => {
+  if (whatsApp.channel !== "whatsapp") return null;
+  if (whatsApp.channelType === "official") {
+    return (
+      <span className="px-1.5 py-0.5 rounded text-[0.65rem] font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+        API Oficial
+      </span>
+    );
+  }
+  return (
+    <span className="px-1.5 py-0.5 rounded text-[0.65rem] font-semibold border border-gray-300 text-gray-600 dark:border-gray-600 dark:text-gray-300">
+      Baileys
+    </span>
+  );
 };
 
 const Connections = () => {
@@ -257,7 +424,20 @@ const Connections = () => {
   }, []);
 
   const sortedWhatsApps = useMemo(() => {
-    const list = [...(whatsApps || [])];
+    // Filtros da toolbar + ordenação compartilhada
+    const search = searchParam.trim().toLowerCase();
+    let list = (whatsApps || []).filter((w) => {
+      if (search) {
+        const hay = `${w.id} ${w.name || ""} ${w.number || ""} ${channelInfo(w).label}`.toLowerCase();
+        if (!hay.includes(search)) return false;
+      }
+      if (channelFilter) {
+        const ch = w.channel || (w.channelType === "official" || w.channelType === "baileys" || !w.channelType ? "whatsapp" : w.channelType);
+        if (ch !== channelFilter) return false;
+      }
+      if (statusFilter && (w.status || "") !== statusFilter) return false;
+      return true;
+    });
     const dir = orderDir === "asc" ? 1 : -1;
     const val = (w) => {
       switch (orderBy) {
@@ -279,7 +459,7 @@ const Connections = () => {
       return 0;
     });
     return list;
-  }, [whatsApps, orderBy, orderDir]);
+  }, [whatsApps, orderBy, orderDir, searchParam, channelFilter, statusFilter]);
 
   const [whatsAppModalOpen, setWhatsAppModalOpen] = useState(false);
   const [, setStatusImport] = useState([]);
@@ -289,7 +469,11 @@ const Connections = () => {
   const [metaMenuAnchorEl, setMetaMenuAnchorEl] = useState(null);
   const [metaSelectKey, setMetaSelectKey] = useState(null);
   // Diagnóstico Meta (token + subscribed_apps) por conexão
-  const [metaHealth, setMetaHealth] = useState({ open: false, loading: false, data: null, name: "" });
+  const [metaHealth, setMetaHealth] = useState({ open: false, loading: false, data: null, name: "", whatsappId: null, resubscribing: false });
+  // Busca + filtros da toolbar (padrão /campaigns)
+  const [searchParam, setSearchParam] = useState("");
+  const [channelFilter, setChannelFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
   const history = useHistory();
 
   const confirmationModalInitialState = {
@@ -559,7 +743,7 @@ const Connections = () => {
                 handleOpenConfirmationModal("closedImported", whatsApp.id);
               }}
             >
-              <CheckCircle />
+              <CheckIcon size={18} />
             </IconButton>
           </span>
         </Tooltip>
@@ -610,7 +794,7 @@ const Connections = () => {
                     color="primary"
                     onClick={() => handleOpenQrModal(whatsApp)}
                   >
-                    <CropFree />
+                    <QrIcon size={18} />
                   </IconButton>
                 </span>
               </Tooltip>
@@ -633,7 +817,7 @@ const Connections = () => {
                         color="primary"
                         onClick={() => handleStartWhatsAppSession(whatsApp.id)}
                       >
-                        <Replay />
+                        <ReconnectIcon size={18} />
                       </IconButton>
                     </span>
                   </Tooltip>
@@ -647,7 +831,7 @@ const Connections = () => {
                             color="secondary"
                             onClick={() => handleRequestNewQrCode(whatsApp.id)}
                           >
-                            <Autorenew />
+                            <NewQrIcon size={18} />
                           </IconButton>
                         </span>
                       </Tooltip>
@@ -670,7 +854,7 @@ const Connections = () => {
                               }))
                             }
                           >
-                            <DeleteSweep />
+                            <ClearSessionIcon size={18} />
                           </IconButton>
                         </span>
                       </Tooltip>
@@ -702,7 +886,7 @@ const Connections = () => {
                           {syncingById[whatsApp.id] ? (
                             <CircularProgress size={18} className={classes.buttonProgress} />
                           ) : (
-                            <Sync />
+                            <SyncIcon size={18} />
                           )}
                         </IconButton>
                       </span>
@@ -718,7 +902,7 @@ const Connections = () => {
                           handleOpenConfirmationModal("disconnect", whatsApp.id);
                         }}
                       >
-                        <PowerSettingsNew />
+                        <DisconnectIcon size={18} />
                       </IconButton>
                     </span>
                   </Tooltip>
@@ -732,7 +916,7 @@ const Connections = () => {
           <Tooltip title={i18n.t("connections.buttons.connecting")}>
             <span>
               <IconButton size="small" disabled>
-                <Autorenew />
+                <CircularProgress size={18} className={classes.buttonProgress} />
               </IconButton>
             </span>
           </Tooltip>
@@ -743,12 +927,41 @@ const Connections = () => {
 
   // Diagnóstico de saúde da integração Meta (token + assinatura de webhook)
   const handleMetaHealth = async (whatsApp) => {
-    setMetaHealth({ open: true, loading: true, data: null, name: whatsApp.name });
+    setMetaHealth({ open: true, loading: true, data: null, name: whatsApp.name, whatsappId: whatsApp.id, resubscribing: false });
     try {
       const { data } = await api.get(`/whatsapp/${whatsApp.id}/meta-health`);
-      setMetaHealth({ open: true, loading: false, data, name: whatsApp.name });
+      setMetaHealth({ open: true, loading: false, data, name: whatsApp.name, whatsappId: whatsApp.id, resubscribing: false });
     } catch (err) {
-      setMetaHealth({ open: false, loading: false, data: null, name: "" });
+      setMetaHealth({ open: false, loading: false, data: null, name: "", whatsappId: null, resubscribing: false });
+      toastError(err);
+    }
+  };
+
+  // Reassina o webhook da página Meta (subscribed_apps) — auto-cura quando
+  // a conexão existe mas a Meta não está entregando eventos de mensagens.
+  const handleMetaResubscribe = async () => {
+    if (!metaHealth.whatsappId) return;
+    setMetaHealth(prev => ({ ...prev, resubscribing: true }));
+    try {
+      const { data } = await api.post(`/whatsapp/${metaHealth.whatsappId}/meta-resubscribe`);
+      setMetaHealth(prev => ({
+        ...prev,
+        resubscribing: false,
+        data: {
+          ...prev.data,
+          subscribed: data.subscribed,
+          subscribedFields: data.subscribedFields || [],
+          pageName: data.pageName || prev.data?.pageName,
+          resubscribeError: data.success ? undefined : data.error,
+        },
+      }));
+      if (data.success && data.subscribed) {
+        toast.success("Webhook da página reassinado com sucesso!");
+      } else {
+        toast.warn(data.error || "Reassinatura executada, mas 'messages' ainda não consta como assinado");
+      }
+    } catch (err) {
+      setMetaHealth(prev => ({ ...prev, resubscribing: false }));
       toastError(err);
     }
   };
@@ -872,53 +1085,55 @@ const Connections = () => {
         <ForbiddenPage />
         :
         <>
-          <MainHeader>
-            <Grid container spacing={isMobile ? 1 : 2} alignItems="center">
-              <Grid item xs={12} sm={6}>
-                <Title>{i18n.t("connections.title")} ({whatsApps.length})</Title>
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <Grid container spacing={1} justifyContent="flex-end">
-                  <Grid item xs={12} sm="auto">
-                    <Button
-                      fullWidth={isMobile}
-                      variant="contained"
-                      color="primary"
-                      onClick={restartWhatsapps}
-                      style={{ minHeight: 44 }}
-                    >
-                      {i18n.t("connections.restartConnections")}
-                    </Button>
-                  </Grid>
-                  <Grid item xs={12} sm="auto">
-                    <Button
-                      fullWidth={isMobile}
-                      variant="contained"
-                      color="primary"
-                      onClick={() => openInNewTab(`https://wa.me/${process.env.REACT_APP_NUMBER_SUPPORT}`)}
-                      style={{ minHeight: 44 }}
-                    >
-                      {i18n.t("connections.callSupport")}
-                    </Button>
-                  </Grid>
-                  <Grid item xs={12} sm="auto">
-                    <PopupState variant="popover" popupId="demo-popup-menu">
-                      {(popupState) => (
-                        <React.Fragment>
-                          <Can
-                            user={user}
-                            perform="connections.create"
-                            yes={() => (
-                              <>
-                                <Button
-                                  fullWidth={isMobile}
-                                  variant="contained"
-                                  color="primary"
-                                  {...bindTrigger(popupState)}
-                                  style={{ minHeight: 44 }}
-                                >
-                                  {i18n.t("connections.newConnection")}
-                                </Button>
+        <Paper className={classes.paper} variant="outlined">
+          {/* Cabeçalho no padrão /campaigns: título + subtítulo + ações */}
+          <div className={classes.header}>
+            <div className={classes.headerText}>
+              <Title>{i18n.t("connections.title")} ({sortedWhatsApps.length})</Title>
+              <span className={classes.subtitle}>
+                Gerencie os canais de atendimento da empresa — WhatsApp, Facebook, Instagram e WebChat.
+              </span>
+            </div>
+            <div className={classes.headerActions}>
+              <Tooltip title={i18n.t("connections.restartConnections")}>
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  size="small"
+                  onClick={restartWhatsapps}
+                  startIcon={<RestartIcon size={16} />}
+                  style={{ minHeight: 36 }}
+                >
+                  {i18n.t("connections.restartConnections")}
+                </Button>
+              </Tooltip>
+              <Tooltip title={i18n.t("connections.callSupport")}>
+                <IconButton
+                  size="small"
+                  onClick={() => openInNewTab(`https://wa.me/${process.env.REACT_APP_NUMBER_SUPPORT}`)}
+                  style={{ border: `1px solid ${theme.palette.divider}`, borderRadius: 8, padding: 8 }}
+                >
+                  <SupportIcon size={16} />
+                </IconButton>
+              </Tooltip>
+              <PopupState variant="popover" popupId="demo-popup-menu">
+                {(popupState) => (
+                  <React.Fragment>
+                    <Can
+                      user={user}
+                      perform="connections.create"
+                      yes={() => (
+                        <>
+                          <Button
+                            variant="contained"
+                            color="primary"
+                            size="small"
+                            startIcon={<AddIcon size={16} />}
+                            {...bindTrigger(popupState)}
+                            style={{ minHeight: 36 }}
+                          >
+                            {i18n.t("connections.newConnection")}
+                          </Button>
                                 <Menu
                                   {...bindMenu(popupState)}
                                   anchorOrigin={{
@@ -1004,63 +1219,105 @@ const Connections = () => {
                                   </MenuItem>
                                 </Menu>
                               </>
-                            )}
-                          />
-                        </React.Fragment>
-                      )}
-                    </PopupState>
-                  </Grid>
-                </Grid>
-              </Grid>
-            </Grid>
-          </MainHeader>
+                          )}
+                        />
+                      </React.Fragment>
+                    )}
+                  </PopupState>
+            </div>
+          </div>
 
-
-          <Paper className={classes.mainPaper} variant="outlined">
-            {loading ? (
-              <Table>
-                <TableBody>
-                  <TableRowSkeleton columns={1} />
-                </TableBody>
-              </Table>
-            ) : (
+          {/* Toolbar: busca + filtro de canal + filtro de status (+ ordenação no mobile) */}
+          <div className={classes.toolbar}>
+            <TextField
+              className={classes.searchField}
+              size="small"
+              variant="outlined"
+              placeholder="Buscar por nome, número, canal ou ID…"
+              value={searchParam}
+              onChange={(e) => setSearchParam(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon size={16} />
+                  </InputAdornment>
+                ),
+              }}
+            />
+            <FormControl size="small" variant="outlined" className={classes.filterSelect}>
+              <Select
+                native
+                value={channelFilter}
+                onChange={(e) => setChannelFilter(e.target.value)}
+                displayEmpty
+              >
+                <option value="">Todos os canais</option>
+                <option value="whatsapp">WhatsApp</option>
+                <option value="facebook">Facebook</option>
+                <option value="instagram">Instagram</option>
+                <option value="webchat">WebChat</option>
+              </Select>
+            </FormControl>
+            <FormControl size="small" variant="outlined" className={classes.filterSelect}>
+              <Select
+                native
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                displayEmpty
+              >
+                <option value="">Todos os status</option>
+                <option value="CONNECTED">Conectado</option>
+                <option value="OPENING">Conectando</option>
+                <option value="qrcode">Aguardando QR</option>
+                <option value="DISCONNECTED">Desconectado</option>
+                <option value="TIMEOUT">Timeout</option>
+                <option value="PAIRING">Pareando</option>
+              </Select>
+            </FormControl>
+            {/* Controle de ordenação — visível apenas no mobile (desktop ordena pelo cabeçalho) */}
+            {isMobile && (
               <>
-              {/* Controle de ordenação — visível apenas no mobile (desktop ordena pelo cabeçalho) */}
-              {isMobile && (
-                <Box
-                  display="flex"
-                  alignItems="center"
-                  justifyContent="flex-end"
-                  mb={1}
-                  style={{ gap: 8 }}
+                <Select
+                  native
+                  value={orderBy}
+                  onChange={(e) => handleSort(e.target.value)}
+                  style={{ fontSize: "0.85rem", marginLeft: "auto" }}
                 >
-                  <Select
-                    native
-                    value={orderBy}
-                    onChange={(e) => handleSort(e.target.value)}
-                    style={{ fontSize: "0.85rem" }}
-                  >
-                    <option value="id">ID</option>
-                    <option value="channel">Canal</option>
-                    <option value="name">{i18n.t("connections.table.name")}</option>
-                    <option value="number">{i18n.t("connections.table.number")}</option>
-                    <option value="status">{i18n.t("connections.table.status")}</option>
-                    <option value="updatedAt">{i18n.t("connections.table.lastUpdate")}</option>
-                  </Select>
-                  <IconButton
-                    size="small"
-                    onClick={() => setOrderDir(d => (d === "asc" ? "desc" : "asc"))}
-                  >
-                    {orderDir === "asc" ? <ArrowUpward fontSize="small" /> : <ArrowDownward fontSize="small" />}
-                  </IconButton>
-                </Box>
-              )}
+                  <option value="id">ID</option>
+                  <option value="channel">Canal</option>
+                  <option value="name">{i18n.t("connections.table.name")}</option>
+                  <option value="number">{i18n.t("connections.table.number")}</option>
+                  <option value="status">{i18n.t("connections.table.status")}</option>
+                  <option value="updatedAt">{i18n.t("connections.table.lastUpdate")}</option>
+                </Select>
+                <IconButton
+                  size="small"
+                  onClick={() => setOrderDir(d => (d === "asc" ? "desc" : "asc"))}
+                >
+                  {orderDir === "asc" ? <SortAscIcon size={16} /> : <SortDescIcon size={16} />}
+                </IconButton>
+              </>
+            )}
+          </div>
+
+          {loading ? (
+            <Table>
+              <TableBody>
+                <TableRowSkeleton columns={1} />
+              </TableBody>
+            </Table>
+          ) : sortedWhatsApps.length === 0 ? (
+            <div className={classes.emptyState}>
+              <WhatsApp style={{ fontSize: 44, color: theme.palette.text.disabled }} />
+              <div>Nenhuma conexão encontrada.</div>
+            </div>
+          ) : (
+            <>
 
               {/* Cards — mobile */}
-              <div className={classes.connectionsGrid}>
+              <div className={classes.mobileList}>
                 {sortedWhatsApps?.map((whatsApp) => {
                   const info = channelInfo(whatsApp);
-                  const st = statusInfo(whatsApp);
                   const isMeta = whatsApp.channel === "facebook" || whatsApp.channel === "instagram";
 
                   return (
@@ -1077,20 +1334,18 @@ const Connections = () => {
                             <div className={classes.cardName} title={whatsApp.name}>
                               {whatsApp.name}
                             </div>
-                            <div className={classes.metaLabel}>
-                              {info.label} · #{whatsApp.id}
-                            </div>
+                            <Box display="flex" alignItems="center" style={{ gap: 6, marginTop: 2 }}>
+                              <ConnectionIdBadge whatsApp={whatsApp} />
+                              <ChannelTypeTag whatsApp={whatsApp} />
+                            </Box>
                           </div>
                         </div>
-                        <Chip
-                          label={st.label}
-                          size="small"
-                          className={classes.statusChip}
-                          style={{ color: st.color, backgroundColor: st.bg }}
-                          icon={whatsApp.status === "OPENING" ? (
-                            <CircularProgress size={14} style={{ color: st.color, marginLeft: 8 }} />
-                          ) : undefined}
-                        />
+                        <Box display="flex" alignItems="center" style={{ gap: 6 }}>
+                          {whatsApp.status === "OPENING" && (
+                            <CircularProgress size={12} className={classes.buttonProgress} />
+                          )}
+                          <ConnectionStatusChip whatsApp={whatsApp} />
+                        </Box>
                       </div>
 
                       <div className={classes.cardMeta}>
@@ -1110,7 +1365,7 @@ const Connections = () => {
                         </div>
                         <div>
                           <div className={classes.metaLabel}>{i18n.t("connections.table.default")}</div>
-                          <div className={classes.metaValue}>{whatsApp.isDefault ? <CheckCircle style={{ color: green[500] }} /> : "—"}</div>
+                          <div className={classes.metaValue}>{whatsApp.isDefault ? <CheckIcon size={18} style={{ color: green[500] }} /> : "—"}</div>
                         </div>
                       </div>
 
@@ -1126,7 +1381,7 @@ const Connections = () => {
                                 className={classes.actionButton}
                                 onClick={() => handleEditWhatsApp(whatsApp)}
                               >
-                                <Edit />
+                                <EditIcon size={18} />
                               </IconButton>
 
                               {isMeta && (
@@ -1136,7 +1391,7 @@ const Connections = () => {
                                     className={classes.actionButton}
                                     onClick={() => handleMetaHealth(whatsApp)}
                                   >
-                                    <Assessment />
+                                    <HealthIcon size={18} />
                                   </IconButton>
                                 </Tooltip>
                               )}
@@ -1150,7 +1405,7 @@ const Connections = () => {
                                     handleOpenMetaMenu(e);
                                   }}
                                 >
-                                  <MoreVert />
+                                  <MoreIcon size={18} />
                                 </IconButton>
                               )}
 
@@ -1161,7 +1416,7 @@ const Connections = () => {
                                   handleOpenConfirmationModal("delete", whatsApp.id);
                                 }}
                               >
-                                <DeleteOutline />
+                                <DeleteIcon size={18} />
                               </IconButton>
                             </>
                           )}
@@ -1189,7 +1444,7 @@ const Connections = () => {
                         <TableCell
                           key={col.key}
                           align="center"
-                          className={classes.sortableHeader}
+                          className={classes.headCell}
                           sortDirection={orderBy === col.key ? orderDir : false}
                         >
                           <TableSortLabel
@@ -1201,7 +1456,7 @@ const Connections = () => {
                           </TableSortLabel>
                         </TableCell>
                       ))}
-                      <TableCell align="center" className={classes.sortableHeader}>
+                      <TableCell align="center" className={classes.headCell}>
                         {i18n.t("connections.table.actions")}
                       </TableCell>
                     </TableRow>
@@ -1209,45 +1464,46 @@ const Connections = () => {
                   <TableBody>
                     {sortedWhatsApps?.map((whatsApp) => {
                       const info = channelInfo(whatsApp);
-                      const st = statusInfo(whatsApp);
                       const isMeta = whatsApp.channel === "facebook" || whatsApp.channel === "instagram";
 
                       return (
-                        <TableRow key={whatsApp.id} hover>
-                          <TableCell align="center">#{whatsApp.id}</TableCell>
-                          <TableCell align="center">
+                        <TableRow key={whatsApp.id} className={classes.rowHover}>
+                          <TableCell align="center" className={classes.bodyCell}>
+                            <ConnectionIdBadge whatsApp={whatsApp} />
+                          </TableCell>
+                          <TableCell align="center" className={classes.bodyCell}>
                             <Tooltip title={info.label}>
-                              <span className={classes.channelAvatar} style={{ backgroundColor: `${info.color}1a`, width: 32, height: 32, borderRadius: 8, margin: "0 auto" }}>
+                              <span className={classes.channelAvatar} style={{ backgroundColor: `${info.color}1a`, margin: "0 auto" }}>
                                 {IconChannel(whatsApp.channel, whatsApp.channelType)}
                               </span>
                             </Tooltip>
                           </TableCell>
-                          <TableCell align="center">
+                          <TableCell align="center" className={classes.bodyCell}>
                             <Box display="flex" alignItems="center" justifyContent="center" style={{ gap: 6 }}>
-                              <span>{whatsApp.name}</span>
+                              <span className={classes.connName}>{whatsApp.name}</span>
+                              <ChannelTypeTag whatsApp={whatsApp} />
                             </Box>
                           </TableCell>
-                          <TableCell align="center">
+                          <TableCell align="center" className={classes.bodyCell}>
                             {whatsApp.number && whatsApp.channel === 'whatsapp'
                               ? formatSerializedId(whatsApp.number)
                               : (whatsApp.number || (isMeta ? `#${whatsApp.facebookPageUserId}` : "—"))}
                           </TableCell>
-                          <TableCell align="center">
-                            <Chip
-                              label={st.label}
-                              size="small"
-                              className={classes.statusChip}
-                              style={{ color: st.color, backgroundColor: st.bg }}
-                              icon={whatsApp.status === "OPENING" ? (
-                                <CircularProgress size={14} style={{ color: st.color, marginLeft: 8 }} />
-                              ) : undefined}
-                            />
+                          <TableCell align="center" className={classes.bodyCell}>
+                            <Box display="flex" alignItems="center" justifyContent="center" style={{ gap: 6 }}>
+                              {whatsApp.status === "OPENING" && (
+                                <CircularProgress size={12} className={classes.buttonProgress} />
+                              )}
+                              <ConnectionStatusChip whatsApp={whatsApp} />
+                            </Box>
                           </TableCell>
-                          <TableCell align="center">{whatsApp.updatedAt ? format(parseISO(whatsApp.updatedAt), "dd/MM/yy HH:mm") : "—"}</TableCell>
-                          <TableCell align="center">
-                            {whatsApp.isDefault ? <CheckCircle style={{ color: green[500] }} /> : "—"}
+                          <TableCell align="center" className={classes.bodyCell}>
+                            {whatsApp.updatedAt ? format(parseISO(whatsApp.updatedAt), "dd/MM/yy HH:mm") : "—"}
                           </TableCell>
-                          <TableCell align="center">
+                          <TableCell align="center" className={classes.bodyCell}>
+                            {whatsApp.isDefault ? <CheckIcon size={18} style={{ color: green[500] }} /> : "—"}
+                          </TableCell>
+                          <TableCell align="center" className={`${classes.bodyCell} ${classes.actionsCell}`}>
                             <Box display="flex" alignItems="center" justifyContent="center">
                               {renderActionButtons(whatsApp)}
                               <Can
@@ -1256,12 +1512,12 @@ const Connections = () => {
                                 yes={() => (
                                   <>
                                     <IconButton size="small" onClick={() => handleEditWhatsApp(whatsApp)}>
-                                      <Edit />
+                                      <EditIcon size={18} />
                                     </IconButton>
                                     {isMeta && (
                                       <Tooltip title="Diagnosticar webhook/token Meta">
                                         <IconButton size="small" onClick={() => handleMetaHealth(whatsApp)}>
-                                          <Assessment />
+                                          <HealthIcon size={18} />
                                         </IconButton>
                                       </Tooltip>
                                     )}
@@ -1273,14 +1529,14 @@ const Connections = () => {
                                           handleOpenMetaMenu(e);
                                         }}
                                       >
-                                        <MoreVert />
+                                        <MoreIcon size={18} />
                                       </IconButton>
                                     )}
                                     <IconButton
                                       size="small"
                                       onClick={() => handleOpenConfirmationModal("delete", whatsApp.id)}
                                     >
-                                      <DeleteOutline />
+                                      <DeleteIcon size={18} />
                                     </IconButton>
                                   </>
                                 )}
@@ -1329,10 +1585,15 @@ const Connections = () => {
                     <div className={classes.metaLabel}>Assinatura de webhook na página</div>
                     <div className={classes.metaValue} style={{ color: metaHealth.data.subscribed ? green[500] : "#b26a00" }}>
                       {metaHealth.data.subscribed
-                        ? `Assinado (${metaHealth.data.subscribedFields.join(", ") || "messages"})`
+                        ? `Assinado (${(metaHealth.data.subscribedFields || []).join(", ") || "messages"})`
                         : "Sem 'messages' assinado"}
                     </div>
                   </div>
+                  {metaHealth.data.resubscribeError && (
+                    <div className={classes.metaValue} style={{ color: "#c62828" }}>
+                      Erro ao reassinar: {metaHealth.data.resubscribeError}
+                    </div>
+                  )}
                   {metaHealth.data.hints?.length > 0 && (
                     <div>
                       <div className={classes.metaLabel}>Recomendações</div>
@@ -1347,6 +1608,21 @@ const Connections = () => {
               )}
             </DialogContent>
             <DialogActions>
+              <Can
+                user={user}
+                perform="connections.edit"
+                yes={() => (
+                  <Button
+                    color="primary"
+                    variant="outlined"
+                    disabled={metaHealth.loading || metaHealth.resubscribing}
+                    onClick={handleMetaResubscribe}
+                    startIcon={metaHealth.resubscribing ? <CircularProgress size={14} /> : <SyncIcon size={16} />}
+                  >
+                    {metaHealth.resubscribing ? "Reassinando…" : "Reassinar webhook"}
+                  </Button>
+                )}
+              />
               <Button onClick={() => setMetaHealth({ open: false, loading: false, data: null, name: "" })}>
                 Fechar
               </Button>

@@ -10,9 +10,11 @@ const CheckContactNumber = async (
 ): Promise<string> => {
   const whatsapp = await GetDefaultWhatsApp(null, companyId);
 
-  // Conexão API oficial: apenas normaliza o número para formato internacional,
-  // sem consulta remota nem erro de "não cadastrado".
-  if (whatsapp.channelType === "official") {
+  // Conexão API oficial ou Meta (facebook/instagram/webchat): apenas
+  // normaliza o número, sem consulta remota — esses canais não têm socket
+  // Baileys e não sabem consultar "onWhatsApp".
+  if (whatsapp.channelType === "official" ||
+      (whatsapp.channel && whatsapp.channel !== "whatsapp")) {
     if (isGroup) {
       throw new AppError("Validação de grupos não suportada via API oficial");
     }
