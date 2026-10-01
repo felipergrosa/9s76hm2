@@ -77,6 +77,7 @@ interface Request {
   city?: string;
   region?: string;
   instagram?: string;
+  facebook?: string;
   situation?: string;
   fantasyName?: string;
   foundationDate?: Date;
@@ -164,6 +165,7 @@ const CreateOrUpdateContactService = async ({
   city,
   region,
   instagram,
+  facebook,
   situation,
   fantasyName,
   foundationDate,
@@ -183,7 +185,10 @@ const CreateOrUpdateContactService = async ({
 
     const rawNumberDigits = isGroup ? (rawNumber || "").toString().trim() : (rawNumber || "").toString();
     const isLinkedDevice = !!remoteJid && remoteJid.includes("@lid");
-    const { canonical } = (!isGroup && !isLinkedDevice) ? safeNormalizePhoneNumber(rawNumberDigits) : { canonical: null };
+    // Canais Meta usam PSID/IGSID (IDs com escopo, não telefones) — pular
+    // normalização e validação de telefone para não rejeitar o contato.
+    const isMetaChannel = Array.isArray(channels) && channels.some(c => ["facebook", "instagram", "messenger"].includes(c));
+    const { canonical } = (!isGroup && !isLinkedDevice && !isMetaChannel) ? safeNormalizePhoneNumber(rawNumberDigits) : { canonical: null };
 
     // VALIDAÇÃO CRÍTICA: Mesmo LIDs com formato de telefone devem ser validados
     if (isLinkedDevice && rawNumberDigits.length >= 10 && rawNumberDigits.length <= 13) {
@@ -199,14 +204,14 @@ const CreateOrUpdateContactService = async ({
     }
 
     // Para LID, não bloquear pela canonical: usa rawNumberDigits ou remoteJid como fallback
-    let number = (isGroup || isLinkedDevice) ? rawNumberDigits : canonical;
+    let number = (isGroup || isLinkedDevice || isMetaChannel) ? rawNumberDigits : canonical;
 
     // =================================================================
     // VALIDAÇÃO CRÍTICA: Detectar inconsistência isGroup vs número
     // =================================================================
     // Se isGroup=false mas número parece ser de grupo (@g.us), REJEITAR
     // Isso previne contatos individuais sendo salvos como grupos
-    if (!isGroup && number && number.includes("@g.us")) {
+    if (!isGroup && !isMetaChannel && number && number.includes("@g.us")) {
       logger.error("[CreateOrUpdateContact] BLOQUEADO: isGroup=false mas número tem @g.us", {
         number,
         isGroup,
@@ -237,7 +242,7 @@ const CreateOrUpdateContactService = async ({
     // GUARD: Número de telefone NUNCA pode ser um LID puro (>13 dígitos)
     // Telefones reais têm no máximo 13 dígitos (55 + DDD + 9 dígitos)
     // =================================================================
-    if (!isGroup && number) {
+    if (!isGroup && !isMetaChannel && number) {
       const numberDigitsOnly = number.replace(/\D/g, "");
       
       // BLOQUEAR: números com >13 dígitos são LIDs ou IDs internos da Meta
@@ -267,7 +272,7 @@ const CreateOrUpdateContactService = async ({
     // Números brasileiros válidos têm no máximo 13 dígitos (55 + DDD + 9 + 8 dígitos)
     // IDs da Meta como "247540473708749" têm 15+ dígitos
     const numberDigitsOnly = (number || "").replace(/\D/g, "");
-    if (!isGroup && !isLinkedDevice && numberDigitsOnly.length > MAX_PHONE_DIGITS) {
+    if (!isGroup && !isLinkedDevice && !isMetaChannel && numberDigitsOnly.length > MAX_PHONE_DIGITS) {
       logger.warn("[CreateOrUpdateContactService] REJEITADO: Número muito longo (provável ID Meta/Facebook)", {
         rawNumber,
         number,
@@ -356,6 +361,7 @@ const CreateOrUpdateContactService = async ({
       city: city || undefined,
       region: normalizedRegion,
       instagram: instagram || undefined,
+      facebook: facebook || undefined,
       situation: situation || "Ativo",
       fantasyName: fantasyName || undefined,
       foundationDate: foundationDate || undefined,
@@ -442,6 +448,7 @@ const CreateOrUpdateContactService = async ({
       contact.representativeCode = representativeCode || contact.representativeCode;
       contact.city = city || contact.city;
       contact.instagram = instagram || contact.instagram;
+      contact.facebook = facebook || contact.facebook;
       contact.situation = situation || contact.situation;
       contact.fantasyName = fantasyName || contact.fantasyName;
       contact.foundationDate = foundationDate || contact.foundationDate;

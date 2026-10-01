@@ -534,6 +534,7 @@ const ListContactsService = async ({
       "representativeCode",
       "city",
       "instagram",
+      "facebook",
       "situation",
       "fantasyName",
       "foundationDate",

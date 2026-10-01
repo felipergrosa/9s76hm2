@@ -35,6 +35,7 @@ interface Request {
   city?: string;
   region?: string;
   instagram?: string;
+  facebook?: string;
   situation?: 'Ativo' | 'Baixado' | 'Ex-Cliente' | 'Excluido' | 'Futuro' | 'Inativo';
   fantasyName?: string;
   foundationDate?: Date;
@@ -87,6 +88,7 @@ const mergeContactData = (contact: Contact, canonicalNumber: string, payload: an
   mergeStringField("city");
   mergeStringField("region");
   mergeStringField("instagram");
+  mergeStringField("facebook");
   mergeStringField("fantasyName");
   mergeStringField("creditLimit");
   mergeStringField("segment");
@@ -142,6 +144,7 @@ const CreateContactService = async ({
   city,
   region,
   instagram,
+  facebook,
   situation,
   fantasyName,
   foundationDate,
@@ -361,6 +364,7 @@ const CreateContactService = async ({
     city: string | null;
     region: string | null;
     instagram: string | null;
+    facebook: string | null;
     situation: string;
     fantasyName: string | null;
     foundationDate: Date | null;
@@ -396,6 +400,7 @@ const CreateContactService = async ({
     city: emptyToNull(city),
     region: emptyToNull(region),
     instagram: emptyToNull(instagram),
+    facebook: emptyToNull(facebook),
     situation: situation || 'Ativo',
     fantasyName: emptyToNull(fantasyName),
     foundationDate: foundationDateValue,

@@ -115,6 +115,7 @@ const ContactSchema = Yup.object().shape({
 	representativeCode: Yup.string().nullable(),
 	city: Yup.string().nullable(),
 	instagram: Yup.string().nullable(),
+	facebook: Yup.string().nullable(),
 	situation: Yup.string().nullable(),
 	fantasyName: Yup.string().nullable(),
 	foundationDate: Yup.date().nullable().transform((value, originalValue) => originalValue === "" ? null : value),
@@ -297,6 +298,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 		representativeCode: "",
 		city: "",
 		instagram: "",
+		facebook: "",
 		situation: "Ativo",
 		fantasyName: "",
 		foundationDate: "",
@@ -568,6 +570,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 			city: values.city?.trim?.() || values.city || null,
 			region: values.region?.trim?.() || values.region || null,
 			instagram: values.instagram?.trim?.() || values.instagram || null,
+			facebook: values.facebook?.trim?.() || values.facebook || null,
 			situation: values.situation?.trim?.() || values.situation || null,
 			fantasyName: values.fantasyName?.trim?.() || values.fantasyName || null,
 			creditLimit: values.creditLimit?.trim?.() || values.creditLimit || null,
@@ -1074,6 +1077,21 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 											fullWidth
 											disabled={!canEditFields}
 											onBlur={() => handleAutoCorrect(setFieldValue, 'instagram', values.instagram)}
+										/>
+									</Grid>
+									<Grid item xs={12} md={6}>
+										<Field
+											as={TextField}
+											label="Facebook"
+											name="facebook"
+											variant="outlined"
+											margin="dense"
+											InputLabelProps={{
+												shrink: true,
+											}}
+											fullWidth
+											disabled={!canEditFields}
+											onBlur={() => handleAutoCorrect(setFieldValue, 'facebook', values.facebook)}
 										/>
 									</Grid>
 									<Grid item xs={12} md={6}>

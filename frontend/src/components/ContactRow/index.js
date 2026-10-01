@@ -8,8 +8,9 @@ import {
   Ban,
   RefreshCw
 } from "lucide-react";
-import { WhatsApp } from "@material-ui/icons";
+import { WhatsApp, Instagram, Facebook } from "@material-ui/icons";
 import { Tooltip } from "@material-ui/core";
+import { instagramProfileUrl, facebookProfileUrl } from "../../utils/socialProfiles";
 import LazyContactAvatar from "../LazyContactAvatar";
 import { Can } from "../Can";
 
@@ -117,6 +118,26 @@ const ContactRow = memo(({
       </td>
       <td className="pl-3 pr-3 py-3 text-center w-[200px]">
         <div className="flex items-center justify-center gap-1.5">
+          {instagramProfileUrl(contact.instagram) && (
+            <Tooltip {...CustomTooltipProps} title={`Instagram: ${contact.instagram}`}>
+              <button
+                onClick={() => window.open(instagramProfileUrl(contact.instagram), "_blank", "noopener")}
+                className="text-pink-600 hover:text-pink-800 dark:text-pink-400 dark:hover:text-pink-300"
+              >
+                <Instagram className="w-6 h-6" />
+              </button>
+            </Tooltip>
+          )}
+          {facebookProfileUrl(contact.facebook) && (
+            <Tooltip {...CustomTooltipProps} title={`Facebook: ${contact.facebook}`}>
+              <button
+                onClick={() => window.open(facebookProfileUrl(contact.facebook), "_blank", "noopener")}
+                className="text-blue-700 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+              >
+                <Facebook className="w-6 h-6" />
+              </button>
+            </Tooltip>
+          )}
           <Tooltip {...CustomTooltipProps} title="Enviar mensagem pelo WhatsApp">
             <button onClick={() => onSendMessage(contact)} className="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300">
               <WhatsApp className="w-6 h-6" />

@@ -159,6 +159,7 @@ export async function ImportContactsService(
       let representativeCode = "";
       let city = "";
       let instagram = "";
+      let facebook = "";
       let situation = "";
       let fantasyName = "";
       let foundationDate = null;
@@ -185,6 +186,10 @@ export async function ImportContactsService(
 
       if (has(row, "instagram") || has(row, "Instagram")) {
         instagram = row["instagram"] || row["Instagram"];
+      }
+
+      if (has(row, "facebook") || has(row, "Facebook")) {
+        facebook = row["facebook"] || row["Facebook"];
       }
 
       if (has(row, "situation") || has(row, "Situação")) {
@@ -242,6 +247,7 @@ export async function ImportContactsService(
         representativeCode,
         city,
         instagram,
+        facebook,
         situation,
         fantasyName,
         foundationDate,
@@ -400,6 +406,7 @@ export async function ImportContactsService(
         keepIfEmpty('representativeCode');
         keepIfEmpty('city');
         keepIfEmpty('instagram');
+        keepIfEmpty('facebook');
         keepIfEmpty('situation');
         keepIfEmpty('fantasyName');
         keepIfEmpty('foundationDate');

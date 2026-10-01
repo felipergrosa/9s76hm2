@@ -24,6 +24,7 @@ interface Request {
   city?: string;
   region?: string;
   instagram?: string;
+  facebook?: string;
   situation?: 'Ativo' | 'Baixado' | 'Ex-Cliente' | 'Excluido' | 'Futuro' | 'Inativo';
   fantasyName?: string;
   foundationDate?: Date;
@@ -52,6 +53,7 @@ const CreateOrUpdateContactServiceForImport = async ({
   city,
   region,
   instagram,
+  facebook,
   situation,
   fantasyName,
   foundationDate,
@@ -155,6 +157,7 @@ const CreateOrUpdateContactServiceForImport = async ({
     city,
     region: normalizeRegion(region),
     instagram,
+    facebook,
     situation: situation || 'Ativo',
     fantasyName,
     foundationDate: finalFoundationDate,

@@ -135,6 +135,7 @@ interface ContactData {
   representativeCode?: string;
   city?: string;
   instagram?: string;
+  facebook?: string;
   situation?: 'Ativo' | 'Baixado' | 'Ex-Cliente' | 'Excluido' | 'Futuro' | 'Inativo';
   fantasyName?: string;
   foundationDate?: Date;
@@ -296,7 +297,7 @@ export const processNormalization = async (req: AuthenticatedRequest, res: Respo
 
 export const importXls = async (req: Request, res: Response): Promise<Response> => {
   const { companyId } = req.user;
-  const { number, name, email, validateContact, tags, cpfCnpj, representativeCode, city, instagram, situation, fantasyName, foundationDate, creditLimit,    segment,
+  const { number, name, email, validateContact, tags, cpfCnpj, representativeCode, city, instagram, facebook, situation, fantasyName, foundationDate, creditLimit,    segment,
     silentMode,
     clientCode,
     dtUltCompra,
@@ -328,6 +329,7 @@ export const importXls = async (req: Request, res: Response): Promise<Response> 
     representativeCode: representativeCode ? String(representativeCode) : null,
     city,
     instagram,
+    facebook,
     situation,
     fantasyName,
     foundationDate,
@@ -793,6 +795,7 @@ export const store = async (req: AuthenticatedRequest, res: Response): Promise<R
     representativeCode: Yup.string().nullable(),
     city: Yup.string().nullable(),
     instagram: Yup.string().nullable(),
+    facebook: Yup.string().nullable(),
     situation: Yup.string().oneOf(['Ativo', 'Baixado', 'Ex-Cliente', 'Excluido', 'Futuro', 'Inativo']).nullable(),
     fantasyName: Yup.string().nullable(),
     foundationDate: Yup.date().nullable().transform((value, originalValue) => originalValue === "" ? null : value),
@@ -1048,6 +1051,7 @@ export const update = async (
     representativeCode: Yup.string().nullable(),
     city: Yup.string().nullable(),
     instagram: Yup.string().nullable(),
+    facebook: Yup.string().nullable(),
     situation: Yup.string().oneOf(['Ativo', 'Baixado', 'Ex-Cliente', 'Excluido', 'Futuro', 'Inativo']).nullable(),
     fantasyName: Yup.string().nullable(),
     foundationDate: Yup.date().nullable().transform((value, originalValue) => originalValue === "" ? null : value),

@@ -97,7 +97,7 @@ const verifyContact = async (msgContact: any, token: any, companyId: any) => {
     profilePicUrl: msgContact.profile_pic,
     isGroup: false,
     companyId: companyId,
-    channel: token.channel,
+    channels: [token.channel],
     whatsappId: token.id
   };
 

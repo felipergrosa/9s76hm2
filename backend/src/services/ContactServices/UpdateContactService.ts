@@ -41,6 +41,7 @@ interface ContactData {
   city?: string;
   region?: string;
   instagram?: string;
+  facebook?: string;
   situation?: 'Ativo' | 'Baixado' | 'Ex-Cliente' | 'Excluido' | 'Futuro' | 'Inativo';
   fantasyName?: string;
   foundationDate?: Date;
@@ -86,6 +87,7 @@ const UpdateContactService = async ({
     city,
     region,
     instagram,
+    facebook,
     situation,
     fantasyName,
     foundationDate,
@@ -165,7 +167,7 @@ const UpdateContactService = async ({
       "acceptAudioMessage", "active", "disableBot", "profilePicUrl", "remoteJid",
       "urlPicture", "florder", "contactName", "isGroupParticipant",
       // Adicionar novos campos aos atributos
-      "cpfCnpj", "representativeCode", "city", "region", "instagram",
+      "cpfCnpj", "representativeCode", "city", "region", "instagram", "facebook",
       "situation", "fantasyName", "foundationDate", "creditLimit", "segment", "dtUltCompra", "vlUltCompra", "clientCode"
     ],
     include: ["extraInfo", "tags"]
@@ -356,6 +358,7 @@ const UpdateContactService = async ({
     city: city !== undefined ? emptyToNull(city) : contact.city,
     region: region !== undefined ? emptyToNull(region) : (contact as any).region,
     instagram: instagram !== undefined ? emptyToNull(instagram) : contact.instagram,
+    facebook: facebook !== undefined ? emptyToNull(facebook) : contact.facebook,
     situation: situation !== undefined ? situation : contact.situation || 'Ativo',
     fantasyName: fantasyName !== undefined ? emptyToNull(fantasyName) : contact.fantasyName,
     foundationDate: foundationDateValue,

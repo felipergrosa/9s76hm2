@@ -166,6 +166,11 @@ class Contact extends Model<Contact> {
   @Column({
     allowNull: true
   })
+  facebook: string;
+
+  @Column({
+    allowNull: true
+  })
   contactName: string;
 
   // Dados de Perfil e Business

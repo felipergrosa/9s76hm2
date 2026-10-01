@@ -28,6 +28,7 @@ export interface LeadInput {
   website?: string;
   googleMapsUrl?: string;
   instagram?: string;
+  facebook?: string;
   twitter?: string;
   linkedin?: string;
   rating?: string;
@@ -86,6 +87,17 @@ function sanitizeInstagramHandle(raw?: string): string | undefined {
   return handle || undefined;
 }
 
+// Aceita handle/URL de página do Facebook — retorna só o identificador.
+function sanitizeFacebookHandle(raw?: string): string | undefined {
+  if (!raw) return undefined;
+  let handle = String(raw).trim();
+  if (!handle) return undefined;
+  const match = handle.match(/facebook\.com\/([^/?#]+)/i);
+  if (match) handle = match[1];
+  handle = handle.replace(/^@+/, "").replace(/\/+$/, "").trim();
+  return handle || undefined;
+}
+
 // Lê um arquivo XLSX/CSV no mesmo formato usado pelos demais imports do
 // sistema e mapeia colunas comuns de planilhas de lead-gen (CNPJ + Google
 // Maps) para o formato interno de LeadInput.
@@ -126,6 +138,7 @@ function parseLeadsFile(file: Express.Multer.File): LeadInput[] {
     website: pick(row, "website", "Website", "site"),
     googleMapsUrl: pick(row, "googleMapsUrl", "google_maps_url", "Google Maps", "maps"),
     instagram: pick(row, "instagram", "Instagram", "insta"),
+    facebook: pick(row, "facebook", "Facebook", "fb"),
     twitter: pick(row, "twitter", "Twitter"),
     linkedin: pick(row, "linkedin", "LinkedIn"),
     rating: pick(row, "rating", "avaliacao", "avaliação", "Avaliação", "nota"),
@@ -144,6 +157,7 @@ async function upsertTypedCustomFields(contactId: number, lead: LeadInput) {
 
   const porte = normalizePorte(lead.porte);
   const instagramHandle = sanitizeInstagramHandle(lead.instagram);
+  const facebookHandle = sanitizeFacebookHandle(lead.facebook);
 
   if (lead.cnae) entries.push({ name: "CNAE", value: lead.cnae, type: "text" });
   if (lead.cnaeId) entries.push({ name: "CNAE código", value: lead.cnaeId, type: "text" });
@@ -152,6 +166,7 @@ async function upsertTypedCustomFields(contactId: number, lead: LeadInput) {
   if (lead.googleMapsUrl) entries.push({ name: "Google Maps", value: lead.googleMapsUrl, type: "text" });
   if (lead.endereco) entries.push({ name: "Endereço", value: lead.endereco, type: "text" });
   if (instagramHandle) entries.push({ name: "Instagram", value: `https://instagram.com/${instagramHandle}`, type: "text" });
+  if (facebookHandle) entries.push({ name: "Facebook", value: `https://facebook.com/${facebookHandle}`, type: "text" });
   if (lead.twitter) entries.push({ name: "Twitter/X", value: `https://x.com/${lead.twitter}`, type: "text" });
   if (lead.linkedin) entries.push({ name: "LinkedIn", value: `https://linkedin.com/company/${lead.linkedin}`, type: "text" });
   if (lead.rating) entries.push({ name: "Avaliação", value: lead.rating, type: "text" });
@@ -260,6 +275,7 @@ const ImportLeadsService = async ({
         fantasyName: lead.name,
         segment: lead.segmento,
         instagram: sanitizeInstagramHandle(lead.instagram),
+        facebook: sanitizeFacebookHandle(lead.facebook),
         silentMode: true,
         userId: walletUserId
       });

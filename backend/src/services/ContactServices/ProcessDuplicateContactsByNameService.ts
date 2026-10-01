@@ -86,6 +86,7 @@ const mergeStringFields = [
   "city",
   "region",
   "instagram",
+  "facebook",
   "fantasyName",
   "creditLimit",
   "segment",
