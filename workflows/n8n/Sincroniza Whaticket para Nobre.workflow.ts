@@ -107,6 +107,23 @@ function extraiCidadeUf(raw) {
   return { cidade: s, uf: '' };
 }
 
+// Dígitos verificadores — impede documento inválido de gravar no ERP
+function dv(s, pesos) {
+  const soma = pesos.reduce((acc, p, i) => acc + Number(s[i]) * p, 0);
+  const r = soma % 11;
+  return r < 2 ? 0 : 11 - r;
+}
+function cnpjValido(s) {
+  if (s.length !== 14 || /^(\\d)\\1+$/.test(s)) return false;
+  return dv(s, [5,4,3,2,9,8,7,6,5,4,3,2]) === Number(s[12])
+      && dv(s, [6,5,4,3,2,9,8,7,6,5,4,3,2]) === Number(s[13]);
+}
+function cpfValido(s) {
+  if (s.length !== 11 || /^(\\d)\\1+$/.test(s)) return false;
+  return dv(s, [10,9,8,7,6,5,4,3,2]) === Number(s[9])
+      && dv(s, [11,10,9,8,7,6,5,4,3,2]) === Number(s[10]);
+}
+
 const out = [];
 for (const item of $input.all()) {
   const b = item.json?.body ?? item.json ?? {};
@@ -117,8 +134,11 @@ for (const item of $input.all()) {
 
   const c = b.contact ?? {};
 
-  // Chaves de match no ERP
-  const cnpj = esc(c.cpfCnpj).replace(/\\D/g, '');
+  // Chaves de match no ERP — documento inválido não casa nem insere
+  const cnpjInformado = esc(c.cpfCnpj).replace(/\\D/g, '');
+  const cnpjOk = cnpjInformado.length === 14 ? cnpjValido(cnpjInformado)
+              : cnpjInformado.length === 11 ? cpfValido(cnpjInformado) : false;
+  const cnpj = cnpjOk ? cnpjInformado : '';
   const clientCode = esc(c.clientCode).replace(/\\D/g, '');
 
   // WhatsApp: ERP guarda formato local (sem DDI 55)
@@ -140,14 +160,13 @@ for (const item of $input.all()) {
   // Sem nenhuma chave nem dado útil → ignora
   if (!cnpj && !clientCode) continue;
 
-  // INSERT exige cadastro completo: cnpj + razão + representante + segmento + cidade + UF
+  // INSERT exige cadastro completo: cnpj VÁLIDO + razão + representante + segmento + cidade + UF
   const cadastroCompleto =
-    (cnpj.length === 14 || cnpj.length === 11) &&
-    !!razao && !!rep && !!segmentoCod && !!cidade && !!uf;
+    !!cnpjOk && !!razao && !!rep && !!segmentoCod && !!cidade && !!uf;
 
   out.push({
     json: {
-      cnpj, clientCode, whatsapp, email, contato,
+      cnpj, cnpjInformado, clientCode, whatsapp, email, contato,
       razao, fantasia, rep, segmentoCod, empresa,
       cidade, uf, endereco, cadastroCompleto,
     },
@@ -190,7 +209,9 @@ for (const item of $input.all()) {
   const orig = $('Normaliza Contato').item.json;
   const existe = Number(item.json?.existe) > 0;
   const acao = existe ? 'update' : (orig.cadastroCompleto ? 'insert' : 'pendente');
-  const motivo = existe ? '' : (orig.cadastroCompleto ? '' : 'cadastro incompleto p/ ERP');
+  const motivo = existe || orig.cadastroCompleto ? ''
+    : (orig.cnpjInformado && !orig.cnpj ? 'cnpj/cpf inválido (DV não confere)'
+    : 'cadastro incompleto p/ ERP');
   out.push({ json: { ...orig, existe, acao, motivo } });
 }
 return out;`,

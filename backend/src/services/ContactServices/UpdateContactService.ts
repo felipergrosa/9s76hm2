@@ -7,6 +7,7 @@ import { Op } from "sequelize";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
 import DispatchContactWebhookService from "./DispatchContactWebhookService";
 import GetUserPersonalTagContactIds from "../../helpers/GetUserPersonalTagContactIds";
+import PropagateCodeNameVariantService from "./PropagateCodeNameVariantService";
 
 interface ExtraInfo {
   id?: number;
@@ -379,6 +380,15 @@ const UpdateContactService = async ({
   }
 
   await contact.update(updateData);
+
+  // Propaga renomeação de "código - nome" para as outras variantes do mesmo código
+  if (representativeCode !== undefined || segment !== undefined) {
+    await PropagateCodeNameVariantService({
+      companyId,
+      representativeCode: representativeCode !== undefined ? updateData.representativeCode : undefined,
+      segment: segment !== undefined ? updateData.segment : undefined
+    });
+  }
 
   // Reload com includes para garantir dados completos no retorno (tags, extraInfo)
   // Isso é necessário para o frontend não perder dados ao receber o evento socket

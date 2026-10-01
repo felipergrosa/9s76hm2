@@ -3,6 +3,7 @@ import { getIO } from "../../libs/socket";
 import Contact from "../../models/Contact";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
 import DispatchContactWebhookService from "./DispatchContactWebhookService";
+import PropagateCodeNameVariantService from "./PropagateCodeNameVariantService";
 
 interface ExtraInfo {
   name: string;
@@ -260,6 +261,13 @@ const CreateOrUpdateContactServiceForImport = async ({
         });
     }
   }
+
+  // Normaliza variantes "código - nome" (rep/segmento renomeados no ERP)
+  await PropagateCodeNameVariantService({
+    companyId,
+    representativeCode: contactData.representativeCode,
+    segment: contactData.segment
+  });
 
   // Dispara webhook para n8n (exceto em modo silencioso)
   if (!silentMode && contact) {

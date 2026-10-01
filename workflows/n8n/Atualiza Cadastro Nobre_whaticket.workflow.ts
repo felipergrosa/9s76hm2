@@ -2,7 +2,7 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 
 // <workflow-map>
 // Workflow : Atualiza Cadastro Nobre/whaticket
-// Nodes   : 14  |  Connections: 13
+// Nodes   : 15  |  Connections: 14
 //
 // NODE INDEX
 // ──────────────────────────────────────────────────────────────────
@@ -15,6 +15,7 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 // BuscaClientesSql                   microsoftSql               [creds]
 // Code                               code
 // FiltraMudanca                      if
+// LimitaLote                         code
 // PreparaCache                       code
 // UpsertCache                        dataTable
 // AtualizaDataSincronizacao          code
@@ -31,10 +32,11 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 //          → MapeiaCampos
 //            → Code
 //              → FiltraMudanca
-//                → SincronizarContatoWhaticket
-//                  → PreparaCache
-//                    → UpsertCache
-//                      → AtualizaDataSincronizacao
+//                → LimitaLote
+//                  → SincronizarContatoWhaticket
+//                    → PreparaCache
+//                      → UpsertCache
+//                        → AtualizaDataSincronizacao
 //               .out(1) → AtualizaDataSincronizacao (↩ loop)
 //    → LeCache
 //      → Code (↩ loop)
@@ -223,15 +225,18 @@ export class AtualizaCadastroNobreWhaticketWorkflow {
 
 const MARGEM_MS = 30_000;
 const OFFSET_HORAS = -3;
+// Sem lastSyncDate (primeira run ou staticData perdido) NÃO faz carga total:
+// janela de fallback de 6h evita varrer 14k+ linhas e estourar o timeout do worker.
+// Carga total só via node "Atualiza Global" (manual).
+const FALLBACK_MS = 6 * 60 * 60 * 1000;
 
 let cutoffSql = '';
 
-if (sd.lastSyncDate) {
-  const t = new Date(
-    new Date(sd.lastSyncDate).getTime()
-    - MARGEM_MS
-    + (OFFSET_HORAS * 60 * 60 * 1000)
-  );
+{
+  const base = sd.lastSyncDate
+    ? new Date(sd.lastSyncDate).getTime() - MARGEM_MS
+    : Date.now() - FALLBACK_MS;
+  const t = new Date(base + (OFFSET_HORAS * 60 * 60 * 1000));
 
   const pad2 = n => String(n).padStart(2, '0');
   const pad3 = n => String(n).padStart(3, '0');
@@ -391,9 +396,9 @@ return [{ json: { cutoffSql, query } }];`,
     })
     BuscaClientesSql = {
         operation: 'executeQuery',
-        query: `/* INCREMENTAL por lastSyncDate (compatível com versões antigas) */
+        query: `/* INCREMENTAL por lastSyncDate + drenagem de backlog (TOP N mais antigos) */
 
-SELECT
+SELECT TOP 400
   -- Identificação principal
   C.Cnpj_Cnpf,
   C.FsCliente,
@@ -478,16 +483,13 @@ WHERE
   AND C.Cnpj_Cnpf <> ''
   AND C.Ativo_Inativo_ExCliente IN ('Ativo','Inativo','Excluido','Ex-Cliente','Baixado','Futuro','Excluído')
   AND C.CdSegmento IN (17, 19, 27, 28, 61, 68, 72, 74, 77, 54, 67, 60)
-  AND (
-    NULLIF(REPLACE(REPLACE(REPLACE(REPLACE(C.F_WhatsApp1, '(', ''), ')', ''), '-', ''), ' ', ''), '') IS NOT NULL
-    OR NULLIF(REPLACE(REPLACE(REPLACE(REPLACE(CONCAT(C.F_Ddd1, C.F_Telefone1), '(', ''), ')', ''), '-', ''), ' ', ''), '') IS NOT NULL
-    OR NULLIF(REPLACE(REPLACE(REPLACE(REPLACE(CONCAT(C.C_Ddd1, C.C_Telefone1), '(', ''), ')', ''), '-', ''), ' ', ''), '') IS NOT NULL
-    OR NULLIF(REPLACE(REPLACE(REPLACE(REPLACE(CONCAT(C.E_Ddd1, C.E_Telefone1), '(', ''), ')', ''), '-', ''), ' ', ''), '') IS NOT NULL
-  )
+  -- filtro de telefone removido do WHERE (não-sargável: REPLACE por linha estourava o timeout);
+  -- quem não tem WhatsApp válido é descartado no node "Code" antes de chamar a API
 AND (
   '{{$json.cutoffSql}}' = ''
   OR C.DtAlteracao >= CAST('{{$json.cutoffSql}}' AS DATETIME)
-)`,
+)
+ORDER BY C.DtAlteracao ASC`,
     };
 
     @node({
@@ -678,16 +680,12 @@ const tags = tagsArray.length ? tagsArray.join(',') : undefined;
     // 🧹 Remove undefined
     Object.keys(body).forEach(k => body[k] === undefined && delete body[k]);
 
-    return { json: body };
-  })
-  .map(item => {
     // 🧠 Dedup por conteúdo: só envia se o payload realmente mudou
     // (cobre DtAlteracao "sujo" no ERP e reprocessamento de janela após falha)
-    const j = item.json;
-    const key = String(j.cpfCnpj || j.clientCode || j.number || '');
-    const content = JSON.stringify(j);
-    const enviar = !!j.number && !!key && cache.get(key) !== content;
-    return { json: { ...j, __key: key, __content: content, __enviar: enviar } };
+    const key = String(body.cpfCnpj || body.clientCode || body.number || '');
+    const content = JSON.stringify(body);
+    const enviar = !!body.number && !!key && cache.get(key) !== content;
+    return { json: { ...body, __key: key, __content: content, __enviar: enviar, __dtAlteracao: j.DtAlteracao ?? null } };
   });`,
     };
 
@@ -720,6 +718,21 @@ const tags = tagsArray.length ? tagsArray.join(',') : undefined;
             combinator: 'and',
         },
         options: {},
+    };
+
+    @node({
+        id: 'b7c8d9e0-5555-4666-a777-ff0011223344',
+        name: 'Limita Lote',
+        type: 'n8n-nodes-base.code',
+        version: 2,
+        position: [-4448, -2864],
+    })
+    LimitaLote = {
+        jsCode: `// Limita envios por execução: a execução foi cancelada aos ~3min com 1878 itens
+// O que não for enviado não entra no cache → entra no próximo ciclo como "mudado"
+// Converge sozinho: cada run drena ~300 pendentes até o cache cobrir a base
+const LOTE_MAX = 150;
+return $input.all().slice(0, LOTE_MAX);`,
     };
 
     @node({
@@ -829,11 +842,36 @@ return out;`,
         position: [-4224, -3056],
     })
     AtualizaDataSincronizacao = {
-        jsCode: `// Code node (Run Once for All Items)
-const sd = $getWorkflowStaticData('global'); // <- correto no Code node
-sd.lastSyncDate = new Date().toISOString();
+        jsCode: `// Cursor anda pelo PROGRESSO real, não pelo relógio:
+// lastSyncDate = max(DtAlteracao) dos itens concluídos nesta run
+// (enviados com sucesso via Upsert Cache OU descartados pelo filtro).
+// Itens cortados pelo "Limita Lote" não avançam o cursor → voltam na próxima run.
+const sd = $getWorkflowStaticData('global');
 
-// devolve os mesmos itens de entrada
+// dtAlteracao por chave dos itens avaliados no Code
+const dtPorChave = new Map();
+for (const it of $('Code').all()) {
+  const j = it.json ?? {};
+  if (j.__dtAlteracao && j.__key) dtPorChave.set(String(j.__key), j.__dtAlteracao);
+}
+
+let maxDt = null;
+const considera = v => {
+  const d = new Date(v);
+  if (!isNaN(d.getTime()) && (!maxDt || d > maxDt)) maxDt = d;
+};
+
+for (const item of $input.all()) {
+  const j = item.json ?? {};
+  if (j.__dtAlteracao) {
+    considera(j.__dtAlteracao); // branch "não mudou" / sem número
+  } else if (j.cnpj && dtPorChave.has(String(j.cnpj))) {
+    considera(dtPorChave.get(String(j.cnpj))); // enviados (chegam via Upsert Cache)
+  }
+}
+
+if (maxDt) sd.lastSyncDate = maxDt.toISOString();
+
 return $input.all();
 `,
     };
@@ -879,13 +917,8 @@ return [{ json: { cutoffSql: '' } }];
         position: [-5120, -3056],
     })
     Log = {
-        jsCode: `const log = {
-  dataExecucao: new Date().toISOString(),
-  quantidade: $input.all().length,
-  registros: $input.all().map(i => i.json)
-};
-
-console.log(JSON.stringify(log, null, 2));
+        jsCode: `// só conta — serializar 14k registros consumia memória/tempo do worker e estourava a execução
+console.log(\`[sync-erp] \${new Date().toISOString()} registros SQL: \${$input.all().length}\`);
 
 return $input.all();`,
     };
@@ -902,6 +935,7 @@ return $input.all();`,
 
 - SQL filtra por DtAlteracao >= lastSyncDate - 30s
 - Dedup por conteúdo (Data Table "whaticket_sync_cache"): só chama a API se o payload mudou
+- "Limita Lote" envia no máx. 300 contatos por execução (pendentes entram no ciclo seguinte)
 - Falha no HTTP não grava cache → o item retenta no próximo ciclo
 - lastSyncDate só avança quando itens chegam ao fim do fluxo
 
@@ -924,8 +958,9 @@ PARA ATUALIZAR TUDO: node "Atualiza Global" (leia comentarios internos) + limpar
         this.MapeiaCampos.out(0).to(this.Code.in(0));
         this.LeCache.out(0).to(this.Code.in(0));
         this.Code.out(0).to(this.FiltraMudanca.in(0));
-        this.FiltraMudanca.out(0).to(this.SincronizarContatoWhaticket.in(0));
+        this.FiltraMudanca.out(0).to(this.LimitaLote.in(0));
         this.FiltraMudanca.out(1).to(this.AtualizaDataSincronizacao.in(0));
+        this.LimitaLote.out(0).to(this.SincronizarContatoWhaticket.in(0));
         this.SincronizarContatoWhaticket.out(0).to(this.PreparaCache.in(0));
         this.PreparaCache.out(0).to(this.UpsertCache.in(0));
         this.UpsertCache.out(0).to(this.AtualizaDataSincronizacao.in(0));

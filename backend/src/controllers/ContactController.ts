@@ -2516,6 +2516,32 @@ export const validateContactName = async (req: AuthenticatedRequest, res: Respon
   }
 };
 
+// Campos "código - nome" (rep/segmento): variantes do mesmo código
+// ("1040", "1040 - VELHO", "1040 - NOVO") colapsam numa única opção —
+// preferindo a variante que tem nome — senão renomear no ERP duplica
+// a listagem. A propagação nos services converge o dado gravado; aqui
+// é só a camada de exibição.
+const collapseCodeNameVariants = (vals: string[]): string[] => {
+  const byCode = new Map<string, string>();
+  const noCode: string[] = [];
+  for (const v of vals) {
+    const m = String(v).trim().match(/^(\d+)/);
+    if (!m) {
+      noCode.push(v);
+      continue;
+    }
+    const cur = byCode.get(m[1]);
+    if (
+      !cur ||
+      (v.includes(" - ") && !cur.includes(" - ")) ||
+      (v.includes(" - ") === cur.includes(" - ") && v.length > cur.length)
+    ) {
+      byCode.set(m[1], v);
+    }
+  }
+  return [...byCode.values(), ...noCode];
+};
+
 /**
  * Retorna valores únicos para campos de autocomplete
  * GET /contacts/unique-values
@@ -2563,7 +2589,11 @@ export const uniqueValues = async (req: AuthenticatedRequest, res: Response): Pr
         offset: parsedOffset
       });
 
-      const values = [...new Set(results.map((r: any) => r[columnName]).filter(Boolean))];
+      let values = [...new Set(results.map((r: any) => r[columnName]).filter(Boolean))];
+
+      if (field === "representativeCode" || field === "segment") {
+        values = collapseCodeNameVariants(values);
+      }
 
       return res.json({ field, values, hasMore: values.length === parsedLimit });
     }
@@ -2633,9 +2663,9 @@ export const uniqueValues = async (req: AuthenticatedRequest, res: Response): Pr
     return res.json({
       cities,
       regions,
-      segments,
+      segments: collapseCodeNameVariants(segments),
       channels,
-      representatives,
+      representatives: collapseCodeNameVariants(representatives),
       companies
     });
 

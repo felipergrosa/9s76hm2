@@ -11,6 +11,7 @@ import ContactTag from "../../models/ContactTag";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
 import DispatchContactWebhookService from "./DispatchContactWebhookService";
 import CreateContactReleaseRequestService from "./CreateContactReleaseRequestService";
+import PropagateCodeNameVariantService from "./PropagateCodeNameVariantService";
 
 interface ExtraInfo extends ContactCustomField {
   name: string;
@@ -425,6 +426,12 @@ const CreateContactService = async ({
       vlUltCompra: vlUltCompraValue
     });
 
+    await PropagateCodeNameVariantService({
+      companyId,
+      representativeCode: contactData.representativeCode,
+      segment: contactData.segment
+    });
+
     return merged;
   }
 
@@ -468,6 +475,12 @@ const CreateContactService = async ({
   } catch (err) {
     logger.warn("[CreateContactService] Falha ao disparar webhook de contato (create)", err);
   }
+
+  await PropagateCodeNameVariantService({
+    companyId,
+    representativeCode: contactData.representativeCode,
+    segment: contactData.segment
+  });
 
   return contact;
 
