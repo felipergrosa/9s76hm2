@@ -513,9 +513,9 @@ export const handleMessage = async (
       if (fromMe) {
         if (/\u200e/.test(bodyMessage)) return;
 
-        msgContact = await profilePsid(recipientPsid, token.facebookUserToken);
+        msgContact = await profilePsid(recipientPsid, token.facebookUserToken, channel);
       } else {
-        msgContact = await profilePsid(senderPsid, token.facebookUserToken);
+        msgContact = await profilePsid(senderPsid, token.facebookUserToken, channel);
       }
 
       const contact = await verifyContact(msgContact, token, companyId);

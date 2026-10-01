@@ -137,11 +137,12 @@ export const subscribePageWebhook = async (
   pageToken: string,
   channel: string = "facebook"
 ): Promise<void> => {
-  // Campos válidos por canal. No Facebook comentários chegam via `feed`
-  // (`comments`/`mentions`/`messaging_seen` só existem para contas IG).
+  // subscribed_apps da Page só aceita campos de Page — os campos
+  // exclusivos de Instagram (comments, mentions, messaging_seen) são
+  // assinados no objeto "Instagram" do webhook do app, não aqui.
   const fields =
     channel === "instagram"
-      ? "messages,messaging_postbacks,messaging_seen,comments,mentions"
+      ? "messages,messaging_postbacks"
       : "messages,messaging_postbacks,message_deliveries,message_reads,feed,messaging_referrals";
 
   const subscribe = (subscribedFields: string) =>

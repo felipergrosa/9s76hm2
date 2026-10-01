@@ -189,10 +189,21 @@ export const getPageProfile = async (
   }
 };
 
-export const profilePsid = async (id: string, token: string): Promise<any> => {
+export const profilePsid = async (
+  id: string,
+  token: string,
+  channel: string = "facebook"
+): Promise<any> => {
+  // IGSID (Instagram) exige fields explícitos — GET /{id} puro falha.
+  // PSID (Messenger) usa os campos clássicos de perfil.
+  const fields =
+    channel === "instagram"
+      ? "name,username,profile_pic"
+      : "first_name,last_name,name,profile_pic";
   try {
     const { data } = await axios.get(
-      `https://graph.facebook.com/v18.0/${id}?access_token=${token}`
+      `https://graph.facebook.com/v18.0/${id}`,
+      { params: { access_token: token, fields } }
     );
     return data;
   } catch (error) {
