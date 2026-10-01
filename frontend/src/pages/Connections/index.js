@@ -412,6 +412,12 @@ const Connections = () => {
   const [orderBy, setOrderBy] = useState("id");
   const [orderDir, setOrderDir] = useState("asc");
 
+  // Busca + filtros da toolbar (padrão /campaigns) — precisam ser declarados
+  // ANTES do useMemo abaixo, senão o factory acessa const em TDZ e a página quebra
+  const [searchParam, setSearchParam] = useState("");
+  const [channelFilter, setChannelFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+
   const handleSort = useCallback((key) => {
     setOrderBy(prev => {
       if (prev === key) {
@@ -470,10 +476,6 @@ const Connections = () => {
   const [metaSelectKey, setMetaSelectKey] = useState(null);
   // Diagnóstico Meta (token + subscribed_apps) por conexão
   const [metaHealth, setMetaHealth] = useState({ open: false, loading: false, data: null, name: "", whatsappId: null, resubscribing: false });
-  // Busca + filtros da toolbar (padrão /campaigns)
-  const [searchParam, setSearchParam] = useState("");
-  const [channelFilter, setChannelFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
   const history = useHistory();
 
   const confirmationModalInitialState = {
