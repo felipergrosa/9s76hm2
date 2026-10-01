@@ -1,12 +1,84 @@
 import { Request, Response } from "express";
 import crypto from "crypto";
-import { buildOAuthUrl, verifyOAuthState, exchangeCodeForPages, subscribePageWebhook, stashOAuthCreds, resolveOAuthCreds } from "../services/MetaOAuthService";
+import { Op } from "sequelize";
+import {
+  buildOAuthUrl,
+  verifyOAuthState,
+  exchangeCodeForPages,
+  subscribePageWebhook,
+  stashOAuthCreds,
+  resolveOAuthCreds,
+  stashMetaSelection,
+  getMetaSelection,
+  consumeMetaSelection,
+  generateMetaSelectionKey,
+  MetaSelectionData,
+  MetaSelectionPage
+} from "../services/MetaOAuthService";
 import CreateWhatsAppService from "../services/WhatsappService/CreateWhatsAppService";
 import Whatsapp from "../models/Whatsapp";
 import logger from "../utils/logger";
 
 const META_CREDENTIALS_ERROR =
   "Credenciais do App Meta não configuradas. Preencha Meta App ID e Meta App Secret nos campos da conexão ou configure META_APP_ID/META_APP_SECRET no servidor.";
+
+const META_SELECTION_EXPIRED_ERROR =
+  "A seleção de páginas expirou ou não existe. Inicie a conexão novamente.";
+
+// Chave da conexão usada por webhook/factory:
+// facebook → Page ID; instagram → Instagram Business Account ID
+const selectionKeyOf = (channel: string, page: MetaSelectionPage): string | undefined =>
+  channel === "instagram" ? page.instagramAccountId : page.pageId;
+
+// Cria ou atualiza a conexão de uma página/conta selecionada (mesma regra que
+// o callback usava para todas as páginas). Re-autorização atualiza tokens em
+// vez de duplicar a conexão.
+const upsertConnectionFromPage = async (
+  stash: MetaSelectionData,
+  page: MetaSelectionPage
+): Promise<"created" | "updated" | "skipped"> => {
+  const connectionKey = selectionKeyOf(stash.channel, page);
+  if (!connectionKey) {
+    logger.warn(`[MetaOAuth] página ${page.pageId} sem chave de conexão para channel=${stash.channel}, ignorada`);
+    return "skipped";
+  }
+
+  await subscribePageWebhook(page.pageId, page.pageToken);
+
+  const connectionData = {
+    name: `${page.pageName} (${stash.channel === "instagram" ? "Instagram" : "Facebook"})`,
+    channel: stash.channel,
+    channelType: stash.channel,
+    companyId: stash.companyId,
+    status: "CONNECTED",
+    facebookUserId: stash.userId,
+    facebookPageUserId: connectionKey,
+    facebookUserToken: page.pageToken,
+    tokenMeta: stash.userToken,
+    metaPageId: page.pageId,
+    metaPageAccessToken: page.pageToken,
+    // Persiste credenciais do app apenas quando vieram da conexão (custom),
+    // não duplicando o secret global de env no banco
+    ...(stash.customCreds ? { metaAppId: stash.appId, metaAppSecret: stash.appSecret } : {}),
+    ...(page.instagramAccountId ? { instagramAccountId: page.instagramAccountId } : {})
+  };
+
+  const existing = await Whatsapp.findOne({
+    where: {
+      companyId: stash.companyId,
+      facebookPageUserId: connectionKey,
+      channel: stash.channel
+    }
+  });
+
+  if (existing) {
+    await existing.update(connectionData);
+    return "updated";
+  }
+
+  await CreateWhatsAppService(connectionData as any);
+  return "created";
+};
 
 // POST /meta-oauth/start {channel, whatsappId?, metaAppId?, metaAppSecret?}
 // Gera a URL de OAuth da Meta. Resolução de credenciais (ordem):
@@ -92,57 +164,127 @@ export const oauthCallback = async (req: Request, res: Response): Promise<void> 
     }
 
     const { userId, userToken, pages } = await exchangeCodeForPages(code, stateData.channel, appId, appSecret);
-    const processed = [];
 
-    for (const page of pages) {
-      await subscribePageWebhook(page.pageId, page.pageToken);
+    // Não cria conexões aqui: as páginas/contas descobertas vão para stash
+    // (server-side, com tokens) e o usuário escolhe no frontend quais conectar.
+    // O stash expira em 20min — a key vai na querystring do redirect.
+    const selectionKey = generateMetaSelectionKey();
+    await stashMetaSelection(selectionKey, {
+      companyId: stateData.companyId,
+      channel: stateData.channel,
+      userId,
+      userToken,
+      appId,
+      appSecret,
+      customCreds,
+      pages
+    });
 
-      // facebookPageUserId é a chave usada por webhook/factory:
-      // facebook → Page ID; instagram → Instagram Business Account ID
-      const connectionKey = stateData.channel === "instagram"
-        ? page.instagramAccountId
-        : page.pageId;
-
-      const connectionData = {
-        name: `${page.pageName} (${stateData.channel === "instagram" ? "Instagram" : "Facebook"})`,
-        channel: stateData.channel,
-        channelType: stateData.channel,
-        companyId: stateData.companyId,
-        status: "CONNECTED",
-        facebookUserId: userId,
-        facebookPageUserId: connectionKey,
-        facebookUserToken: page.pageToken,
-        tokenMeta: userToken,
-        metaPageId: page.pageId,
-        metaPageAccessToken: page.pageToken,
-        // Persiste credenciais do app apenas quando vieram da conexão (custom),
-        // não duplicando o secret global de env no banco
-        ...(customCreds ? { metaAppId: appId, metaAppSecret: appSecret } : {}),
-        ...(page.instagramAccountId ? { instagramAccountId: page.instagramAccountId } : {})
-      };
-
-      // Re-autorização atualiza tokens em vez de duplicar a conexão
-      const existing = await Whatsapp.findOne({
-        where: {
-          companyId: stateData.companyId,
-          facebookPageUserId: connectionKey,
-          channel: stateData.channel
-        }
-      });
-
-      if (existing) {
-        await existing.update(connectionData);
-        processed.push(existing.id);
-      } else {
-        const { whatsapp } = await CreateWhatsAppService(connectionData as any);
-        processed.push(whatsapp.id);
-      }
-    }
-
-    logger.info(`[MetaOAuth] companyId=${stateData.companyId} channel=${stateData.channel} processed ${processed.length} connections`);
-    res.redirect(`${frontendUrl}/connections?meta_success=${processed.length}`);
+    logger.info(`[MetaOAuth] companyId=${stateData.companyId} channel=${stateData.channel} ${pages.length} página(s)/conta(s) aguardando seleção`);
+    res.redirect(`${frontendUrl}/connections?meta_select=${selectionKey}`);
   } catch (err: any) {
     logger.error(`[MetaOAuth] callback error: ${err.message}`);
     res.redirect(`${frontendUrl}/connections?meta_error=${encodeURIComponent(err.message)}`);
   }
+};
+
+// GET /meta-oauth/selection/:key — lista páginas/contas descobertas no OAuth
+// para o usuário escolher quais conectar. NUNCA expõe tokens na resposta.
+export const showMetaSelection = async (req: Request, res: Response): Promise<Response> => {
+  const { companyId } = req.user;
+  const { key } = req.params;
+
+  const stash = await getMetaSelection(key || "");
+  if (!stash) {
+    return res.status(410).json({ error: META_SELECTION_EXPIRED_ERROR });
+  }
+  if (stash.companyId !== companyId) {
+    return res.status(403).json({ error: "Esta seleção não pertence à sua empresa." });
+  }
+
+  // Uma única query para marcar o que já está conectado (evita N+1)
+  const connectionKeys = stash.pages
+    .map(p => selectionKeyOf(stash.channel, p))
+    .filter((k): k is string => Boolean(k));
+
+  const existing = await Whatsapp.findAll({
+    where: {
+      companyId,
+      channel: stash.channel,
+      facebookPageUserId: { [Op.in]: connectionKeys }
+    },
+    attributes: ["facebookPageUserId"]
+  });
+  const connectedKeys = new Set(existing.map(e => e.facebookPageUserId));
+
+  return res.json({
+    channel: stash.channel,
+    pages: stash.pages.map(p => {
+      const connectionKey = selectionKeyOf(stash.channel, p);
+      return {
+        key: connectionKey || null,
+        pageId: p.pageId,
+        pageName: p.pageName,
+        instagramAccountId: p.instagramAccountId || null,
+        alreadyConnected: connectionKey ? connectedKeys.has(connectionKey) : false
+      };
+    })
+  });
+};
+
+// POST /meta-oauth/selection/:key { selectedKeys: string[] }
+// Confirma a seleção granular: cria/atualiza apenas as conexões escolhidas
+// e consome o stash (não permite reuso).
+export const confirmMetaSelection = async (req: Request, res: Response): Promise<Response> => {
+  const { companyId } = req.user;
+  const { key } = req.params;
+  const selectedKeys = (req.body || {}).selectedKeys;
+
+  if (
+    !Array.isArray(selectedKeys) ||
+    selectedKeys.length === 0 ||
+    !selectedKeys.every((k: any) => typeof k === "string" && k.length > 0)
+  ) {
+    return res.status(400).json({ error: "selectedKeys deve ser uma lista não vazia de identificadores." });
+  }
+
+  const stash = await getMetaSelection(key || "");
+  if (!stash) {
+    return res.status(410).json({ error: META_SELECTION_EXPIRED_ERROR });
+  }
+  if (stash.companyId !== companyId) {
+    return res.status(403).json({ error: "Esta seleção não pertence à sua empresa." });
+  }
+
+  // Rejeita keys que não pertencem ao stash — impede vincular páginas de
+  // outra autorização/empresa via IDOR no body
+  const validKeys = new Set(
+    stash.pages
+      .map(p => selectionKeyOf(stash.channel, p))
+      .filter((k): k is string => Boolean(k))
+  );
+  const invalidKeys = selectedKeys.filter((k: string) => !validKeys.has(k));
+  if (invalidKeys.length > 0) {
+    return res.status(400).json({ error: "Uma ou mais contas selecionadas não pertencem a esta autorização." });
+  }
+
+  let created = 0;
+  let updated = 0;
+  const selected = new Set(selectedKeys);
+
+  for (const page of stash.pages) {
+    const connectionKey = selectionKeyOf(stash.channel, page);
+    if (!connectionKey || !selected.has(connectionKey)) continue;
+
+    const result = await upsertConnectionFromPage(stash, page);
+    if (result === "created") created++;
+    else if (result === "updated") updated++;
+  }
+
+  // Consome o stash somente após processar — em caso de erro o usuário pode
+  // reenviar a seleção dentro do TTL de 20min
+  await consumeMetaSelection(key);
+
+  logger.info(`[MetaOAuth] companyId=${companyId} channel=${stash.channel} seleção confirmada: created=${created} updated=${updated}`);
+  return res.json({ created, updated });
 };

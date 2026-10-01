@@ -118,6 +118,22 @@ const messages = {
         },
         empty: "No templates found.",
       },
+      connections: {
+        ...ptMessages.pt.translations.connections,
+        metaSelect: {
+          title: "Select accounts to connect",
+          subtitle: "Check the pages and accounts you want to connect:",
+          loading: "Loading pages...",
+          empty: "No pages or accounts found to connect.",
+          alreadyConnected: "Already connected",
+          selectAll: "Select all",
+          connect: "Connect selected",
+          connecting: "Connecting...",
+          cancel: "Cancel",
+          success: "{{created}} connection(s) created, {{updated}} updated",
+          expired: "Connection session expired — start the connection again",
+        },
+      },
     },
   },
 };

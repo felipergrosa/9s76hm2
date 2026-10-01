@@ -58,6 +58,7 @@ import TableRowSkeleton from "../../components/TableRowSkeleton";
 import api from "../../services/api";
 import WhatsAppModal from "../../components/WhatsAppModal";
 import ConfirmationModal from "../../components/ConfirmationModal";
+import MetaSelectModal from "../../components/MetaSelectModal";
 import QrcodeModal from "../../components/QrcodeModal";
 import { i18n } from "../../translate/i18n";
 import { WhatsAppsContext } from "../../context/WhatsApp/WhatsAppsContext";
@@ -229,6 +230,7 @@ const Connections = () => {
   const [selectedWhatsApp, setSelectedWhatsApp] = useState(null);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [metaMenuAnchorEl, setMetaMenuAnchorEl] = useState(null);
+  const [metaSelectKey, setMetaSelectKey] = useState(null);
   const history = useHistory();
 
   const confirmationModalInitialState = {
@@ -263,11 +265,19 @@ const Connections = () => {
     const params = new URLSearchParams(window.location.search);
     const metaSuccess = params.get("meta_success");
     const metaError = params.get("meta_error");
+    const metaSelect = params.get("meta_select");
+    // meta_select: retorno do OAuth Meta pedindo para o usuário escolher
+    // quais páginas/contas conectar — abre o modal de seleção
+    if (metaSelect) {
+      setMetaSelectKey(metaSelect);
+    }
     if (metaSuccess) {
       toast.success(`${metaSuccess} conexão(ões) Meta criada(s) com sucesso!`);
-      history.replace("/connections");
     } else if (metaError) {
-      toast.error(`Erro OAuth Meta: ${decodeURIComponent(metaError)}`);
+      toast.error(`Erro na conexão com a Meta: ${decodeURIComponent(metaError)}`);
+    }
+    if (metaSuccess || metaError || metaSelect) {
+      // Limpa os query params do retorno OAuth da Meta da URL
       history.replace("/connections");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -358,6 +368,16 @@ const Connections = () => {
   const handleCloseMetaMenu = () => {
     setMetaMenuAnchorEl(null);
   };
+
+  const handleCloseMetaSelect = useCallback(() => {
+    setMetaSelectKey(null);
+  }, []);
+
+  const handleMetaSelectConnected = useCallback(() => {
+    // Recarrega a lista de conexões após criar as selecionadas.
+    // Pequeno delay para o toast de sucesso ficar visível antes do reload.
+    setTimeout(() => history.go(0), 1500);
+  }, [history]);
 
   const openInNewTab = url => {
     window.open(url, '_blank', 'noopener,noreferrer');
@@ -733,6 +753,14 @@ const Connections = () => {
           open={qrModalOpen}
           onClose={handleCloseQrModal}
           whatsAppId={!whatsAppModalOpen && selectedWhatsApp?.id}
+        />
+      )}
+      {metaSelectKey && (
+        <MetaSelectModal
+          open
+          selectionKey={metaSelectKey}
+          onClose={handleCloseMetaSelect}
+          onConnected={handleMetaSelectConnected}
         />
       )}
       <WhatsAppModal

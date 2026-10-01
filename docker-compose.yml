@@ -50,6 +50,13 @@ services:
       # WhatsApp Business API (Meta) - Configurações Globais
       WABA_WEBHOOK_VERIFY_TOKEN: ${WABA_WEBHOOK_VERIFY_TOKEN:-602536nblumi2025}
       WABA_API_VERSION: ${WABA_API_VERSION:-v18.0}
+      # Meta OAuth (Facebook/Instagram) — app SaaS central.
+      # Definir no .env ao lado do compose ou nas envs da stack.
+      META_APP_ID: ${META_APP_ID:-}
+      META_APP_SECRET: ${META_APP_SECRET:-}
+      APP_SECRET_META_STATE: ${APP_SECRET_META_STATE:-}
+      # Verify token do webhook de páginas/IG (GET /webhook)
+      VERIFY_TOKEN: ${VERIFY_TOKEN:-}
       # Sidecar Google Maps Scraper (rede interna, sem porta publicada)
       GMAPS_SCRAPER_URL: http://gmaps-scraper:8080
     networks:

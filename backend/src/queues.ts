@@ -62,6 +62,7 @@ import { buildOfficialPreviewData } from "./utils/officialMessagePreview";
 import { setupEmailCampaignProcessors, scheduleEmailCampaignVerification } from "./queues/EmailCampaignQueue";
 import { setupDripSequenceProcessors, scheduleDripSequenceVerification } from "./queues/DripSequenceQueue";
 import { startOfficialWebhookQueue } from "./queues/OfficialWebhookQueue";
+import runMetaTokenHealthCheck from "./jobs/MetaTokenHealthCheckJob";
 
 const connection = process.env.REDIS_URI || "";
 const limiterMax = process.env.REDIS_OPT_LIMITER_MAX || 1;
@@ -3371,6 +3372,22 @@ async function handleWabaPricingSync() {
   }, null, false, 'America/Sao_Paulo');
   job.start();
 }
+
+// Healthcheck diário dos tokens Meta (Facebook/Instagram) via debug_token.
+// Desconecta conexões com token inválido ou expirando em <7d; nunca reativa.
+async function handleMetaTokenHealthCheck() {
+  const job = new CronJob('0 0 7 * * *', async () => {
+    try {
+      const result = await runMetaTokenHealthCheck();
+      logger.info(
+        `[MetaTokenHealth] Verificação diária concluída: ${result.checked} checadas, ${result.disconnected} desconectadas, ${result.errors} erros`
+      );
+    } catch (e: any) {
+      logger.error(`[MetaTokenHealth] Falha na verificação diária: ${e.message}`);
+    }
+  }, null, false, 'America/Sao_Paulo');
+  job.start();
+}
 async function handleInvoiceCreate() {
   const job = new CronJob('0 * * * * *', async () => {
 
@@ -3452,6 +3469,7 @@ handleWhatsapp();
 handleProcessLanes();
 handleCloseTicketsAutomatic();
 handleWabaPricingSync();
+handleMetaTokenHealthCheck();
 
 export async function startQueueProcess() {
   logger.info("Iniciando processamento de filas");

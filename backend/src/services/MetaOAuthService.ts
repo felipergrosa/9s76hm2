@@ -140,3 +140,65 @@ export const subscribePageWebhook = async (pageId: string, pageToken: string): P
     logger.warn(`[MetaOAuth] subscribePageWebhook failed for ${pageId}: ${err.message}`);
   }
 };
+
+// ============================================================================
+// Seleção granular de páginas/contas pós-OAuth
+// ============================================================================
+// Após o callback OAuth, as páginas/contas IG descobertas ficam em stash no
+// cache (tokens inclusos, apenas server-side) até o usuário escolher quais
+// conectar. O stash NUNCA é exposto em respostas HTTP com tokens.
+const META_SELECTION_PREFIX = "meta-oauth-sel:";
+const META_SELECTION_TTL_SECONDS = 20 * 60; // 20 minutos
+
+export interface MetaSelectionPage {
+  pageId: string;
+  pageName: string;
+  pageToken: string;
+  instagramAccountId?: string;
+}
+
+export interface MetaSelectionData {
+  companyId: number;
+  channel: string;
+  userId: string;
+  userToken: string;
+  appId: string;
+  appSecret: string;
+  customCreds: boolean;
+  pages: MetaSelectionPage[];
+}
+
+// Gera a chave aleatória do stash (vai na querystring do redirect p/ frontend)
+export const generateMetaSelectionKey = (): string =>
+  crypto.randomBytes(16).toString("hex");
+
+export const stashMetaSelection = async (
+  key: string,
+  data: MetaSelectionData,
+  ttlSeconds: number = META_SELECTION_TTL_SECONDS
+): Promise<void> => {
+  await cacheLayer.set(META_SELECTION_PREFIX + key, JSON.stringify(data), "EX", ttlSeconds);
+};
+
+// Lê sem consumir — usado pelo GET de listagem (usuário pode recarregar a tela)
+export const getMetaSelection = async (key: string): Promise<MetaSelectionData | null> => {
+  const raw = await cacheLayer.get(META_SELECTION_PREFIX + key);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as MetaSelectionData;
+  } catch {
+    return null;
+  }
+};
+
+// Lê e deleta — usado na confirmação (POST) para invalidar o stash após uso
+export const consumeMetaSelection = async (key: string): Promise<MetaSelectionData | null> => {
+  const raw = await cacheLayer.get(META_SELECTION_PREFIX + key);
+  if (!raw) return null;
+  await cacheLayer.del(META_SELECTION_PREFIX + key);
+  try {
+    return JSON.parse(raw) as MetaSelectionData;
+  } catch {
+    return null;
+  }
+};

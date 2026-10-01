@@ -256,6 +256,19 @@ const messages = {
           actions: "Acciones",
           session: "Sesión",
           number: "Número de Whatsapp"
+        },
+        metaSelect: {
+          title: "Seleccionar cuentas para conectar",
+          subtitle: "Marque las páginas y cuentas que desea conectar:",
+          loading: "Cargando páginas...",
+          empty: "No se encontraron páginas o cuentas para conectar.",
+          alreadyConnected: "Ya conectada",
+          selectAll: "Seleccionar todas",
+          connect: "Conectar seleccionadas",
+          connecting: "Conectando...",
+          cancel: "Cancelar",
+          success: "{{created}} conexión(es) creada(s), {{updated}} actualizada(s)",
+          expired: "Sesión de conexión expirada — inicie la conexión nuevamente"
         }
       },
       showTicketOpenModal: {
