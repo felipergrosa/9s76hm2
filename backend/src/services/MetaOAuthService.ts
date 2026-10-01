@@ -61,9 +61,10 @@ export const verifyOAuthState = (state: string): { companyId: number; channel: s
 export const buildOAuthUrl = (companyId: number, channel: "facebook" | "instagram", appId: string, credsKey?: string): string => {
   const redirectUri = `${process.env.BACKEND_URL}/meta-oauth/callback`;
   const state = createOAuthState(companyId, channel, credsKey);
+  // pages_manage_metadata e obrigatorio para POST /{page-id}/subscribed_apps
   const scope = channel === "instagram"
-    ? "instagram_basic,instagram_manage_messages,pages_show_list,pages_read_engagement"
-    : "pages_show_list,pages_read_engagement,pages_messaging";
+    ? "instagram_basic,instagram_manage_messages,pages_show_list,pages_read_engagement,pages_manage_metadata"
+    : "pages_show_list,pages_read_engagement,pages_messaging,pages_manage_metadata";
   return `https://www.facebook.com/v19.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}&state=${state}&response_type=code`;
 };
 
@@ -131,13 +132,42 @@ export const exchangeCodeForPages = async (code: string, channel: string, appId:
 };
 
 // Subscribe app to page webhook
-export const subscribePageWebhook = async (pageId: string, pageToken: string): Promise<void> => {
-  try {
-    await axios.post(`${GRAPH}/${pageId}/subscribed_apps`, null, {
-      params: { access_token: pageToken, subscribed_fields: "messages,messaging_postbacks,message_deliveries,message_reads,comments" }
+export const subscribePageWebhook = async (
+  pageId: string,
+  pageToken: string,
+  channel: string = "facebook"
+): Promise<void> => {
+  // Campos válidos por canal. No Facebook comentários chegam via `feed`
+  // (`comments`/`mentions`/`messaging_seen` só existem para contas IG).
+  const fields =
+    channel === "instagram"
+      ? "messages,messaging_postbacks,messaging_seen,comments,mentions"
+      : "messages,messaging_postbacks,message_deliveries,message_reads,feed,messaging_referrals";
+
+  const subscribe = (subscribedFields: string) =>
+    axios.post(`${GRAPH}/${pageId}/subscribed_apps`, null, {
+      params: { access_token: pageToken, subscribed_fields: subscribedFields }
     });
+
+  try {
+    await subscribe(fields);
   } catch (err: any) {
-    logger.warn(`[MetaOAuth] subscribePageWebhook failed for ${pageId}: ${err.message}`);
+    const metaErr = err?.response?.data?.error;
+    logger.warn(
+      `[MetaOAuth] subscribePageWebhook failed for ${pageId}: ${err.message} ` +
+      `(meta=${JSON.stringify(metaErr ?? null)})`
+    );
+    // Fallback: se algum campo não for suportado pela página, assina só o
+    // essencial para não ficar sem receber DMs.
+    try {
+      await subscribe("messages,messaging_postbacks");
+      logger.info(`[MetaOAuth] subscribePageWebhook fallback ok p/ ${pageId}`);
+    } catch (err2: any) {
+      logger.warn(
+        `[MetaOAuth] subscribePageWebhook fallback falhou p/ ${pageId}: ` +
+        `${JSON.stringify(err2?.response?.data?.error ?? err2?.message)}`
+      );
+    }
   }
 };
 

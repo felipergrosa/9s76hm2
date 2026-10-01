@@ -374,10 +374,10 @@ const Connections = () => {
   }, []);
 
   const handleMetaSelectConnected = useCallback(() => {
-    // Recarrega a lista de conexões após criar as selecionadas.
-    // Pequeno delay para o toast de sucesso ficar visível antes do reload.
-    setTimeout(() => history.go(0), 1500);
-  }, [history]);
+    // O backend emite `company-<id>-whatsapp` (action=update) por conexão
+    // criada — o hook useWhatsApps já insere na lista em tempo real.
+    // Não é mais necessário recarregar a página.
+  }, []);
 
   const openInNewTab = url => {
     window.open(url, '_blank', 'noopener,noreferrer');

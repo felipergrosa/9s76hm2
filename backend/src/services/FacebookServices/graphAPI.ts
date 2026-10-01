@@ -197,7 +197,14 @@ export const profilePsid = async (id: string, token: string): Promise<any> => {
     return data;
   } catch (error) {
     logGraphError("profilePsid", error);
-    await getProfile(id, token);
+    // Fallback precisava retornar o perfil — antes o resultado era
+    // descartado e o caller recebia undefined (contact null → crash).
+    try {
+      return await getProfile(id, token);
+    } catch (fallbackError) {
+      logGraphError("profilePsid.fallback", fallbackError);
+      return null;
+    }
   }
 };
 

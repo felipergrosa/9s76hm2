@@ -39,6 +39,7 @@ import { get } from "http";
 import { WebhookModel } from "../../models/Webhook";
 import { is } from "bluebird";
 import ShowTicketService from "../TicketServices/ShowTicketService";
+import logger from "../../utils/logger";
 
 interface IMe {
   name: string;
@@ -490,6 +491,15 @@ export const handleMessage = async (
   companyId: any
 ): Promise<any> => {
   try {
+    // Postbacks (cliques em botões/quick replies) chegam sem `message` —
+    // normaliza para seguir o mesmo fluxo de mensagem de texto.
+    if (webhookEvent.postback && !webhookEvent.message) {
+      webhookEvent.message = {
+        mid: webhookEvent.postback.mid,
+        text: webhookEvent.postback.title || webhookEvent.postback.payload
+      };
+    }
+
     if (webhookEvent.message) {
       let msgContact: any;
 
@@ -510,6 +520,14 @@ export const handleMessage = async (
 
       const contact = await verifyContact(msgContact, token, companyId);
 
+      // Perfil indisponível na Graph API (IGSID sem permissão, usuário
+      // bloqueou a página etc.) — sem contato não há ticket possível.
+      if (!contact) {
+        logger.warn(
+          `[facebookMessageListener] Perfil não resolvido (sender=${senderPsid} recipient=${recipientPsid}) — evento ignorado`
+        );
+        return;
+      }
 
       const unreadCount = fromMe ? 0 : 1;
 
@@ -584,15 +602,15 @@ export const handleMessage = async (
         if (ticketTag) {
           const tag = await Tag.findByPk(ticketTag.tagId)
 
-          if (tag.nextLaneId) {
+          if (tag?.nextLaneId) {
             nextTag = await Tag.findByPk(tag.nextLaneId);
 
-            bodyNextTag = nextTag.greetingMessageLane;
+            bodyNextTag = nextTag?.greetingMessageLane || "";
           }
-          if (tag.rollbackLaneId) {
+          if (tag?.rollbackLaneId) {
             rollbackTag = await Tag.findByPk(tag.rollbackLaneId);
 
-            bodyRollbackTag = rollbackTag.greetingMessageLane;
+            bodyRollbackTag = rollbackTag?.greetingMessageLane || "";
           }
         }
       }
@@ -905,8 +923,11 @@ export const handleMessage = async (
     }
 
     return;
-  } catch (error) {
-    throw new Error(error);
+  } catch (error: any) {
+    // Handler roda fire-and-forget a partir do webhook — re-throw vira
+    // unhandled rejection (ERR_HTTP_HEADERS_SENT no Express). Logar e
+    // engolir é o comportamento correto aqui.
+    logger.error(`[facebookMessageListener] handleMessage falhou: ${error?.message || error}`);
   }
 };
 

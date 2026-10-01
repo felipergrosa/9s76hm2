@@ -18,6 +18,9 @@ import {
 import CreateWhatsAppService from "../services/WhatsappService/CreateWhatsAppService";
 import Whatsapp from "../models/Whatsapp";
 import logger from "../utils/logger";
+import { emitToCompanyNamespace } from "../libs/socketEmit";
+import { invalidateCache, cacheKey } from "../helpers/queryCache";
+import { sanitizeWhatsapp } from "../helpers/sanitizeWhatsapp";
 
 const META_CREDENTIALS_ERROR =
   "Credenciais do App Meta não configuradas. Preencha Meta App ID e Meta App Secret nos campos da conexão ou configure META_APP_ID/META_APP_SECRET no servidor.";
@@ -43,7 +46,7 @@ const upsertConnectionFromPage = async (
     return "skipped";
   }
 
-  await subscribePageWebhook(page.pageId, page.pageToken);
+  await subscribePageWebhook(page.pageId, page.pageToken, stash.channel);
 
   const connectionData = {
     name: `${page.pageName} (${stash.channel === "instagram" ? "Instagram" : "Facebook"})`,
@@ -73,11 +76,31 @@ const upsertConnectionFromPage = async (
 
   if (existing) {
     await existing.update(connectionData);
+    await notifyConnectionChange(stash.companyId, existing);
     return "updated";
   }
 
-  await CreateWhatsAppService(connectionData as any);
+  const { whatsapp } = await CreateWhatsAppService(connectionData as any);
+  await notifyConnectionChange(stash.companyId, whatsapp);
   return "created";
+};
+
+// Notifica o frontend (mesmo evento do CRUD de conexões) e invalida o
+// query cache da listagem — sem isso /whatsapp retornava a lista stale
+// por até 60s e a conexão nova não aparecia na tela.
+const notifyConnectionChange = async (
+  companyId: number,
+  whatsapp: Whatsapp
+): Promise<void> => {
+  try {
+    await invalidateCache(cacheKey("whatsapps", companyId));
+    await emitToCompanyNamespace(companyId, `company-${companyId}-whatsapp`, {
+      action: "update",
+      whatsapp: sanitizeWhatsapp(whatsapp)
+    });
+  } catch (err: any) {
+    logger.warn(`[MetaOAuth] Falha ao notificar conexão ${whatsapp.id}: ${err.message}`);
+  }
 };
 
 // POST /meta-oauth/start {channel, whatsappId?, metaAppId?, metaAppSecret?}
