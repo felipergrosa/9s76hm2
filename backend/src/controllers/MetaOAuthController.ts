@@ -1,21 +1,61 @@
 import { Request, Response } from "express";
-import { buildOAuthUrl, verifyOAuthState, exchangeCodeForPages, subscribePageWebhook } from "../services/MetaOAuthService";
+import crypto from "crypto";
+import { buildOAuthUrl, verifyOAuthState, exchangeCodeForPages, subscribePageWebhook, stashOAuthCreds, resolveOAuthCreds } from "../services/MetaOAuthService";
 import CreateWhatsAppService from "../services/WhatsappService/CreateWhatsAppService";
 import Whatsapp from "../models/Whatsapp";
 import logger from "../utils/logger";
 
-// GET /meta-oauth/start?channel=facebook|instagram — generates Meta OAuth URL
+const META_CREDENTIALS_ERROR =
+  "Credenciais do App Meta não configuradas. Preencha Meta App ID e Meta App Secret nos campos da conexão ou configure META_APP_ID/META_APP_SECRET no servidor.";
+
+// POST /meta-oauth/start {channel, whatsappId?, metaAppId?, metaAppSecret?}
+// Gera a URL de OAuth da Meta. Resolução de credenciais (ordem):
+//   1. metaAppId/metaAppSecret enviados no body (conexão nova ainda não salva)
+//   2. Credenciais da conexão salva (whatsappId, restrita ao tenant)
+//   3. Variáveis de ambiente META_APP_ID/META_APP_SECRET (fallback global)
+// O secret nunca vai na URL/state — fica em stash no cache ligado ao state via `ck`.
 export const startOAuth = async (req: Request, res: Response): Promise<Response> => {
   const { companyId } = req.user;
-  const channel = (req.query.channel as string) || "facebook";
+  const body = (req.method === "POST" ? req.body : req.query) || {};
+  const channel = (body.channel as string) || "facebook";
   if (!["facebook", "instagram"].includes(channel)) {
     return res.status(400).json({ error: "channel deve ser facebook ou instagram" });
   }
-  const metaAppId = process.env.META_APP_ID;
-  if (!metaAppId) {
-    return res.status(503).json({ error: "META_APP_ID não configurado no servidor" });
+
+  let appId = (body.metaAppId as string) || "";
+  let appSecret = (body.metaAppSecret as string) || "";
+
+  // Credenciais de uma conexão já salva (edição) — valida posse do tenant
+  if (!appId && body.whatsappId) {
+    const connection = await Whatsapp.findOne({
+      where: { id: Number(body.whatsappId), companyId },
+      attributes: ["id", "metaAppId", "metaAppSecret"]
+    });
+    if (connection?.metaAppId) {
+      appId = connection.metaAppId;
+      appSecret = connection.metaAppSecret || "";
+    }
   }
-  const url = buildOAuthUrl(companyId, channel as "facebook" | "instagram");
+
+  // Fallback global do servidor
+  if (!appId) {
+    appId = process.env.META_APP_ID || "";
+    appSecret = process.env.META_APP_SECRET || "";
+  }
+
+  if (!appId || !appSecret) {
+    return res.status(503).json({ error: META_CREDENTIALS_ERROR });
+  }
+
+  // Quando credenciais não são as de env, guardamos em stash e referenciamos no state
+  let credsKey: string | undefined;
+  const usingEnv = appId === (process.env.META_APP_ID || "") && appSecret === (process.env.META_APP_SECRET || "");
+  if (!usingEnv) {
+    credsKey = crypto.randomBytes(16).toString("hex");
+    await stashOAuthCreds(credsKey, { appId, appSecret });
+  }
+
+  const url = buildOAuthUrl(companyId, channel as "facebook" | "instagram", appId, credsKey);
   return res.json({ url });
 };
 
@@ -36,7 +76,22 @@ export const oauthCallback = async (req: Request, res: Response): Promise<void> 
   }
 
   try {
-    const { userId, userToken, pages } = await exchangeCodeForPages(code, stateData.channel);
+    // Credenciais por conexão ficam em stash (one-shot); sem ck usa env global
+    let appId = process.env.META_APP_ID || "";
+    let appSecret = process.env.META_APP_SECRET || "";
+    let customCreds = false;
+    if (stateData.ck) {
+      const creds = await resolveOAuthCreds(stateData.ck);
+      if (!creds) {
+        res.redirect(`${frontendUrl}/connections?meta_error=${encodeURIComponent("Sessão de autorização expirada. Tente conectar novamente.")}`);
+        return;
+      }
+      appId = creds.appId;
+      appSecret = creds.appSecret;
+      customCreds = true;
+    }
+
+    const { userId, userToken, pages } = await exchangeCodeForPages(code, stateData.channel, appId, appSecret);
     const processed = [];
 
     for (const page of pages) {
@@ -60,6 +115,9 @@ export const oauthCallback = async (req: Request, res: Response): Promise<void> 
         tokenMeta: userToken,
         metaPageId: page.pageId,
         metaPageAccessToken: page.pageToken,
+        // Persiste credenciais do app apenas quando vieram da conexão (custom),
+        // não duplicando o secret global de env no banco
+        ...(customCreds ? { metaAppId: appId, metaAppSecret: appSecret } : {}),
         ...(page.instagramAccountId ? { instagramAccountId: page.instagramAccountId } : {})
       };
 

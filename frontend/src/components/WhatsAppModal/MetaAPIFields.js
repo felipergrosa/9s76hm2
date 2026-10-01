@@ -78,7 +78,7 @@ const useStyles = makeStyles((theme) => ({
   }
 }));
 
-const MetaAPIFields = ({ values, errors, touched, channelType }) => {
+const MetaAPIFields = ({ values, errors, touched, channelType, whatsAppId }) => {
   const classes = useStyles();
   const [copiedWebhook, setCopiedWebhook] = useState(false);
   const [copiedToken, setCopiedToken] = useState(false);
@@ -108,12 +108,18 @@ const MetaAPIFields = ({ values, errors, touched, channelType }) => {
   const channelName = isInstagram ? "Instagram" : "Facebook";
 
   // OAuth Meta: redireciona para autorização e cria/atualiza as conexões
-  // de todas as páginas da conta automaticamente (inclui webhook subscribe)
+  // de todas as páginas da conta automaticamente (inclui webhook subscribe).
+  // Envia as credenciais preenchidas no formulário (App ID/Secret próprios);
+  // se vazios e editando conexão salva, o backend usa as credenciais dela;
+  // fallback final são as variáveis de ambiente do servidor.
   const handleConnectViaMeta = async () => {
     setOauthLoading(true);
     try {
-      const { data } = await api.get("/meta-oauth/start", {
-        params: { channel: channelType }
+      const { data } = await api.post("/meta-oauth/start", {
+        channel: channelType,
+        whatsappId: whatsAppId || undefined,
+        metaAppId: values.metaAppId || undefined,
+        metaAppSecret: values.metaAppSecret || undefined
       });
       window.location.href = data.url;
     } catch (err) {
@@ -143,8 +149,9 @@ const MetaAPIFields = ({ values, errors, touched, channelType }) => {
         </Button>
         <Typography variant="caption" display="block" color="textSecondary" style={{ marginTop: 4 }}>
           Abre o login da Meta e conecta todas as páginas autorizadas de uma vez
-          (webhook configurado automaticamente). Requer META_APP_ID no servidor.
-          Para conectar várias contas, repita o processo com cada login.
+          (webhook configurado automaticamente). Usa o App ID/Secret preenchidos
+          abaixo ou os configurados no servidor. Para conectar várias contas,
+          repita o processo com cada login.
         </Typography>
       </Box>
 

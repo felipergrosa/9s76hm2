@@ -878,6 +878,7 @@ const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
                           errors={errors}
                           touched={touched}
                           channelType={values.channelType}
+                          whatsAppId={whatsAppId}
                         />
                       </>
                     )}

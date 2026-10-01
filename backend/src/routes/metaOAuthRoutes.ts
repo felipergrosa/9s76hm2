@@ -6,6 +6,7 @@ import { startOAuth, oauthCallback } from "../controllers/MetaOAuthController";
 const routes = Router();
 
 routes.get("/meta-oauth/start", isAuth, checkPermission("connections.create"), startOAuth);
+routes.post("/meta-oauth/start", isAuth, checkPermission("connections.create"), startOAuth);
 // callback is public — Meta redirects here after OAuth
 routes.get("/meta-oauth/callback", oauthCallback);
 

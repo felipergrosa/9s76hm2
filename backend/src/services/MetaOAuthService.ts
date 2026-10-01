@@ -1,6 +1,7 @@
 import axios from "axios";
 import crypto from "crypto";
 import logger from "../utils/logger";
+import cacheLayer from "../libs/cache";
 
 const GRAPH = "https://graph.facebook.com/v19.0";
 
@@ -11,30 +12,55 @@ if (!META_STATE_SECRET) {
   throw new Error("[MetaOAuth] APP_SECRET_META_STATE ou JWT_SECRET precisa estar configurado");
 }
 
-// ponytail: state is HMAC-signed JSON {companyId, channel, nonce, exp}
-export const createOAuthState = (companyId: number, channel: string): string => {
-  const payload = JSON.stringify({ companyId, channel, nonce: crypto.randomBytes(8).toString("hex"), exp: Date.now() + 30 * 60 * 1000 });
+interface MetaAppCredentials {
+  appId: string;
+  appSecret: string;
+}
+
+// Credenciais por conexão ficam em cache (Redis/memória) durante o fluxo OAuth.
+// O secret nunca trafega na URL nem no state — só a chave aleatória `ck`.
+const OAUTH_CREDS_PREFIX = "meta-oauth-creds:";
+const OAUTH_CREDS_TTL_SECONDS = 30 * 60; // mesmo TTL do state
+
+export const stashOAuthCreds = async (credsKey: string, creds: MetaAppCredentials): Promise<void> => {
+  await cacheLayer.set(OAUTH_CREDS_PREFIX + credsKey, JSON.stringify(creds), "EX", OAUTH_CREDS_TTL_SECONDS);
+};
+
+// Consome as credenciais (one-shot): remove do cache após leitura
+export const resolveOAuthCreds = async (credsKey: string): Promise<MetaAppCredentials | null> => {
+  const raw = await cacheLayer.get(OAUTH_CREDS_PREFIX + credsKey);
+  if (!raw) return null;
+  await cacheLayer.del(OAUTH_CREDS_PREFIX + credsKey);
+  try {
+    return JSON.parse(raw) as MetaAppCredentials;
+  } catch {
+    return null;
+  }
+};
+
+// ponytail: state is HMAC-signed JSON {companyId, channel, nonce, exp, ck?}
+export const createOAuthState = (companyId: number, channel: string, credsKey?: string): string => {
+  const payload = JSON.stringify({ companyId, channel, nonce: crypto.randomBytes(8).toString("hex"), exp: Date.now() + 30 * 60 * 1000, ...(credsKey ? { ck: credsKey } : {}) });
   const sig = crypto.createHmac("sha256", META_STATE_SECRET).update(payload).digest("hex");
   return Buffer.from(JSON.stringify({ payload, sig })).toString("base64url");
 };
 
-export const verifyOAuthState = (state: string): { companyId: number; channel: string } | null => {
+export const verifyOAuthState = (state: string): { companyId: number; channel: string; ck?: string } | null => {
   try {
     const { payload, sig } = JSON.parse(Buffer.from(state, "base64url").toString("utf-8"));
     const expected = crypto.createHmac("sha256", META_STATE_SECRET).update(payload).digest("hex");
     if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
     const data = JSON.parse(payload);
     if (Date.now() > data.exp) return null;
-    return { companyId: data.companyId, channel: data.channel };
+    return { companyId: data.companyId, channel: data.channel, ck: data.ck };
   } catch {
     return null;
   }
 };
 
-export const buildOAuthUrl = (companyId: number, channel: "facebook" | "instagram"): string => {
-  const appId = process.env.META_APP_ID || "";
+export const buildOAuthUrl = (companyId: number, channel: "facebook" | "instagram", appId: string, credsKey?: string): string => {
   const redirectUri = `${process.env.BACKEND_URL}/meta-oauth/callback`;
-  const state = createOAuthState(companyId, channel);
+  const state = createOAuthState(companyId, channel, credsKey);
   const scope = channel === "instagram"
     ? "instagram_basic,instagram_manage_messages,pages_show_list,pages_read_engagement"
     : "pages_show_list,pages_read_engagement,pages_messaging";
@@ -42,7 +68,7 @@ export const buildOAuthUrl = (companyId: number, channel: "facebook" | "instagra
 };
 
 // Exchange short-lived code for long-lived page access token and discover pages
-export const exchangeCodeForPages = async (code: string, channel: string): Promise<{
+export const exchangeCodeForPages = async (code: string, channel: string, appId: string, appSecret: string): Promise<{
   userId: string;
   userToken: string;
   pages: Array<{
@@ -52,8 +78,6 @@ export const exchangeCodeForPages = async (code: string, channel: string): Promi
     instagramAccountId?: string;
   }>;
 }> => {
-  const appId = process.env.META_APP_ID || "";
-  const appSecret = process.env.META_APP_SECRET || "";
   const redirectUri = `${process.env.BACKEND_URL}/meta-oauth/callback`;
 
   // Step 1: short-lived user token

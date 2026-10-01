@@ -76,6 +76,7 @@ web_modules/
 # dotenv environment variables file
 .env
 .env.*
+!.env.example
 
 # Ignora .env do backend
 backend/.env
