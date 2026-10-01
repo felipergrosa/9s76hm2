@@ -12,28 +12,23 @@ import { green } from "@material-ui/core/colors";
 import {
   Button,
   TableBody,
-  TableRow,
-  TableCell,
   IconButton,
   Table,
-  TableHead,
   Paper,
   Tooltip,
-  Typography,
   CircularProgress,
   Box,
-  Card,
-  CardContent,
   Chip,
-  Grid
+  Grid,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from "@material-ui/core";
 
 import {
   Edit,
   CheckCircle,
-  SignalCellularConnectedNoInternet2Bar,
-  SignalCellularConnectedNoInternet0Bar,
-  SignalCellular4Bar,
   CropFree,
   DeleteOutline,
   Facebook,
@@ -46,9 +41,8 @@ import {
   PowerSettingsNew,
   Chat as WebChatIcon,
   Sync,
+  Assessment,
 } from "@material-ui/icons";
-
-import FacebookLogin from "react-facebook-login/dist/facebook-login-render-props";
 
 import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
@@ -78,35 +72,15 @@ const useStyles = makeStyles((theme) => ({
     padding: theme.padding,
     ...theme.scrollbarStyles,
   },
-  customTableCell: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  tooltip: {
-    backgroundColor: "#f5f5f9",
-    color: "rgba(0, 0, 0, 0.87)",
-    fontSize: theme.typography.pxToRem(14),
-    border: "1px solid #dadde9",
-    maxWidth: 450,
-  },
-  tooltipPopper: {
-    textAlign: "center",
-  },
   buttonProgress: {
     color: green[500],
   },
-  mobileList: {
+  connectionsGrid: {
     display: "grid",
     gridTemplateColumns: "1fr",
     gap: theme.spacing(2),
     [theme.breakpoints.up("sm")]: {
-      display: "none",
-    },
-  },
-  desktopTableWrapper: {
-    [theme.breakpoints.down("sm")]: {
-      display: "none",
+      gridTemplateColumns: "repeat(auto-fill, minmax(330px, 1fr))",
     },
   },
   card: {
@@ -118,6 +92,11 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: "column",
     gap: theme.spacing(1.25),
     background: theme.palette.background.paper,
+    transition: "box-shadow .2s ease, transform .2s ease",
+    "&:hover": {
+      boxShadow: "0 10px 28px rgba(0,0,0,0.14)",
+      transform: "translateY(-2px)",
+    },
   },
   cardHeader: {
     display: "flex",
@@ -128,10 +107,33 @@ const useStyles = makeStyles((theme) => ({
   cardTitle: {
     display: "flex",
     alignItems: "center",
-    gap: theme.spacing(1),
+    gap: theme.spacing(1.25),
+    minWidth: 0,
+  },
+  channelAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+    "& svg": { fontSize: 22 },
+  },
+  cardName: {
     fontWeight: 700,
-    fontSize: "1.05rem",
+    fontSize: "1rem",
     lineHeight: 1.2,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    maxWidth: 190,
+  },
+  statusChip: {
+    height: 24,
+    fontWeight: 600,
+    fontSize: "0.72rem",
+    flexShrink: 0,
   },
   cardMeta: {
     display: "grid",
@@ -159,30 +161,6 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
-const CustomToolTip = ({ title, content, children }) => {
-  const classes = useStyles();
-
-  return (
-    <Tooltip
-      arrow
-      classes={{
-        tooltip: classes.tooltip,
-        popper: classes.tooltipPopper,
-      }}
-      title={
-        <React.Fragment>
-          <Typography gutterBottom color="inherit">
-            {title}
-          </Typography>
-          {content && <Typography>{content}</Typography>}
-        </React.Fragment>
-      }
-    >
-      {children}
-    </Tooltip>
-  );
-};
-
 const IconChannel = (channel, channelType) => {
   // Garante compatibilidade com conexões antigas onde apenas channelType foi salvo
   if (channel === "facebook" || channelType === "facebook") {
@@ -201,26 +179,49 @@ const IconChannel = (channel, channelType) => {
   return <WhatsApp style={{ color: "#25d366" }} />;
 };
 
+// Rótulo + cor de destaque por tipo de conexão (usado no card modernizado)
+const channelInfo = (whatsApp) => {
+  const { channel, channelType } = whatsApp;
+  if (channel === "facebook" || channelType === "facebook") {
+    return { label: "Facebook", color: "#1877F2" };
+  }
+  if (channel === "instagram" || channelType === "instagram") {
+    return { label: "Instagram", color: "#E1306C" };
+  }
+  if (channel === "webchat" || channelType === "webchat") {
+    return { label: "WebChat", color: "#6B46C1" };
+  }
+  if (channelType === "official") {
+    return { label: "WhatsApp · API Oficial", color: "#075E54" };
+  }
+  return { label: "WhatsApp · Baileys", color: "#25D366" };
+};
+
+// Chip de status com texto (mais legível que o ícone sozinho)
+const statusInfo = (whatsApp) => {
+  const isBaileys = !whatsApp.channelType || whatsApp.channelType === "baileys";
+  switch (whatsApp.status) {
+    case "CONNECTED":
+      return { label: "Conectado", color: "#2e7d32", bg: "rgba(46,125,50,.12)" };
+    case "OPENING":
+      return { label: "Conectando…", color: "#1565c0", bg: "rgba(21,101,192,.12)" };
+    case "qrcode":
+      return isBaileys
+        ? { label: "Aguardando QR Code", color: "#b26a00", bg: "rgba(255,152,0,.14)" }
+        : { label: "Desconectado", color: "#c62828", bg: "rgba(198,40,40,.12)" };
+    case "TIMEOUT":
+      return { label: "Timeout", color: "#b26a00", bg: "rgba(255,152,0,.14)" };
+    case "PAIRING":
+      return { label: "Pareando", color: "#1565c0", bg: "rgba(21,101,192,.12)" };
+    default:
+      return { label: "Desconectado", color: "#c62828", bg: "rgba(198,40,40,.12)" };
+  }
+};
+
 const Connections = () => {
   const classes = useStyles();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
-
-  const getConnectionBadgeStyle = (color) => {
-    if (!color) {
-      return {
-        backgroundColor: "transparent",
-        color: theme.palette.text.secondary,
-        border: `1px solid ${theme.palette.divider}`
-      };
-    }
-
-    return {
-      backgroundColor: color,
-      color: theme.palette.getContrastText(color),
-      border: "none"
-    };
-  };
 
   const { whatsApps, loading } = useContext(WhatsAppsContext);
 
@@ -231,6 +232,8 @@ const Connections = () => {
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [metaMenuAnchorEl, setMetaMenuAnchorEl] = useState(null);
   const [metaSelectKey, setMetaSelectKey] = useState(null);
+  // Diagnóstico Meta (token + subscribed_apps) por conexão
+  const [metaHealth, setMetaHealth] = useState({ open: false, loading: false, data: null, name: "" });
   const history = useHistory();
 
   const confirmationModalInitialState = {
@@ -682,46 +685,16 @@ const Connections = () => {
     );
   };
 
-  const renderStatusToolTips = (whatsApp) => {
-    const isBaileys = !whatsApp.channelType || whatsApp.channelType === "baileys";
-
-    return (
-      <div className={classes.customTableCell}>
-        {(whatsApp.status === "DISCONNECTED" ||
-          (whatsApp.status === "qrcode" && !isBaileys)) && (
-            <CustomToolTip
-              title={i18n.t("connections.toolTips.disconnected.title")}
-              content={i18n.t("connections.toolTips.disconnected.content")}
-            >
-              <SignalCellularConnectedNoInternet0Bar color="secondary" />
-            </CustomToolTip>
-          )}
-        {whatsApp.status === "OPENING" && (
-          <CircularProgress size={24} className={classes.buttonProgress} />
-        )}
-        {whatsApp.status === "qrcode" && isBaileys && (
-          <CustomToolTip
-            title={i18n.t("connections.toolTips.qrcode.title")}
-            content={i18n.t("connections.toolTips.qrcode.content")}
-          >
-            <CropFree />
-          </CustomToolTip>
-        )}
-        {whatsApp.status === "CONNECTED" && (
-          <CustomToolTip title={i18n.t("connections.toolTips.connected.title")}>
-            <SignalCellular4Bar style={{ color: green[500] }} />
-          </CustomToolTip>
-        )}
-        {(whatsApp.status === "TIMEOUT" || whatsApp.status === "PAIRING") && (
-          <CustomToolTip
-            title={i18n.t("connections.toolTips.timeout.title")}
-            content={i18n.t("connections.toolTips.timeout.content")}
-          >
-            <SignalCellularConnectedNoInternet2Bar color="secondary" />
-          </CustomToolTip>
-        )}
-      </div>
-    );
+  // Diagnóstico de saúde da integração Meta (token + assinatura de webhook)
+  const handleMetaHealth = async (whatsApp) => {
+    setMetaHealth({ open: true, loading: true, data: null, name: whatsApp.name });
+    try {
+      const { data } = await api.get(`/whatsapp/${whatsApp.id}/meta-health`);
+      setMetaHealth({ open: true, loading: false, data, name: whatsApp.name });
+    } catch (err) {
+      setMetaHealth({ open: false, loading: false, data: null, name: "" });
+      toastError(err);
+    }
   };
 
   const restartWhatsapps = async () => {
@@ -988,225 +961,186 @@ const Connections = () => {
 
 
           <Paper className={classes.mainPaper} variant="outlined">
-            {/* Mobile cards */}
-            <div className={classes.mobileList}>
-              {loading ? (
-                <Table>
-                  <TableBody>
-                    <TableRowSkeleton columns={1} />
-                  </TableBody>
-                </Table>
-              ) : (
-                whatsApps?.map((whatsApp) => (
-                  <div key={whatsApp.id} className={classes.card}>
-                    <div className={classes.cardHeader}>
-                      <div className={classes.cardTitle}>
-                        {IconChannel(whatsApp.channel, whatsApp.channelType)}
-                        <Chip
-                          label={`#${whatsApp.id}`}
-                          size="small"
-                          style={{
-                            height: "22px",
-                            fontWeight: 600,
-                            ...getConnectionBadgeStyle(whatsApp.color)
-                          }}
-                        />
-                        {whatsApp.name}
-                        {whatsApp.channel === 'whatsapp' && whatsApp.channelType === "official" && (
-                          <Chip
-                            label="API Oficial"
-                            color="primary"
-                            size="small"
-                            style={{ fontSize: '0.7rem', height: '20px' }}
-                          />
-                        )}
-                        {whatsApp.channel === 'whatsapp' && whatsApp.channelType === "baileys" && (
-                          <Chip
-                            label="Baileys"
-                            size="small"
-                            variant="outlined"
-                            style={{ fontSize: '0.7rem', height: '20px' }}
-                          />
-                        )}
-                      </div>
-                      <div className={classes.metaValue}>{whatsApp.number && whatsApp.channel === 'whatsapp' ? formatSerializedId(whatsApp.number) : (whatsApp.number || "—")}</div>
-                    </div>
-                    <div className={classes.cardMeta}>
-                      <div>
-                        <div className={classes.metaLabel}>{i18n.t("connections.table.status")}</div>
-                        <div className={classes.metaValue}>{renderStatusToolTips(whatsApp)}</div>
-                      </div>
-                      <div>
-                        <div className={classes.metaLabel}>{i18n.t("connections.table.lastUpdate")}</div>
-                        <div className={classes.metaValue}>{whatsApp.updatedAt ? format(parseISO(whatsApp.updatedAt), "dd/MM/yy HH:mm") : ""}</div>
-                      </div>
-                      <div>
-                        <div className={classes.metaLabel}>{i18n.t("connections.table.default")}</div>
-                        <div className={classes.metaValue}>{whatsApp.isDefault ? <CheckCircle style={{ color: green[500] }} /> : "—"}</div>
-                      </div>
-                    </div>
-                    <div className={classes.cardActions}>
-                      {renderActionButtons(whatsApp)}
-                      <Can
-                        user={user}
-                        perform="connections.create"
-                        yes={() => (
-                          <>
-                            <IconButton
-                              size="small"
-                              className={classes.actionButton}
-                              onClick={() => handleEditWhatsApp(whatsApp)}
-                            >
-                              <Edit />
-                            </IconButton>
+            {/* Grid de cards unificado (mobile + desktop) */}
+            {loading ? (
+              <Table>
+                <TableBody>
+                  <TableRowSkeleton columns={1} />
+                </TableBody>
+              </Table>
+            ) : (
+              <div className={classes.connectionsGrid}>
+                {whatsApps?.map((whatsApp) => {
+                  const info = channelInfo(whatsApp);
+                  const st = statusInfo(whatsApp);
+                  const isMeta = whatsApp.channel === "facebook" || whatsApp.channel === "instagram";
 
-                            {whatsApp.channel === 'whatsapp' && whatsApp.channelType === "official" && (
+                  return (
+                    <div key={whatsApp.id} className={classes.card}>
+                      <div className={classes.cardHeader}>
+                        <div className={classes.cardTitle}>
+                          <span
+                            className={classes.channelAvatar}
+                            style={{ backgroundColor: `${info.color}1a` }}
+                          >
+                            {IconChannel(whatsApp.channel, whatsApp.channelType)}
+                          </span>
+                          <div style={{ minWidth: 0 }}>
+                            <div className={classes.cardName} title={whatsApp.name}>
+                              {whatsApp.name}
+                            </div>
+                            <div className={classes.metaLabel}>
+                              {info.label} · #{whatsApp.id}
+                            </div>
+                          </div>
+                        </div>
+                        <Chip
+                          label={st.label}
+                          size="small"
+                          className={classes.statusChip}
+                          style={{ color: st.color, backgroundColor: st.bg }}
+                          icon={whatsApp.status === "OPENING" ? (
+                            <CircularProgress size={14} style={{ color: st.color, marginLeft: 8 }} />
+                          ) : undefined}
+                        />
+                      </div>
+
+                      <div className={classes.cardMeta}>
+                        <div>
+                          <div className={classes.metaLabel}>
+                            {isMeta ? "Página/Conta" : i18n.t("connections.table.number")}
+                          </div>
+                          <div className={classes.metaValue}>
+                            {whatsApp.number && whatsApp.channel === 'whatsapp'
+                              ? formatSerializedId(whatsApp.number)
+                              : (whatsApp.number || (isMeta ? `#${whatsApp.facebookPageUserId}` : "—"))}
+                          </div>
+                        </div>
+                        <div>
+                          <div className={classes.metaLabel}>{i18n.t("connections.table.lastUpdate")}</div>
+                          <div className={classes.metaValue}>{whatsApp.updatedAt ? format(parseISO(whatsApp.updatedAt), "dd/MM/yy HH:mm") : "—"}</div>
+                        </div>
+                        <div>
+                          <div className={classes.metaLabel}>{i18n.t("connections.table.default")}</div>
+                          <div className={classes.metaValue}>{whatsApp.isDefault ? <CheckCircle style={{ color: green[500] }} /> : "—"}</div>
+                        </div>
+                      </div>
+
+                      <div className={classes.cardActions}>
+                        {renderActionButtons(whatsApp)}
+                        <Can
+                          user={user}
+                          perform="connections.create"
+                          yes={() => (
+                            <>
                               <IconButton
                                 size="small"
                                 className={classes.actionButton}
-                                onClick={(e) => {
-                                  e.stopPropagation && e.stopPropagation();
-                                  handleOpenMetaMenu(e);
+                                onClick={() => handleEditWhatsApp(whatsApp)}
+                              >
+                                <Edit />
+                              </IconButton>
+
+                              {isMeta && (
+                                <Tooltip title="Diagnosticar webhook/token Meta">
+                                  <IconButton
+                                    size="small"
+                                    className={classes.actionButton}
+                                    onClick={() => handleMetaHealth(whatsApp)}
+                                  >
+                                    <Assessment />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+
+                              {whatsApp.channel === 'whatsapp' && whatsApp.channelType === "official" && (
+                                <IconButton
+                                  size="small"
+                                  className={classes.actionButton}
+                                  onClick={(e) => {
+                                    e.stopPropagation && e.stopPropagation();
+                                    handleOpenMetaMenu(e);
+                                  }}
+                                >
+                                  <MoreVert />
+                                </IconButton>
+                              )}
+
+                              <IconButton
+                                size="small"
+                                className={classes.actionButton}
+                                onClick={() => {
+                                  handleOpenConfirmationModal("delete", whatsApp.id);
                                 }}
                               >
-                                <MoreVert />
+                                <DeleteOutline />
                               </IconButton>
-                            )}
+                            </>
+                          )}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Paper>
 
-                            <IconButton
-                              size="small"
-                              className={classes.actionButton}
-                              onClick={() => {
-                                handleOpenConfirmationModal("delete", whatsApp.id);
-                              }}
-                            >
-                              <DeleteOutline />
-                            </IconButton>
-                          </>
-                        )}
-                      />
+          {/* Diagnóstico Meta — token, assinatura da página e dicas */}
+          <Dialog
+            open={metaHealth.open}
+            onClose={() => setMetaHealth({ open: false, loading: false, data: null, name: "" })}
+            maxWidth="sm"
+            fullWidth
+          >
+            <DialogTitle>Diagnóstico Meta — {metaHealth.name}</DialogTitle>
+            <DialogContent dividers>
+              {metaHealth.loading && (
+                <Box display="flex" justifyContent="center" py={3}>
+                  <CircularProgress size={28} />
+                </Box>
+              )}
+              {metaHealth.data && (
+                <Box display="flex" flexDirection="column" style={{ gap: 12 }}>
+                  <div>
+                    <div className={classes.metaLabel}>Canal / Página</div>
+                    <div className={classes.metaValue}>
+                      {metaHealth.data.channel} · {metaHealth.data.pageName || ""} ({metaHealth.data.pageId})
                     </div>
                   </div>
-                ))
-              )}
-            </div>
-
-            {/* Desktop table */}
-            <div className={classes.desktopTableWrapper}>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell align="center">ID</TableCell>
-                    <TableCell align="center">Channel</TableCell>
-                    <TableCell align="center">{i18n.t("connections.table.name")}</TableCell>
-                    <TableCell align="center">{i18n.t("connections.table.number")}</TableCell>
-                    <TableCell align="center">{i18n.t("connections.table.status")}</TableCell>
-                    <TableCell align="center">{i18n.t("connections.table.session")}</TableCell>
-                    <TableCell align="center">{i18n.t("connections.table.lastUpdate")}</TableCell>
-                    <TableCell align="center">{i18n.t("connections.table.default")}</TableCell>
-                    <Can
-                      user={user}
-                      perform="connections.create"
-                      yes={() => (
-                        <TableCell align="center">{i18n.t("connections.table.actions")}</TableCell>
-                      )}
-                    />
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {loading ? (
-                    <TableRowSkeleton />
-                  ) : (
-                    <>
-                      {whatsApps?.length > 0 &&
-                        whatsApps.map((whatsApp) => (
-                          <TableRow key={whatsApp.id}>
-                            <TableCell align="center">
-                              <Chip
-                                label={`#${whatsApp.id}`}
-                                size="small"
-                                style={{
-                                  fontWeight: 600,
-                                  ...getConnectionBadgeStyle(whatsApp.color)
-                                }}
-                              />
-                            </TableCell>
-                            <TableCell align="center">{IconChannel(whatsApp.channel, whatsApp.channelType)}</TableCell>
-                            <TableCell align="center">
-                              <Box display="flex" alignItems="center" justifyContent="center" gap={1}>
-                                <span>{whatsApp.name}</span>
-                                {whatsApp.channel === 'whatsapp' && whatsApp.channelType === "official" && (
-                                  <Chip
-                                    label="API Oficial"
-                                    color="primary"
-                                    size="small"
-                                    style={{ fontSize: '0.7rem', height: '20px' }}
-                                  />
-                                )}
-                                {whatsApp.channel === 'whatsapp' && whatsApp.channelType === "baileys" && (
-                                  <Chip
-                                    label="Baileys"
-                                    size="small"
-                                    variant="outlined"
-                                    style={{ fontSize: '0.7rem', height: '20px' }}
-                                  />
-                                )}
-                              </Box>
-                            </TableCell>
-                            <TableCell align="center">{whatsApp.number && whatsApp.channel === 'whatsapp' ? (<>{formatSerializedId(whatsApp.number)}</>) : whatsApp.number}</TableCell>
-                            <TableCell align="center">{renderStatusToolTips(whatsApp)}</TableCell>
-                            <TableCell align="center">{renderActionButtons(whatsApp)}</TableCell>
-                            <TableCell align="center">{whatsApp.updatedAt ? format(parseISO(whatsApp.updatedAt), "dd/MM/yy HH:mm") : ""}</TableCell>
-                            <TableCell align="center">
-                              {whatsApp.isDefault && (
-                                <div className={classes.customTableCell}>
-                                  <CheckCircle style={{ color: green[500] }} />
-                                </div>
-                              )}
-                            </TableCell>
-                            <Can
-                              user={user}
-                              perform="connections.edit"
-                              yes={() => (
-                                <TableCell align="center">
-                                  <IconButton
-                                    size="small"
-                                    onClick={() => handleEditWhatsApp(whatsApp)}
-                                  >
-                                    <Edit />
-                                  </IconButton>
-
-                                  {whatsApp.channel === 'whatsapp' && whatsApp.channelType === "official" && (
-                                    <IconButton
-                                      size="small"
-                                      onClick={(e) => {
-                                        e.stopPropagation && e.stopPropagation();
-                                        handleOpenMetaMenu(e);
-                                      }}
-                                    >
-                                      <MoreVert />
-                                    </IconButton>
-                                  )}
-
-                                  <IconButton
-                                    size="small"
-                                    onClick={(e) => {
-                                      handleOpenConfirmationModal("delete", whatsApp.id);
-                                    }}
-                                  >
-                                    <DeleteOutline />
-                                  </IconButton>
-                                </TableCell>
-                              )}
-                            />
-                          </TableRow>
+                  <div>
+                    <div className={classes.metaLabel}>Token da página</div>
+                    <div className={classes.metaValue} style={{ color: metaHealth.data.tokenValid ? green[500] : "#c62828" }}>
+                      {metaHealth.data.tokenValid ? "Válido" : `Inválido${metaHealth.data.tokenError ? ` — ${metaHealth.data.tokenError}` : ""}`}
+                    </div>
+                  </div>
+                  <div>
+                    <div className={classes.metaLabel}>Assinatura de webhook na página</div>
+                    <div className={classes.metaValue} style={{ color: metaHealth.data.subscribed ? green[500] : "#b26a00" }}>
+                      {metaHealth.data.subscribed
+                        ? `Assinado (${metaHealth.data.subscribedFields.join(", ") || "messages"})`
+                        : "Sem 'messages' assinado"}
+                    </div>
+                  </div>
+                  {metaHealth.data.hints?.length > 0 && (
+                    <div>
+                      <div className={classes.metaLabel}>Recomendações</div>
+                      <ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+                        {metaHealth.data.hints.map((h, i) => (
+                          <li key={i} style={{ fontSize: "0.85rem" }}>{h}</li>
                         ))}
-                    </>
+                      </ul>
+                    </div>
                   )}
-                </TableBody>
-              </Table>
-            </div>
-          </Paper>
+                </Box>
+              )}
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setMetaHealth({ open: false, loading: false, data: null, name: "" })}>
+                Fechar
+              </Button>
+            </DialogActions>
+          </Dialog>
         </>
       }
     </MainContainer >

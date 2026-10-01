@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import axios from "axios";
 import { getIO } from "../libs/socket";
 import { emitToCompanyNamespace } from "../libs/socketEmit";
 import cacheLayer from "../libs/cache";
@@ -691,5 +692,96 @@ export const getSyncProgressStatus = async (req: Request, res: Response): Promis
   }
 
   return res.status(200).json(progress);
+};
+
+/**
+ * Diagnóstico de conexões Meta (Facebook/Instagram):
+ * - token da página válido?
+ * - o app está assinado na página (subscribed_apps) e com quais campos?
+ * Ajuda a detectar webhook desconfigurado no painel da Meta.
+ * GET /whatsapp/:whatsappId/meta-health
+ */
+export const metaHealth = async (req: Request, res: Response): Promise<Response> => {
+  const { whatsappId } = req.params;
+  const { companyId } = req.user;
+
+  const whatsapp = await Whatsapp.findOne({
+    where: { id: whatsappId, companyId },
+    attributes: [
+      "id", "name", "channel", "channelType",
+      "metaPageId", "metaPageAccessToken",
+      "facebookUserToken", "facebookPageUserId", "instagramAccountId",
+      "status", "updatedAt"
+    ]
+  });
+  if (!whatsapp) {
+    throw new AppError("ERR_NO_WAPP_FOUND", 404);
+  }
+
+  const channel = whatsapp.channel || whatsapp.channelType;
+  if (channel !== "facebook" && channel !== "instagram") {
+    return res.status(400).json({ error: "Diagnóstico disponível apenas para conexões Facebook/Instagram" });
+  }
+
+  const pageId = whatsapp.metaPageId || whatsapp.facebookPageUserId;
+  const token = whatsapp.metaPageAccessToken || whatsapp.facebookUserToken;
+
+  const result: any = {
+    channel,
+    pageId,
+    instagramAccountId: whatsapp.instagramAccountId || null,
+    tokenValid: false,
+    subscribed: false,
+    subscribedFields: [] as string[],
+    hints: [] as string[]
+  };
+
+  if (!token) {
+    result.hints.push("Token da página ausente — refaça a conexão via OAuth.");
+    return res.status(200).json(result);
+  }
+
+  // Valida token e traz subscribed_apps numa única chamada
+  try {
+    const { data } = await axios.get(`https://graph.facebook.com/v19.0/${pageId}`, {
+      params: {
+        access_token: token,
+        fields: "id,name,subscribed_apps{subscribed_fields}"
+      },
+      timeout: 15000
+    });
+    result.tokenValid = true;
+    result.pageName = data.name;
+    const myAppId = process.env.META_APP_ID || process.env.FACEBOOK_APP_ID;
+    const apps = data?.subscribed_apps?.data || [];
+    const mine = myAppId ? apps.filter((a: any) => String(a.id) === String(myAppId)) : apps;
+    const fields = new Set<string>();
+    mine.forEach((a: any) => (a.subscribed_fields || []).forEach((f: string) => fields.add(f)));
+    result.subscribedApps = apps.map((a: any) => ({ id: a.id, fields: a.subscribed_fields || [] }));
+    result.subscribedFields = [...fields];
+    result.subscribed = fields.has("messages");
+  } catch (err: any) {
+    const metaErr = err?.response?.data?.error;
+    result.tokenError = metaErr?.message || err.message;
+    result.tokenErrorCode = metaErr?.code;
+  }
+
+  // Dicas acionáveis conforme o diagnóstico
+  if (!result.tokenValid) {
+    result.hints.push("Token inválido/expirado — refaça a conexão via OAuth (botão editar → reconectar).");
+  } else if (!result.subscribed) {
+    result.hints.push("Página sem assinatura 'messages' neste app — refaça a conexão ou assine no painel da Meta.");
+  }
+  if (channel === "facebook") {
+    result.hints.push(
+      "Confira no app Meta → Webhooks → objeto 'Página' se o callback está assinado com o campo 'messages'. " +
+      "Se a página usa Caixa de Entrada da Meta como principal, o handover pode estar ativo — mensagens chegam em 'standby'."
+    );
+  }
+  if (channel === "instagram") {
+    result.hints.push("Confira no app Meta → Webhooks → objeto 'Instagram' se 'messages' está assinado.");
+  }
+
+  return res.status(200).json(result);
 };
 

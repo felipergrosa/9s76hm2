@@ -230,6 +230,23 @@ export const profilePsid = async (
   }
 };
 
+// Handover protocol: quando o app não é o receptor primário da página,
+// mensagens chegam em entry.standby. take_thread_control devolve o controle.
+export const takeThreadControl = async (
+  psid: string,
+  token: string
+): Promise<boolean> => {
+  try {
+    await apiBase(token).post("me/take_thread_control", {
+      recipient: { id: psid }
+    });
+    return true;
+  } catch (error) {
+    logGraphError("takeThreadControl", error);
+    return false;
+  }
+};
+
 export const subscribeApp = async (id: string, token: string): Promise<any> => {
   try {
     const { data } = await axios.post(

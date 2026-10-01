@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import logger from "../utils/logger";
 import Whatsapp from "../models/Whatsapp";
 import { handleMessage } from "../services/FacebookServices/facebookMessageListener";
+import { takeThreadControl } from "../services/FacebookServices/graphAPI";
 import { extractCommentFromWebhook, replyCommentWithDM } from "../services/FacebookServices/CommentToDMService";
 import {
   checkMetaWebhookSignature
@@ -67,16 +68,45 @@ export const webHook = async (
           where: { facebookPageUserId: entry.id, channel }
         });
 
-        if (getTokenPage) {
-          entry.messaging?.forEach((data: any) => {
+        if (!getTokenPage) {
+          // Diagnóstico: evento entregue pela Meta sem conexão correspondente
+          // (entry.id divergente, canal errado ou conexão removida).
+          logger.warn(
+            `[Webhook] Evento ${body.object} sem conexão (entryId=${entry.id} channel=${channel})`
+          );
+          return;
+        }
+
+        entry.messaging?.forEach((data: any) => {
+          handleMessage(getTokenPage, data, channel, getTokenPage.companyId);
+        });
+
+        // Handover protocol (só Facebook/Page): quando outro app é o receptor
+        // primário da página, as mensagens chegam em `standby` em vez de
+        // `messaging`. Processamos a mensagem e requisitamos o controle da
+        // thread para voltarmos a receber via `messaging`.
+        if (channel === "facebook" && Array.isArray(entry.standby)) {
+          entry.standby.forEach((data: any) => {
+            // Echo do próprio envio pela página: não vira ticket.
+            if (data?.sender?.id === entry.id) return;
+            const psid = data?.sender?.id;
+            if (psid) {
+              takeThreadControl(psid, getTokenPage.facebookUserToken).then(ok => {
+                if (ok) {
+                  logger.info(
+                    `[Webhook] Thread control requisitado (psid=${psid} entryId=${entry.id})`
+                  );
+                }
+              });
+            }
             handleMessage(getTokenPage, data, channel, getTokenPage.companyId);
           });
+        }
 
-          // Comment-to-DM: reply privately to Facebook/Instagram comments
-          const comment = extractCommentFromWebhook({ entry: [entry] });
-          if (comment) {
-            replyCommentWithDM(getTokenPage, comment).catch(() => {});
-          }
+        // Comment-to-DM: reply privately to Facebook/Instagram comments
+        const comment = extractCommentFromWebhook({ entry: [entry] });
+        if (comment) {
+          replyCommentWithDM(getTokenPage, comment).catch(() => {});
         }
       });
 
