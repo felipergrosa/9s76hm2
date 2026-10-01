@@ -518,13 +518,29 @@ export const handleMessage = async (
         msgContact = await profilePsid(senderPsid, token.facebookUserToken, channel);
       }
 
-      const contact = await verifyContact(msgContact, token, companyId);
+      let contact = await verifyContact(msgContact, token, companyId);
 
       // Perfil indisponível na Graph API (IGSID sem permissão, usuário
-      // bloqueou a página etc.) — sem contato não há ticket possível.
+      // bloqueou a página etc.) — cria contato mínimo para não perder
+      // a mensagem; o nome pode ser enriquecido depois.
       if (!contact) {
+        const psid = fromMe ? recipientPsid : senderPsid;
         logger.warn(
-          `[facebookMessageListener] Perfil não resolvido (sender=${senderPsid} recipient=${recipientPsid}) — evento ignorado`
+          `[facebookMessageListener] Perfil não resolvido (sender=${senderPsid} recipient=${recipientPsid}) — usando contato fallback`
+        );
+        contact = await verifyContact(
+          {
+            id: psid,
+            name: `${channel === "instagram" ? "Instagram" : "Facebook"} ${psid}`
+          },
+          token,
+          companyId
+        );
+      }
+
+      if (!contact) {
+        logger.error(
+          `[facebookMessageListener] Falha ao criar contato (sender=${senderPsid}) — evento ignorado`
         );
         return;
       }
