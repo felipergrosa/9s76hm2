@@ -129,6 +129,7 @@ const ContactListItems = () => {
   const [deletingContact, setDeletingContact] = useState(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmClearListOpen, setConfirmClearListOpen] = useState(false);
+  const [unlinkedToRemove, setUnlinkedToRemove] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [contactList, setContactList] = useState({});
   const [filterModalOpen, setFilterModalOpen] = useState(false);
@@ -353,6 +354,24 @@ const ContactListItems = () => {
       const { data } = await api.post(`/contact-lists/${contactListId}/fix-links`);
       toast.success(`${data.fixed} vínculos corrigidos, ${data.stillUnlinked} ainda sem vínculo`);
       // Recarregar lista
+      dispatch({ type: "RESET" });
+      setSearchParam("");
+      setPageNumber(1);
+      setRefreshKey((k) => k + 1);
+      // Se sobraram itens sem vínculo (número não existe como contato),
+      // oferece remoção — são números inválidos que não devem ficar na lista
+      if (data.stillUnlinked > 0) {
+        setUnlinkedToRemove(data.stillUnlinked);
+      }
+    } catch (err) {
+      toastError(err);
+    }
+  };
+
+  const handleRemoveUnlinked = async () => {
+    try {
+      const { data } = await api.post(`/contact-lists/${contactListId}/fix-links`, { removeUnlinked: true });
+      toast.success(`${data.fixed} vínculos corrigidos, ${data.removed || 0} itens removidos`);
       dispatch({ type: "RESET" });
       setSearchParam("");
       setPageNumber(1);
@@ -797,6 +816,15 @@ const ContactListItems = () => {
             onConfirm={handleClearListItems}
           >
             Tem certeza que deseja remover todos os itens desta lista? Esta ação não pode ser desfeita.
+          </ConfirmationModal>
+          {/* Confirmação para remover itens sem contato correspondente */}
+          <ConfirmationModal
+            title={"Remover itens sem vínculo"}
+            open={unlinkedToRemove > 0}
+            onClose={() => setUnlinkedToRemove(0)}
+            onConfirm={() => { setUnlinkedToRemove(0); handleRemoveUnlinked(); }}
+          >
+            {unlinkedToRemove} item(ns) não correspondem a nenhum contato válido (número inexistente ou incorreto). Deseja removê-los da lista?
           </ConfirmationModal>
           <ConfirmationModal
             title={

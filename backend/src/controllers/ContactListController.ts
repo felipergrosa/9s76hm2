@@ -363,7 +363,8 @@ export const fixLinks = async (
 
     const result = await FixUnlinkedContactsService({
       contactListId: Number(id),
-      companyId: Number(companyId)
+      companyId: Number(companyId),
+      removeUnlinked: req.body?.removeUnlinked === true
     });
 
     // Emitir evento para atualizar frontend

@@ -1,5 +1,5 @@
 import { Sequelize, Op } from "sequelize";
-import { safeNormalizePhoneNumber } from "../../utils/phone";
+import ContactNormalizer from "../../helpers/ContactNormalizer";
 import ContactListItem from "../../models/ContactListItem";
 import Contact from "../../models/Contact";
 import Tag from "../../models/Tag";
@@ -111,8 +111,8 @@ const ListService = async ({
   // Primeiro, identificar quais itens precisam de busca
   const itemsNeedingContact = rowsAny.filter(item => !item.contact);
 
-  // Gera as chaves candidatas para um item: canonical salvo, dígitos do number,
-  // normalização completa e variantes com/sem o 55 (mesma lógica do fix-links)
+  // Gera as chaves candidatas para um item: canonical salvo, dígitos do number
+  // e todas as variações brasileiras (±55, ±9º dígito) via ContactNormalizer
   const candidateKeysFor = (item: any): string[] => {
     const keys: string[] = [];
     const push = (v?: string | null) => {
@@ -120,16 +120,10 @@ const ListService = async ({
       if (d && !keys.includes(d)) keys.push(d);
     };
     push(item.canonicalNumber);
-    push(item.number);
-    try {
-      const { canonical } = safeNormalizePhoneNumber(item.number || "");
-      push(canonical);
-    } catch { /* ignora número inválido */ }
-    // Variantes com/sem código do país 55
-    [...keys].forEach(k => {
-      if (k.startsWith("55")) push(k.slice(2));
-      else push(`55${k}`);
-    });
+    ContactNormalizer.getVariations(item.number || "").variations.forEach(push);
+    if (item.canonicalNumber && item.canonicalNumber !== item.number) {
+      ContactNormalizer.getVariations(item.canonicalNumber).variations.forEach(push);
+    }
     return keys;
   };
 

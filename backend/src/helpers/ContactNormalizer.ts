@@ -148,6 +148,15 @@ class ContactNormalizer {
         variations.add(without9);
         variations.add(`55${without9}`);
       }
+
+      // Sem o 9 (10 dígitos locais): 551187654321 → 551198765432
+      // WhatsApp BR sempre tem o 9º dígito em celulares — variante essencial
+      // para casar contatos gravados sem o 9 (ERPs, bases antigas)
+      if (withoutCountry.length === 10) {
+        const with9 = withoutCountry.substring(0, 2) + '9' + withoutCountry.substring(2);
+        variations.add(with9);
+        variations.add(`55${with9}`);
+      }
     } else if (cleaned.length <= 11) {
       // Sem 55: adicionar
       variations.add(`55${cleaned}`);
@@ -157,6 +166,13 @@ class ContactNormalizer {
         const without9 = cleaned.substring(0, 2) + cleaned.substring(3);
         variations.add(without9);
         variations.add(`55${without9}`);
+      }
+
+      // Sem o 9 (10 dígitos): adicionar variante com 9
+      if (cleaned.length === 10) {
+        const with9 = cleaned.substring(0, 2) + '9' + cleaned.substring(2);
+        variations.add(with9);
+        variations.add(`55${with9}`);
       }
     }
 
