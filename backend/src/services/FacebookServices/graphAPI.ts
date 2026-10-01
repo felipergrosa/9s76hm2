@@ -248,23 +248,38 @@ export const takeThreadControl = async (
 };
 
 export const subscribeApp = async (id: string, token: string): Promise<any> => {
-  try {
-    const { data } = await axios.post(
+  const doSubscribe = (subscribedFields: string[]) =>
+    axios.post(
       `https://graph.facebook.com/v18.0/${id}/subscribed_apps?access_token=${token}`,
-      {
-        subscribed_fields: [
-          "messages",
-          "messaging_postbacks",
-          "message_deliveries",
-          "message_reads",
-          "message_echoes"
-        ]
-      }
+      { subscribed_fields: subscribedFields }
     );
+  try {
+    // standby + messaging_handovers: sem eles, se outro app for o receptor
+    // primário da página, mensagens não chegam nem em messaging nem em standby
+    const { data } = await doSubscribe([
+      "messages",
+      "messaging_postbacks",
+      "message_deliveries",
+      "message_reads",
+      "message_echoes",
+      "standby",
+      "messaging_handovers"
+    ]);
     return data;
   } catch (error) {
-    logGraphError("subscribeApp", error)
-    throw new Error("ERR_SUBSCRIBING_PAGE_TO_MESSAGE_WEBHOOKS");
+    logGraphError("subscribeApp", error);
+    // Fallback: mantém standby/handovers (essencial p/ receptor secundário)
+    try {
+      const { data } = await doSubscribe([
+        "messages",
+        "messaging_postbacks",
+        "standby",
+        "messaging_handovers"
+      ]);
+      return data;
+    } catch {
+      throw new Error("ERR_SUBSCRIBING_PAGE_TO_MESSAGE_WEBHOOKS");
+    }
   }
 };
 

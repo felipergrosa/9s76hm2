@@ -143,7 +143,10 @@ export const subscribePageWebhook = async (
   const fields =
     channel === "instagram"
       ? "messages,messaging_postbacks"
-      : "messages,messaging_postbacks,message_deliveries,message_reads,feed,messaging_referrals";
+      // standby + messaging_handovers: sem eles, quando outro app (ex.: Caixa
+      // de Entrada da Meta) é o receptor primário da página, as mensagens não
+      // chegam em 'messaging' nem em 'standby' — a página fica sem receber DMs
+      : "messages,messaging_postbacks,message_deliveries,message_reads,feed,messaging_referrals,standby,messaging_handovers";
 
   const subscribe = (subscribedFields: string) =>
     axios.post(`${GRAPH}/${pageId}/subscribed_apps`, null, {
@@ -161,13 +164,24 @@ export const subscribePageWebhook = async (
     // Fallback: se algum campo não for suportado pela página, assina só o
     // essencial para não ficar sem receber DMs.
     try {
-      await subscribe("messages,messaging_postbacks");
+      // Fallback mantém standby — essencial quando o app não é o receptor primário
+      await subscribe("messages,messaging_postbacks,standby,messaging_handovers");
       logger.info(`[MetaOAuth] subscribePageWebhook fallback ok p/ ${pageId}`);
     } catch (err2: any) {
       logger.warn(
         `[MetaOAuth] subscribePageWebhook fallback falhou p/ ${pageId}: ` +
         `${JSON.stringify(err2?.response?.data?.error ?? err2?.message)}`
       );
+      // Último nível: assinatura mínima para não ficar sem receber nada
+      try {
+        await subscribe("messages,messaging_postbacks");
+        logger.info(`[MetaOAuth] subscribePageWebhook fallback mínimo ok p/ ${pageId}`);
+      } catch (err3: any) {
+        logger.warn(
+          `[MetaOAuth] subscribePageWebhook fallback mínimo falhou p/ ${pageId}: ` +
+          `${JSON.stringify(err3?.response?.data?.error ?? err3?.message)}`
+        );
+      }
     }
   }
 };
