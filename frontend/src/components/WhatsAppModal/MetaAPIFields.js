@@ -10,17 +10,22 @@ import {
   Tooltip,
   Divider,
   Button,
-  CircularProgress
+  CircularProgress,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails
 } from "@material-ui/core";
 import { makeStyles } from "@material-ui/core/styles";
 import { Alert } from "@material-ui/lab";
-import { 
-  Info, 
+import {
+  Info,
   FileCopy,
   Facebook,
   Instagram,
   VpnKey,
-  Security
+  Security,
+  ExpandMore,
+  CloudDone
 } from "@material-ui/icons";
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
@@ -33,18 +38,35 @@ const useStyles = makeStyles((theme) => ({
     alignItems: "center",
     gap: theme.spacing(1)
   },
-  infoBox: {
-    padding: theme.spacing(2),
-    backgroundColor: theme.palette.type === "dark" ? "#1e3a5f" : "#e3f2fd",
-    borderRadius: theme.shape.borderRadius,
-    marginBottom: theme.spacing(2),
-    display: "flex",
-    alignItems: "flex-start",
-    gap: theme.spacing(1)
+  oauthCard: {
+    padding: theme.spacing(3),
+    borderRadius: theme.shape.borderRadius * 2,
+    backgroundColor:
+      theme.palette.type === "dark"
+        ? "rgba(255,255,255,0.04)"
+        : "rgba(0,0,0,0.02)",
+    border: "1px solid",
+    borderColor:
+      theme.palette.type === "dark"
+        ? "rgba(255,255,255,0.1)"
+        : "rgba(0,0,0,0.08)",
+    textAlign: "center",
+    marginBottom: theme.spacing(2)
   },
-  textField: {
-    marginRight: theme.spacing(1),
-    flex: 1,
+  oauthButton: {
+    padding: theme.spacing(1.5, 4),
+    fontSize: "1rem",
+    fontWeight: 600,
+    textTransform: "none",
+    borderRadius: theme.shape.borderRadius * 2
+  },
+  envBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: theme.spacing(0.5),
+    marginTop: theme.spacing(1),
+    color: theme.palette.success.main,
+    fontSize: "0.8rem"
   },
   divider: {
     margin: theme.spacing(2, 0)
@@ -57,15 +79,21 @@ const useStyles = makeStyles((theme) => ({
     alignItems: "center",
     gap: theme.spacing(1),
     padding: theme.spacing(1.5),
-    backgroundColor: theme.palette.type === "dark" ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
+    backgroundColor:
+      theme.palette.type === "dark"
+        ? "rgba(255,255,255,0.05)"
+        : "rgba(0,0,0,0.03)",
     borderRadius: theme.shape.borderRadius,
     border: "1px solid",
-    borderColor: theme.palette.type === "dark" ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"
+    borderColor:
+      theme.palette.type === "dark"
+        ? "rgba(255,255,255,0.1)"
+        : "rgba(0,0,0,0.1)"
   },
   webhookUrl: {
     flex: 1,
     fontFamily: "monospace",
-    fontSize: "0.9rem",
+    fontSize: "0.85rem",
     wordBreak: "break-all"
   },
   helpButton: {
@@ -75,6 +103,16 @@ const useStyles = makeStyles((theme) => ({
     fontSize: "0.75rem",
     color: theme.palette.text.secondary,
     fontStyle: "italic"
+  },
+  accordion: {
+    boxShadow: "none",
+    border: "1px solid",
+    borderColor:
+      theme.palette.type === "dark"
+        ? "rgba(255,255,255,0.1)"
+        : "rgba(0,0,0,0.08)",
+    borderRadius: theme.shape.borderRadius + "px !important",
+    "&:before": { display: "none" }
   }
 }));
 
@@ -84,7 +122,8 @@ const MetaAPIFields = ({ values, errors, touched, channelType, whatsAppId }) => 
   const [copiedToken, setCopiedToken] = useState(false);
   const [oauthLoading, setOauthLoading] = useState(false);
 
-  const backendUrl = process.env.REACT_APP_BACKEND_URL || window.location.origin;
+  const backendUrl =
+    process.env.REACT_APP_BACKEND_URL || window.location.origin;
   // endpoint único: /webhook atende page (facebook) e instagram
   const webhookUrl = `${backendUrl}/webhook`;
 
@@ -106,12 +145,11 @@ const MetaAPIFields = ({ values, errors, touched, channelType, whatsAppId }) => 
   const ChannelIcon = isInstagram ? Instagram : Facebook;
   const channelColor = isInstagram ? "#e1306c" : "#3b5998";
   const channelName = isInstagram ? "Instagram" : "Facebook";
+  const hasCustomCreds = Boolean(values.metaAppId && values.metaAppSecret);
 
-  // OAuth Meta: redireciona para autorização e cria/atualiza as conexões
-  // de todas as páginas da conta automaticamente (inclui webhook subscribe).
-  // Envia as credenciais preenchidas no formulário (App ID/Secret próprios);
-  // se vazios e editando conexão salva, o backend usa as credenciais dela;
-  // fallback final são as variáveis de ambiente do servidor.
+  // OAuth Meta: redireciona para autorização e o usuário escolhe quais
+  // páginas/contas conectar na tela seguinte (webhook assinado automaticamente).
+  // Credenciais: campos do form > credenciais da conexão salva > env do servidor.
   const handleConnectViaMeta = async () => {
     setOauthLoading(true);
     try {
@@ -133,238 +171,310 @@ const MetaAPIFields = ({ values, errors, touched, channelType, whatsAppId }) => 
       <Typography variant="h6" className={classes.sectionTitle}>
         <ChannelIcon style={{ color: channelColor }} />
         Configuração do {channelName}
-        <Chip label="Meta API" size="small" style={{ backgroundColor: channelColor, color: "#fff" }} className={classes.chip} />
+        <Chip
+          label="Meta API"
+          size="small"
+          style={{ backgroundColor: channelColor, color: "#fff" }}
+          className={classes.chip}
+        />
       </Typography>
 
-      {/* Conexão automática via OAuth Meta — cria 1 conexão por página/conta */}
-      <Box mb={2}>
+      {/* Fluxo principal: OAuth automático com credenciais do servidor */}
+      <Box className={classes.oauthCard}>
         <Button
           variant="contained"
-          startIcon={oauthLoading ? <CircularProgress size={16} color="inherit" /> : <ChannelIcon />}
+          className={classes.oauthButton}
+          startIcon={
+            oauthLoading ? (
+              <CircularProgress size={18} color="inherit" />
+            ) : (
+              <ChannelIcon />
+            )
+          }
           onClick={handleConnectViaMeta}
           disabled={oauthLoading}
-          style={{ backgroundColor: channelColor, color: "#fff", textTransform: "none" }}
+          style={{ backgroundColor: channelColor, color: "#fff" }}
         >
-          {oauthLoading ? "Redirecionando…" : `Conectar ${channelName} automaticamente`}
+          {oauthLoading
+            ? "Redirecionando…"
+            : `Conectar ${channelName} automaticamente`}
         </Button>
-        <Typography variant="caption" display="block" color="textSecondary" style={{ marginTop: 4 }}>
-          Abre o login da Meta e conecta todas as páginas autorizadas de uma vez
-          (webhook configurado automaticamente). Usa o App ID/Secret preenchidos
-          abaixo ou os configurados no servidor. Para conectar várias contas,
-          repita o processo com cada login.
+
+        <Typography
+          variant="body2"
+          color="textSecondary"
+          style={{ marginTop: 12 }}
+        >
+          Abre o login oficial da Meta. Depois de autorizar, você escolhe quais
+          páginas{isInstagram ? " e contas do Instagram" : ""} conectar — o
+          webhook é configurado automaticamente.
         </Typography>
+
+        <Box className={classes.envBadge}>
+          <CloudDone fontSize="small" />
+          {hasCustomCreds
+            ? "Usando credenciais do app informadas abaixo"
+            : "Usando o app Meta configurado no servidor"}
+        </Box>
       </Box>
 
-      <Divider className={classes.divider} />
-      <Typography variant="subtitle2" style={{ marginBottom: 8 }}>
-        Ou configure manualmente:
-      </Typography>
+      {/* Configuração avançada — opcional (app próprio ou cadastro manual) */}
+      <Accordion className={classes.accordion}>
+        <AccordionSummary expandIcon={<ExpandMore />}>
+          <Typography variant="subtitle2">
+            Configuração avançada (opcional)
+          </Typography>
+        </AccordionSummary>
+        <AccordionDetails>
+          <Box width="100%">
+            <Alert severity="info" style={{ marginBottom: 16 }}>
+              Use estes campos apenas se esta conexão tiver um{" "}
+              <strong>app Meta próprio</strong> ou se você quiser cadastrar os
+              dados manualmente. Em branco, o sistema usa as variáveis de
+              ambiente do servidor.
+            </Alert>
 
-      <Alert severity="info" style={{ marginBottom: 16 }}>
-        <strong>Múltiplas Contas:</strong> Cada conexão pode ter suas próprias credenciais. 
-        Se deixar em branco, o sistema usará as variáveis de ambiente (.env) como fallback.
-      </Alert>
+            {/* App ID + App Secret */}
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <Field
+                  as={TextField}
+                  label="Meta App ID"
+                  name="metaAppId"
+                  error={touched.metaAppId && Boolean(errors.metaAppId)}
+                  helperText={
+                    touched.metaAppId && errors.metaAppId ? (
+                      errors.metaAppId
+                    ) : (
+                      <span className={classes.envFallback}>
+                        Fallback: META_APP_ID
+                      </span>
+                    )
+                  }
+                  variant="outlined"
+                  margin="dense"
+                  fullWidth
+                  placeholder="123456789012345"
+                  InputProps={{
+                    startAdornment: (
+                      <VpnKey
+                        style={{ marginRight: 8, color: "#999" }}
+                        fontSize="small"
+                      />
+                    )
+                  }}
+                />
+              </Grid>
 
-      {/* Linha 1: App ID + App Secret */}
-      <Grid container spacing={2}>
-        <Grid item xs={12} md={6}>
-          <Field
-            as={TextField}
-            label="Meta App ID"
-            name="metaAppId"
-            error={touched.metaAppId && Boolean(errors.metaAppId)}
-            helperText={
-              touched.metaAppId && errors.metaAppId
-                ? errors.metaAppId
-                : <span className={classes.envFallback}>Fallback: META_APP_ID</span>
-            }
-            variant="outlined"
-            margin="dense"
-            fullWidth
-            placeholder="123456789012345"
-            InputProps={{
-              startAdornment: <VpnKey style={{ marginRight: 8, color: "#999" }} fontSize="small" />
-            }}
-          />
-        </Grid>
+              <Grid item xs={12} md={6}>
+                <Field
+                  as={TextField}
+                  label="Meta App Secret"
+                  name="metaAppSecret"
+                  type="password"
+                  error={
+                    touched.metaAppSecret && Boolean(errors.metaAppSecret)
+                  }
+                  helperText={
+                    touched.metaAppSecret && errors.metaAppSecret ? (
+                      errors.metaAppSecret
+                    ) : (
+                      <span className={classes.envFallback}>
+                        Fallback: META_APP_SECRET
+                      </span>
+                    )
+                  }
+                  variant="outlined"
+                  margin="dense"
+                  fullWidth
+                  placeholder="abc123def456..."
+                  InputProps={{
+                    startAdornment: (
+                      <Security
+                        style={{ marginRight: 8, color: "#999" }}
+                        fontSize="small"
+                      />
+                    )
+                  }}
+                />
+              </Grid>
+            </Grid>
 
-        <Grid item xs={12} md={6}>
-          <Field
-            as={TextField}
-            label="Meta App Secret"
-            name="metaAppSecret"
-            type="password"
-            error={touched.metaAppSecret && Boolean(errors.metaAppSecret)}
-            helperText={
-              touched.metaAppSecret && errors.metaAppSecret
-                ? errors.metaAppSecret
-                : <span className={classes.envFallback}>Fallback: META_APP_SECRET</span>
-            }
-            variant="outlined"
-            margin="dense"
-            fullWidth
-            placeholder="abc123def456..."
-            InputProps={{
-              startAdornment: <Security style={{ marginRight: 8, color: "#999" }} fontSize="small" />
-            }}
-          />
-        </Grid>
-      </Grid>
+            {/* Page ID + Page Access Token */}
+            <Grid container spacing={2} style={{ marginTop: 8 }}>
+              <Grid item xs={12} md={4}>
+                <Field
+                  as={TextField}
+                  label={
+                    isInstagram ? "Instagram Account ID" : "Facebook Page ID"
+                  }
+                  name={isInstagram ? "instagramAccountId" : "metaPageId"}
+                  error={
+                    isInstagram
+                      ? touched.instagramAccountId &&
+                        Boolean(errors.instagramAccountId)
+                      : touched.metaPageId && Boolean(errors.metaPageId)
+                  }
+                  helperText={
+                    isInstagram
+                      ? "ID da conta do Instagram Business"
+                      : "ID da Página do Facebook"
+                  }
+                  variant="outlined"
+                  margin="dense"
+                  fullWidth
+                  placeholder="17841400000000000"
+                />
+              </Grid>
 
-      {/* Linha 2: Page ID + Page Access Token */}
-      <Grid container spacing={2} style={{ marginTop: 8 }}>
-        <Grid item xs={12} md={4}>
-          <Field
-            as={TextField}
-            label={isInstagram ? "Instagram Account ID" : "Facebook Page ID"}
-            name={isInstagram ? "instagramAccountId" : "metaPageId"}
-            error={
-              isInstagram 
-                ? touched.instagramAccountId && Boolean(errors.instagramAccountId)
-                : touched.metaPageId && Boolean(errors.metaPageId)
-            }
-            helperText={
-              isInstagram
-                ? "ID da conta do Instagram Business"
-                : "ID da Página do Facebook"
-            }
-            variant="outlined"
-            margin="dense"
-            fullWidth
-            placeholder="17841400000000000"
-          />
-        </Grid>
+              <Grid item xs={12} md={8}>
+                <Field
+                  as={TextField}
+                  label="Page Access Token"
+                  name="metaPageAccessToken"
+                  type="password"
+                  error={
+                    touched.metaPageAccessToken &&
+                    Boolean(errors.metaPageAccessToken)
+                  }
+                  helperText="Token de acesso da página (obtido no Meta Business Suite)"
+                  variant="outlined"
+                  margin="dense"
+                  fullWidth
+                  placeholder="EAAxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                />
+              </Grid>
+            </Grid>
 
-        <Grid item xs={12} md={8}>
-          <Field
-            as={TextField}
-            label="Page Access Token"
-            name="metaPageAccessToken"
-            type="password"
-            error={touched.metaPageAccessToken && Boolean(errors.metaPageAccessToken)}
-            helperText="Token de acesso da página (obtido no Meta Business Suite)"
-            variant="outlined"
-            margin="dense"
-            fullWidth
-            placeholder="EAAxxxxxxxxxxxxxxxxxxxxxxxxxx"
-          />
-        </Grid>
-      </Grid>
+            {/* Webhook Verify Token + User Token */}
+            <Grid container spacing={2} style={{ marginTop: 8 }}>
+              <Grid item xs={12} md={6}>
+                <Field
+                  as={TextField}
+                  label="Webhook Verify Token"
+                  name="metaWebhookVerifyToken"
+                  error={
+                    touched.metaWebhookVerifyToken &&
+                    Boolean(errors.metaWebhookVerifyToken)
+                  }
+                  helperText={
+                    touched.metaWebhookVerifyToken &&
+                    errors.metaWebhookVerifyToken ? (
+                      errors.metaWebhookVerifyToken
+                    ) : (
+                      <span className={classes.envFallback}>
+                        Fallback: VERIFY_TOKEN
+                      </span>
+                    )
+                  }
+                  variant="outlined"
+                  margin="dense"
+                  fullWidth
+                  placeholder="meu_token_secreto_123"
+                />
+              </Grid>
 
-      {/* Linha 3: Webhook Verify Token */}
-      <Grid container spacing={2} style={{ marginTop: 8 }}>
-        <Grid item xs={12} md={6}>
-          <Field
-            as={TextField}
-            label="Webhook Verify Token"
-            name="metaWebhookVerifyToken"
-            error={touched.metaWebhookVerifyToken && Boolean(errors.metaWebhookVerifyToken)}
-            helperText={
-              touched.metaWebhookVerifyToken && errors.metaWebhookVerifyToken
-                ? errors.metaWebhookVerifyToken
-                : <span className={classes.envFallback}>Fallback: VERIFY_TOKEN</span>
-            }
-            variant="outlined"
-            margin="dense"
-            fullWidth
-            placeholder="meu_token_secreto_123"
-          />
-        </Grid>
+              <Grid item xs={12} md={6}>
+                <Field
+                  as={TextField}
+                  label="User Access Token (opcional)"
+                  name="metaAccessToken"
+                  type="password"
+                  error={
+                    touched.metaAccessToken && Boolean(errors.metaAccessToken)
+                  }
+                  helperText="Token do usuário para gerenciamento (opcional)"
+                  variant="outlined"
+                  margin="dense"
+                  fullWidth
+                  placeholder="EAAxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                />
+              </Grid>
+            </Grid>
 
-        <Grid item xs={12} md={6}>
-          <Field
-            as={TextField}
-            label="User Access Token (opcional)"
-            name="metaAccessToken"
-            type="password"
-            error={touched.metaAccessToken && Boolean(errors.metaAccessToken)}
-            helperText="Token do usuário para gerenciamento (opcional)"
-            variant="outlined"
-            margin="dense"
-            fullWidth
-            placeholder="EAAxxxxxxxxxxxxxxxxxxxxxxxxxx"
-          />
-        </Grid>
-      </Grid>
+            <Divider className={classes.divider} />
 
-      <Divider className={classes.divider} />
-
-      {/* Informações de Configuração do Webhook */}
-      <Typography variant="h6" className={classes.sectionTitle}>
-        Configuração do Webhook (Meta Business)
-        <Tooltip
-          title="Configure estes valores no Meta for Developers → Seu App → Webhooks"
-        >
-          <IconButton size="small" className={classes.helpButton}>
-            <Info fontSize="small" color="primary" />
-          </IconButton>
-        </Tooltip>
-      </Typography>
-
-      <Grid container spacing={2}>
-        <Grid item xs={12} md={6}>
-          <Box mb={2}>
-            <Typography variant="body2" gutterBottom>
-              <strong>1. Callback URL</strong>
-            </Typography>
-            <Box className={classes.webhookUrlBox}>
-              <Typography className={classes.webhookUrl}>
-                {webhookUrl}
-              </Typography>
-              <Tooltip title={copiedWebhook ? "Copiado!" : "Copiar URL"}>
-                <IconButton
-                  size="small"
-                  onClick={handleCopyWebhook}
-                  color={copiedWebhook ? "primary" : "default"}
-                >
-                  <FileCopy fontSize="small" />
+            {/* Referência de webhook para cadastro manual */}
+            <Typography variant="subtitle2" gutterBottom>
+              Configuração do Webhook (Meta for Developers)
+              <Tooltip title="Configure estes valores no Meta for Developers → Seu App → Webhooks">
+                <IconButton size="small" className={classes.helpButton}>
+                  <Info fontSize="small" color="primary" />
                 </IconButton>
               </Tooltip>
-            </Box>
-            <Typography variant="caption" color="textSecondary">
-              Use esta URL no Meta for Developers → Webhooks
             </Typography>
-          </Box>
-        </Grid>
 
-        <Grid item xs={12} md={6}>
-          <Box mb={2}>
-            <Typography variant="body2" gutterBottom>
-              <strong>2. Verify Token</strong>
-            </Typography>
-            <Box className={classes.webhookUrlBox}>
-              <Typography className={classes.webhookUrl}>
-                {values.metaWebhookVerifyToken || "(preencha o campo acima)"}
-              </Typography>
-              {values.metaWebhookVerifyToken && (
-                <Tooltip title={copiedToken ? "Copiado!" : "Copiar Token"}>
-                  <IconButton
-                    size="small"
-                    onClick={handleCopyToken}
-                    color={copiedToken ? "primary" : "default"}
-                  >
-                    <FileCopy fontSize="small" />
-                  </IconButton>
-                </Tooltip>
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <Box mb={1}>
+                  <Typography variant="body2" gutterBottom>
+                    <strong>Callback URL</strong>
+                  </Typography>
+                  <Box className={classes.webhookUrlBox}>
+                    <Typography className={classes.webhookUrl}>
+                      {webhookUrl}
+                    </Typography>
+                    <Tooltip
+                      title={copiedWebhook ? "Copiado!" : "Copiar URL"}
+                    >
+                      <IconButton
+                        size="small"
+                        onClick={handleCopyWebhook}
+                        color={copiedWebhook ? "primary" : "default"}
+                      >
+                        <FileCopy fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                </Box>
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <Box mb={1}>
+                  <Typography variant="body2" gutterBottom>
+                    <strong>Verify Token</strong>
+                  </Typography>
+                  <Box className={classes.webhookUrlBox}>
+                    <Typography className={classes.webhookUrl}>
+                      {values.metaWebhookVerifyToken ||
+                        "(usa VERIFY_TOKEN do servidor)"}
+                    </Typography>
+                    {values.metaWebhookVerifyToken && (
+                      <Tooltip
+                        title={copiedToken ? "Copiado!" : "Copiar Token"}
+                      >
+                        <IconButton
+                          size="small"
+                          onClick={handleCopyToken}
+                          color={copiedToken ? "primary" : "default"}
+                        >
+                          <FileCopy fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                  </Box>
+                </Box>
+              </Grid>
+            </Grid>
+
+            <Alert severity="warning" style={{ marginTop: 8 }}>
+              <strong>Campos de assinatura no painel Meta:</strong>
+              <br />
+              {isInstagram ? (
+                <>
+                  messages, messaging_postbacks, comments, messaging_seen,
+                  mentions
+                </>
+              ) : (
+                <>
+                  messages, messaging_postbacks, feed, message_deliveries,
+                  message_reads, messaging_referrals, leadgen
+                </>
               )}
-            </Box>
-            <Typography variant="caption" color="textSecondary">
-              Use o mesmo token no Meta for Developers
-            </Typography>
+            </Alert>
           </Box>
-        </Grid>
-      </Grid>
-
-      {/* Campos de assinatura necessários */}
-      <Alert severity="warning" style={{ marginTop: 8 }}>
-        <strong>Campos de Assinatura (Webhooks):</strong>
-        <br />
-        {isInstagram ? (
-          <>• messages, messaging_postbacks, messaging_optins</>
-        ) : (
-          <>• messages, messaging_postbacks, message_deliveries, messaging_optins</>
-        )}
-      </Alert>
+        </AccordionDetails>
+      </Accordion>
     </>
   );
 };
