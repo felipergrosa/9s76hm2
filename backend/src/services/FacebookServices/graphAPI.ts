@@ -189,33 +189,44 @@ export const getPageProfile = async (
   }
 };
 
+// Conjuntos de campos por canal, do mais completo ao mínimo — alguns campos
+// exigem permissões avançadas do app, então tentamos o rico e degradamos.
+const PROFILE_FIELD_SETS: Record<string, string[]> = {
+  instagram: [
+    "name,username,profile_pic,follower_count,is_verified_user,is_user_follow_business,is_business_follow_user",
+    "name,username,profile_pic"
+  ],
+  facebook: [
+    "first_name,last_name,name,profile_pic,locale,timezone",
+    "first_name,last_name,profile_pic"
+  ]
+};
+
 export const profilePsid = async (
   id: string,
   token: string,
   channel: string = "facebook"
 ): Promise<any> => {
   // IGSID (Instagram) exige fields explícitos — GET /{id} puro falha.
-  // PSID (Messenger) usa os campos clássicos de perfil.
-  const fields =
-    channel === "instagram"
-      ? "name,username,profile_pic"
-      : "first_name,last_name,name,profile_pic";
-  try {
-    const { data } = await axios.get(
-      `https://graph.facebook.com/v18.0/${id}`,
-      { params: { access_token: token, fields } }
-    );
-    return data;
-  } catch (error) {
-    logGraphError("profilePsid", error);
-    // Fallback precisava retornar o perfil — antes o resultado era
-    // descartado e o caller recebia undefined (contact null → crash).
+  const fieldSets = PROFILE_FIELD_SETS[channel] || PROFILE_FIELD_SETS.facebook;
+  for (const fields of fieldSets) {
     try {
-      return await getProfile(id, token);
-    } catch (fallbackError) {
-      logGraphError("profilePsid.fallback", fallbackError);
-      return null;
+      const { data } = await axios.get(
+        `https://graph.facebook.com/v18.0/${id}`,
+        { params: { access_token: token, fields } }
+      );
+      return data;
+    } catch (error) {
+      logGraphError("profilePsid", error);
     }
+  }
+  // Fallback precisava retornar o perfil — antes o resultado era
+  // descartado e o caller recebia undefined (contact null → crash).
+  try {
+    return await getProfile(id, token);
+  } catch (fallbackError) {
+    logGraphError("profilePsid.fallback", fallbackError);
+    return null;
   }
 };
 

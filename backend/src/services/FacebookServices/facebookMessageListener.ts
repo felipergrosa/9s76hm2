@@ -4,6 +4,7 @@ import axios from "axios";
 import moment from "moment";
 import { join } from "path";
 import Contact from "../../models/Contact";
+import ContactCustomField from "../../models/ContactCustomField";
 import Ticket from "../../models/Ticket";
 import CreateOrUpdateContactService from "../ContactServices/CreateOrUpdateContactService";
 import CreateMessageService from "../MessageServices/CreateMessageService";
@@ -88,20 +89,89 @@ export interface ReplyTo {
   mid: string;
 }
 
+// Persiste os dados que a Graph API devolve do perfil como campos
+// customizados do contato (visíveis no modal) e enriquece nome/handle.
+const upsertMetaProfileFields = async (
+  contact: Contact,
+  msgContact: any,
+  channel: string
+): Promise<void> => {
+  const entries: Array<{ name: string; value: string }> = [];
+  const isIg = channel === "instagram";
+
+  if (isIg) {
+    if (msgContact.username) entries.push({ name: "Instagram", value: `@${msgContact.username}` });
+    if (msgContact.follower_count !== undefined) entries.push({ name: "Seguidores Instagram", value: String(msgContact.follower_count) });
+    if (msgContact.is_verified_user) entries.push({ name: "Conta verificada", value: "Sim" });
+    if (msgContact.is_user_follow_business !== undefined) entries.push({ name: "Segue a empresa", value: msgContact.is_user_follow_business ? "Sim" : "Não" });
+    if (msgContact.is_business_follow_user !== undefined) entries.push({ name: "Empresa segue usuário", value: msgContact.is_business_follow_user ? "Sim" : "Não" });
+  } else {
+    entries.push({ name: "Facebook PSID", value: String(msgContact.id) });
+    if (msgContact.locale) entries.push({ name: "Idioma", value: msgContact.locale });
+    if (msgContact.timezone !== undefined) entries.push({ name: "Fuso horário", value: String(msgContact.timezone) });
+  }
+
+  for (const entry of entries) {
+    const [field] = await ContactCustomField.findOrCreate({
+      where: { contactId: contact.id, name: entry.name },
+      defaults: { ...entry, contactId: contact.id } as any
+    });
+    if (field.value !== entry.value) {
+      await field.update({ value: entry.value });
+    }
+  }
+};
+
+// Nome de fallback criado quando a Graph não resolve o perfil — se depois
+// resolver, substituímos pelo nome real.
+const isMetaFallbackName = (name: string | null | undefined, number: string): boolean => {
+  const n = (name || "").trim();
+  if (!n) return true;
+  if (n === number) return true;
+  return /^(Instagram|Facebook)\s+\d+$/.test(n);
+};
+
 const verifyContact = async (msgContact: any, token: any, companyId: any) => {
   if (!msgContact) return null;
 
+  const isIg = token.channel === "instagram";
+  const resolvedName =
+    msgContact?.name ||
+    [msgContact?.first_name, msgContact?.last_name].filter(Boolean).join(" ").trim() ||
+    msgContact?.username ||
+    `${isIg ? "Instagram" : "Facebook"} ${msgContact.id}`;
+
   const contactData = {
-    name: msgContact?.name || `${msgContact?.first_name} ${msgContact?.last_name}`,
+    name: resolvedName,
     number: msgContact.id,
     profilePicUrl: msgContact.profile_pic,
     isGroup: false,
     companyId: companyId,
     channels: [token.channel],
-    whatsappId: token.id
+    whatsappId: token.id,
+    instagram: isIg ? (msgContact.username || undefined) : undefined
   };
 
   const contact = await CreateOrUpdateContactService(contactData);
+  if (!contact) return null;
+
+  try {
+    // Contato criado como fallback ganha o nome real quando o perfil resolve
+    if (msgContact?.name || msgContact?.username) {
+      if (isMetaFallbackName(contact.name, String(msgContact.id))) {
+        await contact.update({ name: resolvedName });
+      }
+    }
+    if (isIg && msgContact?.username && !contact.instagram) {
+      await contact.update({ instagram: msgContact.username });
+    }
+    await upsertMetaProfileFields(contact, msgContact, token.channel);
+  } catch (err: any) {
+    // Enriquecimento é best-effort — não pode derrubar a mensagem
+    logger.warn(
+      `[facebookMessageListener] Enriquecimento do perfil falhou (contactId=${contact.id}): ${err?.message}`
+    );
+  }
 
   return contact;
 };
