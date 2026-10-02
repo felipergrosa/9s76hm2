@@ -34,7 +34,6 @@ import Autocomplete from "@material-ui/lab/Autocomplete";
 import { getBackendUrl } from "../../config";
 import TabPanel from "../TabPanel";
 import AvatarUploader from "../AvatarUpload";
-import PermissionTransferList from "../PermissionTransferList";
 import LegacySettingsGroup from "../LegacySettingsGroup";
 import VisibilityIcon from "@material-ui/icons/Visibility";
 import GroupIcon from "@material-ui/icons/Group";
@@ -183,6 +182,7 @@ const UserModal = ({ open, onClose, userId }) => {
   const [avatar, setAvatar] = useState(null);
   const [roleOptions, setRoleOptions] = useState([]);
   const [selectedRoleIds, setSelectedRoleIds] = useState([]);
+  const [permLabels, setPermLabels] = useState({});
   const startWorkRef = useRef();
   const endWorkRef = useRef();
 
@@ -248,6 +248,23 @@ const UserModal = ({ open, onClose, userId }) => {
       }
     };
     fetchRoles();
+
+    // Catálogo (key -> label) para o preview de permissões da role escolhida
+    const fetchCatalog = async () => {
+      try {
+        const { data } = await api.get("/permissions/catalog");
+        const map = {};
+        (Array.isArray(data) ? data : []).forEach(cat =>
+          (cat?.permissions || []).forEach(p => { map[p.key] = p.label; })
+        );
+        setPermLabels(map);
+      } catch (err) {
+        if (err?.response?.status !== 403) {
+          console.error("[UserModal] Erro ao buscar catálogo:", err);
+        }
+      }
+    };
+    fetchCatalog();
 
     if (userId) {
       const fetchUserRoles = async () => {
@@ -393,7 +410,6 @@ const UserModal = ({ open, onClose, userId }) => {
                   className={classes.tab}
                 >
                   <Tab label={i18n.t("userModal.tabs.general")} value={"general"} />
-                  <Tab label={i18n.t("userModal.tabs.permissions")} value={"permissions"} />
                   <Tab label={i18n.t("userModal.tabs.access")} value={"access"} />
                   {loggedInUser.super && <Tab label="Como usar?" value={"tutorial"} />}
                 </Tabs>
@@ -488,43 +504,28 @@ const UserModal = ({ open, onClose, userId }) => {
                           {hasPermission("users.edit") && (
                             <>
                               <InputLabel id="profile-selection-input-label">
-                                {i18n.t("userModal.form.profile")}
+                                Perfil de acesso
                               </InputLabel>
 
-                              {/* Perfil base (Admin/Usuário) + Perfis de Acesso criados
-                                  em /users → aba Perfis. Escolher um perfil define
-                                  profile="user" e vincula a role selecionada — as
-                                  permissões dela somam às da aba Permissões. */}
+                              {/* Perfil único: as capacidades do usuário vêm
+                                  exclusivamente da Role escolhida (criadas em
+                                  /users → aba Perfis). Sem role = apenas as
+                                  permissões básicas de atendente. */}
                               <Select
-                                label={i18n.t("userModal.form.profile")}
+                                label="Perfil de acesso"
                                 labelId="profile-selection-label"
                                 id="profile-selection"
-                                required
-                                value={
-                                  values.profile === "admin"
-                                    ? "admin"
-                                    : selectedRoleIds.length > 0
-                                      ? `role:${selectedRoleIds[0]}`
-                                      : (values.profile || "user")
-                                }
+                                value={selectedRoleIds[0] || ""}
+                                disabled={!hasPermission("roles.view")}
                                 onChange={e => {
                                   const v = e.target.value;
-                                  if (typeof v === "string" && v.startsWith("role:")) {
-                                    const rid = Number(v.slice(5));
-                                    setFieldValue("profile", "user");
-                                    setSelectedRoleIds([rid]);
-                                  } else {
-                                    setFieldValue("profile", v);
-                                    setSelectedRoleIds([]);
-                                  }
+                                  setSelectedRoleIds(v ? [Number(v)] : []);
                                 }}
                               >
-                                <MenuItem value="admin">Admin</MenuItem>
-                                <MenuItem value="user">User</MenuItem>
-                                {roleOptions.length > 0 && <Divider />}
+                                <MenuItem value="">Sem perfil (permissões básicas)</MenuItem>
                                 {roleOptions.map(r => (
-                                  <MenuItem key={r.id} value={`role:${r.id}`}>
-                                    {r.name} — perfil de acesso
+                                  <MenuItem key={r.id} value={r.id}>
+                                    {r.name}
                                   </MenuItem>
                                 ))}
                               </Select>
@@ -533,6 +534,73 @@ const UserModal = ({ open, onClose, userId }) => {
                         </FormControl>
                       </Grid>
                     </Grid>
+
+                    {/* Preview somente-leitura das permissões da role escolhida —
+                        reforça "perfil define permissões" sem abrir edição manual */}
+                    {selectedRoleIds.length > 0 && (() => {
+                      const role = roleOptions.find(r => r.id === selectedRoleIds[0]);
+                      const perms = Array.isArray(role?.permissions) ? role.permissions : [];
+                      return perms.length > 0 ? (
+                        <Grid container spacing={1} style={{ marginTop: 4 }}>
+                          <Grid item xs={12}>
+                            <Typography variant="caption" color="textSecondary">
+                              Permissões do perfil ({perms.length}):
+                            </Typography>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
+                              {perms.map(p => (
+                                <Chip key={p} label={permLabels[p] || p} size="small" variant="outlined" />
+                              ))}
+                            </div>
+                          </Grid>
+                        </Grid>
+                      ) : null;
+                    })()}
+
+                    {/* Elevações de hierarquia — exclusivas de super admin
+                        (backend bloqueia concessão por não-super) */}
+                    {loggedInUser.super && hasPermission("users.edit") && (
+                      <Grid container spacing={1} style={{ marginTop: 8 }}>
+                        <Grid item xs={12} md={6}>
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={values.profile === "admin"}
+                                onChange={e => setFieldValue("profile", e.target.checked ? "admin" : "user")}
+                                color="primary"
+                              />
+                            }
+                            label={
+                              <div>
+                                Administrador do tenant
+                                <Typography variant="caption" display="block" color="textSecondary">
+                                  Vê todos os tickets e conexões da empresa
+                                </Typography>
+                              </div>
+                            }
+                          />
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={values.super}
+                                onChange={(e) => setFieldValue("super", e.target.checked)}
+                                name="super"
+                                color="primary"
+                              />
+                            }
+                            label={
+                              <div>
+                                Super Admin
+                                <Typography variant="caption" display="block" color="textSecondary">
+                                  Acesso total a todos os tenants
+                                </Typography>
+                              </div>
+                            }
+                          />
+                        </Grid>
+                      </Grid>
+                    )}
                     <Grid container spacing={1}>
                       <Grid item xs={12} md={12} xl={12}>
                         {hasPermission("users.edit") && (
@@ -692,95 +760,6 @@ const UserModal = ({ open, onClose, userId }) => {
                       </Grid>
                     </Grid>
                   </TabPanel>
-                  <TabPanel
-                    className={classes.container}
-                    value={tab}
-                    name={"permissions"}
-                  >
-                    {hasPermission("users.edit") && (
-                      <>
-                        {/* NOVO: Sistema de Permissões Granulares */}
-                        <Grid container spacing={1}>
-                            <Grid item xs={12}>
-                              <PermissionTransferList
-                                value={values.permissions || []}
-                                onChange={(permissions) => setFieldValue("permissions", permissions)}
-                                disabled={false}
-                              />
-                            </Grid>
-                          </Grid>
-
-                          {/* Item 11 do plano (RBAC): Perfis de Acesso (Roles) -
-                              somam permissões extras às já definidas acima, sem substituir nada. */}
-                          {hasPermission("roles.view") && (
-                            <>
-                              <Divider style={{ marginTop: 16, marginBottom: 16 }} />
-                              <Typography variant="subtitle2" style={{ marginBottom: 8 }}>
-                                Perfis de Acesso (Roles)
-                              </Typography>
-                              <Typography variant="caption" color="textSecondary" style={{ marginBottom: 12, display: 'block' }}>
-                                Perfis concedem permissões adicionais, somando-se às selecionadas acima.
-                              </Typography>
-                              <Autocomplete
-                                multiple
-                                options={roleOptions}
-                                getOptionLabel={(option) => option?.name || ''}
-                                value={roleOptions.filter(r => selectedRoleIds.includes(r.id))}
-                                onChange={(e, newValue) => setSelectedRoleIds((newValue || []).map(r => r.id))}
-                                disabled={!hasPermission("roles.edit")}
-                                renderTags={(value, getTagProps) =>
-                                  value.map((option, index) => (
-                                    <Chip
-                                      {...getTagProps({ index })}
-                                      key={option.id}
-                                      label={option.name}
-                                      size="small"
-                                    />
-                                  ))
-                                }
-                                renderInput={(params) => (
-                                  <TextField
-                                    {...params}
-                                    variant="outlined"
-                                    margin="dense"
-                                    placeholder="Selecione perfis de acesso"
-                                  />
-                                )}
-                              />
-                            </>
-                          )}
-
-                          {/* Elevação total: switch Super Admin por último, junto das capacidades */}
-                          {/* Apenas superadmin pode ver esta opção */}
-                          {loggedInUser.super && (
-                            <>
-                              <Divider style={{ marginTop: 16, marginBottom: 16 }} />
-                              <Grid container spacing={1}>
-                                <Grid item xs={12} md={6}>
-                                  <FormControlLabel
-                                    control={
-                                      <Switch
-                                        checked={values.super}
-                                        onChange={(e) => setFieldValue("super", e.target.checked)}
-                                        name="super"
-                                        color="primary"
-                                      />
-                                    }
-                                    label={
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                        Super Admin (Acesso Total)
-                                        <span title="Super Admin" style={{ fontSize: '1.2rem' }}>👑</span>
-                                      </div>
-                                    }
-                                  />
-                                </Grid>
-                              </Grid>
-                            </>
-                          )}
-                      </>
-                    )}
-                  </TabPanel>
-
                   {/* ABA: ACESSO A DADOS — escopo de dados visíveis ao usuário
                       (carteiras, grupos, usuários gerenciados e conexões).
                       Capacidades/permissões ficam na aba "Permissões". */}
