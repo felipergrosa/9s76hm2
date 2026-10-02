@@ -2640,7 +2640,7 @@ export const uniqueValues = async (req: AuthenticatedRequest, res: Response): Pr
     // Se field especificado, retorna apenas aquele campo (lazy loading)
     if (field && ['city', 'region', 'segment', 'channels', 'representativeCode', 'bzEmpresa'].includes(field)) {
       const columnName = field === 'bzEmpresa' ? 'bzEmpresa' : field;
-      
+
       const whereClause: any = {
         companyId,
         [columnName]: { [Op.not]: null, [Op.ne]: "" }
@@ -2648,7 +2648,7 @@ export const uniqueValues = async (req: AuthenticatedRequest, res: Response): Pr
 
       // Filtro de busca opcional
       if (search) {
-        whereClause[columnName] = { 
+        whereClause[columnName] = {
           [Op.and]: [
             { [Op.not]: null },
             { [Op.ne]: "" },
@@ -2657,14 +2657,15 @@ export const uniqueValues = async (req: AuthenticatedRequest, res: Response): Pr
         };
       }
 
+      // Sem LIMIT/OFFSET no SQL: o colapso de variantes "código"/"código - nome"
+      // precisa enxergar o conjunto completo — paginar antes do colapso deixa
+      // a variante sem nome visível quando a nomeada cai noutra página.
       const results = await Contact.findAll({
         where: whereClause,
         attributes: [columnName],
         group: [columnName],
         order: [[columnName, 'ASC']],
-        raw: true,
-        limit: parsedLimit,
-        offset: parsedOffset
+        raw: true
       });
 
       let values = [...new Set(results.map((r: any) => r[columnName]).filter(Boolean))];
@@ -2673,7 +2674,14 @@ export const uniqueValues = async (req: AuthenticatedRequest, res: Response): Pr
         values = collapseCodeNameVariants(values);
       }
 
-      return res.json({ field, values, hasMore: values.length === parsedLimit });
+      // Paginação em memória sobre o conjunto já colapsado
+      const paged = values.slice(parsedOffset, parsedOffset + parsedLimit);
+
+      return res.json({
+        field,
+        values: paged,
+        hasMore: parsedOffset + paged.length < values.length
+      });
     }
 
     // Buscar todos os valores únicos para cada campo
@@ -2700,8 +2708,7 @@ export const uniqueValues = async (req: AuthenticatedRequest, res: Response): Pr
       attributes: ["segment"],
       group: ["segment"],
       order: [["segment", "ASC"]],
-      raw: true,
-      limit: 200
+      raw: true
     }).then((results: any[]) => [...new Set(results.map(r => r.segment).filter(Boolean))]);
 
     const representativesPromise = Contact.findAll({
@@ -2709,8 +2716,7 @@ export const uniqueValues = async (req: AuthenticatedRequest, res: Response): Pr
       attributes: ["representativeCode"],
       group: ["representativeCode"],
       order: [["representativeCode", "ASC"]],
-      raw: true,
-      limit: 200
+      raw: true
     }).then((results: any[]) => [...new Set(results.map(r => r.representativeCode).filter(Boolean))]);
 
     const companiesPromise = Contact.findAll({
@@ -2718,8 +2724,7 @@ export const uniqueValues = async (req: AuthenticatedRequest, res: Response): Pr
       attributes: ["bzEmpresa"],
       group: ["bzEmpresa"],
       order: [["bzEmpresa", "ASC"]],
-      raw: true,
-      limit: 200
+      raw: true
     }).then((results: any[]) => [...new Set(results.map(r => r.bzEmpresa).filter(Boolean))]);
 
     const channelsPromise = Contact.findAll({
