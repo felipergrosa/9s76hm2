@@ -104,13 +104,15 @@ const TicketsQueuesService = async ({
 
   const isLGPDEnabled = settings[0]?.enableLGPD === "enabled";
 
+  // Status "campaign" é tratado em query separada: disparos de campanha
+  // criam um ticket por contato e acumulam aos milhares — trazer todos
+  // travava o carregamento do painel. Buscamos só os mais recentes.
+  const activeStatuses = isLGPDEnabled && showAll === "true"
+    ? ["open", "pending", "lgpd"]
+    : ["open", "pending"];
+
   whereCondition = {
     ...whereCondition,
-    status: { 
-      [Op.in]: isLGPDEnabled && showAll === "true" 
-        ? ["open", "pending", "campaign", "lgpd"] 
-        : ["open", "pending", "campaign"] 
-    },
     companyId
   };
 
@@ -212,16 +214,29 @@ const TicketsQueuesService = async ({
     } as any;
   }
 
-  // findAll no lugar de findAndCountAll: o count era descartado e custava
-  // uma query extra com joins. distinct:true removido — não há includes
-  // to-many que dupliquem linhas. Ordenação por coluna de join ("user"."name")
-  // removida pois impedia uso de índice e o frontend reagrupa os dados.
-  const tickets = await Ticket.findAll({
-    where: whereCondition,
-    include: includeCondition,
-    order: [["updatedAt", "DESC"]]
-  });
-  return tickets;
+  // Duas queries em paralelo: tickets ativos (open/pending/lgpd) com limite
+  // de segurança alto, e tickets de campanha limitados aos mais recentes.
+  // findAll no lugar de findAndCountAll: o count era descartado. Ordenação
+  // por coluna de join removida (impedia índice); o frontend reagrupa.
+  const ACTIVE_LIMIT = 2000;
+  const CAMPAIGN_LIMIT = 300;
+
+  const [activeTickets, campaignTickets] = await Promise.all([
+    Ticket.findAll({
+      where: { ...whereCondition, status: { [Op.in]: activeStatuses } },
+      include: includeCondition,
+      order: [["updatedAt", "DESC"]],
+      limit: ACTIVE_LIMIT
+    }),
+    Ticket.findAll({
+      where: { ...whereCondition, status: "campaign" },
+      include: includeCondition,
+      order: [["updatedAt", "DESC"]],
+      limit: CAMPAIGN_LIMIT
+    })
+  ]);
+
+  return [...activeTickets, ...campaignTickets];
 };
 
 export default TicketsQueuesService;
