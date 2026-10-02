@@ -1,147 +1,246 @@
-/* eslint-disable no-unused-vars */
-
-import { useTheme } from "@material-ui/core/styles";
-import React, { useState, useEffect, useReducer, useContext } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { toast } from "react-toastify";
 
-import { useHistory } from "react-router-dom";
+import { makeStyles, useTheme } from "@material-ui/core/styles";
+import {
+  Button,
+  Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+  IconButton,
+  TextField,
+  InputAdornment,
+  FormControl,
+  Select,
+} from "@material-ui/core";
 
-import { makeStyles } from "@material-ui/core/styles";
-import Paper from "@material-ui/core/Paper";
-import Button from "@material-ui/core/Button";
-import Table from "@material-ui/core/Table";
-import TableBody from "@material-ui/core/TableBody";
-import TableCell from "@material-ui/core/TableCell";
-import TableHead from "@material-ui/core/TableHead";
-import TableRow from "@material-ui/core/TableRow";
-import IconButton from "@material-ui/core/IconButton";
-import SearchIcon from "@material-ui/icons/Search";
-import TextField from "@material-ui/core/TextField";
-import InputAdornment from "@material-ui/core/InputAdornment";
-
-import DeleteOutlineIcon from "@material-ui/icons/DeleteOutline";
-import EditIcon from "@material-ui/icons/Edit";
-import DescriptionIcon from "@material-ui/icons/Description";
-import TimerOffIcon from "@material-ui/icons/TimerOff";
-import PlayCircleOutlineIcon from "@material-ui/icons/PlayCircleOutline";
-import PauseCircleOutlineIcon from "@material-ui/icons/PauseCircleOutline";
+import {
+  Search as SearchIcon,
+  Pencil as EditIcon,
+  Trash2 as DeleteIcon,
+  Plus as AddIcon,
+  MessageSquare as PhraseIcon,
+} from "lucide-react";
 
 import MainContainer from "../../components/MainContainer";
-import MainHeader from "../../components/MainHeader";
 import Title from "../../components/Title";
+import TableRowSkeleton from "../../components/TableRowSkeleton";
+import ForbiddenPage from "../../components/ForbiddenPage";
 
 import api from "../../services/api";
 import { i18n } from "../../translate/i18n";
-import TableRowSkeleton from "../../components/TableRowSkeleton";
-import CampaignModal from "../../components/CampaignModal";
-import ConfirmationModal from "../../components/ConfirmationModal";
 import toastError from "../../errors/toastError";
-import { isArray } from "lodash";
-import { useDate } from "../../hooks/useDate";
-import { SocketContext } from "../../context/Socket/SocketContext";
-import { AddCircle, Build, DevicesFold, TextFields } from "@mui/icons-material";
-import { CircularProgress, Grid, Stack } from "@mui/material";
-import { AuthContext } from "../../context/Auth/AuthContext";
-import usePermissions from "../../hooks/usePermissions";
+import ConfirmationModal from "../../components/ConfirmationModal";
 import CampaignModalPhrase from "../../components/CampaignModalPhrase";
-import { colorBackgroundTable, colorLineTable, colorLineTableHover, colorTopTable } from "../../styles/styles";
+import usePermissions from "../../hooks/usePermissions";
 
-const reducer = (state, action) => {
-  if (action.type === "LOAD_CAMPAIGNS") {
-    const campaigns = action.payload;
-    const newCampaigns = [];
+// Status → chip tailwind (padrão das telas de Conexões/Campanhas)
+const statusInfo = (flow) =>
+  flow.status
+    ? {
+        label: "Ativo",
+        cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200",
+      }
+    : {
+        label: "Desativado",
+        cls: "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200",
+      };
 
-    if (isArray(campaigns)) {
-      campaigns.forEach(campaign => {
-        const campaignIndex = state.findIndex(u => u.id === campaign.id);
-        if (campaignIndex !== -1) {
-          state[campaignIndex] = campaign;
-        } else {
-          newCampaigns.push(campaign);
-        }
-      });
-    }
-
-    return [...state, ...newCampaigns];
-  }
-
-  if (action.type === "UPDATE_CAMPAIGNS") {
-    const campaign = action.payload;
-    const campaignIndex = state.findIndex(u => u.id === campaign.id);
-
-    if (campaignIndex !== -1) {
-      state[campaignIndex] = campaign;
-      return [...state];
-    } else {
-      return [campaign, ...state];
-    }
-  }
-
-  if (action.type === "DELETE_CAMPAIGN") {
-    const campaignId = action.payload;
-
-    const campaignIndex = state.findIndex(u => u.id === campaignId);
-    if (campaignIndex !== -1) {
-      state.splice(campaignIndex, 1);
-    }
-    return [...state];
-  }
-
-  if (action.type === "RESET") {
-    return [];
-  }
-};
-
-const useStyles = makeStyles(theme => ({
-  mainPaper: {
+// ===== Estilos no padrão do gerenciador (referência: Connections/index.js) =====
+const useStyles = makeStyles((theme) => ({
+  paper: {
     flex: 1,
-    backgroundColor: colorBackgroundTable(),
+    padding: 0,
+    overflow: "hidden",
     borderRadius: 12,
-    padding: theme.spacing(1),
-    overflowY: "scroll",
-    ...theme.scrollbarStyles
-  }
+    border: `1px solid ${theme.palette.divider}`,
+    backgroundColor: theme.palette.background.paper,
+  },
+  header: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing(2),
+    flexWrap: "wrap",
+    padding: theme.spacing(2, 2.5),
+  },
+  headerText: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+  },
+  subtitle: {
+    color: theme.palette.text.secondary,
+    fontSize: "0.85rem",
+  },
+  headerActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1),
+    flexWrap: "wrap",
+  },
+  toolbar: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1.5),
+    flexWrap: "wrap",
+    padding: theme.spacing(1.5, 2.5),
+    borderTop: `1px solid ${theme.palette.divider}`,
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    background:
+      theme.palette.type === "dark"
+        ? theme.palette.background.default
+        : "#fafafa",
+  },
+  searchField: {
+    minWidth: 220,
+    flex: "1 1 280px",
+    maxWidth: 380,
+  },
+  filterSelect: {
+    minWidth: 150,
+  },
+  headCell: {
+    fontWeight: 600,
+    fontSize: "0.72rem",
+    letterSpacing: "0.06em",
+    textTransform: "uppercase",
+    color: theme.palette.text.secondary,
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    background:
+      theme.palette.type === "dark"
+        ? theme.palette.background.default
+        : "#fafafa",
+    whiteSpace: "nowrap",
+  },
+  bodyCell: {
+    fontSize: "0.85rem",
+    paddingTop: theme.spacing(1.25),
+    paddingBottom: theme.spacing(1.25),
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    verticalAlign: "middle",
+  },
+  rowHover: {
+    "&:hover": {
+      backgroundColor: theme.palette.action.hover,
+    },
+    transition: "background-color 120ms ease",
+  },
+  nameText: {
+    fontWeight: 600,
+    fontSize: "0.9rem",
+    lineHeight: 1.35,
+  },
+  actionsCell: {
+    whiteSpace: "nowrap",
+  },
+  emptyState: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing(1),
+    padding: theme.spacing(8, 2),
+    color: theme.palette.text.secondary,
+    textAlign: "center",
+  },
+  // Cards mobile
+  mobileList: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gap: theme.spacing(1.5),
+    padding: theme.spacing(1.5),
+    [theme.breakpoints.up("sm")]: {
+      display: "none",
+    },
+  },
+  desktopTableWrapper: {
+    [theme.breakpoints.down("sm")]: {
+      display: "none",
+    },
+  },
+  card: {
+    borderRadius: 12,
+    padding: theme.spacing(1.75),
+    border: `1px solid ${theme.palette.divider}`,
+    display: "flex",
+    flexDirection: "column",
+    gap: theme.spacing(1.25),
+    background: theme.palette.background.paper,
+  },
+  cardHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing(1),
+  },
+  cardTitle: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1.25),
+    minWidth: 0,
+  },
+  cardName: {
+    fontWeight: 700,
+    fontSize: "1rem",
+    lineHeight: 1.2,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    maxWidth: 190,
+  },
+  cardMeta: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+    gap: theme.spacing(1),
+  },
+  metaLabel: {
+    fontSize: "0.72rem",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    color: theme.palette.text.secondary,
+  },
+  metaValue: {
+    fontSize: "0.9rem",
+    fontWeight: 600,
+    wordBreak: "break-word",
+  },
+  cardActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(0.5),
+    flexWrap: "wrap",
+  },
+  actionButton: {
+    minWidth: 44,
+    minHeight: 44,
+  },
 }));
 
 const CampaignsPhrase = () => {
   const classes = useStyles();
   const theme = useTheme();
 
-  const history = useHistory();
-
-  const { user } = useContext(AuthContext);
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission("phrase-campaigns.create");
   const canEdit = hasPermission("phrase-campaigns.edit");
   const canDelete = hasPermission("phrase-campaigns.delete");
 
   const [loading, setLoading] = useState(true);
-  const [pageNumber, setPageNumber] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
-  const [selectedCampaign, setSelectedCampaign] = useState(null);
-  const [deletingCampaign, setDeletingCampaign] = useState(null);
-  const [campaignModalOpen, setCampaignModalOpen] = useState(false);
-  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
-  const [searchParam, setSearchParam] = useState("");
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [deletingContact, setDeletingContact] = useState(null);
-
   const [campaignflows, setCampaignFlows] = useState([]);
-  const [ModalOpenPhrase, setModalOpenPhrase] = useState(false);
   const [campaignflowSelected, setCampaignFlowSelected] = useState();
+  const [modalOpenPhrase, setModalOpenPhrase] = useState(false);
+  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  const [deletingCampaign, setDeletingCampaign] = useState(null);
 
-  const handleDeleteCampaign = async campaignId => {
-    try {
-      await api.delete(`/flowcampaign/${campaignId}`);
-      toast.success("Frase deletada");
-      getCampaigns()
-    } catch (err) {
-      toastError(err);
-    }
-    
-  };
+  // Busca + filtro de status da toolbar (filtro client-side)
+  const [searchParam, setSearchParam] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
 
-  const getCampaigns =  async() => {
+  const getCampaigns = async () => {
     setLoading(true);
     try {
       const res = await api.get("/flowcampaign");
@@ -154,180 +253,258 @@ const CampaignsPhrase = () => {
     }
   };
 
-  const onSaveModal = () => {
-    getCampaigns()
-  }
+  useEffect(() => {
+    getCampaigns();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const handleScroll = e => {
-    if (!hasMore || loading) return;
-    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
-    if (scrollHeight - (scrollTop + 100) < clientHeight) {
+  // Filtro client-side por nome + status (padrão /connections)
+  const filteredFlows = useMemo(() => {
+    const search = searchParam.trim().toLowerCase();
+    return (campaignflows || []).filter((flow) => {
+      if (search && !(flow.name || "").toLowerCase().includes(search)) {
+        return false;
+      }
+      if (statusFilter !== "" && String(!!flow.status) !== statusFilter) {
+        return false;
+      }
+      return true;
+    });
+  }, [campaignflows, searchParam, statusFilter]);
+
+  const handleDeleteCampaign = async (campaignId) => {
+    try {
+      await api.delete(`/flowcampaign/${campaignId}`);
+      toast.success("Frase deletada");
+      getCampaigns();
+    } catch (err) {
+      toastError(err);
     }
   };
 
-  useEffect(() => {
+  const onSaveModal = () => {
     getCampaigns();
-  }, []);
+  };
+
+  // Nova campanha de frases: limpa o id selecionado antes de abrir o modal
+  const handleOpenNewCampaign = () => {
+    setCampaignFlowSelected(undefined);
+    setModalOpenPhrase(true);
+  };
+
+  const handleEditCampaign = (flow) => {
+    setCampaignFlowSelected(flow.id);
+    setModalOpenPhrase(true);
+  };
+
+  const handleAskDelete = (flow) => {
+    setDeletingCampaign(flow);
+    setConfirmModalOpen(true);
+  };
 
   return (
     <MainContainer>
       <ConfirmationModal
         title={
           deletingCampaign &&
-          `${i18n.t("campaigns.confirmationModal.deleteTitle")} ${
-            deletingCampaign.name
-          }?`
+          `${i18n.t("campaigns.confirmationModal.deleteTitle")} ${deletingCampaign.name}?`
         }
         open={confirmModalOpen}
         onClose={setConfirmModalOpen}
-        onConfirm={() => handleDeleteCampaign(deletingContact.id)}
+        onConfirm={() => handleDeleteCampaign(deletingCampaign.id)}
       >
         {i18n.t("campaigns.confirmationModal.deleteMessage")}
       </ConfirmationModal>
       <CampaignModalPhrase
-        open={ModalOpenPhrase}
+        open={modalOpenPhrase}
         onClose={() => setModalOpenPhrase(false)}
         FlowCampaignId={campaignflowSelected}
         onSave={onSaveModal}
       />
-      <MainHeader>
-        <Grid style={{ width: "99.6%" }} container>
-          <Grid xs={12} sm={8} item>
-            <Title>Campanhas</Title>
-          </Grid>
-          <Grid xs={12} sm={4} item>
-            <Grid spacing={2} container>
-              <Grid xs={6} sm={6} item>
-                {/* <TextField
-                  fullWidth
-                  placeholder={i18n.t("campaigns.searchPlaceholder")}
-                  type="search"
-                  value={searchParam}
-                  onChange={handleSearch}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <SearchIcon style={{ color: "gray" }} />
-                      </InputAdornment>
-                    ),
-                  }}
-                /> */}
-              </Grid>
-              <Grid xs={6} sm={6} item>
-                {canCreate && (
-                  <Button
-                    fullWidth
-                    variant="contained"
-                    onClick={() => {
-                      setCampaignFlowSelected();
-                      setModalOpenPhrase(true);
-                    }}
-                    color="primary"
-                    style={{ textTransform: "none" }}
-                  >
-                    <Stack direction={"row"} gap={1}>
-                      <AddCircle />
-                      {"Campanha"}
-                    </Stack>
-                  </Button>
-                )}
-              </Grid>
-            </Grid>
-          </Grid>
-        </Grid>
-      </MainHeader>
-      <Paper
-        className={classes.mainPaper}
-        variant="outlined"
-        onScroll={handleScroll}
-      >
-        <Stack>
-          <Grid container style={{ padding: "8px" }}>
-            <Grid item xs={4} style={{ color: colorTopTable() }}>
-              Nome
-            </Grid>
-            <Grid item xs={4} style={{ color: colorTopTable() }} align="center">
-              Status
-            </Grid>
-            <Grid item xs={4} align="end" style={{ color: colorTopTable() }}>
-              {i18n.t("contacts.table.actions")}
-            </Grid>
-          </Grid>
-          <>
-            {!loading &&
-              campaignflows.map(flow => (
-                <Grid
-                  container
-                  key={flow.id}
-                  sx={{
-                  padding: "8px",
-                  backgroundColor: theme.palette.primary.main,
-                  color: "#fff",
-                 borderRadius: 4,
-                 marginTop: 0.5,
-                "&:hover": {
-                 backgroundColor: theme.palette.primary.dark,
-               },
-                }}
-
+      {!hasPermission("phrase-campaigns.view") ? (
+        <ForbiddenPage />
+      ) : (
+        <Paper className={classes.paper} variant="outlined">
+          {/* Cabeçalho no padrão: título + subtítulo + ações */}
+          <div className={classes.header}>
+            <div className={classes.headerText}>
+              <Title>
+                {i18n.t("campaigns.title")} ({filteredFlows.length})
+              </Title>
+              <span className={classes.subtitle}>
+                Gerencie as campanhas de frases (sequências de mensagens) da empresa.
+              </span>
+            </div>
+            <div className={classes.headerActions}>
+              {canCreate && (
+                <Button
+                  variant="contained"
+                  color="primary"
+                  size="small"
+                  startIcon={<AddIcon size={16} />}
+                  style={{ minHeight: 36 }}
+                  onClick={handleOpenNewCampaign}
                 >
-                  <Grid item xs={4}>
-                    <Stack
-                      justifyContent={"center"}
-                      height={"100%"}
-                      style={{ color: "#ededed" }}
-                    >
-                      <Stack direction={"row"}>
-                        <TextFields />
-                        <Stack justifyContent={"center"} marginLeft={1}>
-                          {flow.name}
-                        </Stack>
-                      </Stack>
-                    </Stack>
-                  </Grid>
-                  <Grid item xs={4} align="center" style={{ color: "#ededed" }}>
-                    <Stack justifyContent={"center"} height={"100%"}>
-                      {flow.status ? "Ativo" : "Desativado"}
-                    </Stack>
-                  </Grid>
-                  <Grid item xs={4} align="end">
-                    {canEdit && (
-                      <IconButton
-                        size="small"
-                        onClick={() => {
-                          setCampaignFlowSelected(flow.id);
-                          setModalOpenPhrase(true);
-                        }}
-                      >
-                        <EditIcon style={{ color: "#ededed" }} />
-                      </IconButton>
-                    )}
-                    {canDelete && (
-                      <IconButton
-                        size="small"
-                        onClick={e => {
-                          setConfirmModalOpen(true);
-                          setDeletingContact(flow);
-                        }}
-                      >
-                        <DeleteOutlineIcon style={{ color: "#ededed" }} />
-                      </IconButton>
-                    )}
-                  </Grid>
-                </Grid>
-              ))}
-            {loading && (
-              <Stack
-                justifyContent={"center"}
-                alignItems={"center"}
-                minHeight={"50vh"}
+                  {i18n.t("campaigns.buttons.add")}
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Toolbar: busca + filtro de status */}
+          <div className={classes.toolbar}>
+            <TextField
+              className={classes.searchField}
+              size="small"
+              variant="outlined"
+              placeholder={i18n.t("campaigns.searchPlaceholder")}
+              value={searchParam}
+              onChange={(e) => setSearchParam(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon size={16} />
+                  </InputAdornment>
+                ),
+              }}
+            />
+            <FormControl
+              size="small"
+              variant="outlined"
+              className={classes.filterSelect}
+            >
+              <Select
+                native
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                displayEmpty
               >
-                <CircularProgress />
-              </Stack>
-            )}
-          </>
-        </Stack>
-      </Paper>
+                <option value="">Todos os status</option>
+                <option value="true">Ativos</option>
+                <option value="false">Desativados</option>
+              </Select>
+            </FormControl>
+          </div>
+
+          {loading ? (
+            <Table>
+              <TableBody>
+                <TableRowSkeleton columns={3} />
+              </TableBody>
+            </Table>
+          ) : filteredFlows.length === 0 ? (
+            <div className={classes.emptyState}>
+              <PhraseIcon
+                size={44}
+                style={{ color: theme.palette.text.disabled }}
+              />
+              <div>Nenhuma campanha de frases encontrada.</div>
+            </div>
+          ) : (
+            <>
+              {/* Cards — mobile */}
+              <div className={classes.mobileList}>
+                {filteredFlows.map((flow) => {
+                  const st = statusInfo(flow);
+                  return (
+                    <div key={flow.id} className={classes.card}>
+                      <div className={classes.cardHeader}>
+                        <div className={classes.cardTitle}>
+                          <span className={classes.cardName} title={flow.name}>
+                            {flow.name}
+                          </span>
+                        </div>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-xs font-medium ${st.cls}`}
+                        >
+                          {st.label}
+                        </span>
+                      </div>
+                      <div className={classes.cardActions}>
+                        {canEdit && (
+                          <IconButton
+                            size="small"
+                            className={classes.actionButton}
+                            onClick={() => handleEditCampaign(flow)}
+                          >
+                            <EditIcon size={18} />
+                          </IconButton>
+                        )}
+                        {canDelete && (
+                          <IconButton
+                            size="small"
+                            className={classes.actionButton}
+                            onClick={() => handleAskDelete(flow)}
+                          >
+                            <DeleteIcon size={18} />
+                          </IconButton>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Tabela — desktop */}
+              <div className={classes.desktopTableWrapper}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell className={classes.headCell}>Nome</TableCell>
+                      <TableCell align="center" className={classes.headCell}>
+                        Status
+                      </TableCell>
+                      <TableCell align="center" className={classes.headCell}>
+                        {i18n.t("contacts.table.actions")}
+                      </TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {filteredFlows.map((flow) => {
+                      const st = statusInfo(flow);
+                      return (
+                        <TableRow key={flow.id} className={classes.rowHover}>
+                          <TableCell className={classes.bodyCell}>
+                            <span className={classes.nameText}>{flow.name}</span>
+                          </TableCell>
+                          <TableCell align="center" className={classes.bodyCell}>
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-xs font-medium ${st.cls}`}
+                            >
+                              {st.label}
+                            </span>
+                          </TableCell>
+                          <TableCell
+                            align="center"
+                            className={`${classes.bodyCell} ${classes.actionsCell}`}
+                          >
+                            {canEdit && (
+                              <IconButton
+                                size="small"
+                                onClick={() => handleEditCampaign(flow)}
+                              >
+                                <EditIcon size={18} />
+                              </IconButton>
+                            )}
+                            {canDelete && (
+                              <IconButton
+                                size="small"
+                                onClick={() => handleAskDelete(flow)}
+                              >
+                                <DeleteIcon size={18} />
+                              </IconButton>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
+          )}
+        </Paper>
+      )}
     </MainContainer>
   );
 };

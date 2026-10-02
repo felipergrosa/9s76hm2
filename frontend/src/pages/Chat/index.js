@@ -15,9 +15,17 @@ import {
   Tabs,
   TextField,
 } from "@material-ui/core";
+import { useTheme } from "@material-ui/core/styles";
+import {
+  MessageSquare as ChatIcon,
+  Plus as AddIcon,
+} from "lucide-react";
+
 import ChatList from "./ChatList";
 import ChatMessages from "./ChatMessages";
 import { UsersFilter } from "../../components/UsersFilter";
+import MainContainer from "../../components/MainContainer";
+import Title from "../../components/Title";
 import api from "../../services/api";
 // import { SocketContext } from "../../context/Socket/SocketContext";
 
@@ -29,33 +37,89 @@ import { i18n } from "../../translate/i18n";
 
 const isDirectChatSelection = (users, type) => type === "new" && Array.isArray(users) && users.length === 1;
 
+// ===== Estilos no padrão do gerenciador de Conexões/Campanhas =====
+// Página de chat interno: cabeçalho + corpo com lista lateral e área de mensagens
 const useStyles = makeStyles((theme) => ({
-  mainContainer: {
+  paper: {
+    flex: 1,
     display: "flex",
     flexDirection: "column",
-    position: "relative",
-    flex: 1,
-    padding: theme.spacing(2),
-    height: `calc(100% - 48px)`,
-    overflowY: "hidden",
-    border: "1px solid rgba(0, 0, 0, 0.12)",
+    minHeight: 0,
+    padding: 0,
+    overflow: "hidden",
+    borderRadius: 12,
+    border: `1px solid ${theme.palette.divider}`,
+    backgroundColor: theme.palette.background.paper,
   },
-  gridContainer: {
+  header: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing(2),
+    flexWrap: "wrap",
+    padding: theme.spacing(2, 2.5),
+  },
+  headerText: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+  },
+  subtitle: {
+    color: theme.palette.text.secondary,
+    fontSize: "0.85rem",
+  },
+  headerActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1),
+    flexWrap: "wrap",
+  },
+  chatBody: {
     flex: 1,
-    height: "100%",
-    border: "1px solid rgba(0, 0, 0, 0.12)",
+    minHeight: 0,
+    display: "flex",
+    flexDirection: "column",
+    borderTop: `1px solid ${theme.palette.divider}`,
     background: theme.palette.background.color,
   },
-  gridItem: {
+  chatGrid: {
+    height: "100%",
+    flexWrap: "nowrap",
+  },
+  listPane: {
+    height: "100%",
+    overflow: "hidden",
+    borderRight: `1px solid ${theme.palette.divider}`,
+  },
+  // O ChatList (componente compartilhado) reserva 58px para a antiga linha
+  // do botão "Nova", que migrou para o cabeçalho — compensamos a altura aqui
+  listPaneInner: {
+    height: "calc(100% + 58px)",
+  },
+  messagesPane: {
     height: "100%",
   },
-  gridItemTab: {
-    height: "92%",
-    width: "100%",
+  mobileChat: {
+    flex: 1,
+    minHeight: 0,
+    display: "flex",
+    flexDirection: "column",
   },
-  btnContainer: {
-    textAlign: "right",
-    padding: 10,
+  tabPanel: {
+    flex: 1,
+    minHeight: 0,
+    overflow: "hidden",
+  },
+  emptyState: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing(1),
+    height: "100%",
+    padding: theme.spacing(4, 2),
+    color: theme.palette.text.secondary,
+    textAlign: "center",
   },
 }));
 
@@ -163,6 +227,7 @@ export function ChatModal({
 
 function Chat(props) {
   const classes = useStyles();
+  const theme = useTheme();
   const { user, socket } = useContext(AuthContext);
   const history = useHistory();
 
@@ -395,36 +460,34 @@ function Chat(props) {
     }
   };
 
+  // Estado vazio da área de mensagens (nenhuma conversa selecionada)
+  const renderEmptyChat = () => (
+    <div className={classes.emptyState}>
+      <ChatIcon size={44} style={{ color: theme.palette.text.disabled }} />
+      <div>Selecione uma conversa para começar.</div>
+    </div>
+  );
+
   const renderGrid = () => {
     return (
-      <Grid className={classes.gridContainer} container>
-        <Grid className={classes.gridItem} md={3} item>
-          <div className={classes.btnContainer}>
-            <Button
-              onClick={() => {
-                setDialogType("new");
+      <Grid className={classes.chatGrid} container>
+        <Grid className={classes.listPane} md={3} item>
+          <div className={classes.listPaneInner}>
+            <ChatList
+              chats={chats}
+              pageInfo={chatsPageInfo}
+              loading={loading}
+              handleSelectChat={(chat) => selectChat(chat)}
+              handleDeleteChat={(chat) => deleteChat(chat)}
+              handleEditChat={() => {
+                setDialogType("edit");
                 setShowDialog(true);
               }}
-              color="primary"
-              variant="contained"
-            >
-              {i18n.t("chatInternal.new")}
-            </Button>
+            />
           </div>
-          <ChatList
-            chats={chats}
-            pageInfo={chatsPageInfo}
-            loading={loading}
-            handleSelectChat={(chat) => selectChat(chat)}
-            handleDeleteChat={(chat) => deleteChat(chat)}
-            handleEditChat={() => {
-              setDialogType("edit");
-              setShowDialog(true);
-            }}
-          />
         </Grid>
-        <Grid className={classes.gridItem} md={9} item>
-          {isObject(currentChat) && has(currentChat, "id") && (
+        <Grid className={classes.messagesPane} md={9} item>
+          {isObject(currentChat) && has(currentChat, "id") ? (
             <ChatMessages
               chat={currentChat}
               scrollToBottomRef={scrollToBottomRef}
@@ -434,6 +497,8 @@ function Chat(props) {
               handleSendMessage={sendMessage}
               handleLoadMore={loadMoreMessages}
             />
+          ) : (
+            renderEmptyChat()
           )}
         </Grid>
       </Grid>
@@ -442,42 +507,33 @@ function Chat(props) {
 
   const renderTab = () => {
     return (
-      <Grid className={classes.gridContainer} container>
-        <Grid md={12} item>
-          <Tabs
-            value={tab}
-            indicatorColor="primary"
-            textColor="primary"
-            onChange={(e, v) => setTab(v)}
-            aria-label="disabled tabs example"
-          >
-            <Tab label="Chats" />
-            <Tab label="Mensagens" />
-          </Tabs>
-        </Grid>
-        {tab === 0 && (
-          <Grid className={classes.gridItemTab} md={12} item>
-            <div className={classes.btnContainer}>
-              <Button
-                onClick={() => setShowDialog(true)}
-                color="primary"
-                variant="contained"
-              >
-                Novo
-              </Button>
+      <div className={classes.mobileChat}>
+        <Tabs
+          value={tab}
+          indicatorColor="primary"
+          textColor="primary"
+          onChange={(e, v) => setTab(v)}
+          aria-label="disabled tabs example"
+        >
+          <Tab label="Chats" />
+          <Tab label="Mensagens" />
+        </Tabs>
+        <div className={classes.tabPanel}>
+          {tab === 0 && (
+            <div className={classes.listPaneInner}>
+              {/* Props idênticas à versão original mobile (sem handleEditChat) */}
+              <ChatList
+                chats={chats}
+                pageInfo={chatsPageInfo}
+                loading={loading}
+                handleSelectChat={(chat) => selectChat(chat)}
+                handleDeleteChat={(chat) => deleteChat(chat)}
+              />
             </div>
-            <ChatList
-              chats={chats}
-              pageInfo={chatsPageInfo}
-              loading={loading}
-              handleSelectChat={(chat) => selectChat(chat)}
-              handleDeleteChat={(chat) => deleteChat(chat)}
-            />
-          </Grid>
-        )}
-        {tab === 1 && (
-          <Grid className={classes.gridItemTab} md={12} item>
-            {isObject(currentChat) && has(currentChat, "id") && (
+          )}
+          {tab === 1 && (
+            isObject(currentChat) && has(currentChat, "id") ? (
+              /* Sem a prop `chat` — mesma assinatura da versão original mobile */
               <ChatMessages
                 scrollToBottomRef={scrollToBottomRef}
                 pageInfo={messagesPageInfo}
@@ -486,15 +542,17 @@ function Chat(props) {
                 handleSendMessage={sendMessage}
                 handleLoadMore={loadMoreMessages}
               />
-            )}
-          </Grid>
-        )}
-      </Grid>
+            ) : (
+              renderEmptyChat()
+            )
+          )}
+        </div>
+      </div>
     );
   };
 
   return (
-    <>
+    <MainContainer>
       <ChatModal
         type={dialogType}
         open={showDialog}
@@ -508,10 +566,40 @@ function Chat(props) {
         }}
         handleClose={() => setShowDialog(false)}
       />
-      <Paper className={classes.mainContainer}>
-        {isWidthUp("md", props.width) ? renderGrid() : renderTab()}
+      <Paper className={classes.paper} variant="outlined">
+        {/* Cabeçalho no padrão de listagens: título + subtítulo + ação primária */}
+        <div className={classes.header}>
+          <div className={classes.headerText}>
+            <Title>
+              {i18n.t("mainDrawer.listItems.chats")} ({chats.length})
+            </Title>
+            <span className={classes.subtitle}>
+              Conversas internas da equipe — crie grupos ou chats diretos com os usuários da empresa.
+            </span>
+          </div>
+          <div className={classes.headerActions}>
+            <Button
+              variant="contained"
+              color="primary"
+              size="small"
+              startIcon={<AddIcon size={16} />}
+              style={{ minHeight: 36 }}
+              onClick={() => {
+                setDialogType("new");
+                setShowDialog(true);
+              }}
+            >
+              {i18n.t("chatInternal.new")}
+            </Button>
+          </div>
+        </div>
+
+        {/* Corpo do chat: lista lateral + mensagens (grid no desktop, abas no mobile) */}
+        <div className={classes.chatBody}>
+          {isWidthUp("md", props.width) ? renderGrid() : renderTab()}
+        </div>
       </Paper>
-    </>
+    </MainContainer>
   );
 }
 

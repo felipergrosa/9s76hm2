@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import Autocomplete from "@material-ui/lab/Autocomplete";
+import Skeleton from "@material-ui/lab/Skeleton";
 import CNAES from "../../data/cnaeList";
 import NJS from "../../data/naturezaJuridicaList";
 import SEGMENT_PRESETS from "../../data/leadSegmentPresets";
@@ -8,34 +9,37 @@ import {
   Select, MenuItem, FormControl, InputLabel, LinearProgress,
   Table, TableHead, TableRow, TableCell, TableBody, Checkbox,
   Chip, IconButton, Tooltip, CircularProgress, Divider, Grid,
-  FormControlLabel, Collapse,
+  FormControlLabel, Collapse, InputAdornment,
 } from "@material-ui/core";
 import { makeStyles } from "@material-ui/core/styles";
+// WhatsApp permanece em @material-ui/icons — não há equivalente no lucide-react
+import { WhatsApp as WhatsAppIcon } from "@material-ui/icons";
 import {
   Search as SearchIcon,
-  GetApp as ImportIcon,
-  Refresh as RefreshIcon,
-  MapOutlined as MapsIcon,
-  BusinessOutlined as CnpjIcon,
-  FiberManualRecord as DotIcon,
-  PersonAdd as LeadIcon,
-  FilterList as FilterIcon,
-  PeopleOutlined as FollowersIcon,
-  HelpOutline as HelpIcon,
+  Download as ImportIcon,
+  RefreshCw as RefreshIcon,
+  Map as MapsIcon,
+  Building2 as CnpjIcon,
+  Circle as DotIcon,
+  UserPlus as LeadIcon,
+  ListFilter as FilterIcon,
+  Users as FollowersIcon,
+  HelpCircle as HelpIcon,
   Instagram as InstagramIcon,
-  AccountBalanceOutlined as ConselhoIcon,
-  DeleteOutline as DeleteIcon,
-  DeleteSweepOutlined as ClearIcon,
-  WhatsApp as WhatsAppIcon,
-  ArrowUpward as SortAscIcon,
-  ArrowDownward as SortDescIcon,
-  UnfoldMore as SortNoneIcon,
-  StopOutlined as StopIcon,
-  Public as GlobalIcon,
-} from "@material-ui/icons";
+  Landmark as ConselhoIcon,
+  Trash2 as DeleteIcon,
+  Eraser as ClearIcon,
+  ArrowUp as SortAscIcon,
+  ArrowDown as SortDescIcon,
+  ChevronsUpDown as SortNoneIcon,
+  CircleStop as StopIcon,
+  Globe as GlobalIcon,
+  Settings as SettingsIcon,
+} from "lucide-react";
 import { toast } from "react-toastify";
 import api from "../../services/api";
 import MainContainer from "../../components/MainContainer";
+import Title from "../../components/Title";
 import ConfirmationModal from "../../components/ConfirmationModal";
 import ApifyTokenModal from "../../components/ApifyTokenModal";
 import LeadMapPicker from "../../components/LeadMapPicker";
@@ -150,23 +154,175 @@ const CONSELHOS = [
 ];
 
 const useStyles = makeStyles(theme => ({
-  root: { padding: theme.spacing(3) },
-
-  hero: {
-    background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
-    borderRadius: 16,
-    padding: "24px 28px",
-    color: "#fff",
-    marginBottom: 24,
+  // ===== Padrão de layout de página (referência: Connections) =====
+  mainPaper: {
+    flex: 1,
+    padding: 0,
+    overflow: "hidden",
+    borderRadius: 12,
+    border: `1px solid ${theme.palette.divider}`,
+    backgroundColor: theme.palette.background.paper,
+  },
+  header: {
     display: "flex",
     alignItems: "center",
-    gap: 16,
+    justifyContent: "space-between",
+    gap: theme.spacing(2),
+    flexWrap: "wrap",
+    padding: theme.spacing(2, 2.5),
   },
-  heroIcon: { fontSize: 40, opacity: 0.9 },
-  heroTitle: { fontWeight: 700, fontSize: 20, color: "#fff" },
-  heroSub: { fontSize: 12, color: "rgba(255,255,255,0.72)", marginTop: 3 },
+  headerText: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+  },
+  subtitle: {
+    color: theme.palette.text.secondary,
+    fontSize: "0.85rem",
+  },
+  headerActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1),
+    flexWrap: "wrap",
+  },
+  // Conteúdo da página dentro do Paper principal (grid de seções)
+  pageContent: {
+    padding: theme.spacing(0, 2.5, 2.5),
+  },
+  warnBanner: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    margin: theme.spacing(0, 2.5, 2),
+    padding: theme.spacing(1.25, 2),
+    borderRadius: 10,
+    fontSize: 13,
+    lineHeight: 1.5,
+    background: theme.palette.type === "dark" ? "#3a2f10" : "#fef3c7",
+    border: `1px solid ${theme.palette.type === "dark" ? "#6b5518" : "#fcd34d"}`,
+    color: theme.palette.type === "dark" ? "#fcd34d" : "#92400e",
+  },
+  // Barra de busca/filtros da seção de resultados (dentro de Paper interno)
+  toolbar: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1.5),
+    flexWrap: "wrap",
+    padding: theme.spacing(1.25, 1.5),
+    marginBottom: theme.spacing(1.5),
+    borderRadius: 10,
+    border: `1px solid ${theme.palette.divider}`,
+    background:
+      theme.palette.type === "dark"
+        ? theme.palette.background.default
+        : "#fafafa",
+  },
+  searchField: {
+    minWidth: 200,
+    flex: "1 1 240px",
+    maxWidth: 340,
+  },
+  headCell: {
+    fontWeight: 600,
+    fontSize: "0.72rem",
+    letterSpacing: "0.06em",
+    textTransform: "uppercase",
+    color: theme.palette.text.secondary,
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    whiteSpace: "nowrap",
+  },
+  bodyCell: {
+    fontSize: "0.85rem",
+    paddingTop: theme.spacing(1.25),
+    paddingBottom: theme.spacing(1.25),
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    verticalAlign: "middle",
+  },
+  rowHover: {
+    "&:hover": {
+      backgroundColor: theme.palette.action.hover,
+    },
+    transition: "background-color 120ms ease",
+  },
+  emptyState: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing(1),
+    padding: theme.spacing(6, 2),
+    color: theme.palette.text.secondary,
+    textAlign: "center",
+  },
+  // Cards mobile / tabela desktop
+  mobileList: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gap: theme.spacing(1.5),
+    padding: theme.spacing(1.5, 0),
+    [theme.breakpoints.up("sm")]: {
+      display: "none",
+    },
+  },
+  desktopTableWrapper: {
+    [theme.breakpoints.down("sm")]: {
+      display: "none",
+    },
+  },
+  card: {
+    borderRadius: 12,
+    padding: theme.spacing(1.75),
+    border: `1px solid ${theme.palette.divider}`,
+    display: "flex",
+    flexDirection: "column",
+    gap: theme.spacing(1.25),
+    background: theme.palette.background.paper,
+  },
+  cardHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing(1),
+  },
+  cardTitle: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(0.5),
+    minWidth: 0,
+  },
+  cardName: {
+    fontWeight: 700,
+    fontSize: "0.95rem",
+    lineHeight: 1.2,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  },
+  cardMeta: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+    gap: theme.spacing(1),
+  },
+  metaLabel: {
+    fontSize: "0.72rem",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    color: theme.palette.text.secondary,
+  },
+  metaValue: {
+    fontSize: "0.85rem",
+    fontWeight: 600,
+    wordBreak: "break-word",
+  },
+  cardActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(0.5),
+    flexWrap: "wrap",
+  },
 
-  paper: { borderRadius: 12, padding: theme.spacing(3), marginBottom: theme.spacing(2) },
+  // ===== Estilos específicos da página =====
+  paper: { borderRadius: 12, padding: theme.spacing(2.5), marginBottom: theme.spacing(2) },
 
   filterRow: { display: "flex", gap: theme.spacing(2), flexWrap: "wrap", alignItems: "flex-end", marginTop: 16 },
   sliderBox: { minWidth: 220, flex: 1, marginTop: 8 },
@@ -207,7 +363,16 @@ const useStyles = makeStyles(theme => ({
   progressLabel: { display: "flex", justifyContent: "space-between", marginBottom: 6 },
 
   tableContainer: { maxHeight: 440, overflow: "auto", borderRadius: 8, border: `1px solid ${theme.palette.divider}` },
-  stickyHead: { position: "sticky", top: 0, background: theme.palette.background.paper, zIndex: 1 },
+  // Cabeçalho fixo da tabela de resultados — fundo precisa ser opaco p/ o sticky
+  stickyHead: {
+    position: "sticky",
+    top: 0,
+    zIndex: 1,
+    background:
+      theme.palette.type === "dark"
+        ? theme.palette.background.default
+        : "#fafafa",
+  },
 
   importBar: {
     display: "flex", gap: theme.spacing(2), alignItems: "center",
@@ -215,12 +380,6 @@ const useStyles = makeStyles(theme => ({
   },
 
   rating: { color: "#f59e0b", fontWeight: 700, fontSize: 12 },
-
-  emptyResults: {
-    textAlign: "center", padding: "48px 24px",
-    color: theme.palette.text.secondary,
-  },
-  emptyResultsIcon: { fontSize: 56, opacity: 0.18, marginBottom: 8 },
 
   sourceBadge: {
     display: "inline-flex", alignItems: "center", gap: 4,
@@ -320,12 +479,12 @@ function SortableHeader({ className, label, sortKey, sortConfig, onSort }) {
   return (
     <TableCell
       className={className}
-      style={{ fontWeight: 700, fontSize: 11, cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
+      style={{ cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
       onClick={() => onSort(sortKey)}
     >
       <Box display="flex" alignItems="center" style={{ gap: 2 }}>
         {label}
-        <Icon style={{ fontSize: 13, opacity: active ? 1 : 0.35 }} />
+        <Icon size={13} style={{ opacity: active ? 1 : 0.35 }} />
       </Box>
     </TableCell>
   );
@@ -336,6 +495,7 @@ export default function LeadScraper() {
   const [tab, setTab] = useState(0);
   const [helpOpen, setHelpOpen] = useState(false);
   const [jobs, setJobs] = useState([]);
+  const [jobsLoaded, setJobsLoaded] = useState(false); // true após o 1º loadJobs — controla o skeleton do histórico
   const [activeJob, setActiveJob] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null); // {type:"job",job} | {type:"all"}
   const [loading, setLoading] = useState(false);
@@ -414,6 +574,7 @@ export default function LeadScraper() {
       // backend pode responder { jobs, count } quando paginado — compat com array
       setJobs(Array.isArray(data) ? data : (data?.jobs || []));
     } catch {}
+    finally { setJobsLoaded(true); }
   }, []);
 
   const loadEngineStatus = useCallback(async () => {
@@ -714,6 +875,8 @@ export default function LeadScraper() {
   // sort/filtro atuam só na ORDEM/VISIBILIDADE de exibição via displayRows.
   const [sortConfig, setSortConfig] = useState({ key: null, dir: "asc" }); // key: "name"|"phone"|"cnpj"|"rating"|"situacao"
   const [quickFilters, setQuickFilters] = useState({ hasPhone: false, hasCnpj: false, hasWhatsapp: false, hasReceita: false });
+  // Busca textual da toolbar de resultados (client-side, só afeta exibição)
+  const [resultsSearch, setResultsSearch] = useState("");
 
   const toggleQuickFilter = (key) => setQuickFilters(prev => ({ ...prev, [key]: !prev[key] }));
 
@@ -741,6 +904,12 @@ export default function LeadScraper() {
       if (quickFilters.hasCnpj && !r.cnpj) return false;
       if (quickFilters.hasWhatsapp && !(r.whatsappChecked && r.hasWhatsapp)) return false;
       if (quickFilters.hasReceita && !(r.enrichedFrom || []).includes("receita") && !r.cnaeDescricao) return false;
+      // Busca livre: nome, razão social, contatos, CNPJ, endereço, registro e IG
+      const q = resultsSearch.trim().toLowerCase();
+      if (q) {
+        const hay = `${r.nomeFantasia || ""} ${r.name || ""} ${r.razaoSocial || ""} ${r.phone || ""} ${r.instagramPhone || ""} ${r.cnpj || ""} ${r.email || ""} ${r.address || ""} ${r.municipio || ""} ${r.uf || ""} ${r.registro || ""} ${r.instagram || ""}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
       return true;
     })
     .sort((a, b) => {
@@ -753,68 +922,93 @@ export default function LeadScraper() {
 
   return (
     <MainContainer useWindowScroll>
-    <Box className={classes.root}>
-      {/* ── Hero ── */}
-      <Box className={classes.hero}>
-        <LeadIcon className={classes.heroIcon} />
-        <Box style={{ flex: 1 }}>
-          <Typography className={classes.heroTitle}>Captador de Leads</Typography>
-          <Typography className={classes.heroSub}>
-            Busque empresas via Google Maps ou enriqueça CNPJs pela Receita Federal (BrasilAPI)
-          </Typography>
-        </Box>
-        {/* Status dos motores de busca (Apify/sidecar/Puppeteer) */}
-        <Tooltip title={
-          engineStatus?.apify?.configured
-            ? "Apify configurado — usado para Maps (quando disponível), Seguidores IG e telefone de bio. Clique para gerenciar o token."
-            : "APIFY_TOKEN não configurado — usando fallback local (Puppeteer/DDG). Clique para configurar o token."
-        }>
-          <Box
-            onClick={() => setApifyModalOpen(true)}
-            style={{
-              display: "flex", alignItems: "center", gap: 6, cursor: "pointer",
-              background: engineStatus?.apify?.configured ? "rgba(76,175,80,0.18)" : "rgba(255,255,255,0.08)",
-              color: "#fff",
-              border: `1px solid ${engineStatus?.apify?.configured ? "rgba(129,199,132,0.5)" : "rgba(255,255,255,0.2)"}`,
-              borderRadius: 8, padding: "4px 12px", fontSize: 12, whiteSpace: "nowrap", flexShrink: 0,
-            }}>
-            ⚙ Apify {engineStatus?.apify?.configured ? "ativo" : "não configurado"}
-            {engineStatus?.googleMaps?.engine && (
-              <Chip
-                size="small"
-                label={`Maps: ${engineStatus.googleMaps.engine}`}
-                style={{ height: 18, fontSize: 10, fontWeight: 700, background: "rgba(255,255,255,0.2)", color: "#fff" }}
-              />
-            )}
-          </Box>
-        </Tooltip>
-      </Box>
-
+      {/* ── Modais ── */}
       <ApifyTokenModal
         open={apifyModalOpen}
         onClose={() => setApifyModalOpen(false)}
         onSaved={loadEngineStatus}
       />
+      <ConfirmationModal
+        title={confirmDelete?.type === "all" ? "Limpar histórico" : confirmDelete?.type === "stop" ? "Parar busca" : "Excluir busca"}
+        open={!!confirmDelete}
+        onClose={() => setConfirmDelete(null)}
+        onConfirm={() => {
+          const target = confirmDelete;
+          setConfirmDelete(null);
+          if (target?.type === "all") clearHistory();
+          else if (target?.type === "job") deleteJob(target.job);
+          else if (target?.type === "stop") stopJob(target.job);
+        }}
+      >
+        {confirmDelete?.type === "all"
+          ? "Excluir todo o histórico de buscas? Leads já importados não serão afetados."
+          : confirmDelete?.type === "stop"
+            ? "Parar esta busca? Os leads já coletados serão mantidos."
+            : "Excluir esta busca do histórico? Leads já importados não serão afetados."}
+      </ConfirmationModal>
 
-      {!engineStatus?.apify?.configured && (
-        <Box style={{
-          background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 8,
-          padding: "10px 16px", marginBottom: 16, fontSize: 13, color: "#92400e",
-        }}>
-          ⚠ Sem token Apify configurado: Seguidores IG fica indisponível e telefone/e-mail de bio do Instagram usa um fallback mais limitado (sem login). Busca no Maps continua funcionando via sidecar/Puppeteer. Clique no badge "Apify" acima para configurar.
-        </Box>
-      )}
+      <Paper className={classes.mainPaper} variant="outlined">
+        {/* ── Cabeçalho padrão: título + subtítulo + ações ── */}
+        <div className={classes.header}>
+          <div className={classes.headerText}>
+            <Title>Captador de Leads</Title>
+            <span className={classes.subtitle}>
+              Busque e enriqueça leads via Google Maps, Receita Federal, Instagram e conselhos de classe — ou em todas as fontes de uma vez.
+            </span>
+          </div>
+          <div className={classes.headerActions}>
+            {/* Status dos motores de busca (Apify/sidecar/Puppeteer) — clique abre o modal de token */}
+            <Tooltip title={
+              engineStatus?.apify?.configured
+                ? "Apify configurado — usado para Maps (quando disponível), Seguidores IG e telefone de bio. Clique para gerenciar o token."
+                : "APIFY_TOKEN não configurado — usando fallback local (Puppeteer/DDG). Clique para configurar o token."
+            }>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => setApifyModalOpen(true)}
+                startIcon={<SettingsIcon size={16} />}
+                style={{
+                  minHeight: 36,
+                  textTransform: "none",
+                  fontWeight: 600,
+                  whiteSpace: "nowrap",
+                  ...(engineStatus?.apify?.configured
+                    ? { color: "#2e7d32", borderColor: "#a5d6a7", backgroundColor: "rgba(76,175,80,0.08)" }
+                    : {}),
+                }}
+              >
+                Apify {engineStatus?.apify?.configured ? "ativo" : "não configurado"}
+              </Button>
+            </Tooltip>
+            {engineStatus?.googleMaps?.engine && (
+              <Chip
+                size="small"
+                variant="outlined"
+                label={`Maps: ${engineStatus.googleMaps.engine}`}
+              />
+            )}
+          </div>
+        </div>
 
+        {/* Aviso quando o token Apify não está configurado */}
+        {!engineStatus?.apify?.configured && (
+          <div className={classes.warnBanner}>
+            ⚠ Sem token Apify configurado: Seguidores IG fica indisponível e telefone/e-mail de bio do Instagram usa um fallback mais limitado (sem login). Busca no Maps continua funcionando via sidecar/Puppeteer. Clique no botão "Apify" acima para configurar.
+          </div>
+        )}
+
+        <div className={classes.pageContent}>
       <Grid container spacing={2}>
         {/* ── Left: form ── */}
         <Grid item xs={12} md={7}>
           <Paper className={classes.paper} elevation={0} variant="outlined">
             <Tabs value={tab} onChange={(_, v) => { setTab(v); setHelpOpen(false); }} indicatorColor="primary" textColor="primary">
-              <Tab label={<Box display="flex" alignItems="center" style={{ gap: 6 }}><MapsIcon fontSize="small" /> Google Maps</Box>} />
-              <Tab label={<Box display="flex" alignItems="center" style={{ gap: 6 }}><CnpjIcon fontSize="small" /> CNPJ / Receita Federal</Box>} />
-              <Tab label={<Box display="flex" alignItems="center" style={{ gap: 6 }}><FollowersIcon fontSize="small" /> Seguidores IG</Box>} />
-              <Tab label={<Box display="flex" alignItems="center" style={{ gap: 6 }}><ConselhoIcon fontSize="small" /> Conselhos</Box>} />
-              <Tab label={<Box display="flex" alignItems="center" style={{ gap: 6 }}><GlobalIcon fontSize="small" /> Busca Global</Box>} />
+              <Tab label={<Box display="flex" alignItems="center" style={{ gap: 6 }}><MapsIcon size={16} /> Google Maps</Box>} />
+              <Tab label={<Box display="flex" alignItems="center" style={{ gap: 6 }}><CnpjIcon size={16} /> CNPJ / Receita Federal</Box>} />
+              <Tab label={<Box display="flex" alignItems="center" style={{ gap: 6 }}><FollowersIcon size={16} /> Seguidores IG</Box>} />
+              <Tab label={<Box display="flex" alignItems="center" style={{ gap: 6 }}><ConselhoIcon size={16} /> Conselhos</Box>} />
+              <Tab label={<Box display="flex" alignItems="center" style={{ gap: 6 }}><GlobalIcon size={16} /> Busca Global</Box>} />
             </Tabs>
 
             <TabPanel value={tab} index={0}>
@@ -878,7 +1072,7 @@ export default function LeadScraper() {
                   className={`${classes.modeBtn} ${mapsMode === "map" ? classes.modeBtnActive : ""}`}
                   onClick={() => setMapsMode("map")}
                   size="small"
-                  startIcon={<MapsIcon fontSize="small" />}
+                  startIcon={<MapsIcon size={16} />}
                 >
                   Escolher área no mapa
                 </Button>
@@ -935,7 +1129,7 @@ export default function LeadScraper() {
                 {canImport && (
                   <Button
                     variant="contained" color="primary"
-                    startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <SearchIcon />}
+                    startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <SearchIcon size={18} />}
                     onClick={startMapsJob} disabled={loading}
                     style={{ textTransform: "none", fontWeight: 600 }}
                   >
@@ -944,7 +1138,7 @@ export default function LeadScraper() {
                 )}
               </Box>
               <Box className={classes.helpToggle} onClick={() => setHelpOpen(o => !o)}>
-                <HelpIcon style={{ fontSize: 15 }} />
+                <HelpIcon size={15} />
                 <span>{helpOpen ? "Ocultar tutorial" : "Como usar esta aba?"}</span>
               </Box>
               <Collapse in={helpOpen}>
@@ -972,14 +1166,14 @@ export default function LeadScraper() {
                 <Button
                   className={`${classes.modeBtn} ${cnpjMode === "search" ? classes.modeBtnActive : ""}`}
                   onClick={() => setCnpjMode("search")}
-                  startIcon={<FilterIcon fontSize="small" />}
+                  startIcon={<FilterIcon size={16} />}
                 >
                   Pesquisa Avançada
                 </Button>
                 <Button
                   className={`${classes.modeBtn} ${cnpjMode === "enrich" ? classes.modeBtnActive : ""}`}
                   onClick={() => setCnpjMode("enrich")}
-                  startIcon={<CnpjIcon fontSize="small" />}
+                  startIcon={<CnpjIcon size={16} />}
                 >
                   Enriquecer CNPJs
                 </Button>
@@ -1005,7 +1199,7 @@ export default function LeadScraper() {
                     {canImport && (
                       <Button
                         variant="contained" color="primary"
-                        startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <CnpjIcon />}
+                        startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <CnpjIcon size={18} />}
                         onClick={startCnpjJob} disabled={loading}
                         style={{ textTransform: "none", fontWeight: 600 }}
                       >
@@ -1014,7 +1208,7 @@ export default function LeadScraper() {
                     )}
                   </Box>
                   <Box className={classes.helpToggle} onClick={() => setHelpOpen(o => !o)}>
-                    <HelpIcon style={{ fontSize: 15 }} />
+                    <HelpIcon size={15} />
                     <span>{helpOpen ? "Ocultar tutorial" : "Como usar esta aba?"}</span>
                   </Box>
                   <Collapse in={helpOpen}>
@@ -1210,7 +1404,7 @@ export default function LeadScraper() {
                     {canImport && (
                       <Button
                         variant="contained" color="primary"
-                        startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <SearchIcon />}
+                        startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <SearchIcon size={18} />}
                         onClick={startCnpjSearchJob} disabled={loading}
                         style={{ textTransform: "none", fontWeight: 600 }}
                       >
@@ -1221,7 +1415,7 @@ export default function LeadScraper() {
 
                   <Box className={`${classes.fullRow}`}>
                     <Box className={classes.helpToggle} onClick={() => setHelpOpen(o => !o)}>
-                      <HelpIcon style={{ fontSize: 15 }} />
+                      <HelpIcon size={15} />
                       <span>{helpOpen ? "Ocultar tutorial" : "Como usar esta aba?"}</span>
                     </Box>
                     <Collapse in={helpOpen}>
@@ -1279,7 +1473,7 @@ export default function LeadScraper() {
                   {canImport && (
                     <Button
                       variant="contained" color="primary"
-                      startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <FollowersIcon />}
+                      startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <FollowersIcon size={18} />}
                       onClick={startFollowersJob}
                       disabled={loading || !engineStatus?.apify?.configured}
                       style={{ textTransform: "none", fontWeight: 600 }}
@@ -1292,7 +1486,7 @@ export default function LeadScraper() {
                   </Typography>
                 </Box>
                 <Box className={classes.helpToggle} onClick={() => setHelpOpen(o => !o)}>
-                  <HelpIcon style={{ fontSize: 15 }} />
+                  <HelpIcon size={15} />
                   <span>{helpOpen ? "Ocultar tutorial" : "Como usar esta aba?"}</span>
                 </Box>
                 <Collapse in={helpOpen}>
@@ -1440,7 +1634,7 @@ export default function LeadScraper() {
                   {canImport && (
                     <Button
                       variant="contained" color="primary"
-                      startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <ConselhoIcon />}
+                      startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <ConselhoIcon size={18} />}
                       onClick={startConselhoJob} disabled={loading}
                       style={{ textTransform: "none", fontWeight: 600 }}
                     >
@@ -1564,7 +1758,7 @@ export default function LeadScraper() {
                 {canImport && (
                   <Button
                     variant="contained" color="primary"
-                    startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <GlobalIcon />}
+                    startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <GlobalIcon size={18} />}
                     onClick={startGlobalJob} disabled={loading}
                     style={{ textTransform: "none", fontWeight: 600 }}
                   >
@@ -1573,7 +1767,7 @@ export default function LeadScraper() {
                 )}
               </Box>
               <Box className={classes.helpToggle} onClick={() => setHelpOpen(o => !o)}>
-                <HelpIcon style={{ fontSize: 15 }} />
+                <HelpIcon size={15} />
                 <span>{helpOpen ? "Ocultar tutorial" : "Como funciona?"}</span>
               </Box>
               <Collapse in={helpOpen}>
@@ -1611,23 +1805,30 @@ export default function LeadScraper() {
                         onClick={() => setConfirmDelete({ type: "all" })}
                         disabled={!jobs.some(j => j.status === "done" || j.status === "error" || j.status === "cancelled")}
                       >
-                        <ClearIcon fontSize="small" />
+                        <ClearIcon size={16} />
                       </IconButton>
                     </span>
                   </Tooltip>
                 )}
                 <Tooltip title="Recarregar">
-                  <IconButton size="small" onClick={loadJobs}><RefreshIcon fontSize="small" /></IconButton>
+                  <IconButton size="small" onClick={loadJobs}><RefreshIcon size={16} /></IconButton>
                 </Tooltip>
               </Box>
             </Box>
 
             <Box style={{ overflowY: "auto", flex: 1, minHeight: 0 }}>
-            {jobs.length === 0 ? (
-              <Box textAlign="center" py={4}>
-                <LeadIcon style={{ fontSize: 40, opacity: 0.18, marginBottom: 8 }} />
+            {!jobsLoaded ? (
+              /* Skeleton do histórico enquanto o primeiro carregamento não retorna */
+              <>
+                {[0, 1, 2].map(k => (
+                  <Skeleton key={k} variant="rect" height={54} style={{ borderRadius: 8, marginBottom: 6 }} />
+                ))}
+              </>
+            ) : jobs.length === 0 ? (
+              <div className={classes.emptyState}>
+                <LeadIcon size={40} style={{ opacity: 0.35 }} />
                 <Typography variant="body2" color="textSecondary">Nenhuma busca iniciada ainda.</Typography>
-              </Box>
+              </div>
             ) : (
               jobs.map(j => {
                 const st = STATUS[j.status] || STATUS.pending;
@@ -1651,7 +1852,7 @@ export default function LeadScraper() {
                     onClick={() => selectJob(j)}
                   >
                     {j.status === "running" ? (
-                      <DotIcon className={classes.runningPulse} style={{ fontSize: 12 }} />
+                      <DotIcon className={classes.runningPulse} size={12} fill="currentColor" />
                     ) : (
                       <Box style={{ width: 10, height: 10, borderRadius: "50%", background: st.color, flexShrink: 0 }} />
                     )}
@@ -1676,7 +1877,7 @@ export default function LeadScraper() {
                           style={{ marginLeft: 4, padding: 2 }}
                           onClick={(e) => { e.stopPropagation(); setConfirmDelete({ type: "stop", job: j }); }}
                         >
-                          <StopIcon style={{ fontSize: 15 }} />
+                          <StopIcon size={15} />
                         </IconButton>
                       </Tooltip>
                     )}
@@ -1687,7 +1888,7 @@ export default function LeadScraper() {
                           style={{ marginLeft: 4, padding: 2 }}
                           onClick={(e) => { e.stopPropagation(); setConfirmDelete({ type: "job", job: j }); }}
                         >
-                          <DeleteIcon style={{ fontSize: 15 }} />
+                          <DeleteIcon size={15} />
                         </IconButton>
                       </Tooltip>
                     )}
@@ -1707,11 +1908,11 @@ export default function LeadScraper() {
             <Box display="flex" alignItems="center" style={{ gap: 12 }}>
               <Typography variant="h6" style={{ fontWeight: 700 }}>Resultados</Typography>
               <Box className={classes.sourceBadge}>
-                {activeJob.source === "global" ? <GlobalIcon style={{ fontSize: 12 }} />
-                  : activeJob.source === "google_maps" ? <MapsIcon style={{ fontSize: 12 }} />
-                  : activeJob.source === "ig_followers" ? <InstagramIcon style={{ fontSize: 12 }} />
-                  : activeJob.source === "conselho" ? <ConselhoIcon style={{ fontSize: 12 }} />
-                  : <CnpjIcon style={{ fontSize: 12 }} />}
+                {activeJob.source === "global" ? <GlobalIcon size={12} />
+                  : activeJob.source === "google_maps" ? <MapsIcon size={12} />
+                  : activeJob.source === "ig_followers" ? <InstagramIcon size={12} />
+                  : activeJob.source === "conselho" ? <ConselhoIcon size={12} />
+                  : <CnpjIcon size={12} />}
                 {activeJob.source === "global" ? "Busca Global"
                   : activeJob.source === "google_maps" ? "Google Maps"
                   : activeJob.source === "cnpj_search" ? "RF Pesquisa Avançada"
@@ -1734,7 +1935,7 @@ export default function LeadScraper() {
                     size="small"
                     variant="outlined"
                     color="secondary"
-                    startIcon={<StopIcon style={{ fontSize: 14 }} />}
+                    startIcon={<StopIcon size={14} />}
                     onClick={() => setConfirmDelete({ type: "stop", job: activeJob })}
                     style={{ fontSize: 11, textTransform: "none", fontWeight: 700 }}
                   >
@@ -1773,14 +1974,30 @@ export default function LeadScraper() {
           )}
 
           {results.length === 0 && !isRunning ? (
-            <Box className={classes.emptyResults}>
-              <SearchIcon className={classes.emptyResultsIcon} />
+            <div className={classes.emptyState}>
+              <SearchIcon size={44} style={{ opacity: 0.35 }} />
               <Typography variant="subtitle1">Nenhum resultado encontrado</Typography>
               <Typography variant="body2">Tente ajustar os filtros ou expandir a área de busca.</Typography>
-            </Box>
+            </div>
           ) : results.length > 0 ? (
             <>
-              <Box display="flex" style={{ gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+              {/* Toolbar: busca livre + filtros rápidos (client-side, só exibição) */}
+              <div className={classes.toolbar}>
+                <TextField
+                  className={classes.searchField}
+                  size="small"
+                  variant="outlined"
+                  placeholder="Buscar por nome, telefone, CNPJ…"
+                  value={resultsSearch}
+                  onChange={e => setResultsSearch(e.target.value)}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon size={16} />
+                      </InputAdornment>
+                    ),
+                  }}
+                />
                 {[
                   { key: "hasPhone", label: "Com telefone" },
                   { key: "hasWhatsapp", label: "Com WhatsApp" },
@@ -1805,7 +2022,164 @@ export default function LeadScraper() {
                     {displayRows.length} de {results.length} exibidos
                   </Typography>
                 )}
-              </Box>
+              </div>
+
+              {/* Cards — mobile */}
+              <div className={classes.mobileList}>
+                {displayRows.map(({ r, i }) => (
+                  <div key={i} className={classes.card}>
+                    <div className={classes.cardHeader}>
+                      <div className={classes.cardTitle}>
+                        <Checkbox
+                          checked={selectedIndices.includes(i)}
+                          onChange={() => toggleSelect(i)}
+                          size="small"
+                        />
+                        <div style={{ minWidth: 0 }}>
+                          <div className={classes.cardName}>{r.nomeFantasia || r.name || "—"}</div>
+                          {r.razaoSocial && r.razaoSocial !== r.name && (
+                            <Typography variant="caption" color="textSecondary" style={{ display: "block" }}>
+                              {r.razaoSocial}
+                            </Typography>
+                          )}
+                        </div>
+                      </div>
+                      {/* Badges das fontes (busca global) */}
+                      {Array.isArray(r.sources) && r.sources.length > 0 && (
+                        <Box display="flex" style={{ gap: 3, flexWrap: "wrap", flexShrink: 0 }}>
+                          {r.sources.map(src => (
+                            <span
+                              key={src}
+                              style={{
+                                background: (GLOBAL_SOURCE_META[src]?.color || "#555") + "22",
+                                color: GLOBAL_SOURCE_META[src]?.color || "#555",
+                                borderRadius: 3, padding: "0 5px",
+                                fontSize: 9, fontWeight: 800, letterSpacing: 0.3,
+                              }}
+                            >
+                              {GLOBAL_SOURCE_META[src]?.label || src}
+                            </span>
+                          ))}
+                        </Box>
+                      )}
+                    </div>
+
+                    <div className={classes.cardMeta}>
+                      <div>
+                        <div className={classes.metaLabel}>Telefone</div>
+                        <div className={classes.metaValue}>
+                          <Box display="flex" alignItems="center" style={{ gap: 4 }}>
+                            {r.phone ? formatPhoneBR(r.phone) : "—"}
+                            {r.whatsappChecked && r.hasWhatsapp && (
+                              <Tooltip title="WhatsApp ativo (validado)">
+                                <WhatsAppIcon style={{ fontSize: 15, color: "#25d366" }} />
+                              </Tooltip>
+                            )}
+                            {r.whatsappChecked && r.hasWhatsapp === false && (
+                              <span style={{ color: "#9e9e9e", fontSize: 11 }}>sem WA</span>
+                            )}
+                          </Box>
+                          {r.instagramPhone && r.instagramPhone !== r.phone && (
+                            <Typography variant="caption" style={{ display: "block", color: SOCIAL_COLORS.instagram, fontSize: 11 }}>
+                              📸 {formatPhoneBR(r.instagramPhone)}
+                            </Typography>
+                          )}
+                        </div>
+                      </div>
+                      {activeJob.source === "conselho" && (
+                        <div>
+                          <div className={classes.metaLabel}>Registro</div>
+                          <div className={classes.metaValue} style={{ fontFamily: "monospace" }}>{r.registro || "—"}</div>
+                        </div>
+                      )}
+                      <div>
+                        <div className={classes.metaLabel}>CNPJ</div>
+                        <div className={classes.metaValue} style={{ fontFamily: "monospace", fontWeight: 500 }}>
+                          {r.cnpj
+                            ? r.cnpj.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5")
+                            : r.website
+                              ? <a href={r.website} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11 }}>site</a>
+                              : "—"}
+                          {(r.enrichedFrom || []).includes("receita") && (
+                            <Chip label="RF" size="small"
+                              style={{ fontSize: 9, height: 16, fontWeight: 700, background: "#e8f5e9", color: "#2e7d32", marginLeft: 4 }} />
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <div className={classes.metaLabel}>Endereço</div>
+                        <div className={classes.metaValue} style={{ fontWeight: 500 }}>
+                          {r.address || (r.municipio ? `${r.municipio}/${r.uf}` : "—")}
+                        </div>
+                      </div>
+                      <div>
+                        <div className={classes.metaLabel}>Receita</div>
+                        <div className={classes.metaValue}>
+                          {(r.cnaeDescricao || r.porte || r.situacao || r.naturezaJuridica || r.capitalSocial) ? (
+                            <Box>
+                              {r.porte && (
+                                <Chip label={r.porte} size="small"
+                                  style={{ fontSize: 9, height: 16, fontWeight: 600, marginRight: 4 }} />
+                              )}
+                              {r.situacao && (
+                                <Chip
+                                  label={r.situacao}
+                                  size="small"
+                                  style={{
+                                    fontSize: 9, height: 16, fontWeight: 700,
+                                    background: /ativ/i.test(r.situacao) ? "#e8f5e9" : "#fce4ec",
+                                    color: /ativ/i.test(r.situacao) ? "#2e7d32" : "#c62828",
+                                  }}
+                                />
+                              )}
+                            </Box>
+                          ) : "—"}
+                        </div>
+                      </div>
+                      <div>
+                        <div className={classes.metaLabel}>Avaliação</div>
+                        <div className={classes.metaValue}>
+                          <span className={classes.rating}><Stars value={r.rating} /></span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Redes sociais */}
+                    <div className={classes.cardActions}>
+                      {["instagram","twitter","linkedin","facebook"].map(p =>
+                        r[p] ? (
+                          <a
+                            key={p}
+                            href={SOCIAL_LINKS[p](r[p])}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              background: SOCIAL_COLORS[p],
+                              color: "#fff",
+                              borderRadius: 4,
+                              padding: "2px 6px",
+                              fontSize: 10,
+                              fontWeight: 700,
+                              textDecoration: "none",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {SOCIAL_LABELS[p]}
+                          </a>
+                        ) : null
+                      )}
+                      {r.email && (
+                        <Typography variant="caption" color="textSecondary" style={{ marginLeft: 4 }}>
+                          {r.email}
+                        </Typography>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Tabela — desktop */}
+              <div className={classes.desktopTableWrapper}>
               <Box className={classes.tableContainer}>
                 <Table size="small" stickyHeader>
                   <TableHead>
@@ -1818,24 +2192,24 @@ export default function LeadScraper() {
                           size="small"
                         />
                       </TableCell>
-                      <SortableHeader className={classes.stickyHead} label="NOME" sortKey="name" sortConfig={sortConfig} onSort={requestSort} />
+                      <SortableHeader className={`${classes.stickyHead} ${classes.headCell}`} label="NOME" sortKey="name" sortConfig={sortConfig} onSort={requestSort} />
                       {activeJob.source === "conselho" && (
-                        <TableCell className={classes.stickyHead} style={{ fontWeight: 700, fontSize: 11 }}>REGISTRO</TableCell>
+                        <TableCell className={`${classes.stickyHead} ${classes.headCell}`}>REGISTRO</TableCell>
                       )}
-                      <SortableHeader className={classes.stickyHead} label="TELEFONE" sortKey="phone" sortConfig={sortConfig} onSort={requestSort} />
-                      <TableCell className={classes.stickyHead} style={{ fontWeight: 700, fontSize: 11 }}>REDES SOCIAIS</TableCell>
-                      <TableCell className={classes.stickyHead} style={{ fontWeight: 700, fontSize: 11 }}>ENDEREÇO</TableCell>
-                      <SortableHeader className={classes.stickyHead} label="CNPJ" sortKey="cnpj" sortConfig={sortConfig} onSort={requestSort} />
-                      <SortableHeader className={classes.stickyHead} label="RECEITA" sortKey="situacao" sortConfig={sortConfig} onSort={requestSort} />
+                      <SortableHeader className={`${classes.stickyHead} ${classes.headCell}`} label="TELEFONE" sortKey="phone" sortConfig={sortConfig} onSort={requestSort} />
+                      <TableCell className={`${classes.stickyHead} ${classes.headCell}`}>REDES SOCIAIS</TableCell>
+                      <TableCell className={`${classes.stickyHead} ${classes.headCell}`}>ENDEREÇO</TableCell>
+                      <SortableHeader className={`${classes.stickyHead} ${classes.headCell}`} label="CNPJ" sortKey="cnpj" sortConfig={sortConfig} onSort={requestSort} />
+                      <SortableHeader className={`${classes.stickyHead} ${classes.headCell}`} label="RECEITA" sortKey="situacao" sortConfig={sortConfig} onSort={requestSort} />
                       {activeJob.source === "conselho" && (
-                        <TableCell className={classes.stickyHead} style={{ fontWeight: 700, fontSize: 11 }}>STATUS</TableCell>
+                        <TableCell className={`${classes.stickyHead} ${classes.headCell}`}>STATUS</TableCell>
                       )}
-                      <SortableHeader className={classes.stickyHead} label="AVALIAÇÃO" sortKey="rating" sortConfig={sortConfig} onSort={requestSort} />
+                      <SortableHeader className={`${classes.stickyHead} ${classes.headCell}`} label="AVALIAÇÃO" sortKey="rating" sortConfig={sortConfig} onSort={requestSort} />
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {displayRows.map(({ r, i }) => (
-                      <TableRow key={i} hover selected={selectedIndices.includes(i)}>
+                      <TableRow key={i} hover selected={selectedIndices.includes(i)} className={classes.rowHover}>
                         <TableCell padding="checkbox">
                           <Checkbox
                             checked={selectedIndices.includes(i)}
@@ -1843,7 +2217,7 @@ export default function LeadScraper() {
                             size="small"
                           />
                         </TableCell>
-                        <TableCell>
+                        <TableCell className={classes.bodyCell}>
                           <Typography variant="body2" style={{ fontWeight: 600, fontSize: 12 }}>
                             {r.nomeFantasia || r.name || "—"}
                           </Typography>
@@ -1876,13 +2250,13 @@ export default function LeadScraper() {
                           )}
                         </TableCell>
                         {activeJob.source === "conselho" && (
-                          <TableCell>
+                          <TableCell className={classes.bodyCell}>
                             <Typography variant="body2" style={{ fontSize: 11, fontFamily: "monospace" }}>
                               {r.registro || "—"}
                             </Typography>
                           </TableCell>
                         )}
-                        <TableCell style={{ whiteSpace: "nowrap" }}>
+                        <TableCell className={classes.bodyCell} style={{ whiteSpace: "nowrap" }}>
                           <Box display="flex" alignItems="center" style={{ gap: 4 }}>
                             <Typography variant="body2" style={{ fontSize: 12, whiteSpace: "nowrap" }}>
                               {r.phone ? formatPhoneBR(r.phone) : "—"}
@@ -1904,7 +2278,7 @@ export default function LeadScraper() {
                             </Typography>
                           )}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className={classes.bodyCell}>
                           <Box display="flex" style={{ gap: 4, flexWrap: "wrap" }}>
                             {["instagram","twitter","linkedin","facebook"].map(p =>
                               r[p] ? (
@@ -1933,12 +2307,12 @@ export default function LeadScraper() {
                             )}
                           </Box>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className={classes.bodyCell}>
                           <Typography variant="body2" style={{ fontSize: 12 }}>
                             {r.address || (r.municipio ? `${r.municipio}/${r.uf}` : "—")}
                           </Typography>
                         </TableCell>
-                        <TableCell style={{ whiteSpace: "nowrap" }}>
+                        <TableCell className={classes.bodyCell} style={{ whiteSpace: "nowrap" }}>
                           <Box display="flex" alignItems="center" style={{ gap: 4 }}>
                             <Typography variant="body2" style={{ fontSize: 11, fontFamily: "monospace", whiteSpace: "nowrap" }}>
                               {r.cnpj
@@ -1955,7 +2329,7 @@ export default function LeadScraper() {
                             )}
                           </Box>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className={classes.bodyCell}>
                           {(r.cnaeDescricao || r.porte || r.situacao || r.naturezaJuridica || r.capitalSocial) ? (
                             <Tooltip title={
                               <Box style={{ fontSize: 12, lineHeight: 1.6 }}>
@@ -1986,7 +2360,7 @@ export default function LeadScraper() {
                           ) : <Typography variant="caption" color="textSecondary">—</Typography>}
                         </TableCell>
                         {activeJob.source === "conselho" && (
-                          <TableCell>
+                          <TableCell className={classes.bodyCell}>
                             <Chip
                               label={r.situacao || "—"}
                               size="small"
@@ -1994,7 +2368,7 @@ export default function LeadScraper() {
                             />
                           </TableCell>
                         )}
-                        <TableCell>
+                        <TableCell className={classes.bodyCell}>
                           <span className={classes.rating}><Stars value={r.rating} /></span>
                         </TableCell>
                       </TableRow>
@@ -2002,6 +2376,7 @@ export default function LeadScraper() {
                   </TableBody>
                 </Table>
               </Box>
+              </div>
 
               <Divider style={{ margin: "16px 0" }} />
 
@@ -2048,7 +2423,7 @@ export default function LeadScraper() {
                 {canImport && (
                   <Button
                     variant="contained" color="primary"
-                    startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <ImportIcon />}
+                    startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <ImportIcon size={18} />}
                     onClick={importSelected}
                     disabled={loading || (activeJob.status !== "done" && activeJob.status !== "cancelled")}
                     style={{ textTransform: "none", fontWeight: 600, whiteSpace: "nowrap" }}
@@ -2063,26 +2438,8 @@ export default function LeadScraper() {
           ) : null}
         </Paper>
       )}
-    </Box>
-
-      <ConfirmationModal
-        title={confirmDelete?.type === "all" ? "Limpar histórico" : confirmDelete?.type === "stop" ? "Parar busca" : "Excluir busca"}
-        open={!!confirmDelete}
-        onClose={() => setConfirmDelete(null)}
-        onConfirm={() => {
-          const target = confirmDelete;
-          setConfirmDelete(null);
-          if (target?.type === "all") clearHistory();
-          else if (target?.type === "job") deleteJob(target.job);
-          else if (target?.type === "stop") stopJob(target.job);
-        }}
-      >
-        {confirmDelete?.type === "all"
-          ? "Excluir todo o histórico de buscas? Leads já importados não serão afetados."
-          : confirmDelete?.type === "stop"
-            ? "Parar esta busca? Os leads já coletados serão mantidos."
-            : "Excluir esta busca do histórico? Leads já importados não serão afetados."}
-      </ConfirmationModal>
+        </div>
+      </Paper>
     </MainContainer>
   );
 }

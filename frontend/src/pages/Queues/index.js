@@ -1,8 +1,9 @@
-import React, { useEffect, useReducer, useState, useContext } from "react";
+import React, { useContext, useEffect, useMemo, useReducer, useState } from "react";
 
 import {
   Button,
   IconButton,
+  InputAdornment,
   makeStyles,
   Paper,
   Table,
@@ -10,43 +11,155 @@ import {
   TableCell,
   TableHead,
   TableRow,
-  Typography,
+  TextField,
   useTheme,
-  Grid,
 } from "@material-ui/core";
-import useMediaQuery from "@material-ui/core/useMediaQuery";
+
+import {
+  ListTree as QueuesIcon,
+  Pencil as EditIcon,
+  Plus as AddIcon,
+  Search as SearchIcon,
+  Trash2 as DeleteIcon,
+} from "lucide-react";
 
 import MainContainer from "../../components/MainContainer";
-import MainHeader from "../../components/MainHeader";
 import TableRowSkeleton from "../../components/TableRowSkeleton";
 import Title from "../../components/Title";
 import { i18n } from "../../translate/i18n";
 import toastError from "../../errors/toastError";
 import api from "../../services/api";
-import { DeleteOutline, Edit } from "@material-ui/icons";
 import QueueModal from "../../components/QueueModal";
 import { toast } from "react-toastify";
 import ConfirmationModal from "../../components/ConfirmationModal";
-// import { SocketContext } from "../../context/Socket/SocketContext";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import ForbiddenPage from "../../components/ForbiddenPage";
 import usePermissions from "../../hooks/usePermissions";
 
+// ===== Estilos no padrão de listagem (referência: /connections) =====
 const useStyles = makeStyles((theme) => ({
-  mainPaper: {
+  paper: {
     flex: 1,
-    padding: theme.spacing(2),
-    ...theme.scrollbarStyles,
+    padding: 0,
+    overflow: "hidden",
+    borderRadius: 12,
+    border: `1px solid ${theme.palette.divider}`,
+    backgroundColor: theme.palette.background.paper,
   },
-  customTableCell: {
+  header: {
     display: "flex",
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing(2),
+    flexWrap: "wrap",
+    padding: theme.spacing(2, 2.5),
   },
+  headerText: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+  },
+  subtitle: {
+    color: theme.palette.text.secondary,
+    fontSize: "0.85rem",
+  },
+  headerActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1),
+    flexWrap: "wrap",
+  },
+  toolbar: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1.5),
+    flexWrap: "wrap",
+    padding: theme.spacing(1.5, 2.5),
+    borderTop: `1px solid ${theme.palette.divider}`,
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    background:
+      theme.palette.type === "dark"
+        ? theme.palette.background.default
+        : "#fafafa",
+  },
+  searchField: {
+    minWidth: 220,
+    flex: "1 1 280px",
+    maxWidth: 380,
+  },
+  filterSelect: {
+    minWidth: 150,
+  },
+  headCell: {
+    fontWeight: 600,
+    fontSize: "0.72rem",
+    letterSpacing: "0.06em",
+    textTransform: "uppercase",
+    color: theme.palette.text.secondary,
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    background:
+      theme.palette.type === "dark"
+        ? theme.palette.background.default
+        : "#fafafa",
+    whiteSpace: "nowrap",
+  },
+  bodyCell: {
+    fontSize: "0.85rem",
+    paddingTop: theme.spacing(1.25),
+    paddingBottom: theme.spacing(1.25),
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    verticalAlign: "middle",
+  },
+  rowHover: {
+    "&:hover": {
+      backgroundColor: theme.palette.action.hover,
+    },
+    transition: "background-color 120ms ease",
+  },
+  actionsCell: {
+    whiteSpace: "nowrap",
+  },
+  emptyState: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing(1),
+    padding: theme.spacing(8, 2),
+    color: theme.palette.text.secondary,
+    textAlign: "center",
+  },
+  // Amostra da cor da fila (cards e tabela)
+  colorSwatch: {
+    width: 18,
+    height: 18,
+    borderRadius: 6,
+    border: `1px solid ${theme.palette.divider}`,
+    flexShrink: 0,
+  },
+  colorSwatchTable: {
+    display: "inline-block",
+    width: 48,
+    height: 18,
+    borderRadius: 6,
+    border: `1px solid ${theme.palette.divider}`,
+    verticalAlign: "middle",
+  },
+  // Texto da saudação truncado com reticências na tabela
+  greetingText: {
+    display: "inline-block",
+    maxWidth: 320,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    verticalAlign: "middle",
+  },
+  // Cards mobile
   mobileList: {
     display: "grid",
     gridTemplateColumns: "1fr",
-    gap: theme.spacing(2),
+    gap: theme.spacing(1.5),
+    padding: theme.spacing(1.5),
     [theme.breakpoints.up("sm")]: {
       display: "none",
     },
@@ -57,9 +170,8 @@ const useStyles = makeStyles((theme) => ({
     },
   },
   card: {
-    borderRadius: 14,
-    padding: theme.spacing(2),
-    boxShadow: "0 6px 18px rgba(0,0,0,0.08)",
+    borderRadius: 12,
+    padding: theme.spacing(1.75),
     border: `1px solid ${theme.palette.divider}`,
     display: "flex",
     flexDirection: "column",
@@ -75,15 +187,19 @@ const useStyles = makeStyles((theme) => ({
   cardTitle: {
     display: "flex",
     alignItems: "center",
-    gap: theme.spacing(1),
+    gap: theme.spacing(1.25),
+    minWidth: 0,
     fontWeight: 700,
     fontSize: "1.05rem",
   },
-  colorSwatch: {
-    width: 18,
-    height: 18,
-    borderRadius: 6,
-    border: `1px solid ${theme.palette.divider}`,
+  cardName: {
+    fontWeight: 700,
+    fontSize: "1rem",
+    lineHeight: 1.2,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    maxWidth: 190,
   },
   cardMeta: {
     display: "grid",
@@ -91,18 +207,20 @@ const useStyles = makeStyles((theme) => ({
     gap: theme.spacing(1),
   },
   metaLabel: {
-    fontSize: "0.85rem",
+    fontSize: "0.72rem",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
     color: theme.palette.text.secondary,
   },
   metaValue: {
-    fontSize: "0.95rem",
+    fontSize: "0.9rem",
     fontWeight: 600,
     wordBreak: "break-word",
   },
   cardActions: {
     display: "flex",
     alignItems: "center",
-    gap: theme.spacing(1),
+    gap: theme.spacing(0.5),
     flexWrap: "wrap",
   },
   actionButton: {
@@ -157,7 +275,6 @@ const reducer = (state, action) => {
 const Queues = () => {
   const classes = useStyles();
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
   const [queues, dispatch] = useReducer(reducer, []);
   const [loading, setLoading] = useState(false);
@@ -165,11 +282,22 @@ const Queues = () => {
   const [queueModalOpen, setQueueModalOpen] = useState(false);
   const [selectedQueue, setSelectedQueue] = useState(null);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
-  //   const socketManager = useContext(SocketContext);
+  // Busca da toolbar (filtro client-side — a listagem de filas vem toda do backend)
+  const [searchParam, setSearchParam] = useState("");
   const { user, socket } = useContext(AuthContext);
   const { hasPermission } = usePermissions();
   const companyId = user.companyId;
 
+  // Filas filtradas pela busca da toolbar (compartilhada entre tabela e cards)
+  const filteredQueues = useMemo(() => {
+    const search = searchParam.trim().toLowerCase();
+    if (!search) return queues;
+    return queues.filter((queue) =>
+      `${queue.id} ${queue.name || ""} ${queue.greetingMessage || ""} ${queue.orderQueue ?? ""}`
+        .toLowerCase()
+        .includes(search)
+    );
+  }, [queues, searchParam]);
 
   useEffect(() => {
     (async () => {
@@ -256,6 +384,7 @@ const Queues = () => {
       >
         {i18n.t("queues.confirmationModal.deleteMessage")}
       </ConfirmationModal>
+      {/* Modal de fila — mantém integrações, chatbots, horários e RAG por fila */}
       <QueueModal
         open={queueModalOpen}
         onClose={handleCloseQueueModal}
@@ -268,157 +397,189 @@ const Queues = () => {
           }
         }}
       />
-      {hasPermission("queues.view") ? (
-        <>
-          <MainHeader>
-            <Grid container spacing={isMobile ? 1 : 2} alignItems="center">
-              <Grid item xs={12} sm={6}>
-                <Title>{i18n.t("queues.title")} ({queues.length})</Title>
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <Grid container spacing={1} justifyContent="flex-end">
-                  <Grid item xs={12} sm="auto">
-                    <Button
-                      fullWidth={isMobile}
-                      variant="contained"
-                      color="primary"
-                      onClick={handleOpenQueueModal}
-                      style={{ minHeight: 44 }}
-                    >
-                      {i18n.t("queues.buttons.add")}
-                    </Button>
-                  </Grid>
-                </Grid>
-              </Grid>
-            </Grid>
-          </MainHeader>
-          <Paper className={classes.mainPaper} variant="outlined">
-            {/* Mobile cards */}
-            <div className={classes.mobileList}>
-              {queues.map((queue) => (
-                <div key={queue.id} className={classes.card}>
-                  <div className={classes.cardHeader}>
-                    <div className={classes.cardTitle}>
-                      <span className={classes.colorSwatch} style={{ backgroundColor: queue.color }} />
-                      {queue.name}
+      {!hasPermission("queues.view") ? <ForbiddenPage /> : (
+        <Paper className={classes.paper} variant="outlined">
+          {/* 1. Cabeçalho: título + subtítulo + ações primárias */}
+          <div className={classes.header}>
+            <div className={classes.headerText}>
+              <Title>{i18n.t("queues.title")} ({filteredQueues.length})</Title>
+              <span className={classes.subtitle}>
+                Gerencie as filas de atendimento — ordem de exibição, saudação, integrações e chatbots por fila.
+              </span>
+            </div>
+            <div className={classes.headerActions}>
+              <Button
+                variant="contained"
+                color="primary"
+                size="small"
+                startIcon={<AddIcon size={16} />}
+                onClick={handleOpenQueueModal}
+                style={{ minHeight: 36 }}
+              >
+                {i18n.t("queues.buttons.add")}
+              </Button>
+            </div>
+          </div>
+
+          {/* 2. Toolbar de busca */}
+          <div className={classes.toolbar}>
+            <TextField
+              className={classes.searchField}
+              size="small"
+              variant="outlined"
+              placeholder="Buscar por nome, saudação ou ID…"
+              value={searchParam}
+              onChange={(e) => setSearchParam(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon size={16} />
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </div>
+
+          {/* 3. Conteúdo: skeleton / vazio / lista responsiva */}
+          {loading ? (
+            <Table>
+              <TableBody>
+                <TableRowSkeleton columns={6} />
+              </TableBody>
+            </Table>
+          ) : filteredQueues.length === 0 ? (
+            <div className={classes.emptyState}>
+              <QueuesIcon size={44} style={{ color: theme.palette.text.disabled }} />
+              <div>
+                {searchParam
+                  ? "Nenhuma fila encontrada para essa busca."
+                  : "Nenhuma fila cadastrada."}
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Cards — mobile */}
+              <div className={classes.mobileList}>
+                {filteredQueues.map((queue) => (
+                  <div key={queue.id} className={classes.card}>
+                    <div className={classes.cardHeader}>
+                      <div className={classes.cardTitle}>
+                        <span
+                          className={classes.colorSwatch}
+                          style={{ backgroundColor: queue.color }}
+                        />
+                        <span className={classes.cardName}>{queue.name}</span>
+                      </div>
+                      <div className={classes.metaValue}>#{queue.id}</div>
                     </div>
-                    <div className={classes.metaValue}>ID #{queue.id}</div>
-                  </div>
-                  <div className={classes.cardMeta}>
-                    <div>
-                      <div className={classes.metaLabel}>{i18n.t("queues.table.orderQueue")}</div>
-                      <div className={classes.metaValue}>{queue.orderQueue ?? "—"}</div>
-                    </div>
-                    <div>
-                      <div className={classes.metaLabel}>{i18n.t("queues.table.greeting")}</div>
-                      <div className={classes.metaValue}>
-                        {queue.greetingMessage ? queue.greetingMessage.slice(0, 90) + (queue.greetingMessage.length > 90 ? "…" : "") : "—"}
+                    <div className={classes.cardMeta}>
+                      <div>
+                        <div className={classes.metaLabel}>
+                          {i18n.t("queues.table.orderQueue")}
+                        </div>
+                        <div className={classes.metaValue}>
+                          {queue.orderQueue ?? "—"}
+                        </div>
+                      </div>
+                      <div>
+                        <div className={classes.metaLabel}>
+                          {i18n.t("queues.table.greeting")}
+                        </div>
+                        <div className={classes.metaValue}>
+                          {queue.greetingMessage
+                            ? queue.greetingMessage.slice(0, 90) +
+                              (queue.greetingMessage.length > 90 ? "…" : "")
+                            : "—"}
+                        </div>
                       </div>
                     </div>
+                    <div className={classes.cardActions}>
+                      {hasPermission("queues.edit") && (
+                        <IconButton
+                          size="small"
+                          className={classes.actionButton}
+                          onClick={() => handleEditQueue(queue)}
+                        >
+                          <EditIcon size={18} />
+                        </IconButton>
+                      )}
+                      {hasPermission("queues.delete") && (
+                        <IconButton
+                          size="small"
+                          className={classes.actionButton}
+                          onClick={() => {
+                            setSelectedQueue(queue);
+                            setConfirmModalOpen(true);
+                          }}
+                        >
+                          <DeleteIcon size={18} />
+                        </IconButton>
+                      )}
+                    </div>
                   </div>
-                  <div className={classes.cardActions}>
-                    {hasPermission("queues.edit") && (
-                      <IconButton
-                        size="small"
-                        className={classes.actionButton}
-                        onClick={() => handleEditQueue(queue)}
-                      >
-                        <Edit />
-                      </IconButton>
-                    )}
-                    {hasPermission("queues.delete") && (
-                      <IconButton
-                        size="small"
-                        className={classes.actionButton}
-                        onClick={() => {
-                          setSelectedQueue(queue);
-                          setConfirmModalOpen(true);
-                        }}
-                      >
-                        <DeleteOutline />
-                      </IconButton>
-                    )}
-                  </div>
-                </div>
-              ))}
-              {loading && <TableRowSkeleton columns={1} />}
-            </div>
+                ))}
+              </div>
 
-            {/* Desktop table */}
-            <div className={classes.desktopTableWrapper}>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell align="center">
-                      {i18n.t("queues.table.ID")}
-                    </TableCell>
-                    <TableCell align="center">
-                      {i18n.t("queues.table.name")}
-                    </TableCell>
-                    <TableCell align="center">
-                      {i18n.t("queues.table.color")}
-                    </TableCell>
-                    <TableCell align="center">
-                      {i18n.t("queues.table.orderQueue")}
-                    </TableCell>
-                    <TableCell align="center">
-                      {i18n.t("queues.table.greeting")}
-                    </TableCell>
-                    <TableCell align="center">
-                      {i18n.t("queues.table.actions")}
-                    </TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  <>
-                    {queues.map((queue) => (
-                      <TableRow key={queue.id}>
-                        <TableCell align="center">{queue.id}</TableCell>
-                        <TableCell align="center">{queue.name}</TableCell>
-                        <TableCell align="center">
-                          <div className={classes.customTableCell}>
-                            <span
-                              style={{
-                                backgroundColor: queue.color,
-                                width: 60,
-                                height: 20,
-                                alignSelf: "center",
-                              }}
-                            />
-                          </div>
+              {/* Tabela — desktop */}
+              <div className={classes.desktopTableWrapper}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell align="center" className={classes.headCell}>
+                        {i18n.t("queues.table.ID")}
+                      </TableCell>
+                      <TableCell align="center" className={classes.headCell}>
+                        {i18n.t("queues.table.name")}
+                      </TableCell>
+                      <TableCell align="center" className={classes.headCell}>
+                        {i18n.t("queues.table.color")}
+                      </TableCell>
+                      <TableCell align="center" className={classes.headCell}>
+                        {i18n.t("queues.table.orderQueue")}
+                      </TableCell>
+                      <TableCell align="center" className={classes.headCell}>
+                        {i18n.t("queues.table.greeting")}
+                      </TableCell>
+                      <TableCell align="center" className={classes.headCell}>
+                        {i18n.t("queues.table.actions")}
+                      </TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {filteredQueues.map((queue) => (
+                      <TableRow key={queue.id} className={classes.rowHover}>
+                        <TableCell align="center" className={classes.bodyCell}>
+                          #{queue.id}
                         </TableCell>
-                        <TableCell align="center">
-                          <div className={classes.customTableCell}>
-                            <Typography
-                              style={{ width: 300, align: "center" }}
-                              noWrap
-                              variant="body2"
-                            >
-                              {queue.orderQueue}
-                            </Typography>
-                          </div>
+                        <TableCell align="center" className={classes.bodyCell}>
+                          {queue.name}
                         </TableCell>
-                        <TableCell align="center">
-                          <div className={classes.customTableCell}>
-                            <Typography
-                              style={{ width: 300, align: "center" }}
-                              noWrap
-                              variant="body2"
-                            >
-                              {queue.greetingMessage}
-                            </Typography>
-                          </div>
+                        <TableCell align="center" className={classes.bodyCell}>
+                          <span
+                            className={classes.colorSwatchTable}
+                            style={{ backgroundColor: queue.color }}
+                          />
                         </TableCell>
-                        <TableCell align="center">
+                        <TableCell align="center" className={classes.bodyCell}>
+                          {queue.orderQueue ?? "—"}
+                        </TableCell>
+                        <TableCell align="center" className={classes.bodyCell}>
+                          <span className={classes.greetingText}>
+                            {queue.greetingMessage || "—"}
+                          </span>
+                        </TableCell>
+                        <TableCell
+                          align="center"
+                          className={`${classes.bodyCell} ${classes.actionsCell}`}
+                        >
                           {hasPermission("queues.edit") && (
                             <IconButton
                               size="small"
                               onClick={() => handleEditQueue(queue)}
                             >
-                              <Edit />
+                              <EditIcon size={18} />
                             </IconButton>
                           )}
-
                           {hasPermission("queues.delete") && (
                             <IconButton
                               size="small"
@@ -427,20 +588,19 @@ const Queues = () => {
                                 setConfirmModalOpen(true);
                               }}
                             >
-                              <DeleteOutline />
+                              <DeleteIcon size={18} />
                             </IconButton>
                           )}
                         </TableCell>
                       </TableRow>
                     ))}
-                    {loading && <TableRowSkeleton columns={4} />}
-                  </>
-                </TableBody>
-              </Table>
-            </div>
-          </Paper>
-        </>
-      ) : <ForbiddenPage />}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
+          )}
+        </Paper>
+      )}
     </MainContainer>
   );
 };

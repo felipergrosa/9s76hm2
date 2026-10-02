@@ -31,10 +31,9 @@ import CompareArrowsIcon from "@material-ui/icons/CompareArrows";
 import AccountTreeIcon from "@material-ui/icons/AccountTree";
 import BugReportIcon from "@material-ui/icons/BugReport";
 import { toast } from "react-toastify";
+import { Eraser as ClearIcon } from "lucide-react";
 
 import MainContainer from "../../components/MainContainer";
-import MainHeader from "../../components/MainHeader";
-import MainHeaderButtonsWrapper from "../../components/MainHeaderButtonsWrapper";
 import Title from "../../components/Title";
 import ForbiddenPage from "../../components/ForbiddenPage";
 import WhatsAppPreview from "../../components/CampaignModal/WhatsAppPreview";
@@ -55,12 +54,58 @@ import useWhatsApps from "../../hooks/useWhatsApps";
 import { getAIAgents } from "../../services/aiAgents";
 import usePermissions from "../../hooks/usePermissions";
 
+// ===== Estilos no padrão de layout (referência: Connections) =====
 const useStyles = makeStyles((theme) => ({
-  mainPaper: {
+  paper: {
     flex: 1,
-    padding: theme.spacing(1),
+    padding: 0,
+    overflowX: "hidden",
     overflowY: "auto",
+    borderRadius: 12,
+    border: `1px solid ${theme.palette.divider}`,
+    backgroundColor: theme.palette.background.paper,
     ...theme.scrollbarStyles
+  },
+  header: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing(2),
+    flexWrap: "wrap",
+    padding: theme.spacing(2, 2.5),
+  },
+  headerText: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+  },
+  subtitle: {
+    color: theme.palette.text.secondary,
+    fontSize: "0.85rem",
+  },
+  headerActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1),
+    flexWrap: "wrap",
+  },
+  toolbar: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1.5),
+    flexWrap: "wrap",
+    padding: theme.spacing(1.5, 2.5),
+    borderTop: `1px solid ${theme.palette.divider}`,
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    background:
+      theme.palette.type === "dark"
+        ? theme.palette.background.default
+        : "#fafafa",
+  },
+  selectField: {
+    minWidth: 200,
+    flex: "1 1 240px",
+    maxWidth: 420,
   },
   tabsContainer: {
     marginBottom: theme.spacing(2),
@@ -134,12 +179,6 @@ const useStyles = makeStyles((theme) => ({
       backgroundColor: "rgba(48, 54, 61, 0.5)",
       borderLeftColor: "#58a6ff"
     }
-  },
-  contextSelector: {
-    padding: theme.spacing(2),
-    marginBottom: theme.spacing(2),
-    backgroundColor: theme.mode === "light" ? "#f5f5f5" : "#1a1a2e",
-    borderRadius: 8
   }
 }));
 
@@ -382,10 +421,6 @@ const AITraining = () => {
     }
   };
 
-  if (!hasPermission("ai-training.view")) {
-    return <ForbiddenPage />;
-  }
-
   const closeRateModal = () => {
     setRateModalOpen(false);
     setRateTargetMessageId(null);
@@ -511,93 +546,113 @@ const AITraining = () => {
     toast.success("Versão restaurada no editor");
   };
 
+  // Toolbar de contexto no padrão de layout: filtros do sandbox
+  // (agente, etapa do funil e conexão) + feedback de carregamento/vazio
   const renderContextSelector = () => (
-    <Paper className={classes.contextSelector} variant="outlined">
-      <Grid container spacing={2} alignItems="center">
-        <Grid item xs={12} md={4}>
-          <FormControl fullWidth variant="outlined" size="small">
-            <InputLabel>Agente</InputLabel>
-            <Select
-              value={selectedAgentId}
-              onChange={async (e) => {
-                const next = e.target.value;
-                setSelectedAgentId(next);
-                setSessionId("");
-                setMessages([]);
-                setLogs([]);
-                setToolCalls([]);
-                await loadStages(next);
-              }}
-              label="Agente"
-              disabled={loadingAgents}
-            >
-              <MenuItem value=""><em>Selecione</em></MenuItem>
-              {agents.map((a) => (
-                <MenuItem key={a.id} value={String(a.id)}>{a.name}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </Grid>
-        <Grid item xs={12} md={4}>
-          <FormControl fullWidth variant="outlined" size="small">
-            <InputLabel>Etapa do funil</InputLabel>
-            <Select
-              value={selectedStageId}
-              onChange={(e) => {
-                const stageId = e.target.value;
-                setSelectedStageId(stageId);
-                setSessionId("");
-                const stage = stages.find((s) => String(s.id) === stageId);
-                if (stage) {
-                  setPromptOverride(stage.systemPrompt || "");
-                }
-              }}
-              label="Etapa do funil"
-              disabled={!selectedAgentId || loadingStages}
-            >
-              <MenuItem value=""><em>Selecione</em></MenuItem>
-              {stages.map((s) => (
-                <MenuItem key={s.id} value={String(s.id)}>{s.order} - {s.name}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </Grid>
-        <Grid item xs={12} md={4}>
-          <FormControl fullWidth variant="outlined" size="small">
-            <InputLabel>Conexão</InputLabel>
-            <Select
-              value={selectedWhatsappId}
-              onChange={(e) => {
-                setSelectedWhatsappId(e.target.value);
-                setSelectedGroupId("");
-                setToNumber("");
-                setSessionId("");
-              }}
-              label="Conexão"
-              disabled={loadingWhatsApps}
-            >
-              <MenuItem value=""><em>Selecione</em></MenuItem>
-              {whatsApps.map((w) => (
-                <MenuItem key={w.id} value={String(w.id)}>{w.name} ({w.status})</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </Grid>
-      </Grid>
-    </Paper>
+    <div className={classes.toolbar}>
+      <FormControl variant="outlined" size="small" className={classes.selectField}>
+        <InputLabel>Agente</InputLabel>
+        <Select
+          value={selectedAgentId}
+          onChange={async (e) => {
+            const next = e.target.value;
+            setSelectedAgentId(next);
+            setSessionId("");
+            setMessages([]);
+            setLogs([]);
+            setToolCalls([]);
+            await loadStages(next);
+          }}
+          label="Agente"
+          disabled={loadingAgents}
+        >
+          <MenuItem value=""><em>Selecione</em></MenuItem>
+          {agents.map((a) => (
+            <MenuItem key={a.id} value={String(a.id)}>{a.name}</MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+      <FormControl variant="outlined" size="small" className={classes.selectField}>
+        <InputLabel>Etapa do funil</InputLabel>
+        <Select
+          value={selectedStageId}
+          onChange={(e) => {
+            const stageId = e.target.value;
+            setSelectedStageId(stageId);
+            setSessionId("");
+            const stage = stages.find((s) => String(s.id) === stageId);
+            if (stage) {
+              setPromptOverride(stage.systemPrompt || "");
+            }
+          }}
+          label="Etapa do funil"
+          disabled={!selectedAgentId || loadingStages}
+        >
+          <MenuItem value=""><em>Selecione</em></MenuItem>
+          {stages.map((s) => (
+            <MenuItem key={s.id} value={String(s.id)}>{s.order} - {s.name}</MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+      <FormControl variant="outlined" size="small" className={classes.selectField}>
+        <InputLabel>Conexão</InputLabel>
+        <Select
+          value={selectedWhatsappId}
+          onChange={(e) => {
+            setSelectedWhatsappId(e.target.value);
+            setSelectedGroupId("");
+            setToNumber("");
+            setSessionId("");
+          }}
+          label="Conexão"
+          disabled={loadingWhatsApps}
+        >
+          <MenuItem value=""><em>Selecione</em></MenuItem>
+          {whatsApps.map((w) => (
+            <MenuItem key={w.id} value={String(w.id)}>{w.name} ({w.status})</MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+      {loadingAgents ? (
+        // Estado de carregamento da lista de agentes
+        <Box display="flex" alignItems="center" style={{ gap: 8 }}>
+          <CircularProgress size={16} />
+          <span className={classes.subtitle}>Carregando agentes…</span>
+        </Box>
+      ) : agents.length === 0 ? (
+        // Empty state: sem agente de IA não há o que treinar
+        <span className={classes.subtitle}>Nenhum agente de IA cadastrado — crie um agente para iniciar o treinamento.</span>
+      ) : null}
+    </div>
   );
 
   return (
-
     <MainContainer>
-      <MainHeader>
-        <Title>Training / Sandbox (IA)</Title>
-        <MainHeaderButtonsWrapper>
-          <Button variant="outlined" onClick={handleClear}>Limpar</Button>
-        </MainHeaderButtonsWrapper>
-      </MainHeader>
+      {!hasPermission("ai-training.view") ? <ForbiddenPage /> : (
+      <Paper className={classes.paper} variant="outlined">
+        {/* Cabeçalho no padrão /connections: título + subtítulo + ações */}
+        <div className={classes.header}>
+          <div className={classes.headerText}>
+            <Title>Training / Sandbox (IA)</Title>
+            <span className={classes.subtitle}>
+              Treine, teste e ajuste os prompts dos agentes de IA em um ambiente seguro antes de aplicar em produção.
+            </span>
+          </div>
+          <div className={classes.headerActions}>
+            <Button
+              variant="outlined"
+              color="primary"
+              size="small"
+              onClick={handleClear}
+              startIcon={<ClearIcon size={16} />}
+              style={{ minHeight: 36 }}
+            >
+              Limpar
+            </Button>
+          </div>
+        </div>
 
-      <Paper className={classes.mainPaper} variant="outlined">
+        {/* Toolbar: seletores de contexto do sandbox (agente/etapa/conexão) */}
         {renderContextSelector()}
 
         <Tabs
@@ -823,6 +878,7 @@ const AITraining = () => {
           </Box>
         </TabPanel>
       </Paper>
+      )}
 
       <OnboardingTour />
 

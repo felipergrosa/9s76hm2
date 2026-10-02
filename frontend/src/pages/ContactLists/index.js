@@ -4,29 +4,32 @@ import { toast } from "react-toastify";
 import { useHistory } from "react-router-dom";
 
 import { makeStyles, useTheme } from "@material-ui/core/styles";
-import useMediaQuery from "@material-ui/core/useMediaQuery";
-import Grid from "@material-ui/core/Grid";
 import Paper from "@material-ui/core/Paper";
- 
+
 import Table from "@material-ui/core/Table";
 import TableBody from "@material-ui/core/TableBody";
 import TableCell from "@material-ui/core/TableCell";
 import TableHead from "@material-ui/core/TableHead";
 import TableRow from "@material-ui/core/TableRow";
 import IconButton from "@material-ui/core/IconButton";
-import SearchIcon from "@material-ui/icons/Search";
 import TextField from "@material-ui/core/TextField";
 import InputAdornment from "@material-ui/core/InputAdornment";
+import { Popover, Button, Typography } from "@material-ui/core";
 
-import DeleteOutlineIcon from "@material-ui/icons/DeleteOutline";
-import EditIcon from "@material-ui/icons/Edit";
-import PeopleIcon from "@material-ui/icons/People";
-import DownloadIcon from "@material-ui/icons/GetApp";
+import {
+  Search as SearchIcon,
+  Pencil as EditIcon,
+  Trash2 as DeleteIcon,
+  Users as ContactsIcon,
+  Download as DownloadIcon,
+  Plus as PlusIcon,
+  Filter as FilterIcon,
+} from "lucide-react";
 
 import MainContainer from "../../components/MainContainer";
-import MainHeader from "../../components/MainHeader";
 import Title from "../../components/Title";
 import usePermissions from "../../hooks/usePermissions";
+import ForbiddenPage from "../../components/ForbiddenPage";
 
 import api from "../../services/api";
 import { i18n } from "../../translate/i18n";
@@ -34,8 +37,6 @@ import TableRowSkeleton from "../../components/TableRowSkeleton";
 import ContactListDialog from "../../components/ContactListDialog";
 import ConfirmationModal from "../../components/ConfirmationModal";
 import toastError from "../../errors/toastError";
-import { Popover, Button, Typography, Chip } from "@material-ui/core";
-import { Plus as PlusIcon, Filter as FilterIcon } from "lucide-react";
 
 import planilhaExemplo from "../../assets/planilha.xlsx";
 // import { SocketContext } from "../../context/Socket/SocketContext";
@@ -89,16 +90,114 @@ const reducer = (state, action) => {
   }
 };
 
+// ===== Estilos no padrão SPEC-LAYOUT-PADRAO (referência: pages/Connections) =====
 const useStyles = makeStyles((theme) => ({
-  mainPaper: {
+  paper: {
     flex: 1,
-    padding: theme.spacing(2),
-    // Removido overflowY e scrollbar interna para usar scroll da janela
+    padding: 0,
+    overflow: "hidden",
+    borderRadius: 12,
+    border: `1px solid ${theme.palette.divider}`,
+    backgroundColor: theme.palette.background.paper,
   },
+  header: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing(2),
+    flexWrap: "wrap",
+    padding: theme.spacing(2, 2.5),
+  },
+  headerText: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+  },
+  subtitle: {
+    color: theme.palette.text.secondary,
+    fontSize: "0.85rem",
+  },
+  headerActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1),
+    flexWrap: "wrap",
+  },
+  toolbar: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1.5),
+    flexWrap: "wrap",
+    padding: theme.spacing(1.5, 2.5),
+    borderTop: `1px solid ${theme.palette.divider}`,
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    background:
+      theme.palette.type === "dark"
+        ? theme.palette.background.default
+        : "#fafafa",
+  },
+  searchField: {
+    minWidth: 220,
+    flex: "1 1 280px",
+    maxWidth: 380,
+  },
+  headCell: {
+    fontWeight: 600,
+    fontSize: "0.72rem",
+    letterSpacing: "0.06em",
+    textTransform: "uppercase",
+    color: theme.palette.text.secondary,
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    background:
+      theme.palette.type === "dark"
+        ? theme.palette.background.default
+        : "#fafafa",
+    whiteSpace: "nowrap",
+  },
+  bodyCell: {
+    fontSize: "0.85rem",
+    paddingTop: theme.spacing(1.25),
+    paddingBottom: theme.spacing(1.25),
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    verticalAlign: "middle",
+  },
+  rowHover: {
+    "&:hover": {
+      backgroundColor: theme.palette.action.hover,
+    },
+    transition: "background-color 120ms ease",
+  },
+  listName: {
+    fontWeight: 600,
+    fontSize: "0.9rem",
+    lineHeight: 1.35,
+  },
+  actionsCell: {
+    whiteSpace: "nowrap",
+  },
+  emptyState: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing(1),
+    padding: theme.spacing(8, 2),
+    color: theme.palette.text.secondary,
+    textAlign: "center",
+  },
+  paginationBar: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: theme.spacing(1.5, 2.5),
+    borderTop: `1px solid ${theme.palette.divider}`,
+  },
+  // Cards mobile
   mobileList: {
     display: "grid",
     gridTemplateColumns: "1fr",
-    gap: theme.spacing(2),
+    gap: theme.spacing(1.5),
+    padding: theme.spacing(1.5),
     [theme.breakpoints.up("sm")]: {
       display: "none",
     },
@@ -109,9 +208,8 @@ const useStyles = makeStyles((theme) => ({
     },
   },
   card: {
-    borderRadius: 14,
-    padding: theme.spacing(2),
-    boxShadow: "0 6px 18px rgba(0,0,0,0.08)",
+    borderRadius: 12,
+    padding: theme.spacing(1.75),
     border: `1px solid ${theme.palette.divider}`,
     display: "flex",
     flexDirection: "column",
@@ -125,10 +223,19 @@ const useStyles = makeStyles((theme) => ({
     gap: theme.spacing(1),
   },
   cardTitle: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1.25),
+    minWidth: 0,
+  },
+  cardName: {
     fontWeight: 700,
-    fontSize: "1.05rem",
+    fontSize: "1rem",
     lineHeight: 1.2,
-    wordBreak: "break-word",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    maxWidth: 190,
   },
   cardMeta: {
     display: "grid",
@@ -136,17 +243,20 @@ const useStyles = makeStyles((theme) => ({
     gap: theme.spacing(1),
   },
   metaLabel: {
-    fontSize: "0.85rem",
+    fontSize: "0.72rem",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
     color: theme.palette.text.secondary,
   },
   metaValue: {
-    fontSize: "0.95rem",
+    fontSize: "0.9rem",
     fontWeight: 600,
+    wordBreak: "break-word",
   },
   cardActions: {
     display: "flex",
     alignItems: "center",
-    gap: theme.spacing(1),
+    gap: theme.spacing(0.5),
     flexWrap: "wrap",
   },
   actionButton: {
@@ -159,7 +269,6 @@ const ContactLists = () => {
   const classes = useStyles();
   const history = useHistory();
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
   const [loading, setLoading] = useState(false);
   const [pageNumber, setPageNumber] = useState(1);
@@ -212,18 +321,7 @@ const ContactLists = () => {
     };
     const cleaned = clean(sf || null);
     setDetailsFilter(cleaned || null);
-    try {
-      // Diagnóstico: inspeciona o conteúdo real vindo do backend
-      // Remova depois que identificarmos o(s) campo(s) responsável(is) por '0000'
-      console.log('[SavedFilter - details RAW]', sf);
-      console.log('[SavedFilter - details CLEAN]', cleaned);
-    } catch (_) {}
   };
-  
-  // Log sempre que o estado mudar (garante diagnóstico mesmo sem evento do botão)
-  useEffect(() => {
-    try { console.log('[SavedFilter - state]', detailsFilter); } catch(_) {}
-  }, [detailsFilter]);
   const closeDetails = () => {
     // Restaura o foco para o botão/anchor para não manter o foco em um elemento que poderá ficar oculto
     try { detailsAnchorEl && typeof detailsAnchorEl.focus === 'function' && detailsAnchorEl.focus(); } catch(_) {}
@@ -292,6 +390,7 @@ const ContactLists = () => {
     return () => {
       socket.off(`company-${companyId}-ContactList`, onContactListEvent);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleOpenContactListModal = () => {
@@ -364,6 +463,51 @@ const ContactLists = () => {
     history.push(`/contact-lists/${id}/contacts`);
   };
 
+  // Botão "Filtro salvo" (compartilhado entre tabela desktop e cards mobile)
+  // Exibe um resumo clicável quando a lista possui savedFilter com algum critério ativo
+  const renderSavedFilterButton = (contactList) => {
+    const sf = contactList && contactList.savedFilter ? contactList.savedFilter : null;
+    if (!sf) return <span style={{ color: '#999' }}>—</span>;
+    const hasAny = (
+      (Array.isArray(sf.channel) && sf.channel.length > 0) ||
+      (Array.isArray(sf.representativeCode) && sf.representativeCode.length > 0) ||
+      (Array.isArray(sf.city) && sf.city.length > 0) ||
+      (Array.isArray(sf.segment) && sf.segment.length > 0) ||
+      (Array.isArray(sf.situation) && sf.situation.length > 0) ||
+      (Array.isArray(sf.foundationMonths) && sf.foundationMonths.length > 0) ||
+      (!!sf.minCreditLimit || !!sf.maxCreditLimit) ||
+      (typeof sf.florder !== 'undefined') ||
+      (!!sf.dtUltCompraStart || !!sf.dtUltCompraEnd) ||
+      (sf.minVlUltCompra != null || sf.maxVlUltCompra != null) ||
+      (Array.isArray(sf.tags) && sf.tags.length > 0)
+    );
+    if (!hasAny) return <span style={{ color: '#999' }}>—</span>;
+    const activeCount = [
+      Array.isArray(sf.channel) && sf.channel.length > 0,
+      Array.isArray(sf.representativeCode) && sf.representativeCode.length > 0,
+      Array.isArray(sf.city) && sf.city.length > 0,
+      Array.isArray(sf.segment) && sf.segment.length > 0,
+      Array.isArray(sf.situation) && sf.situation.length > 0,
+      Array.isArray(sf.foundationMonths) && sf.foundationMonths.length > 0,
+      (!!sf.minCreditLimit || !!sf.maxCreditLimit),
+      (typeof sf.florder !== 'undefined'),
+      (!!sf.dtUltCompraStart || !!sf.dtUltCompraEnd),
+      (sf.minVlUltCompra != null || sf.maxVlUltCompra != null),
+      (Array.isArray(sf.tags) && sf.tags.length > 0)
+    ].filter(Boolean).length;
+    return (
+      <Button
+        size="small"
+        variant="outlined"
+        onMouseEnter={(e) => openDetails(e, sf)}
+        onClick={(e) => openDetails(e, sf)}
+        startIcon={<FilterIcon size={16} color="#059669" />}
+      >
+        {`Filtro salvo${activeCount ? ` (${activeCount})` : ''}`}
+      </Button>
+    );
+  };
+
   return (
     <MainContainer useWindowScroll>
       <ConfirmationModal
@@ -384,250 +528,259 @@ const ContactLists = () => {
         aria-labelledby="form-dialog-title"
         contactListId={selectedContactList && selectedContactList.id}
       />
-      <MainHeader>
-        <Grid container spacing={isMobile ? 1 : 2} alignItems="center">
-          <Grid item xs={12} sm={5}>
-            <Title>{i18n.t("contactLists.title")}</Title>
-          </Grid>
-          <Grid item xs={12} sm={7}>
-            <Grid container alignItems="center" spacing={1} justifyContent={isMobile ? "stretch" : "flex-end"}>
-              <Grid item xs={12} sm>
-                <TextField
-                  fullWidth
-                  size="small"
-                  placeholder={i18n.t("contacts.searchPlaceholder")}
-                  type="search"
-                  value={searchParam}
-                  onChange={handleSearch}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <SearchIcon style={{ color: "gray" }} />
-                      </InputAdornment>
-                    ),
-                  }}
-                />
-              </Grid>
-              {hasPermission("contact-lists.create") && (
-                <Grid item xs={12} sm="auto">
+      {!hasPermission("contact-lists.view") ? (
+        <ForbiddenPage />
+      ) : (
+        <>
+          <Paper className={classes.paper} variant="outlined">
+            {/* 1. Cabeçalho: título + total + subtítulo + ações */}
+            <div className={classes.header}>
+              <div className={classes.headerText}>
+                <Title>
+                  {i18n.t("contactLists.title")} ({totalContactLists})
+                </Title>
+                <span className={classes.subtitle}>
+                  Crie e gerencie listas de contatos para usar em campanhas, com filtros salvos e planilha de exemplo.
+                </span>
+              </div>
+              <div className={classes.headerActions}>
+                {hasPermission("contact-lists.create") && (
                   <Button
-                    fullWidth={isMobile}
                     variant="contained"
                     color="primary"
+                    size="small"
                     onClick={handleOpenContactListModal}
-                    style={{ minHeight: 44 }}
                     startIcon={<PlusIcon size={16} />}
+                    style={{ minHeight: 36 }}
                   >
                     {i18n.t("contactLists.buttons.add")}
                   </Button>
-                </Grid>
-              )}
-            </Grid>
-          </Grid>
-        </Grid>
-      </MainHeader>
-      <Paper
-        className={classes.mainPaper}
-        variant="outlined"
-      >
-        {/* Mobile cards */}
-        <div className={classes.mobileList}>
-          {contactLists.map((contactList) => (
-            <div key={contactList.id} className={classes.card}>
-              <div className={classes.cardHeader}>
-                <div className={classes.cardTitle}>{contactList.name}</div>
-                <div className={classes.metaValue}>{contactList.contactsCount || 0} contatos</div>
-              </div>
-              <div className={classes.cardMeta}>
-                <div>
-                  <div className={classes.metaLabel}>Filtro salvo</div>
-                  <div className={classes.metaValue}>
-                    {(() => {
-                      const sf = contactList && contactList.savedFilter ? contactList.savedFilter : null;
-                      if (!sf) return <span style={{ color: '#999' }}>—</span>;
-                      const hasAny = (
-                        (Array.isArray(sf.channel) && sf.channel.length > 0) ||
-                        (Array.isArray(sf.representativeCode) && sf.representativeCode.length > 0) ||
-                        (Array.isArray(sf.city) && sf.city.length > 0) ||
-                        (Array.isArray(sf.segment) && sf.segment.length > 0) ||
-                        (Array.isArray(sf.situation) && sf.situation.length > 0) ||
-                        (Array.isArray(sf.foundationMonths) && sf.foundationMonths.length > 0) ||
-                        (!!sf.minCreditLimit || !!sf.maxCreditLimit) ||
-                        (typeof sf.florder !== 'undefined') ||
-                        (!!sf.dtUltCompraStart || !!sf.dtUltCompraEnd) ||
-                        (sf.minVlUltCompra != null || sf.maxVlUltCompra != null) ||
-                        (Array.isArray(sf.tags) && sf.tags.length > 0)
-                      );
-                      if (!hasAny) return <span style={{ color: '#999' }}>—</span>;
-                      const activeCount = [
-                        Array.isArray(sf.channel) && sf.channel.length > 0,
-                        Array.isArray(sf.representativeCode) && sf.representativeCode.length > 0,
-                        Array.isArray(sf.city) && sf.city.length > 0,
-                        Array.isArray(sf.segment) && sf.segment.length > 0,
-                        Array.isArray(sf.situation) && sf.situation.length > 0,
-                        Array.isArray(sf.foundationMonths) && sf.foundationMonths.length > 0,
-                        (!!sf.minCreditLimit || !!sf.maxCreditLimit),
-                        (typeof sf.florder !== 'undefined'),
-                        (!!sf.dtUltCompraStart || !!sf.dtUltCompraEnd),
-                        (sf.minVlUltCompra != null || sf.maxVlUltCompra != null),
-                        (Array.isArray(sf.tags) && sf.tags.length > 0)
-                      ].filter(Boolean).length;
-                      return (
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          onClick={(e) => openDetails(e, sf)}
-                          startIcon={<FilterIcon size={16} color="#059669" />}
-                        >
-                          {`Filtro salvo${activeCount ? ` (${activeCount})` : ''}`}
-                        </Button>
-                      );
-                    })()}
-                  </div>
-                </div>
-              </div>
-              <div className={classes.cardActions}>
-                <IconButton
-                  size="small"
-                  className={classes.actionButton}
-                  onClick={() => goToContacts(contactList.id)}
-                >
-                  <PeopleIcon />
-                </IconButton>
-                {hasPermission("contact-lists.edit") && (
-                  <IconButton
-                    size="small"
-                    className={classes.actionButton}
-                    onClick={() => handleEditContactList(contactList)}
-                  >
-                    <EditIcon />
-                  </IconButton>
                 )}
-                {hasPermission("contact-lists.delete") && (
-                  <IconButton
-                    size="small"
-                    className={classes.actionButton}
-                    onClick={() => {
-                      setConfirmModalOpen(true);
-                      setDeletingContactList(contactList);
-                    }}
-                  >
-                    <DeleteOutlineIcon />
-                  </IconButton>
-                )}
-                <IconButton size="small" className={classes.actionButton} component="a" href={planilhaExemplo} download="planilha.xlsx" title="Baixar Planilha Exemplo">
-                  <DownloadIcon />
-                </IconButton>
               </div>
             </div>
-          ))}
-          {loading && <TableRowSkeleton columns={1} />}
-        </div>
 
-        {/* Desktop table */}
-        <div className={classes.desktopTableWrapper}>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell align="left">{i18n.t("contactLists.table.name")}</TableCell>
-                <TableCell align="left">{i18n.t("contactLists.table.contacts")}</TableCell>
-                <TableCell align="left">Filtro salvo</TableCell>
-                <TableCell align="right">{i18n.t("contactLists.table.actions")}</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
+            {/* 2. Toolbar: busca (server-side com debounce) */}
+            <div className={classes.toolbar}>
+              <TextField
+                className={classes.searchField}
+                size="small"
+                variant="outlined"
+                placeholder={i18n.t("contacts.searchPlaceholder")}
+                type="search"
+                value={searchParam}
+                onChange={handleSearch}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon size={16} />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            </div>
+
+            {/* 3. Conteúdo: skeleton / vazio / cards + tabela */}
+            {loading ? (
+              <Table>
+                <TableBody>
+                  <TableRowSkeleton columns={4} />
+                </TableBody>
+              </Table>
+            ) : contactLists.length === 0 ? (
+              <div className={classes.emptyState}>
+                <ContactsIcon size={44} style={{ color: theme.palette.text.disabled }} />
+                <div>Nenhuma lista de contatos encontrada.</div>
+              </div>
+            ) : (
               <>
-                {contactLists.map((contactList) => (
-                  <TableRow key={contactList.id}>
-                    <TableCell align="left">{contactList.name}</TableCell>
-                    <TableCell align="left">{contactList.contactsCount || 0}</TableCell>
-                    <TableCell align="left" style={{ maxWidth: 560 }}>
-                      {(() => {
-                        const sf = contactList && contactList.savedFilter ? contactList.savedFilter : null;
-                        if (!sf) return <span style={{ color: '#999' }}>—</span>;
-                        const hasAny = (
-                          (Array.isArray(sf.channel) && sf.channel.length > 0) ||
-                          (Array.isArray(sf.representativeCode) && sf.representativeCode.length > 0) ||
-                          (Array.isArray(sf.city) && sf.city.length > 0) ||
-                          (Array.isArray(sf.segment) && sf.segment.length > 0) ||
-                          (Array.isArray(sf.situation) && sf.situation.length > 0) ||
-                          (Array.isArray(sf.foundationMonths) && sf.foundationMonths.length > 0) ||
-                          (!!sf.minCreditLimit || !!sf.maxCreditLimit) ||
-                          (typeof sf.florder !== 'undefined') ||
-                          (!!sf.dtUltCompraStart || !!sf.dtUltCompraEnd) ||
-                          (sf.minVlUltCompra != null || sf.maxVlUltCompra != null) ||
-                          (Array.isArray(sf.tags) && sf.tags.length > 0)
-                        );
-                        if (!hasAny) return <span style={{ color: '#999' }}>—</span>;
-                        const activeCount = [
-                          Array.isArray(sf.channel) && sf.channel.length > 0,
-                          Array.isArray(sf.representativeCode) && sf.representativeCode.length > 0,
-                          Array.isArray(sf.city) && sf.city.length > 0,
-                          Array.isArray(sf.segment) && sf.segment.length > 0,
-                          Array.isArray(sf.situation) && sf.situation.length > 0,
-                          Array.isArray(sf.foundationMonths) && sf.foundationMonths.length > 0,
-                          (!!sf.minCreditLimit || !!sf.maxCreditLimit),
-                          (typeof sf.florder !== 'undefined'),
-                          (!!sf.dtUltCompraStart || !!sf.dtUltCompraEnd),
-                          (sf.minVlUltCompra != null || sf.maxVlUltCompra != null),
-                          (Array.isArray(sf.tags) && sf.tags.length > 0)
-                        ].filter(Boolean).length;
-                        return (
-                          <Button
+                {/* Cards — mobile */}
+                <div className={classes.mobileList}>
+                  {contactLists.map((contactList) => (
+                    <div key={contactList.id} className={classes.card}>
+                      <div className={classes.cardHeader}>
+                        <div className={classes.cardTitle}>
+                          <div className={classes.cardName} title={contactList.name}>
+                            {contactList.name}
+                          </div>
+                        </div>
+                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                          {contactList.contactsCount || 0} contatos
+                        </span>
+                      </div>
+                      <div className={classes.cardMeta}>
+                        <div>
+                          <div className={classes.metaLabel}>Filtro salvo</div>
+                          <div className={classes.metaValue}>
+                            {renderSavedFilterButton(contactList)}
+                          </div>
+                        </div>
+                      </div>
+                      <div className={classes.cardActions}>
+                        <IconButton
+                          size="small"
+                          className={classes.actionButton}
+                          onClick={() => goToContacts(contactList.id)}
+                        >
+                          <ContactsIcon size={18} />
+                        </IconButton>
+                        {hasPermission("contact-lists.edit") && (
+                          <IconButton
                             size="small"
-                            variant="outlined"
-                            onMouseEnter={(e) => openDetails(e, sf)}
-                            onClick={(e) => openDetails(e, sf)}
-                            startIcon={<FilterIcon size={16} color="#059669" />}
+                            className={classes.actionButton}
+                            onClick={() => handleEditContactList(contactList)}
                           >
-                            {`Filtro salvo${activeCount ? ` (${activeCount})` : ''}`}
-                          </Button>
-                        );
-                      })()}
-                    </TableCell>
-                    <TableCell align="right">
-                      <a href={planilhaExemplo} download="planilha.xlsx">
-                        <IconButton size="small" title="Baixar Planilha Exemplo">
-                          <DownloadIcon />
+                            <EditIcon size={18} />
+                          </IconButton>
+                        )}
+                        {hasPermission("contact-lists.delete") && (
+                          <IconButton
+                            size="small"
+                            className={classes.actionButton}
+                            onClick={() => {
+                              setConfirmModalOpen(true);
+                              setDeletingContactList(contactList);
+                            }}
+                          >
+                            <DeleteIcon size={18} />
+                          </IconButton>
+                        )}
+                        <IconButton size="small" className={classes.actionButton} component="a" href={planilhaExemplo} download="planilha.xlsx" title="Baixar Planilha Exemplo">
+                          <DownloadIcon size={18} />
                         </IconButton>
-                      </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
 
-                      <IconButton
-                        size="small"
-                        onClick={() => goToContacts(contactList.id)}
-                      >
-                        <PeopleIcon />
-                      </IconButton>
+                {/* Tabela — desktop */}
+                <div className={classes.desktopTableWrapper}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell align="left" className={classes.headCell}>{i18n.t("contactLists.table.name")}</TableCell>
+                        <TableCell align="left" className={classes.headCell}>{i18n.t("contactLists.table.contacts")}</TableCell>
+                        <TableCell align="left" className={classes.headCell}>Filtro salvo</TableCell>
+                        <TableCell align="right" className={classes.headCell}>{i18n.t("contactLists.table.actions")}</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {contactLists.map((contactList) => (
+                        <TableRow key={contactList.id} className={classes.rowHover}>
+                          <TableCell align="left" className={classes.bodyCell}>
+                            <span className={classes.listName}>{contactList.name}</span>
+                          </TableCell>
+                          <TableCell align="left" className={classes.bodyCell}>
+                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                              {contactList.contactsCount || 0}
+                            </span>
+                          </TableCell>
+                          <TableCell align="left" className={classes.bodyCell} style={{ maxWidth: 560 }}>
+                            {renderSavedFilterButton(contactList)}
+                          </TableCell>
+                          <TableCell align="right" className={`${classes.bodyCell} ${classes.actionsCell}`}>
+                            <a href={planilhaExemplo} download="planilha.xlsx">
+                              <IconButton size="small" title="Baixar Planilha Exemplo">
+                                <DownloadIcon size={18} />
+                              </IconButton>
+                            </a>
 
-                      {hasPermission("contact-lists.edit") && (
-                        <IconButton
-                          size="small"
-                          onClick={() => handleEditContactList(contactList)}
-                        >
-                          <EditIcon />
-                        </IconButton>
-                      )}
+                            <IconButton
+                              size="small"
+                              onClick={() => goToContacts(contactList.id)}
+                            >
+                              <ContactsIcon size={18} />
+                            </IconButton>
 
-                      {hasPermission("contact-lists.delete") && (
-                        <IconButton
-                          size="small"
-                          onClick={() => {
-                            setConfirmModalOpen(true);
-                            setDeletingContactList(contactList);
-                          }}
-                        >
-                          <DeleteOutlineIcon />
-                        </IconButton>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {loading && <TableRowSkeleton columns={4} />}
+                            {hasPermission("contact-lists.edit") && (
+                              <IconButton
+                                size="small"
+                                onClick={() => handleEditContactList(contactList)}
+                              >
+                                <EditIcon size={18} />
+                              </IconButton>
+                            )}
+
+                            {hasPermission("contact-lists.delete") && (
+                              <IconButton
+                                size="small"
+                                onClick={() => {
+                                  setConfirmModalOpen(true);
+                                  setDeletingContactList(contactList);
+                                }}
+                              >
+                                <DeleteIcon size={18} />
+                              </IconButton>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               </>
-            </TableBody>
-          </Table>
-        </div>
-      </Paper>
+            )}
+
+            {/* Paginação numerada (server-side) — preservada dentro do Paper */}
+            <nav className={classes.paginationBar}>
+              <ul className="inline-flex items-center -space-x-px">
+                <li>
+                  <button
+                    onClick={() => handlePageChange(1)}
+                    disabled={pageNumber === 1}
+                    className={`flex items-center justify-center px-3 h-8 leading-tight border rounded-l-lg ${
+                      pageNumber === 1
+                        ? "text-gray-300 bg-white border-gray-300 dark:bg-gray-800 dark:border-gray-700"
+                        : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
+                    }`}
+                  >
+                    «
+                  </button>
+                </li>
+                <li>
+                  <button
+                    onClick={() => handlePageChange(pageNumber - 1)}
+                    disabled={pageNumber === 1}
+                    className={`flex items-center justify-center px-3 h-8 leading-tight border ${
+                      pageNumber === 1
+                        ? "text-gray-300 bg-white border-gray-300 dark:bg-gray-800 dark:border-gray-700"
+                        : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
+                    }`}
+                  >
+                    ‹
+                  </button>
+                </li>
+                {renderPageNumbers()}
+                <li>
+                  <button
+                    onClick={() => handlePageChange(pageNumber + 1)}
+                    disabled={pageNumber === totalPages}
+                    className={`flex items-center justify-center px-3 h-8 leading-tight border ${
+                      pageNumber === totalPages
+                        ? "text-gray-300 bg-white border-gray-300 dark:bg-gray-800 dark:border-gray-700"
+                        : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
+                    }`}
+                  >
+                    ›
+                  </button>
+                </li>
+                <li>
+                  <button
+                    onClick={() => handlePageChange(totalPages)}
+                    disabled={pageNumber === totalPages}
+                    className={`flex items-center justify-center px-3 h-8 leading-tight border rounded-r-lg ${
+                      pageNumber === totalPages
+                        ? "text-gray-300 bg-white border-gray-300 dark:bg-gray-800 dark:border-gray-700"
+                        : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
+                    }`}
+                  >
+                    »
+                  </button>
+                </li>
+              </ul>
+            </nav>
+          </Paper>
+        </>
+      )}
       {/* Popover de detalhes do filtro salvo */}
       <Popover
         open={Boolean(detailsAnchorEl)}
@@ -683,64 +836,6 @@ const ContactLists = () => {
           )}
         </div>
       </Popover>
-      {/* Paginação (baseada no totalPages/renderPageNumbers) */}
-      <nav className="flex justify-between items-center mt-4">
-        <ul className="inline-flex items-center -space-x-px">
-          <li>
-            <button
-              onClick={() => handlePageChange(1)}
-              disabled={pageNumber === 1}
-              className={`flex items-center justify-center px-3 h-8 leading-tight border rounded-l-lg ${
-                pageNumber === 1
-                  ? "text-gray-300 bg-white border-gray-300 dark:bg-gray-800 dark:border-gray-700"
-                  : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
-              }`}
-            >
-              «
-            </button>
-          </li>
-          <li>
-            <button
-              onClick={() => handlePageChange(pageNumber - 1)}
-              disabled={pageNumber === 1}
-              className={`flex items-center justify-center px-3 h-8 leading-tight border ${
-                pageNumber === 1
-                  ? "text-gray-300 bg-white border-gray-300 dark:bg-gray-800 dark:border-gray-700"
-                  : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
-              }`}
-            >
-              ‹
-            </button>
-          </li>
-          {renderPageNumbers()}
-          <li>
-            <button
-              onClick={() => handlePageChange(pageNumber + 1)}
-              disabled={pageNumber === totalPages}
-              className={`flex items-center justify-center px-3 h-8 leading-tight border ${
-                pageNumber === totalPages
-                  ? "text-gray-300 bg-white border-gray-300 dark:bg-gray-800 dark:border-gray-700"
-                  : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
-              }`}
-            >
-              ›
-            </button>
-          </li>
-          <li>
-            <button
-              onClick={() => handlePageChange(totalPages)}
-              disabled={pageNumber === totalPages}
-              className={`flex items-center justify-center px-3 h-8 leading-tight border rounded-r-lg ${
-                pageNumber === totalPages
-                  ? "text-gray-300 bg-white border-gray-300 dark:bg-gray-800 dark:border-gray-700"
-                  : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
-              }`}
-            >
-              »
-            </button>
-          </li>
-        </ul>
-      </nav>
     </MainContainer>
   );
 };

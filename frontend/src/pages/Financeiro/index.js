@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useReducer, useContext } from "react";
-import { makeStyles } from "@material-ui/core/styles";
+import React, { useState, useEffect, useReducer, useContext, useMemo } from "react";
+import { makeStyles, useTheme } from "@material-ui/core/styles";
 import Paper from "@material-ui/core/Paper";
 import Button from "@material-ui/core/Button";
 import Table from "@material-ui/core/Table";
@@ -7,19 +7,12 @@ import TableBody from "@material-ui/core/TableBody";
 import TableCell from "@material-ui/core/TableCell";
 import TableHead from "@material-ui/core/TableHead";
 import TableRow from "@material-ui/core/TableRow";
-import Chip from "@material-ui/core/Chip";
-import Typography from "@material-ui/core/Typography";
-import Grid from "@material-ui/core/Grid";
 import Box from "@material-ui/core/Box";
-import Card from "@material-ui/core/Card";
-import CardContent from "@material-ui/core/CardContent";
-import CardHeader from "@material-ui/core/CardHeader";
-import Divider from "@material-ui/core/Divider";
-import Avatar from "@material-ui/core/Avatar";
 import CircularProgress from "@material-ui/core/CircularProgress";
-import Tooltip from "@material-ui/core/Tooltip";
-import useMediaQuery from "@material-ui/core/useMediaQuery";
-import { useTheme } from "@material-ui/core/styles";
+import TextField from "@material-ui/core/TextField";
+import InputAdornment from "@material-ui/core/InputAdornment";
+import FormControl from "@material-ui/core/FormControl";
+import Select from "@material-ui/core/Select";
 
 // Ícones
 import PaymentIcon from "@material-ui/icons/Payment";
@@ -30,12 +23,10 @@ import HourglassEmptyIcon from "@material-ui/icons/HourglassEmpty";
 import PersonIcon from "@material-ui/icons/Person";
 import DevicesIcon from "@material-ui/icons/Devices";
 import QueueIcon from "@material-ui/icons/Queue";
-import MoneyIcon from "@material-ui/icons/Money";
 import DateRangeIcon from "@material-ui/icons/DateRange";
-import InfoIcon from "@material-ui/icons/Info";
+import { Search as SearchIcon } from "lucide-react";
 
 import MainContainer from "../../components/MainContainer";
-import MainHeader from "../../components/MainHeader";
 import Title from "../../components/Title";
 import SubscriptionModal from "../../components/SubscriptionModal";
 import api from "../../services/api";
@@ -89,56 +80,195 @@ const reducer = (state, action) => {
   }
 };
 
+// ===== Estilos no padrão de listagem (referência: Connections/index.js) =====
 const useStyles = makeStyles((theme) => ({
-  mainPaper: {
+  paper: {
     flex: 1,
-    padding: theme.spacing(2),
-    borderRadius: 16,
-    boxShadow: "0 4px 20px rgba(0, 0, 0, 0.05)",
-    ...theme.scrollbarStyles,
+    padding: 0,
+    overflow: "hidden",
+    borderRadius: 12,
+    border: `1px solid ${theme.palette.divider}`,
+    backgroundColor: theme.palette.background.paper,
   },
-  tableContainer: {
-    overflowX: "auto",
+  header: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing(2),
+    flexWrap: "wrap",
+    padding: theme.spacing(2, 2.5),
   },
-  table: {
-    minWidth: 600,
+  headerText: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
   },
-  tableHead: {
-    backgroundColor: "#f9f9f9",
-  },
-  tableHeadCell: {
-    fontWeight: "bold",
+  subtitle: {
     color: theme.palette.text.secondary,
-    padding: theme.spacing(2),
+    fontSize: "0.85rem",
   },
-  tableRow: {
+  headerActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1),
+    flexWrap: "wrap",
+  },
+  toolbar: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1.5),
+    flexWrap: "wrap",
+    padding: theme.spacing(1.5, 2.5),
+    borderTop: `1px solid ${theme.palette.divider}`,
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    background:
+      theme.palette.type === "dark"
+        ? theme.palette.background.default
+        : "#fafafa",
+  },
+  searchField: {
+    minWidth: 220,
+    flex: "1 1 280px",
+    maxWidth: 380,
+  },
+  filterSelect: {
+    minWidth: 150,
+  },
+  headCell: {
+    fontWeight: 600,
+    fontSize: "0.72rem",
+    letterSpacing: "0.06em",
+    textTransform: "uppercase",
+    color: theme.palette.text.secondary,
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    background:
+      theme.palette.type === "dark"
+        ? theme.palette.background.default
+        : "#fafafa",
+    whiteSpace: "nowrap",
+  },
+  bodyCell: {
+    fontSize: "0.85rem",
+    paddingTop: theme.spacing(1.25),
+    paddingBottom: theme.spacing(1.25),
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    verticalAlign: "middle",
+  },
+  rowHover: {
     "&:hover": {
-      backgroundColor: "rgba(0, 0, 0, 0.04)",
+      backgroundColor: theme.palette.action.hover,
     },
-    transition: "background-color 0.2s",
+    transition: "background-color 120ms ease",
   },
-  tableCell: {
-    padding: theme.spacing(2),
-    borderBottom: "1px solid rgba(224, 224, 224, 0.5)",
+  actionsCell: {
+    whiteSpace: "nowrap",
   },
-  chipPaid: {
-    backgroundColor: theme.palette.success.main,
-    color: "#fff",
-    fontWeight: "bold",
+  emptyState: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing(1),
+    padding: theme.spacing(8, 2),
+    color: theme.palette.text.secondary,
+    textAlign: "center",
   },
-  chipPending: {
-    backgroundColor: theme.palette.warning.main,
-    color: "#fff",
-    fontWeight: "bold",
+  // Cards mobile
+  mobileList: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gap: theme.spacing(1.5),
+    padding: theme.spacing(1.5),
+    [theme.breakpoints.up("sm")]: {
+      display: "none",
+    },
   },
-  chipOverdue: {
-    backgroundColor: theme.palette.error.main,
-    color: "#fff",
-    fontWeight: "bold",
+  desktopTableWrapper: {
+    overflowX: "auto",
+    [theme.breakpoints.down("sm")]: {
+      display: "none",
+    },
   },
-  avatarIcon: {
-    backgroundColor: theme.palette.primary.main,
-    marginRight: theme.spacing(1),
+  card: {
+    borderRadius: 12,
+    padding: theme.spacing(1.75),
+    border: `1px solid ${theme.palette.divider}`,
+    display: "flex",
+    flexDirection: "column",
+    gap: theme.spacing(1.25),
+    background: theme.palette.background.paper,
+  },
+  cardHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing(1),
+  },
+  cardTitle: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1.25),
+    minWidth: 0,
+  },
+  cardName: {
+    fontWeight: 700,
+    fontSize: "1rem",
+    lineHeight: 1.2,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    maxWidth: 190,
+  },
+  cardMeta: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+    gap: theme.spacing(1),
+  },
+  metaLabel: {
+    fontSize: "0.72rem",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    color: theme.palette.text.secondary,
+  },
+  metaValue: {
+    fontSize: "0.9rem",
+    fontWeight: 600,
+    wordBreak: "break-word",
+  },
+  cardActions: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: theme.spacing(0.5),
+    flexWrap: "wrap",
+  },
+  actionButton: {
+    minWidth: 44,
+    minHeight: 44,
+  },
+  // Específicos do Financeiro
+  invoiceIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 9,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+    backgroundColor: `${theme.palette.primary.main}1a`,
+    color: theme.palette.primary.main,
+    "& svg": { fontSize: 18 },
+  },
+  mutedText: {
+    color: theme.palette.text.secondary,
+    fontSize: "0.78rem",
+    marginTop: 2,
+  },
+  detailIcon: {
+    marginRight: theme.spacing(0.5),
+    color: theme.palette.primary.main,
+    fontSize: 16,
+    verticalAlign: "middle",
   },
   paymentButton: {
     borderRadius: 20,
@@ -158,97 +288,92 @@ const useStyles = makeStyles((theme) => ({
     color: theme.palette.success.main,
     borderColor: theme.palette.success.main,
   },
-  cardGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
-    gap: theme.spacing(3),
-    padding: theme.spacing(2, 0),
-    [theme.breakpoints.down("xs")]: {
-      gridTemplateColumns: "1fr",
-    },
-  },
-  card: {
-    borderRadius: 16,
-    boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)",
-    transition: "transform 0.2s, box-shadow 0.2s",
-    "&:hover": {
-      transform: "translateY(-4px)",
-      boxShadow: "0 8px 24px rgba(0, 0, 0, 0.12)",
-    },
-  },
-  cardHeader: {
-    paddingBottom: 0,
-  },
-  cardAvatar: {
-    backgroundColor: theme.palette.primary.main,
-  },
-  detailsGrid: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: theme.spacing(2),
-    marginTop: theme.spacing(2),
-  },
-  detailItem: {
-    display: "flex",
-    alignItems: "center",
-    marginBottom: theme.spacing(1),
-  },
-  detailIcon: {
-    marginRight: theme.spacing(1),
-    color: theme.palette.primary.main,
-    fontSize: 18,
-  },
-  bold: {
-    fontWeight: "bold",
-  },
-  statusDivider: {
-    margin: theme.spacing(2, 0),
-  },
-  cardActions: {
-    display: "flex",
-    justifyContent: "flex-end",
-    padding: theme.spacing(2),
-  },
-  mobileView: {
-    display: "none",
-    [theme.breakpoints.down("sm")]: {
-      display: "block",
-    },
-  },
-  desktopView: {
-    display: "block",
-    [theme.breakpoints.down("sm")]: {
-      display: "none",
-    },
-  },
-  title: {
-    display: "flex",
-    alignItems: "center",
-    "& svg": {
-      marginRight: theme.spacing(1),
-      color: theme.palette.primary.main,
-    },
-  },
-  invoiceCount: {
-    backgroundColor: theme.palette.primary.main,
-    color: theme.palette.primary.contrastText,
-    borderRadius: 20,
-    padding: theme.spacing(0.5, 1.5),
-    fontSize: 14,
-    marginLeft: theme.spacing(1),
-  },
 }));
+
+// Diferença em dias entre hoje e o vencimento da fatura (mesma lógica original)
+const daysUntilDue = (record) => {
+  const hoje = moment(moment()).format("DD/MM/yyyy");
+  const vencimento = moment(record.dueDate).format("DD/MM/yyyy");
+  var diff = moment(vencimento, "DD/MM/yyyy").diff(moment(hoje, "DD/MM/yyyy"));
+  return moment.duration(diff).asDays();
+};
+
+// Status da fatura → rótulo + chip tailwind (Pago / Vencido / Em Aberto)
+const getInvoiceStatus = (record) => {
+  const dias = daysUntilDue(record);
+  if (record.status === "paid") {
+    return {
+      key: "paid",
+      text: "Pago",
+      cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200",
+      icon: <CheckCircleIcon style={{ fontSize: 14 }} />,
+    };
+  }
+  if (dias < 0) {
+    return {
+      key: "overdue",
+      text: "Vencido",
+      cls: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+      icon: <ErrorIcon style={{ fontSize: 14 }} />,
+    };
+  }
+  return {
+    key: "open",
+    text: "Em Aberto",
+    cls: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
+    icon: <HourglassEmptyIcon style={{ fontSize: 14 }} />,
+  };
+};
+
+// Chip de status no padrão das telas de Conexões/Campanhas
+const InvoiceStatusChip = ({ invoice }) => {
+  const st = getInvoiceStatus(invoice);
+  return (
+    <span
+      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${st.cls}`}
+      style={{ gap: 4 }}
+    >
+      {st.icon}
+      {st.text}
+    </span>
+  );
+};
+
+// Texto auxiliar com os dias restantes/atraso da fatura
+const renderDaysLeft = (record) => {
+  const dias = daysUntilDue(record);
+
+  if (record.status === "paid") {
+    return null;
+  }
+
+  if (dias < 0) {
+    return `Vencido há ${Math.abs(Math.floor(dias))} dias`;
+  } else if (dias === 0) {
+    return "Vence hoje";
+  } else {
+    return `Vence em ${Math.floor(dias)} dias`;
+  }
+};
+
+// Destaque de linha para faturas vencidas e não pagas
+const rowStyle = (record) => {
+  const dias = daysUntilDue(record);
+  if (dias < 0 && record.status !== "paid") {
+    return { backgroundColor: "rgba(255, 188, 188, 0.15)" };
+  }
+};
 
 const Invoices = () => {
   const classes = useStyles();
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const { user } = useContext(AuthContext);
 
   const [loading, setLoading] = useState(false);
   const [pageNumber, setPageNumber] = useState(1);
   const [hasMore, setHasMore] = useState(false);
-  const [searchParam] = useState("");
+  const [searchParam, setSearchParam] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
   const [invoices, dispatch] = useReducer(reducer, []);
   const [storagePlans, setStoragePlans] = useState([]);
   const [selectedContactId, setSelectedContactId] = useState(null);
@@ -256,12 +381,12 @@ const Invoices = () => {
   const [companyPlan, setCompanyPlan] = useState(null);
 
   const handleOpenContactModal = (invoice) => {
-    // Create a copy of the invoice but replace the value with the plan amount
+    // Cria cópia da fatura substituindo o valor pelo valor do plano da empresa
     const invoiceWithPlanValue = {
       ...invoice,
       value: companyPlan && companyPlan.amount ? parseFloat(companyPlan.amount) : invoice.value
     };
-    
+
     setStoragePlans(invoiceWithPlanValue);
     setSelectedContactId(null);
     setContactModalOpen(true);
@@ -271,23 +396,23 @@ const Invoices = () => {
     setSelectedContactId(null);
     setContactModalOpen(false);
   };
-  
+
   useEffect(() => {
     dispatch({ type: "RESET" });
     setPageNumber(1);
   }, [searchParam]);
 
-  // Fetch Company info first, then get the plan using the planId
+  // Busca os dados da empresa e depois o plano via planId
   useEffect(() => {
     const fetchCompanyPlan = async () => {
       try {
         if (user && user.companyId) {
-          // First get the company info to access its planId
+          // Primeiro busca a empresa para acessar o planId
           const companyResponse = await api.get(`/companies/${user.companyId}`);
           const company = companyResponse.data;
-          
+
           if (company && company.planId) {
-            // Now use the planId to get the plan details
+            // Com o planId, busca os detalhes do plano
             const planResponse = await api.get(`/plans/${company.planId}`);
             setCompanyPlan(planResponse.data);
           }
@@ -319,27 +444,49 @@ const Invoices = () => {
     }, 500);
     return () => clearTimeout(delayDebounceFn);
   }, [searchParam, pageNumber]);
+
   useEffect(() => {
     window.addEventListener("error", (e) => {
       console.error("Erro global capturado:", e.message, e.error);
     });
   }, []);
 
+  // O endpoint /invoices/all retorna todas as faturas (ignora searchParam),
+  // então a busca e o filtro de status da toolbar são aplicados client-side
+  const filteredInvoices = useMemo(() => {
+    const search = searchParam.trim().toLowerCase();
+    return (invoices || []).filter((invoice) => {
+      const statusInfo = getInvoiceStatus(invoice);
+      if (statusFilter && statusInfo.key !== statusFilter) return false;
+      if (search) {
+        const hay = `${invoice.id} ${invoice.detail || ""} ${statusInfo.text} ${moment(invoice.dueDate).format("DD/MM/YYYY")}`.toLowerCase();
+        if (!hay.includes(search)) return false;
+      }
+      return true;
+    });
+  }, [invoices, searchParam, statusFilter]);
+
   const isLoadingFallback = !user || !user.companyId || !companyPlan;
 
   if (isLoadingFallback) {
     return (
       <MainContainer>
-        <MainHeader>
-          <Title>Faturas</Title>
-        </MainHeader>
-        <Box display="flex" justifyContent="center" my={6}>
-          <CircularProgress />
-        </Box>
+        <Paper className={classes.paper} variant="outlined">
+          <div className={classes.header}>
+            <div className={classes.headerText}>
+              <Title>Faturas</Title>
+              <span className={classes.subtitle}>
+                Acompanhe as faturas da assinatura, vencimentos e status de pagamento.
+              </span>
+            </div>
+          </div>
+          <Box display="flex" justifyContent="center" py={6}>
+            <CircularProgress />
+          </Box>
+        </Paper>
       </MainContainer>
     );
   }
-
 
   const loadMore = () => {
     setPageNumber((prevState) => prevState + 1);
@@ -353,161 +500,34 @@ const Invoices = () => {
     }
   };
 
-  const rowStyle = (record) => {
-    const hoje = moment(moment()).format("DD/MM/yyyy");
-    const vencimento = moment(record.dueDate).format("DD/MM/yyyy");
-    var diff = moment(vencimento, "DD/MM/yyyy").diff(moment(hoje, "DD/MM/yyyy"));
-    var dias = moment.duration(diff).asDays();
-    if (dias < 0 && record.status !== "paid") {
-      return { backgroundColor: "rgba(255, 188, 188, 0.15)" };
-    }
-  };
+  // Valor exibido: prioriza o amount do plano da empresa, senão o valor da fatura
+  const renderInvoiceValue = (invoice) =>
+    companyPlan && companyPlan.amount
+      ? parseFloat(companyPlan.amount).toLocaleString('pt-br', { style: 'currency', currency: 'BRL' })
+      : invoice.value.toLocaleString('pt-br', { style: 'currency', currency: 'BRL' });
 
-  const getInvoiceStatus = (record) => {
-    const hoje = moment(moment()).format("DD/MM/yyyy");
-    const vencimento = moment(record.dueDate).format("DD/MM/yyyy");
-    var diff = moment(vencimento, "DD/MM/yyyy").diff(moment(hoje, "DD/MM/yyyy"));
-    var dias = moment.duration(diff).asDays();
-    const status = record.status;
-    if (status === "paid") {
-      return { text: "Pago", chip: classes.chipPaid, icon: <CheckCircleIcon /> };
-    }
-    if (dias < 0) {
-      return { text: "Vencido", chip: classes.chipOverdue, icon: <ErrorIcon /> };
-    } else {
-      return { text: "Em Aberto", chip: classes.chipPending, icon: <HourglassEmptyIcon /> };
-    }
-  };
-
-  const renderDaysLeft = (record) => {
-    const hoje = moment(moment()).format("DD/MM/yyyy");
-    const vencimento = moment(record.dueDate).format("DD/MM/yyyy");
-    var diff = moment(vencimento, "DD/MM/yyyy").diff(moment(hoje, "DD/MM/yyyy"));
-    var dias = moment.duration(diff).asDays();
-    
-    if (record.status === "paid") {
-      return null;
-    }
-    
-    if (dias < 0) {
-      return `Vencido há ${Math.abs(Math.floor(dias))} dias`;
-    } else if (dias === 0) {
-      return "Vence hoje";
-    } else {
-      return `Vence em ${Math.floor(dias)} dias`;
-    }
-  };
-
-  // Renderização de cards para visualização móvel
-  const renderMobileCards = () => {
-    if (loading && invoices.length === 0) {
-      return (
-        <Box display="flex" justifyContent="center" my={4}>
-          <CircularProgress />
-        </Box>
-      );
-    }
-
-    return (
-      <div className={classes.cardGrid}>
-        {invoices.map((invoice) => {
-          const statusInfo = getInvoiceStatus(invoice);
-          return (
-            <Card key={invoice.id} className={classes.card}>
-              <CardHeader
-                className={classes.cardHeader}
-                avatar={
-                  <Avatar className={classes.cardAvatar}>
-                    <ReceiptIcon />
-                  </Avatar>
-                }
-                title={
-                  <Typography variant="h6" component="h2">
-                    {invoice.detail}
-                  </Typography>
-                }
-                subheader={
-                  <Typography variant="caption">
-                    ID: {invoice.id}
-                  </Typography>
-                }
-              />
-              <CardContent>
-                <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                  <Chip
-                    icon={statusInfo.icon}
-                    label={statusInfo.text}
-                    className={statusInfo.chip}
-                    size="small"
-                  />
-                  <Typography variant="body2" color="textSecondary">
-                    {renderDaysLeft(invoice)}
-                  </Typography>
-                </Box>
-
-                <Divider className={classes.statusDivider} />
-
-                <div className={classes.detailsGrid}>
-                  <div className={classes.detailItem}>
-                    <PersonIcon className={classes.detailIcon} />
-                    <Typography variant="body2">
-                      {companyPlan && companyPlan.users} usuários
-                    </Typography>
-                  </div>
-                  <div className={classes.detailItem}>
-                    <DevicesIcon className={classes.detailIcon} />
-                    <Typography variant="body2">
-                      {companyPlan && companyPlan.connections} conexões
-                    </Typography>
-                  </div>
-                  <div className={classes.detailItem}>
-                    <QueueIcon className={classes.detailIcon} />
-                    <Typography variant="body2">
-                      {companyPlan && companyPlan.queues} filas
-                    </Typography>
-                  </div>
-                  <div className={classes.detailItem}>
-                    <DateRangeIcon className={classes.detailIcon} />
-                    <Typography variant="body2">
-                      {moment(invoice.dueDate).format("DD/MM/YYYY")}
-                    </Typography>
-                  </div>
-                </div>
-
-                <Box mt={3}>
-                  <Typography variant="h6" className={classes.bold} color="primary">
-                    <MoneyIcon className={classes.detailIcon} />
-                    {companyPlan && companyPlan.amount 
-                      ? parseFloat(companyPlan.amount).toLocaleString('pt-br', { style: 'currency', currency: 'BRL' })
-                      : invoice.value.toLocaleString('pt-br', { style: 'currency', currency: 'BRL' })}
-                  </Typography>
-                </Box>
-
-                <Box mt={3} display="flex" justifyContent="flex-end">
-                  {statusInfo.text !== "Pago" ? (
-                    <Button
-                      variant="contained"
-                      className={classes.paymentButton}
-                      startIcon={<PaymentIcon />}
-                      onClick={() => handleOpenContactModal(invoice)}
-                    >
-                      PAGAR AGORA
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="outlined"
-                      className={classes.paidButton}
-                      startIcon={<CheckCircleIcon />}
-                    >
-                      PAGO
-                    </Button>
-                  )}
-                </Box>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+  // Botão de ação por status — "PAGAR"/"PAGAR AGORA" abre o modal de assinatura
+  const renderActionButton = (invoice, isMobileView) => {
+    const statusInfo = getInvoiceStatus(invoice);
+    return statusInfo.text !== "Pago" ? (
+      <Button
+        size="small"
+        variant="contained"
+        className={classes.paymentButton}
+        startIcon={<PaymentIcon />}
+        onClick={() => handleOpenContactModal(invoice)}
+      >
+        {isMobileView ? "PAGAR AGORA" : "PAGAR"}
+      </Button>
+    ) : (
+      <Button
+        size="small"
+        variant="outlined"
+        className={classes.paidButton}
+        startIcon={<CheckCircleIcon />}
+      >
+        PAGO
+      </Button>
     );
   };
 
@@ -520,149 +540,181 @@ const Invoices = () => {
         Invoice={storagePlans}
         contactId={selectedContactId}
       />
-      
-      <MainHeader>
-        <Box className={classes.title}>
-          <ReceiptIcon fontSize="large" />
-          <Title>Faturas</Title>
-          <span className={classes.invoiceCount}>{invoices.length}</span>
-        </Box>
-      </MainHeader>
-      
+
       <Paper
-        className={classes.mainPaper}
+        className={classes.paper}
         variant="outlined"
         onScroll={handleScroll}
       >
-        {/* Visualização móvel (cards) */}
-        <div className={classes.mobileView}>
-          {renderMobileCards()}
+        {/* Cabeçalho no padrão: título + subtítulo + ações */}
+        <div className={classes.header}>
+          <div className={classes.headerText}>
+            <Title>Faturas ({filteredInvoices.length})</Title>
+            <span className={classes.subtitle}>
+              Acompanhe as faturas da assinatura, vencimentos e status de pagamento.
+            </span>
+          </div>
+          <div className={classes.headerActions} />
         </div>
 
-        {/* Visualização desktop (tabela) */}
-        <div className={classes.desktopView}>
-          <div className={classes.tableContainer}>
-            <Table className={classes.table} size="small">
-              <TableHead className={classes.tableHead}>
-                <TableRow>
-                  <TableCell className={classes.tableHeadCell}>
-                    <Tooltip title="Detalhes da fatura">
-                      <Box display="flex" alignItems="center">
-                        <InfoIcon fontSize="small" style={{ marginRight: 8 }} />
-                        Detalhes
-                      </Box>
-                    </Tooltip>
-                  </TableCell>
-                  <TableCell className={classes.tableHeadCell} align="center">
-                    <Tooltip title="Número de usuários">
-                      <Box display="flex" alignItems="center" justifyContent="center">
-                        <PersonIcon fontSize="small" style={{ marginRight: 8 }} />
-                        Usuários
-                      </Box>
-                    </Tooltip>
-                  </TableCell>
-                  <TableCell className={classes.tableHeadCell} align="center">
-                    <Tooltip title="Número de conexões">
-                      <Box display="flex" alignItems="center" justifyContent="center">
-                        <DevicesIcon fontSize="small" style={{ marginRight: 8 }} />
-                        Conexões
-                      </Box>
-                    </Tooltip>
-                  </TableCell>
-                  <TableCell className={classes.tableHeadCell} align="center">
-                    <Tooltip title="Número de filas">
-                      <Box display="flex" alignItems="center" justifyContent="center">
-                        <QueueIcon fontSize="small" style={{ marginRight: 8 }} />
-                        Filas
-                      </Box>
-                    </Tooltip>
-                  </TableCell>
-                  <TableCell className={classes.tableHeadCell} align="center">
-                    <Tooltip title="Valor da fatura">
-                      <Box display="flex" alignItems="center" justifyContent="center">
-                        <MoneyIcon fontSize="small" style={{ marginRight: 8 }} />
-                        Valor
-                      </Box>
-                    </Tooltip>
-                  </TableCell>
-                  <TableCell className={classes.tableHeadCell} align="center">
-                    <Tooltip title="Data de vencimento">
-                      <Box display="flex" alignItems="center" justifyContent="center">
-                        <DateRangeIcon fontSize="small" style={{ marginRight: 8 }} />
-                        Vencimento
-                      </Box>
-                    </Tooltip>
-                  </TableCell>
-                  <TableCell className={classes.tableHeadCell} align="center">Status</TableCell>
-                  <TableCell className={classes.tableHeadCell} align="center">Ação</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {invoices.map((invoice) => {
-                  const statusInfo = getInvoiceStatus(invoice);
-                  return (
-                    <TableRow 
-                      key={invoice.id} 
-                      style={rowStyle(invoice)} 
-                      className={classes.tableRow}
+        {/* Toolbar: busca + filtro de status (client-side) */}
+        <div className={classes.toolbar}>
+          <TextField
+            className={classes.searchField}
+            size="small"
+            variant="outlined"
+            placeholder="Buscar por detalhes, ID ou vencimento…"
+            value={searchParam}
+            onChange={(e) => setSearchParam(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon size={16} />
+                </InputAdornment>
+              ),
+            }}
+          />
+          <FormControl size="small" variant="outlined" className={classes.filterSelect}>
+            <Select
+              native
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              displayEmpty
+            >
+              <option value="">Todos os status</option>
+              <option value="paid">Pago</option>
+              <option value="open">Em Aberto</option>
+              <option value="overdue">Vencido</option>
+            </Select>
+          </FormControl>
+        </div>
+
+        {loading && invoices.length === 0 ? (
+          <Table>
+            <TableBody>
+              <TableRowSkeleton columns={8} />
+            </TableBody>
+          </Table>
+        ) : filteredInvoices.length === 0 ? (
+          <div className={classes.emptyState}>
+            <ReceiptIcon style={{ fontSize: 44, color: theme.palette.text.disabled }} />
+            <div>Nenhuma fatura encontrada.</div>
+          </div>
+        ) : (
+          <>
+            {/* Cards — mobile */}
+            <div className={classes.mobileList}>
+              {filteredInvoices.map((invoice) => (
+                <div key={invoice.id} className={classes.card}>
+                  <div className={classes.cardHeader}>
+                    <div className={classes.cardTitle}>
+                      <span className={classes.invoiceIcon}>
+                        <ReceiptIcon />
+                      </span>
+                      <div style={{ minWidth: 0 }}>
+                        <div className={classes.cardName} title={invoice.detail}>
+                          {invoice.detail}
+                        </div>
+                        <div className={classes.mutedText}>ID: {invoice.id}</div>
+                      </div>
+                    </div>
+                    <InvoiceStatusChip invoice={invoice} />
+                  </div>
+
+                  <div className={classes.cardMeta}>
+                    <div>
+                      <div className={classes.metaLabel}>Usuários</div>
+                      <div className={classes.metaValue}>
+                        <PersonIcon className={classes.detailIcon} />
+                        {companyPlan && companyPlan.users}
+                      </div>
+                    </div>
+                    <div>
+                      <div className={classes.metaLabel}>Conexões</div>
+                      <div className={classes.metaValue}>
+                        <DevicesIcon className={classes.detailIcon} />
+                        {companyPlan && companyPlan.connections}
+                      </div>
+                    </div>
+                    <div>
+                      <div className={classes.metaLabel}>Filas</div>
+                      <div className={classes.metaValue}>
+                        <QueueIcon className={classes.detailIcon} />
+                        {companyPlan && companyPlan.queues}
+                      </div>
+                    </div>
+                    <div>
+                      <div className={classes.metaLabel}>Vencimento</div>
+                      <div className={classes.metaValue}>
+                        <DateRangeIcon className={classes.detailIcon} />
+                        {moment(invoice.dueDate).format("DD/MM/YYYY")}
+                      </div>
+                      <div className={classes.mutedText}>{renderDaysLeft(invoice)}</div>
+                    </div>
+                    <div>
+                      <div className={classes.metaLabel}>Valor</div>
+                      <div className={classes.metaValue}>
+                        {renderInvoiceValue(invoice)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className={classes.cardActions}>
+                    {renderActionButton(invoice, true)}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Tabela — desktop */}
+            <div className={classes.desktopTableWrapper}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell className={classes.headCell}>Detalhes</TableCell>
+                    <TableCell className={classes.headCell} align="center">Usuários</TableCell>
+                    <TableCell className={classes.headCell} align="center">Conexões</TableCell>
+                    <TableCell className={classes.headCell} align="center">Filas</TableCell>
+                    <TableCell className={classes.headCell} align="center">Valor</TableCell>
+                    <TableCell className={classes.headCell} align="center">Vencimento</TableCell>
+                    <TableCell className={classes.headCell} align="center">Status</TableCell>
+                    <TableCell className={classes.headCell} align="center">Ação</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {filteredInvoices.map((invoice) => (
+                    <TableRow
+                      key={invoice.id}
+                      style={rowStyle(invoice)}
+                      className={classes.rowHover}
                     >
-                      <TableCell className={classes.tableCell}>{companyPlan.name}</TableCell>
-                      <TableCell className={classes.tableCell} align="center">{companyPlan && companyPlan.users}</TableCell>
-                      <TableCell className={classes.tableCell} align="center">{companyPlan && companyPlan.connections}</TableCell>
-                      <TableCell className={classes.tableCell} align="center">{companyPlan && companyPlan.queues}</TableCell>
-                      <TableCell className={classes.tableCell} align="center" style={{ fontWeight: 'bold' }}>
-                        {companyPlan && companyPlan.amount 
-                          ? parseFloat(companyPlan.amount).toLocaleString('pt-br', { style: 'currency', currency: 'BRL' })
-                          : invoice.value.toLocaleString('pt-br', { style: 'currency', currency: 'BRL' })}
+                      <TableCell className={classes.bodyCell}>{companyPlan.name}</TableCell>
+                      <TableCell className={classes.bodyCell} align="center">{companyPlan && companyPlan.users}</TableCell>
+                      <TableCell className={classes.bodyCell} align="center">{companyPlan && companyPlan.connections}</TableCell>
+                      <TableCell className={classes.bodyCell} align="center">{companyPlan && companyPlan.queues}</TableCell>
+                      <TableCell className={classes.bodyCell} align="center" style={{ fontWeight: 'bold' }}>
+                        {renderInvoiceValue(invoice)}
                       </TableCell>
-                      <TableCell className={classes.tableCell} align="center">
+                      <TableCell className={classes.bodyCell} align="center">
                         <Box display="flex" flexDirection="column">
-                          <Typography variant="body2">
-                            {moment(invoice.dueDate).format("DD/MM/YYYY")}
-                          </Typography>
-                          <Typography variant="caption" color="textSecondary">
-                            {renderDaysLeft(invoice)}
-                          </Typography>
+                          <span>{moment(invoice.dueDate).format("DD/MM/YYYY")}</span>
+                          <span className={classes.mutedText}>{renderDaysLeft(invoice)}</span>
                         </Box>
                       </TableCell>
-                      <TableCell className={classes.tableCell} align="center">
-                        <Chip
-                          icon={statusInfo.icon}
-                          label={statusInfo.text}
-                          className={statusInfo.chip}
-                          size="small"
-                        />
+                      <TableCell className={classes.bodyCell} align="center">
+                        <InvoiceStatusChip invoice={invoice} />
                       </TableCell>
-                      <TableCell className={classes.tableCell} align="center">
-                        {statusInfo.text !== "Pago" ? (
-                          <Button
-                            size="small"
-                            variant="contained"
-                            className={classes.paymentButton}
-                            startIcon={<PaymentIcon />}
-                            onClick={() => handleOpenContactModal(invoice)}
-                          >
-                            PAGAR
-                          </Button>
-                        ) : (
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            className={classes.paidButton}
-                            startIcon={<CheckCircleIcon />}
-                          >
-                            PAGO
-                          </Button>
-                        )}
+                      <TableCell className={`${classes.bodyCell} ${classes.actionsCell}`} align="center">
+                        {renderActionButton(invoice, false)}
                       </TableCell>
                     </TableRow>
-                  );
-                })}
-                {loading && <TableRowSkeleton columns={8} />}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
+                  ))}
+                  {loading && <TableRowSkeleton columns={8} />}
+                </TableBody>
+              </Table>
+            </div>
+          </>
+        )}
       </Paper>
     </MainContainer>
   );

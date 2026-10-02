@@ -1,116 +1,255 @@
-import React, { useState, useEffect, useCallback } from "react";
-import {
-  Box, Paper, Typography, Tabs, Tab, Button, TextField, Dialog,
-  DialogTitle, DialogContent, DialogActions, IconButton, Chip,
-  CircularProgress, Tooltip
-} from "@material-ui/core";
-import { makeStyles } from "@material-ui/core/styles";
-import Skeleton from "@material-ui/lab/Skeleton";
-import {
-  Add as AddIcon, Delete as DeleteIcon, Refresh as RefreshIcon,
-  MenuBook as BookIcon, Category as GeneralIcon,
-  LocalOffer as ProductIcon, Gavel as RulesIcon,
-} from "@material-ui/icons";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { toast } from "react-toastify";
+
+import {
+  Paper, Button, TextField, Dialog, DialogTitle, DialogContent,
+  DialogActions, IconButton, CircularProgress, Tooltip,
+  Tabs, Tab, InputAdornment,
+  Table, TableBody, TableRow, TableCell, TableHead,
+} from "@material-ui/core";
+import { makeStyles, useTheme } from "@material-ui/core/styles";
+
+import {
+  Plus as AddIcon,
+  Trash2 as DeleteIcon,
+  RefreshCw as RefreshIcon,
+  Search as SearchIcon,
+  BookOpen as BookIcon,
+  Folder as GeneralIcon,
+  Package as ProductIcon,
+  Gavel as RulesIcon,
+} from "lucide-react";
+
 import api from "../../services/api";
 import MainContainer from "../../components/MainContainer";
+import Title from "../../components/Title";
+import TableRowSkeleton from "../../components/TableRowSkeleton";
+import ForbiddenPage from "../../components/ForbiddenPage";
 import usePermissions from "../../hooks/usePermissions";
 
+// ===== Estilos no padrão de layout das páginas de listagem (ref: Connections) =====
 const useStyles = makeStyles(theme => ({
-  root: { padding: theme.spacing(3) },
-
-  hero: {
-    background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
-    borderRadius: 16,
-    padding: "28px 32px",
-    color: "#fff",
-    marginBottom: 24,
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  heroLeft: { display: "flex", alignItems: "center", gap: 16 },
-  heroIcon: { fontSize: 44, opacity: 0.9 },
-  heroTitle: { fontWeight: 700, fontSize: 22, color: "#fff", lineHeight: 1.2 },
-  heroSub: { fontSize: 13, color: "rgba(255,255,255,0.78)", marginTop: 4, maxWidth: 400, lineHeight: 1.5 },
-  heroActions: { display: "flex", alignItems: "center", gap: 8 },
-  heroBtn: {
-    background: "rgba(255,255,255,0.15)", color: "#fff",
-    border: "1px solid rgba(255,255,255,0.3)",
-    textTransform: "none", backdropFilter: "blur(4px)",
-    "&:hover": { background: "rgba(255,255,255,0.25)" },
-  },
-  heroBtnPrimary: {
-    background: "#fff", color: theme.palette.primary.main,
-    textTransform: "none", fontWeight: 600,
-    "&:hover": { background: "rgba(255,255,255,0.92)" },
-  },
-
-  paper: { borderRadius: 12, overflow: "hidden" },
-  tabs: { borderBottom: `1px solid ${theme.palette.divider}` },
-  tabContent: { padding: "20px 24px" },
-
-  docCard: {
-    display: "flex", alignItems: "center",
-    padding: "14px 16px",
-    borderRadius: 10,
-    marginBottom: 10,
+  paper: {
+    flex: 1,
+    padding: 0,
+    overflow: "hidden",
+    borderRadius: 12,
     border: `1px solid ${theme.palette.divider}`,
-    transition: "box-shadow 0.15s, border-color 0.15s",
+    backgroundColor: theme.palette.background.paper,
+  },
+  header: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing(2),
+    flexWrap: "wrap",
+    padding: theme.spacing(2, 2.5),
+  },
+  headerText: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+  },
+  subtitle: {
+    color: theme.palette.text.secondary,
+    fontSize: "0.85rem",
+  },
+  headerActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1),
+    flexWrap: "wrap",
+  },
+  tabs: {
+    borderTop: `1px solid ${theme.palette.divider}`,
+    borderBottom: `1px solid ${theme.palette.divider}`,
+  },
+  toolbar: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1.5),
+    flexWrap: "wrap",
+    padding: theme.spacing(1.5, 2.5),
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    background:
+      theme.palette.type === "dark"
+        ? theme.palette.background.default
+        : "#fafafa",
+  },
+  searchField: {
+    minWidth: 220,
+    flex: "1 1 280px",
+    maxWidth: 380,
+  },
+  filterSelect: {
+    minWidth: 150,
+  },
+  toolbarNote: {
+    marginLeft: "auto",
+    color: theme.palette.text.secondary,
+    fontSize: "0.8rem",
+  },
+  headCell: {
+    fontWeight: 600,
+    fontSize: "0.72rem",
+    letterSpacing: "0.06em",
+    textTransform: "uppercase",
+    color: theme.palette.text.secondary,
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    background:
+      theme.palette.type === "dark"
+        ? theme.palette.background.default
+        : "#fafafa",
+    whiteSpace: "nowrap",
+  },
+  bodyCell: {
+    fontSize: "0.85rem",
+    paddingTop: theme.spacing(1.25),
+    paddingBottom: theme.spacing(1.25),
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    verticalAlign: "middle",
+  },
+  rowHover: {
     "&:hover": {
-      boxShadow: "0 2px 12px rgba(0,0,0,0.08)",
-      borderColor: theme.palette.primary.light,
+      backgroundColor: theme.palette.action.hover,
+    },
+    transition: "background-color 120ms ease",
+  },
+  docIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 9,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  docTitle: {
+    fontWeight: 600,
+    fontSize: "0.9rem",
+    lineHeight: 1.35,
+  },
+  actionsCell: {
+    whiteSpace: "nowrap",
+  },
+  emptyState: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing(1),
+    padding: theme.spacing(8, 2),
+    color: theme.palette.text.secondary,
+    textAlign: "center",
+  },
+  // Cards mobile
+  mobileList: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gap: theme.spacing(1.5),
+    padding: theme.spacing(1.5),
+    [theme.breakpoints.up("sm")]: {
+      display: "none",
     },
   },
-  docIcon: { width: 40, height: 40, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  docBody: { flex: 1, marginLeft: 14, minWidth: 0 },
-  docTitle: { fontWeight: 600, fontSize: 14, lineHeight: 1.3 },
-  docMeta: { fontSize: 11, color: theme.palette.text.disabled, marginTop: 3 },
-  docActions: { display: "flex", alignItems: "center", gap: 4, marginLeft: 8 },
-
-  catChipGeneral: { background: "#eceff1", color: "#546e7a", fontWeight: 600, fontSize: 10 },
-  catChipProduct: { background: "#e3f2fd", color: "#1565c0", fontWeight: 600, fontSize: 10 },
-  catChipRules: { background: "#fff3e0", color: "#e65100", fontWeight: 600, fontSize: 10 },
-
-  emptyState: {
-    textAlign: "center", padding: "48px 24px",
-    display: "flex", flexDirection: "column", alignItems: "center", gap: 12,
+  desktopTableWrapper: {
+    [theme.breakpoints.down("sm")]: {
+      display: "none",
+    },
   },
-  emptyIcon: { fontSize: 56, opacity: 0.18 },
+  card: {
+    borderRadius: 12,
+    padding: theme.spacing(1.75),
+    border: `1px solid ${theme.palette.divider}`,
+    display: "flex",
+    flexDirection: "column",
+    gap: theme.spacing(1.25),
+    background: theme.palette.background.paper,
+  },
+  cardHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing(1),
+  },
+  cardTitle: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1.25),
+    minWidth: 0,
+  },
+  cardName: {
+    fontWeight: 700,
+    fontSize: "1rem",
+    lineHeight: 1.2,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    maxWidth: 190,
+  },
+  cardMeta: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+    gap: theme.spacing(1),
+  },
+  metaLabel: {
+    fontSize: "0.72rem",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    color: theme.palette.text.secondary,
+  },
+  metaValue: {
+    fontSize: "0.9rem",
+    fontWeight: 600,
+    wordBreak: "break-word",
+  },
+  cardActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(0.5),
+    flexWrap: "wrap",
+  },
+  actionButton: {
+    minWidth: 44,
+    minHeight: 44,
+  },
 }));
 
+// Categorias da base de conhecimento — chip segue o padrão tailwind do spec
 const CATEGORIES = [
   {
-    value: "general", label: "Geral", chipCls: "catChipGeneral",
-    icon: <GeneralIcon />, iconBg: "#eceff1", iconColor: "#546e7a",
+    value: "general", label: "Geral", icon: GeneralIcon,
+    chipCls: "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200",
+    iconBg: "#eceff1", iconColor: "#546e7a",
     desc: "Documentos e textos de uso geral pelo agente de IA",
   },
   {
-    value: "product", label: "Produtos", chipCls: "catChipProduct",
-    icon: <ProductIcon />, iconBg: "#e3f2fd", iconColor: "#1565c0",
+    value: "product", label: "Produtos", icon: ProductIcon,
+    chipCls: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+    iconBg: "#e3f2fd", iconColor: "#1565c0",
     desc: "Catálogo, preços e especificações de produtos",
   },
   {
-    value: "rules", label: "Regras", chipCls: "catChipRules",
-    icon: <RulesIcon />, iconBg: "#fff3e0", iconColor: "#e65100",
+    value: "rules", label: "Regras", icon: RulesIcon,
+    chipCls: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
+    iconBg: "#fff3e0", iconColor: "#e65100",
     desc: "Políticas da empresa, procedimentos e respostas padrão",
   },
 ];
 
-function DocSkeleton() {
-  return (
-    <Box style={{ display: "flex", alignItems: "center", padding: "14px 16px", marginBottom: 10 }}>
-      <Skeleton variant="rect" width={40} height={40} style={{ borderRadius: 8, flexShrink: 0 }} />
-      <Box style={{ flex: 1, marginLeft: 14 }}>
-        <Skeleton variant="text" width="60%" height={18} />
-        <Skeleton variant="text" width="35%" height={14} style={{ marginTop: 4 }} />
-      </Box>
-    </Box>
-  );
-}
+// Chip de categoria no padrão tailwind (mesmo visual dos status em Connections)
+const CategoryChip = ({ cat }) => (
+  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${cat.chipCls}`}>
+    {cat.label}
+  </span>
+);
+
+// Formata o tamanho do documento em KB (mesmo critério da versão anterior)
+const formatSize = (size) => (size ? `${(size / 1024).toFixed(1)} KB` : "—");
 
 export default function KnowledgeBase() {
   const classes = useStyles();
+  const theme = useTheme();
   const [tab, setTab] = useState(0);
   const [docs, setDocs] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -118,11 +257,20 @@ export default function KnowledgeBase() {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [saving, setSaving] = useState(false);
+  // Busca client-side sobre os documentos da categoria carregada
+  const [searchParam, setSearchParam] = useState("");
   const { hasPermission } = usePermissions();
   // Indexar/remover documentos exige ai-settings.edit no backend (ragRoutes)
   const canManageDocs = hasPermission("ai-settings.edit");
 
   const cat = CATEGORIES[tab];
+
+  // Filtra os documentos pelo termo de busca (client-side)
+  const filteredDocs = useMemo(() => {
+    const search = searchParam.trim().toLowerCase();
+    if (!search) return docs;
+    return docs.filter(d => (d.title || "").toLowerCase().includes(search));
+  }, [docs, searchParam]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -167,115 +315,8 @@ export default function KnowledgeBase() {
   const openDialog = () => { setTitle(""); setContent(""); setOpen(true); };
 
   return (
-    <MainContainer useWindowScroll>
-    <Box className={classes.root}>
-      {/* ── Hero ── */}
-      <Box className={classes.hero}>
-        <Box className={classes.heroLeft}>
-          <BookIcon className={classes.heroIcon} />
-          <Box>
-            <Typography className={classes.heroTitle}>Base de Conhecimento IA</Typography>
-            <Typography className={classes.heroSub}>
-              Documentos indexados com PGVector + HNSW para busca semântica nas respostas dos agentes.
-            </Typography>
-          </Box>
-        </Box>
-        <Box className={classes.heroActions}>
-          <Tooltip title="Recarregar">
-            <IconButton onClick={load} style={{ color: "rgba(255,255,255,0.8)" }}><RefreshIcon /></IconButton>
-          </Tooltip>
-          {canManageDocs && (
-            <Button variant="contained" className={classes.heroBtnPrimary} startIcon={<AddIcon />} onClick={openDialog}>
-              Novo Documento
-            </Button>
-          )}
-        </Box>
-      </Box>
-
-      {/* ── Content ── */}
-      <Paper className={classes.paper} elevation={0} variant="outlined">
-        <Tabs
-          value={tab}
-          onChange={(_, v) => setTab(v)}
-          className={classes.tabs}
-          indicatorColor="primary"
-          textColor="primary"
-        >
-          {CATEGORIES.map(c => (
-            <Tab
-              key={c.value}
-              label={
-                <Box display="flex" alignItems="center" style={{ gap: 6 }}>
-                  {c.label}
-                  {!loading && tab === CATEGORIES.indexOf(c) && (
-                    <Chip size="small" label={docs.length} style={{ height: 18, fontSize: 10, fontWeight: 700 }} />
-                  )}
-                </Box>
-              }
-            />
-          ))}
-        </Tabs>
-
-        <Box className={classes.tabContent}>
-          <Typography variant="body2" color="textSecondary" style={{ marginBottom: 16 }}>
-            {cat.desc}
-          </Typography>
-
-          {loading ? (
-            [1, 2, 3].map(i => <DocSkeleton key={i} />)
-          ) : docs.length === 0 ? (
-            <Box className={classes.emptyState}>
-              <BookIcon className={classes.emptyIcon} />
-              <Typography variant="h6" color="textSecondary">
-                Nenhum documento em "{cat.label}"
-              </Typography>
-              <Typography variant="body2" color="textSecondary">
-                Adicione textos, regras ou catálogos para o agente consultar durante conversas.
-              </Typography>
-              {canManageDocs && (
-                <Button variant="outlined" color="primary" startIcon={<AddIcon />} onClick={openDialog}>
-                  Adicionar primeiro documento
-                </Button>
-              )}
-            </Box>
-          ) : (
-            docs.map(doc => {
-              const docCat = CATEGORIES.find(c => c.value === (doc.category || "general")) || CATEGORIES[0];
-              return (
-                <Box key={doc.id} className={classes.docCard}>
-                  <Box
-                    className={classes.docIcon}
-                    style={{ background: docCat.iconBg, color: docCat.iconColor }}
-                  >
-                    {React.cloneElement(docCat.icon, { fontSize: "small" })}
-                  </Box>
-
-                  <Box className={classes.docBody}>
-                    <Typography className={classes.docTitle}>{doc.title}</Typography>
-                    <Typography className={classes.docMeta}>
-                      Atualizado {new Date(doc.updatedAt).toLocaleDateString("pt-BR")}
-                      {doc.size ? ` · ${(doc.size / 1024).toFixed(1)}KB` : ""}
-                    </Typography>
-                  </Box>
-
-                  <Box className={classes.docActions}>
-                    <Chip label={docCat.label} size="small" className={classes[docCat.chipCls]} />
-                    {canManageDocs && (
-                      <Tooltip title="Remover documento">
-                        <IconButton size="small" onClick={() => handleDelete(doc.id)}>
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    )}
-                  </Box>
-                </Box>
-              );
-            })
-          )}
-        </Box>
-      </Paper>
-
-      {/* ── Create dialog ── */}
+    <MainContainer>
+      {/* ── Modal de criação de documento ── */}
       <Dialog open={open} onClose={() => setOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>
           Novo Documento — {cat.label}
@@ -300,13 +341,234 @@ export default function KnowledgeBase() {
           <Button
             variant="contained" color="primary"
             onClick={handleCreate} disabled={saving}
-            startIcon={saving ? <CircularProgress size={16} /> : <BookIcon />}
+            startIcon={saving ? <CircularProgress size={16} /> : <BookIcon size={16} />}
           >
             Indexar Documento
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+
+      {!hasPermission("helps.view") ? <ForbiddenPage /> : (
+        <Paper className={classes.paper} variant="outlined">
+          {/* Cabeçalho no padrão: título + contagem + subtítulo + ações */}
+          <div className={classes.header}>
+            <div className={classes.headerText}>
+              <Title>Base de Conhecimento IA ({filteredDocs.length})</Title>
+              <span className={classes.subtitle}>
+                Documentos indexados com PGVector + HNSW para busca semântica nas respostas dos agentes.
+              </span>
+            </div>
+            <div className={classes.headerActions}>
+              <Tooltip title="Recarregar">
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  size="small"
+                  onClick={load}
+                  startIcon={<RefreshIcon size={16} />}
+                  style={{ minHeight: 36 }}
+                >
+                  Recarregar
+                </Button>
+              </Tooltip>
+              {canManageDocs && (
+                <Button
+                  variant="contained"
+                  color="primary"
+                  size="small"
+                  startIcon={<AddIcon size={16} />}
+                  onClick={openDialog}
+                  style={{ minHeight: 36 }}
+                >
+                  Novo Documento
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Abas de categoria (filtro principal — carrega docs no backend por categoria) */}
+          <Tabs
+            value={tab}
+            onChange={(_, v) => setTab(v)}
+            className={classes.tabs}
+            indicatorColor="primary"
+            textColor="primary"
+          >
+            {CATEGORIES.map(c => (
+              <Tab
+                key={c.value}
+                label={
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    {c.label}
+                    {!loading && tab === CATEGORIES.indexOf(c) && (
+                      <span className="px-1.5 py-0.5 rounded-full text-[0.65rem] font-bold bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200">
+                        {docs.length}
+                      </span>
+                    )}
+                  </span>
+                }
+              />
+            ))}
+          </Tabs>
+
+          {/* Toolbar: busca por título + descrição da categoria ativa */}
+          <div className={classes.toolbar}>
+            <TextField
+              className={classes.searchField}
+              size="small"
+              variant="outlined"
+              placeholder="Buscar por título…"
+              value={searchParam}
+              onChange={e => setSearchParam(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon size={16} />
+                  </InputAdornment>
+                ),
+              }}
+            />
+            <span className={classes.toolbarNote}>{cat.desc}</span>
+          </div>
+
+          {/* Conteúdo: skeleton / vazio / lista responsiva */}
+          {loading ? (
+            <Table>
+              <TableBody>
+                {[1, 2, 3].map(i => <TableRowSkeleton key={i} columns={5} />)}
+              </TableBody>
+            </Table>
+          ) : filteredDocs.length === 0 ? (
+            <div className={classes.emptyState}>
+              <BookIcon size={44} style={{ color: theme.palette.text.disabled }} />
+              <div>Nenhum documento encontrado em "{cat.label}".</div>
+              {canManageDocs && (
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  size="small"
+                  startIcon={<AddIcon size={16} />}
+                  onClick={openDialog}
+                  style={{ minHeight: 36, marginTop: 8 }}
+                >
+                  Adicionar primeiro documento
+                </Button>
+              )}
+            </div>
+          ) : (
+            <>
+              {/* Cards — mobile */}
+              <div className={classes.mobileList}>
+                {filteredDocs.map(doc => {
+                  const docCat = CATEGORIES.find(c => c.value === (doc.category || "general")) || CATEGORIES[0];
+                  const DocIcon = docCat.icon;
+                  return (
+                    <div key={doc.id} className={classes.card}>
+                      <div className={classes.cardHeader}>
+                        <div className={classes.cardTitle}>
+                          <span
+                            className={classes.docIcon}
+                            style={{ background: docCat.iconBg, color: docCat.iconColor }}
+                          >
+                            <DocIcon size={18} />
+                          </span>
+                          <div className={classes.cardName} title={doc.title}>
+                            {doc.title}
+                          </div>
+                        </div>
+                        <CategoryChip cat={docCat} />
+                      </div>
+
+                      <div className={classes.cardMeta}>
+                        <div>
+                          <div className={classes.metaLabel}>Atualizado</div>
+                          <div className={classes.metaValue}>
+                            {doc.updatedAt ? new Date(doc.updatedAt).toLocaleDateString("pt-BR") : "—"}
+                          </div>
+                        </div>
+                        <div>
+                          <div className={classes.metaLabel}>Tamanho</div>
+                          <div className={classes.metaValue}>{formatSize(doc.size)}</div>
+                        </div>
+                      </div>
+
+                      {canManageDocs && (
+                        <div className={classes.cardActions}>
+                          <Tooltip title="Remover documento">
+                            <IconButton
+                              size="small"
+                              className={classes.actionButton}
+                              onClick={() => handleDelete(doc.id)}
+                            >
+                              <DeleteIcon size={18} />
+                            </IconButton>
+                          </Tooltip>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Tabela — desktop */}
+              <div className={classes.desktopTableWrapper}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell className={classes.headCell}>Documento</TableCell>
+                      <TableCell align="center" className={classes.headCell}>Categoria</TableCell>
+                      <TableCell align="center" className={classes.headCell}>Tamanho</TableCell>
+                      <TableCell align="center" className={classes.headCell}>Atualizado</TableCell>
+                      {canManageDocs && (
+                        <TableCell align="center" className={classes.headCell}>Ações</TableCell>
+                      )}
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {filteredDocs.map(doc => {
+                      const docCat = CATEGORIES.find(c => c.value === (doc.category || "general")) || CATEGORIES[0];
+                      const DocIcon = docCat.icon;
+                      return (
+                        <TableRow key={doc.id} className={classes.rowHover}>
+                          <TableCell className={classes.bodyCell}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                              <span
+                                className={classes.docIcon}
+                                style={{ background: docCat.iconBg, color: docCat.iconColor }}
+                              >
+                                <DocIcon size={18} />
+                              </span>
+                              <span className={classes.docTitle}>{doc.title}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell align="center" className={classes.bodyCell}>
+                            <CategoryChip cat={docCat} />
+                          </TableCell>
+                          <TableCell align="center" className={classes.bodyCell}>
+                            {formatSize(doc.size)}
+                          </TableCell>
+                          <TableCell align="center" className={classes.bodyCell}>
+                            {doc.updatedAt ? new Date(doc.updatedAt).toLocaleDateString("pt-BR") : "—"}
+                          </TableCell>
+                          {canManageDocs && (
+                            <TableCell align="center" className={`${classes.bodyCell} ${classes.actionsCell}`}>
+                              <Tooltip title="Remover documento">
+                                <IconButton size="small" onClick={() => handleDelete(doc.id)}>
+                                  <DeleteIcon size={18} />
+                                </IconButton>
+                              </Tooltip>
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
+          )}
+        </Paper>
+      )}
     </MainContainer>
   );
 }

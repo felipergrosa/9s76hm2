@@ -1,56 +1,130 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
-  Box, Paper, Typography, Tabs, Tab, Button, TextField, Dialog,
+  Box, Paper, Button, TextField, Dialog,
   DialogTitle, DialogContent, DialogActions, IconButton, Select,
-  MenuItem, FormControl, InputLabel, Chip, Table, TableHead,
-  TableRow, TableCell, TableBody, Tooltip, CircularProgress
+  MenuItem, FormControl, InputLabel, Table, TableHead,
+  TableRow, TableCell, TableBody, Tooltip, CircularProgress,
+  FormControlLabel, Checkbox, InputAdornment
 } from "@material-ui/core";
-import { makeStyles } from "@material-ui/core/styles";
-import Skeleton from "@material-ui/lab/Skeleton";
+import { makeStyles, useTheme } from "@material-ui/core/styles";
 import {
-  Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon,
-  Tune as TuneIcon, CheckCircle as RequiredIcon,
-} from "@material-ui/icons";
-import { FormControlLabel, Checkbox } from "@material-ui/core";
+  Search as SearchIcon,
+  Pencil as EditIcon,
+  Trash2 as DeleteIcon,
+  Plus as AddIcon,
+  SlidersHorizontal as TuneIcon,
+} from "lucide-react";
 import { toast } from "react-toastify";
 import api from "../../services/api";
 import MainContainer from "../../components/MainContainer";
+import Title from "../../components/Title";
+import TableRowSkeleton from "../../components/TableRowSkeleton";
+import ForbiddenPage from "../../components/ForbiddenPage";
+import usePermissions from "../../hooks/usePermissions";
 
+// `color` alimenta a bolinha do seletor de tipo no dialog; `cls` é o chip tailwind
+// usado na tabela/cards (padrão das telas de listagem)
 const TYPE_META = {
-  text:    { label: "Texto",   bg: "#e3f2fd", color: "#1565c0" },
-  number:  { label: "Número",  bg: "#f3e5f5", color: "#6a1b9a" },
-  date:    { label: "Data",    bg: "#e0f7fa", color: "#006064" },
-  boolean: { label: "Booleano",bg: "#fff3e0", color: "#e65100" },
-  select:  { label: "Seleção", bg: "#e8f5e9", color: "#2e7d32" },
+  text:    { label: "Texto",    color: "#1565c0", cls: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" },
+  number:  { label: "Número",   color: "#6a1b9a", cls: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200" },
+  date:    { label: "Data",     color: "#006064", cls: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200" },
+  boolean: { label: "Booleano", color: "#e65100", cls: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200" },
+  select:  { label: "Seleção",  color: "#2e7d32", cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200" },
 };
 
+// Estilos no padrão de listagem (referência: pages/Connections)
 const useStyles = makeStyles(theme => ({
-  root: { padding: theme.spacing(3) },
-
-  hero: {
-    background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
-    borderRadius: 16,
-    padding: "24px 28px",
-    color: "#fff",
-    marginBottom: 24,
+  paper: {
+    flex: 1,
+    padding: 0,
+    overflow: "hidden",
+    borderRadius: 12,
+    border: `1px solid ${theme.palette.divider}`,
+    backgroundColor: theme.palette.background.paper,
+  },
+  header: {
     display: "flex",
-    justifyContent: "space-between",
     alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing(2),
+    flexWrap: "wrap",
+    padding: theme.spacing(2, 2.5),
   },
-  heroLeft: { display: "flex", alignItems: "center", gap: 14 },
-  heroIcon: { fontSize: 40, opacity: 0.9 },
-  heroTitle: { fontWeight: 700, fontSize: 20, color: "#fff" },
-  heroSub: { fontSize: 12, color: "rgba(255,255,255,0.72)", marginTop: 3 },
-  heroBtn: {
-    background: "#fff", color: theme.palette.primary.main,
-    textTransform: "none", fontWeight: 600,
-    "&:hover": { background: "rgba(255,255,255,0.9)" },
+  headerText: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
   },
-
-  paper: { borderRadius: 12, overflow: "hidden" },
-  tabs: { borderBottom: `1px solid ${theme.palette.divider}` },
-  tableWrap: { padding: "0 4px 8px" },
-
+  subtitle: {
+    color: theme.palette.text.secondary,
+    fontSize: "0.85rem",
+  },
+  headerActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1),
+    flexWrap: "wrap",
+  },
+  toolbar: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1.5),
+    flexWrap: "wrap",
+    padding: theme.spacing(1.5, 2.5),
+    borderTop: `1px solid ${theme.palette.divider}`,
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    background:
+      theme.palette.type === "dark"
+        ? theme.palette.background.default
+        : "#fafafa",
+  },
+  searchField: {
+    minWidth: 220,
+    flex: "1 1 280px",
+    maxWidth: 380,
+  },
+  filterSelect: {
+    minWidth: 150,
+  },
+  headCell: {
+    fontWeight: 600,
+    fontSize: "0.72rem",
+    letterSpacing: "0.06em",
+    textTransform: "uppercase",
+    color: theme.palette.text.secondary,
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    background:
+      theme.palette.type === "dark"
+        ? theme.palette.background.default
+        : "#fafafa",
+    whiteSpace: "nowrap",
+  },
+  bodyCell: {
+    fontSize: "0.85rem",
+    paddingTop: theme.spacing(1.25),
+    paddingBottom: theme.spacing(1.25),
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    verticalAlign: "middle",
+  },
+  rowHover: {
+    "&:hover": {
+      backgroundColor: theme.palette.action.hover,
+    },
+    transition: "background-color 120ms ease",
+  },
+  actionsCell: {
+    whiteSpace: "nowrap",
+  },
+  emptyState: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing(1),
+    padding: theme.spacing(8, 2),
+    color: theme.palette.text.secondary,
+    textAlign: "center",
+  },
   keyCode: {
     fontFamily: "monospace",
     fontSize: 12,
@@ -59,15 +133,77 @@ const useStyles = makeStyles(theme => ({
     padding: "2px 6px",
     color: theme.palette.type === "dark" ? "#81c784" : "#d32f2f",
   },
-
-  emptyState: {
-    textAlign: "center", padding: "48px 24px",
+  // Cards mobile
+  mobileList: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gap: theme.spacing(1.5),
+    padding: theme.spacing(1.5),
+    [theme.breakpoints.up("sm")]: {
+      display: "none",
+    },
+  },
+  desktopTableWrapper: {
+    [theme.breakpoints.down("sm")]: {
+      display: "none",
+    },
+  },
+  card: {
+    borderRadius: 12,
+    padding: theme.spacing(1.75),
+    border: `1px solid ${theme.palette.divider}`,
+    display: "flex",
+    flexDirection: "column",
+    gap: theme.spacing(1.25),
+    background: theme.palette.background.paper,
+  },
+  cardHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing(1),
+  },
+  cardTitle: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1.25),
+    minWidth: 0,
+  },
+  cardName: {
+    fontWeight: 700,
+    fontSize: "1rem",
+    lineHeight: 1.2,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    maxWidth: 190,
+  },
+  cardMeta: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+    gap: theme.spacing(1),
+  },
+  metaLabel: {
+    fontSize: "0.72rem",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
     color: theme.palette.text.secondary,
   },
-  emptyIcon: { fontSize: 52, opacity: 0.18, marginBottom: 8 },
-
-  required: { background: "#e8f5e9", color: "#2e7d32", fontWeight: 700, fontSize: 10 },
-  optional: { background: "#f5f5f5", color: "#9e9e9e", fontWeight: 600, fontSize: 10 },
+  metaValue: {
+    fontSize: "0.9rem",
+    fontWeight: 600,
+    wordBreak: "break-word",
+  },
+  cardActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(0.5),
+    flexWrap: "wrap",
+  },
+  actionButton: {
+    minWidth: 44,
+    minHeight: 44,
+  },
 }));
 
 // Somente "lead" tem storage/consumo implementado (ContactCustomField + form de contato).
@@ -80,26 +216,40 @@ const FIELD_TYPES = ["text", "number", "date", "boolean", "select"];
 
 const emptyForm = { entityType: "lead", key: "", label: "", type: "text", options: "", required: false };
 
-function TableSkeleton() {
+// Chip de tipo do campo (tailwind, padrão das telas de listagem)
+const TypeChip = ({ type }) => {
+  const tm = TYPE_META[type] || TYPE_META.text;
   return (
-    <>
-      {[1, 2, 3].map(i => (
-        <TableRow key={i}>
-          <TableCell><Skeleton width={100} height={20} /></TableCell>
-          <TableCell><Skeleton width={120} height={20} /></TableCell>
-          <TableCell><Skeleton variant="rect" width={60} height={22} style={{ borderRadius: 12 }} /></TableCell>
-          <TableCell><Skeleton width={80} height={20} /></TableCell>
-          <TableCell><Skeleton variant="rect" width={50} height={20} style={{ borderRadius: 10 }} /></TableCell>
-          <TableCell align="right"><Skeleton width={60} height={32} /></TableCell>
-        </TableRow>
-      ))}
-    </>
+    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${tm.cls}`}>
+      {tm.label}
+    </span>
   );
-}
+};
+
+// Chip "obrigatório/opcional" (tailwind)
+const RequiredChip = ({ required }) => (
+  <span
+    className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+      required
+        ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200"
+        : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300"
+    }`}
+  >
+    {required ? "Obrigatório" : "Opcional"}
+  </span>
+);
+
+// Resumo das opções (máx. 3 + reticências), igual à exibição anterior
+const optionsSummary = (options) =>
+  Array.isArray(options) && options.length
+    ? options.slice(0, 3).join(", ") + (options.length > 3 ? "…" : "")
+    : "—";
 
 export default function AdminCustomFields() {
   const classes = useStyles();
-  const [tab, setTab] = useState(0);
+  const theme = useTheme();
+  const { hasPermission } = usePermissions();
+
   const [configs, setConfigs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -107,7 +257,12 @@ export default function AdminCustomFields() {
   const [editId, setEditId] = useState(null);
   const [saving, setSaving] = useState(false);
 
-  const currentEntity = ENTITIES[tab].value;
+  // Busca + filtro de tipo (client-side, padrão das telas de listagem)
+  const [searchParam, setSearchParam] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
+
+  // Apenas "lead" está ativo no momento (ver ENTITIES)
+  const currentEntity = ENTITIES[0].value;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -122,6 +277,20 @@ export default function AdminCustomFields() {
   }, [currentEntity]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Lista filtrada por busca (chave/rótulo/tipo) e filtro de tipo
+  const filteredConfigs = useMemo(() => {
+    const search = searchParam.trim().toLowerCase();
+    return (configs || []).filter((c) => {
+      if (typeFilter && c.type !== typeFilter) return false;
+      if (search) {
+        const typeLabel = (TYPE_META[c.type] || {}).label || "";
+        const hay = `${c.key || ""} ${c.label || ""} ${typeLabel}`.toLowerCase();
+        if (!hay.includes(search)) return false;
+      }
+      return true;
+    });
+  }, [configs, searchParam, typeFilter]);
 
   const openCreate = () => {
     setForm({ ...emptyForm, entityType: currentEntity });
@@ -181,121 +350,8 @@ export default function AdminCustomFields() {
   const setField = (key, val) => setForm(f => ({ ...f, [key]: val }));
 
   return (
-    <MainContainer useWindowScroll>
-    <Box className={classes.root}>
-      {/* ── Hero ── */}
-      <Box className={classes.hero}>
-        <Box className={classes.heroLeft}>
-          <TuneIcon className={classes.heroIcon} />
-          <Box>
-            <Typography className={classes.heroTitle}>Campos Customizados</Typography>
-            <Typography className={classes.heroSub}>
-              Configure campos extras exibidos no cadastro do Lead / Contato
-            </Typography>
-          </Box>
-        </Box>
-        <Button className={classes.heroBtn} variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
-          Novo Campo
-        </Button>
-      </Box>
-
-      {/* ── Table ── */}
-      <Paper className={classes.paper} elevation={0} variant="outlined">
-        <Tabs
-          value={tab}
-          onChange={(_, v) => setTab(v)}
-          className={classes.tabs}
-          indicatorColor="primary"
-          textColor="primary"
-        >
-          {ENTITIES.map(e => (
-            <Tab key={e.value} label={e.label} />
-          ))}
-        </Tabs>
-
-        <Box className={classes.tableWrap}>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell style={{ fontWeight: 700, fontSize: 11 }}>CHAVE</TableCell>
-                <TableCell style={{ fontWeight: 700, fontSize: 11 }}>RÓTULO</TableCell>
-                <TableCell style={{ fontWeight: 700, fontSize: 11 }}>TIPO</TableCell>
-                <TableCell style={{ fontWeight: 700, fontSize: 11 }}>OPÇÕES</TableCell>
-                <TableCell style={{ fontWeight: 700, fontSize: 11 }}>OBRIG.</TableCell>
-                <TableCell align="right" style={{ fontWeight: 700, fontSize: 11 }}>AÇÕES</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {loading ? (
-                <TableSkeleton />
-              ) : configs.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6}>
-                    <Box className={classes.emptyState}>
-                      <TuneIcon className={classes.emptyIcon} />
-                      <Typography variant="subtitle1">Nenhum campo para {ENTITIES[tab].label}</Typography>
-                      <Typography variant="body2" color="textSecondary" style={{ marginBottom: 12 }}>
-                        Campos customizados permitem armazenar informações específicas do seu negócio.
-                      </Typography>
-                      <Button variant="outlined" color="primary" startIcon={<AddIcon />} onClick={openCreate}>
-                        Criar primeiro campo
-                      </Button>
-                    </Box>
-                  </TableCell>
-                </TableRow>
-              ) : configs.map(c => {
-                const tm = TYPE_META[c.type] || TYPE_META.text;
-                return (
-                  <TableRow key={c.id} hover>
-                    <TableCell>
-                      <span className={classes.keyCode}>{c.key}</span>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" style={{ fontWeight: 500 }}>{c.label}</Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={tm.label}
-                        size="small"
-                        style={{ background: tm.bg, color: tm.color, fontWeight: 700, fontSize: 11 }}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="caption" color="textSecondary">
-                        {Array.isArray(c.options) && c.options.length
-                          ? c.options.slice(0, 3).join(", ") + (c.options.length > 3 ? "…" : "")
-                          : "—"}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={c.required ? "Sim" : "Opt"}
-                        size="small"
-                        icon={c.required ? <RequiredIcon style={{ fontSize: 12 }} /> : undefined}
-                        className={c.required ? classes.required : classes.optional}
-                      />
-                    </TableCell>
-                    <TableCell align="right">
-                      <Tooltip title="Editar">
-                        <IconButton size="small" onClick={() => openEdit(c)}>
-                          <EditIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Remover">
-                        <IconButton size="small" onClick={() => handleDelete(c.id)}>
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </Box>
-      </Paper>
-
-      {/* ── Dialog ── */}
+    <MainContainer>
+      {/* Dialog de criação/edição — mantido fora do gate de permissão */}
       <Dialog open={open} onClose={() => setOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>{editId ? "Editar Campo" : "Novo Campo Customizado"}</DialogTitle>
         <DialogContent>
@@ -365,7 +421,193 @@ export default function AdminCustomFields() {
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+
+      {/* Gate de permissão: a rota já exige settings.edit (PrivateRoute) e o
+          backend valida settings.edit nos endpoints de custom-field-configs */}
+      {!hasPermission("settings.edit") ? <ForbiddenPage /> : (
+        <Paper className={classes.paper} variant="outlined">
+          {/* Cabeçalho: título + contagem + subtítulo + ações */}
+          <div className={classes.header}>
+            <div className={classes.headerText}>
+              <Title>Campos Customizados ({filteredConfigs.length})</Title>
+              <span className={classes.subtitle}>
+                Configure campos extras exibidos no cadastro do Lead / Contato.
+              </span>
+            </div>
+            <div className={classes.headerActions}>
+              <Button
+                variant="contained"
+                color="primary"
+                size="small"
+                startIcon={<AddIcon size={16} />}
+                style={{ minHeight: 36 }}
+                onClick={openCreate}
+              >
+                Novo Campo
+              </Button>
+            </div>
+          </div>
+
+          {/* Toolbar: busca + filtro de tipo */}
+          <div className={classes.toolbar}>
+            <TextField
+              className={classes.searchField}
+              size="small"
+              variant="outlined"
+              placeholder="Buscar por chave, rótulo ou tipo…"
+              value={searchParam}
+              onChange={(e) => setSearchParam(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon size={16} />
+                  </InputAdornment>
+                ),
+              }}
+            />
+            <FormControl size="small" variant="outlined" className={classes.filterSelect}>
+              <Select
+                native
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value)}
+                displayEmpty
+              >
+                <option value="">Todos os tipos</option>
+                {FIELD_TYPES.map(t => (
+                  <option key={t} value={t}>{TYPE_META[t].label}</option>
+                ))}
+              </Select>
+            </FormControl>
+          </div>
+
+          {loading ? (
+            <Table>
+              <TableBody>
+                <TableRowSkeleton columns={6} />
+              </TableBody>
+            </Table>
+          ) : filteredConfigs.length === 0 ? (
+            <div className={classes.emptyState}>
+              <TuneIcon size={44} style={{ color: theme.palette.text.disabled }} />
+              <div>
+                {configs.length === 0
+                  ? `Nenhum campo para ${ENTITIES[0].label}`
+                  : "Nenhum campo encontrado para a busca/filtro atual."}
+              </div>
+              {configs.length === 0 && (
+                <>
+                  <div style={{ fontSize: "0.85rem" }}>
+                    Campos customizados permitem armazenar informações específicas do seu negócio.
+                  </div>
+                  <Button
+                    variant="outlined"
+                    color="primary"
+                    size="small"
+                    startIcon={<AddIcon size={16} />}
+                    onClick={openCreate}
+                  >
+                    Criar primeiro campo
+                  </Button>
+                </>
+              )}
+            </div>
+          ) : (
+            <>
+              {/* Cards — mobile */}
+              <div className={classes.mobileList}>
+                {filteredConfigs.map(c => (
+                  <div key={c.id} className={classes.card}>
+                    <div className={classes.cardHeader}>
+                      <div className={classes.cardTitle}>
+                        <div style={{ minWidth: 0 }}>
+                          <div className={classes.cardName} title={c.label}>{c.label}</div>
+                          <span className={classes.keyCode}>{c.key}</span>
+                        </div>
+                      </div>
+                      <TypeChip type={c.type} />
+                    </div>
+                    <div className={classes.cardMeta}>
+                      <div>
+                        <div className={classes.metaLabel}>Opções</div>
+                        <div className={classes.metaValue}>{optionsSummary(c.options)}</div>
+                      </div>
+                      <div>
+                        <div className={classes.metaLabel}>Obrigatório</div>
+                        <div className={classes.metaValue}>
+                          <RequiredChip required={c.required} />
+                        </div>
+                      </div>
+                    </div>
+                    <div className={classes.cardActions}>
+                      <Tooltip title="Editar">
+                        <IconButton size="small" className={classes.actionButton} onClick={() => openEdit(c)}>
+                          <EditIcon size={18} />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Remover">
+                        <IconButton size="small" className={classes.actionButton} onClick={() => handleDelete(c.id)}>
+                          <DeleteIcon size={18} />
+                        </IconButton>
+                      </Tooltip>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Tabela — desktop */}
+              <div className={classes.desktopTableWrapper}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell className={classes.headCell}>Chave</TableCell>
+                      <TableCell className={classes.headCell}>Rótulo</TableCell>
+                      <TableCell className={classes.headCell}>Tipo</TableCell>
+                      <TableCell className={classes.headCell}>Opções</TableCell>
+                      <TableCell className={classes.headCell}>Obrig.</TableCell>
+                      <TableCell align="right" className={classes.headCell}>Ações</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {filteredConfigs.map(c => (
+                      <TableRow key={c.id} className={classes.rowHover}>
+                        <TableCell className={classes.bodyCell}>
+                          <span className={classes.keyCode}>{c.key}</span>
+                        </TableCell>
+                        <TableCell className={classes.bodyCell}>
+                          <span style={{ fontWeight: 500 }}>{c.label}</span>
+                        </TableCell>
+                        <TableCell className={classes.bodyCell}>
+                          <TypeChip type={c.type} />
+                        </TableCell>
+                        <TableCell className={classes.bodyCell}>
+                          <span style={{ color: theme.palette.text.secondary, fontSize: "0.78rem" }}>
+                            {optionsSummary(c.options)}
+                          </span>
+                        </TableCell>
+                        <TableCell className={classes.bodyCell}>
+                          <RequiredChip required={c.required} />
+                        </TableCell>
+                        <TableCell align="right" className={`${classes.bodyCell} ${classes.actionsCell}`}>
+                          <Tooltip title="Editar">
+                            <IconButton size="small" onClick={() => openEdit(c)}>
+                              <EditIcon size={18} />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Remover">
+                            <IconButton size="small" onClick={() => handleDelete(c.id)}>
+                              <DeleteIcon size={18} />
+                            </IconButton>
+                          </Tooltip>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
+          )}
+        </Paper>
+      )}
     </MainContainer>
   );
 }

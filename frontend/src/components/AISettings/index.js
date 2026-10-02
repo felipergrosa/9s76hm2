@@ -30,8 +30,7 @@ import {
   TableBody,
   TableRow,
   TableCell,
-  TableContainer,
-  Divider
+  TableContainer
 } from "@material-ui/core";
 import SaveIcon from '@material-ui/icons/Save';
 import AddIcon from '@material-ui/icons/Add';
@@ -42,10 +41,12 @@ import InfoIcon from '@material-ui/icons/Info';
 import SettingsIcon from '@material-ui/icons/Settings';
 import BarChartIcon from '@material-ui/icons/BarChart';
 import BrainIcon from '@material-ui/icons/Memory';
-import DescriptionIcon from '@material-ui/icons/Description';
+import { Save as SaveLucideIcon } from "lucide-react";
 import { makeStyles } from "@material-ui/core/styles";
 import { toast } from "react-toastify";
 import api from "../../services/api";
+import MainContainer from "../MainContainer";
+import Title from "../Title";
 import {
   AreaChart,
   Area,
@@ -57,14 +58,46 @@ import {
   Legend
 } from "recharts";
 import { showAIErrorToast } from "../../utils/aiErrorHandler";
-import AIConfigValidator from "../AIConfigValidator";
 import AIModelSelector from "../AIModelSelector";
 const useStyles = makeStyles((theme) => ({
-  root: {
-    padding: theme.spacing(3),
+  // Estrutura no padrão das telas migradas (referência: pages/Connections)
+  paper: {
+    flex: 1,
+    padding: 0,
+    overflow: "hidden",
+    borderRadius: 12,
+    border: `1px solid ${theme.palette.divider}`,
+    backgroundColor: theme.palette.background.paper,
+  },
+  header: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing(2),
+    flexWrap: "wrap",
+    padding: theme.spacing(2, 2.5),
+  },
+  headerText: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+  },
+  subtitle: {
+    color: theme.palette.text.secondary,
+    fontSize: "0.85rem",
+  },
+  headerActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1),
+    flexWrap: "wrap",
+  },
+  tabs: {
+    borderTop: `1px solid ${theme.palette.divider}`,
+    borderBottom: `1px solid ${theme.palette.divider}`,
   },
   tabPanel: {
-    paddingTop: theme.spacing(3),
+    padding: theme.spacing(2, 2.5, 2.5),
   },
   card: {
     marginBottom: theme.spacing(2),
@@ -81,9 +114,6 @@ const useStyles = makeStyles((theme) => ({
     "&.active": {
       borderColor: theme.palette.primary.main,
     },
-  },
-  statusChip: {
-    marginLeft: theme.spacing(1),
   },
   testButton: {
     marginTop: theme.spacing(1),
@@ -272,10 +302,10 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
     allowedVariables: "{nome} {cidade}"
   });
   const [editingPreset, setEditingPreset] = useState(null);
-  const [editingPresetIndex, setEditingPresetIndex] = useState(-1);
 
   const [stats, setStats] = useState({
     totalRequests: 0,
+    todayRequests: 0,
     successRate: 0,
     avgProcessingTimeMs: 0,
     totalPromptTokens: 0,
@@ -286,12 +316,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
     rag: { requests: 0, successRate: 0, topDocuments: [] },
     providers: [],
     modules: [],
-    dailyUsage: [],
-    totalRequests: 0,
-    todayRequests: 0,
-    totalTokens: 0,
-    avgProcessingTimeMs: 0,
-    successRate: 0
+    dailyUsage: []
   });
 
   const [currentWindow, setCurrentWindow] = useState("7");
@@ -367,11 +392,11 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
     : stats.timeframe?.windowDays
       ? `Últimos ${stats.timeframe.windowDays} dias`
       : "Período não informado";
-  const totalTokens = stats.totalTokens || ((stats.totalPromptTokens || 0) + (stats.totalCompletionTokens || 0));
 
   useEffect(() => {
     loadSettings();
     loadPresets();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -421,30 +446,6 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
           language: jsonContent.language || "Português (Brasil)",
           brandVoice: jsonContent.brandVoice || "",
           allowedVariables: jsonContent.allowedVariables || ""
-        };
-
-        const fetchProviderModels = async (provider) => {
-          try {
-            setModelsLoading(prev => ({ ...prev, [provider]: true }));
-            const cfg = providers[provider] || {};
-            const params = new URLSearchParams();
-            params.set('provider', provider);
-            // backend aceita apiKey/baseURL via query antes de salvar integração
-            if (cfg.apiKey) params.set('apiKey', cfg.apiKey);
-            if (cfg.baseURL) params.set('baseURL', cfg.baseURL);
-            const { data } = await api.get(`/ai/models?${params.toString()}`);
-            const models = Array.isArray(data?.models) ? data.models : [];
-            setProviderModels(prev => ({ ...prev, [provider]: models }));
-            if (models.length && !models.includes(cfg.model)) {
-              handleProviderChange(provider, 'model', models[0]);
-            }
-            toast.success(`Modelos carregados de ${provider.toUpperCase()}: ${models.length}`);
-          } catch (error) {
-            console.warn(`Falha ao carregar modelos de ${provider}:`, error);
-            toast.error(`Não foi possível carregar modelos de ${provider.toUpperCase()}`);
-          } finally {
-            setModelsLoading(prev => ({ ...prev, [provider]: false }));
-          }
         };
       });
 
@@ -1058,7 +1059,9 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
                   conversations: ragData2.conversations || 0,
                   externalLinks: ragData2.externalLinks || []
                 });
-              } catch { }
+              } catch {
+                // ignora falha do retry silencioso de fontes RAG
+              }
             }, 2000);
           }
         } catch (err) {
@@ -1114,21 +1117,45 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
 
   if (loading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress />
-      </Box>
+      <MainContainer>
+        <Paper className={classes.paper} variant="outlined">
+          <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+            <CircularProgress />
+          </Box>
+        </Paper>
+      </MainContainer>
     );
   }
 
   return (
-    <div className={classes.root}>
-      <Typography variant="h4" gutterBottom>
-        <BrainIcon style={{ marginRight: 8, verticalAlign: "middle" }} />
-        Configurações de Inteligência Artificial
-      </Typography>
+    <MainContainer>
+      <Paper className={classes.paper} variant="outlined">
+        {/* Cabeçalho no padrão das telas migradas: título + subtítulo + ação primária */}
+        <div className={classes.header}>
+          <div className={classes.headerText}>
+            <Title>Configurações de Inteligência Artificial</Title>
+            <span className={classes.subtitle}>
+              Gerencie provedores, base de conhecimento (RAG), presets e métricas de uso da IA
+            </span>
+          </div>
+          <div className={classes.headerActions}>
+            {/* Ação primária da tela: salva provedores habilitados + configurações RAG */}
+            <Button
+              variant="contained"
+              color="primary"
+              size="small"
+              startIcon={saving ? <CircularProgress size={16} /> : <SaveLucideIcon size={16} />}
+              onClick={saveSettings}
+              disabled={saving}
+              style={{ minHeight: 36 }}
+            >
+              Salvar Configurações
+            </Button>
+          </div>
+        </div>
 
-      <Paper>
         <Tabs
+          className={classes.tabs}
           value={tabValue}
           onChange={handleTabChange}
           indicatorColor="primary"
@@ -1391,16 +1418,6 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
                                 Carregar Modelos
                               </Button>
                             )}
-
-                            <Button
-                              variant="outlined"
-                              color="secondary"
-                              startIcon={<DescriptionIcon />}
-                              onClick={() => handleOpenTemplates(providerName)}
-                              className={classes.testButton}
-                            >
-                              📋 Templates
-                            </Button>
                           </Box>
 
                           {/* Badge de modelos carregados */}
@@ -2406,6 +2423,6 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
           </Grid>
         </TabPanel>
       </Paper>
-    </div>
+    </MainContainer>
   );
 };

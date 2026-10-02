@@ -1,65 +1,49 @@
-import React, { useState, useEffect, useReducer, useContext } from "react";
+import React, { useState, useEffect, useReducer, useContext, useMemo } from "react";
 
 import { toast } from "react-toastify";
 import { useHistory } from "react-router-dom";
+import { format, parseISO } from "date-fns";
 
 import { makeStyles, useTheme } from "@material-ui/core/styles";
+import {
+  Button,
+  Paper,
+  IconButton,
+  Tooltip,
+  CircularProgress,
+  TextField,
+  InputAdornment,
+  FormControl,
+  Select,
+  Table,
+  TableBody,
+  TableRow,
+  TableCell,
+  TableHead,
+} from "@material-ui/core";
 
-import Paper from "@material-ui/core/Paper";
-import Avatar from "@material-ui/core/Avatar";
-import WhatsAppIcon from "@material-ui/icons/WhatsApp";
-import SearchIcon from "@material-ui/icons/Search";
-import TextField from "@material-ui/core/TextField";
-import InputAdornment from "@material-ui/core/InputAdornment";
-
-import IconButton from "@material-ui/core/IconButton";
-import DeleteOutlineIcon from "@material-ui/icons/DeleteOutline";
-import EditIcon from "@material-ui/icons/Edit";
+import {
+  Search as SearchIcon,
+  Plus as AddIcon,
+  PenLine as EditNameIcon,
+  Workflow as FlowIcon,
+  Copy as DuplicateIcon,
+  Trash2 as DeleteIcon,
+} from "lucide-react";
 
 import api from "../../services/api";
 import TableRowSkeleton from "../../components/TableRowSkeleton";
-import ContactModal from "../../components/ContactModal";
 import ConfirmationModal from "../../components/ConfirmationModal";
 
 import { i18n } from "../../translate/i18n";
-import MainHeader from "../../components/MainHeader";
 import Title from "../../components/Title";
-import MainHeaderButtonsWrapper from "../../components/MainHeaderButtonsWrapper";
 import MainContainer from "../../components/MainContainer";
 import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import usePermissions from "../../hooks/usePermissions";
 import NewTicketModal from "../../components/NewTicketModal";
-import { SocketContext } from "../../context/Socket/SocketContext";
-import WebhookModal from "../../components/WebhookModal";
-import {
-  AddCircle,
-  Build,
-  ContentCopy,
-  DevicesFold,
-  MoreVert,
-  WebhookOutlined
-} from "@mui/icons-material";
-
-import {
-  Button,
-  CircularProgress,
-  Grid,
-  Menu,
-  MenuItem,
-  Stack
-} from "@mui/material";
-
 import FlowBuilderModal from "../../components/FlowBuilderModal";
-
-import {
-  colorBackgroundTable,
-  colorLineTable,
-  colorLineTableHover,
-  colorPrimary,
-  colorTitleTable,
-  colorTopTable
-} from "../../styles/styles";
+import ForbiddenPage from "../../components/ForbiddenPage";
 
 const reducer = (state, action) => {
   if (action.type === "LOAD_CONTACTS") {
@@ -105,16 +89,206 @@ const reducer = (state, action) => {
   }
 };
 
-const useStyles = makeStyles(theme => ({
-  mainPaper: {
+// ===== Estilos no padrão das páginas de listagem (SPEC-LAYOUT-PADRAO) =====
+const useStyles = makeStyles((theme) => ({
+  paper: {
     flex: 1,
-    backgroundColor: colorBackgroundTable(),
+    padding: 0,
+    overflowY: "auto",
     borderRadius: 12,
-    padding: theme.spacing(1),
-    overflowY: "scroll",
-    ...theme.scrollbarStyles
-  }
+    border: `1px solid ${theme.palette.divider}`,
+    backgroundColor: theme.palette.background.paper,
+    ...theme.scrollbarStyles,
+  },
+  header: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing(2),
+    flexWrap: "wrap",
+    padding: theme.spacing(2, 2.5),
+  },
+  headerText: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+  },
+  subtitle: {
+    color: theme.palette.text.secondary,
+    fontSize: "0.85rem",
+  },
+  headerActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1),
+    flexWrap: "wrap",
+  },
+  toolbar: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1.5),
+    flexWrap: "wrap",
+    padding: theme.spacing(1.5, 2.5),
+    borderTop: `1px solid ${theme.palette.divider}`,
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    background:
+      theme.palette.type === "dark"
+        ? theme.palette.background.default
+        : "#fafafa",
+  },
+  searchField: {
+    minWidth: 220,
+    flex: "1 1 280px",
+    maxWidth: 380,
+  },
+  filterSelect: {
+    minWidth: 150,
+  },
+  headCell: {
+    fontWeight: 600,
+    fontSize: "0.72rem",
+    letterSpacing: "0.06em",
+    textTransform: "uppercase",
+    color: theme.palette.text.secondary,
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    background:
+      theme.palette.type === "dark"
+        ? theme.palette.background.default
+        : "#fafafa",
+    whiteSpace: "nowrap",
+  },
+  bodyCell: {
+    fontSize: "0.85rem",
+    paddingTop: theme.spacing(1.25),
+    paddingBottom: theme.spacing(1.25),
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    verticalAlign: "middle",
+  },
+  rowHover: {
+    "&:hover": {
+      backgroundColor: theme.palette.action.hover,
+    },
+    transition: "background-color 120ms ease",
+  },
+  flowName: {
+    fontWeight: 600,
+    fontSize: "0.9rem",
+    lineHeight: 1.35,
+  },
+  actionsCell: {
+    whiteSpace: "nowrap",
+  },
+  emptyState: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing(1),
+    padding: theme.spacing(8, 2),
+    color: theme.palette.text.secondary,
+    textAlign: "center",
+  },
+  flowAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 9,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+    color: theme.palette.primary.main,
+    backgroundColor: `${theme.palette.primary.main}1a`,
+  },
+  loadMore: {
+    display: "flex",
+    justifyContent: "center",
+    padding: theme.spacing(2),
+  },
+  // Cards mobile
+  mobileList: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gap: theme.spacing(1.5),
+    padding: theme.spacing(1.5),
+    [theme.breakpoints.up("sm")]: {
+      display: "none",
+    },
+  },
+  desktopTableWrapper: {
+    [theme.breakpoints.down("sm")]: {
+      display: "none",
+    },
+  },
+  card: {
+    borderRadius: 12,
+    padding: theme.spacing(1.75),
+    border: `1px solid ${theme.palette.divider}`,
+    display: "flex",
+    flexDirection: "column",
+    gap: theme.spacing(1.25),
+    background: theme.palette.background.paper,
+  },
+  cardHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing(1),
+  },
+  cardTitle: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1.25),
+    minWidth: 0,
+  },
+  cardName: {
+    fontWeight: 700,
+    fontSize: "1rem",
+    lineHeight: 1.2,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    maxWidth: 190,
+  },
+  cardMeta: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+    gap: theme.spacing(1),
+  },
+  metaLabel: {
+    fontSize: "0.72rem",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    color: theme.palette.text.secondary,
+  },
+  metaValue: {
+    fontSize: "0.9rem",
+    fontWeight: 600,
+    wordBreak: "break-word",
+  },
+  cardActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(0.5),
+    flexWrap: "wrap",
+  },
+  actionButton: {
+    minWidth: 44,
+    minHeight: 44,
+  },
 }));
+
+// Chip de status do fluxo (Ativo/Desativado) — padrão tailwind das listagens
+const FlowStatusChip = ({ flow }) => (
+  <span
+    className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+      flow.active
+        ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200"
+        : "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
+    }`}
+  >
+    {flow.active ? "Ativo" : "Desativado"}
+  </span>
+);
 
 const FlowBuilder = () => {
   const classes = useStyles();
@@ -124,13 +298,14 @@ const FlowBuilder = () => {
   const [loading, setLoading] = useState(false);
   const [pageNumber, setPageNumber] = useState(1);
   const [searchParam, setSearchParam] = useState("");
-  const [contacts, dispatch] = useReducer(reducer, []);
+  const [, dispatch] = useReducer(reducer, []);
   const [webhooks, setWebhooks] = useState([]);
+  const [statusFilter, setStatusFilter] = useState("");
   const [selectedContactId, setSelectedContactId] = useState(null);
   const [selectedWebhookName, setSelectedWebhookName] = useState(null);
   const [contactModalOpen, setContactModalOpen] = useState(false);
   const [newTicketModalOpen, setNewTicketModalOpen] = useState(false);
-  const [contactTicket, setContactTicket] = useState({});
+  const [contactTicket] = useState({});
   const [deletingContact, setDeletingContact] = useState(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmDuplicateOpen, setConfirmDuplicateOpen] = useState(false);
@@ -191,7 +366,22 @@ const FlowBuilder = () => {
       // Remove apenas o listener deste evento; nao desconectar o socket compartilhado
       socket.off(`company-${companyId}-contact`, onContact);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Filtro client-side: busca por nome/ID + filtro de status da toolbar
+  const filteredFlows = useMemo(() => {
+    const search = searchParam.trim().toLowerCase();
+    return (webhooks || []).filter((flow) => {
+      if (search) {
+        const hay = `${flow.id} ${flow.name || ""}`.toLowerCase();
+        if (!hay.includes(search)) return false;
+      }
+      if (statusFilter === "active" && !flow.active) return false;
+      if (statusFilter === "inactive" && flow.active) return false;
+      return true;
+    });
+  }, [webhooks, searchParam, statusFilter]);
 
   const handleSearch = event => {
     setSearchParam(event.target.value.toLowerCase());
@@ -214,9 +404,10 @@ const FlowBuilder = () => {
     }
   };
 
-  const hadleEditContact = () => {
-    setSelectedContactId(deletingContact.id);
-    setSelectedWebhookName(deletingContact.name);
+  // Abre o modal de renomear fluxo
+  const hadleEditContact = (flow) => {
+    setSelectedContactId(flow.id);
+    setSelectedWebhookName(flow.name);
     setContactModalOpen(true);
   };
 
@@ -256,6 +447,7 @@ const FlowBuilder = () => {
     setPageNumber(prevState => prevState + 1);
   };
 
+  // Paginação por scroll infinito (preservada da versão anterior)
   const handleScroll = e => {
     if (!hasMore || loading) return;
     const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
@@ -264,24 +456,72 @@ const FlowBuilder = () => {
     }
   };
 
-  const [anchorEl, setAnchorEl] = useState(null);
-
-  const open = Boolean(anchorEl);
-
-  const handleClick = event => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleClose = () => {
-    setAnchorEl(null);
-  };
-
-  const exportLink = () => {
-    history.push(`/flowbuilder/${deletingContact.id}`);
-  };
+  // Ações por fluxo (compartilhadas entre cards mobile e tabela desktop)
+  const renderFlowActions = (flow, isCard = false) => (
+    <>
+      {canEdit && (
+        <Tooltip title="Editar nome">
+          <IconButton
+            size="small"
+            className={isCard ? classes.actionButton : undefined}
+            onClick={(e) => {
+              e.stopPropagation();
+              hadleEditContact(flow);
+            }}
+          >
+            <EditNameIcon size={18} />
+          </IconButton>
+        </Tooltip>
+      )}
+      {canEdit && (
+        <Tooltip title="Editar fluxo">
+          <IconButton
+            size="small"
+            className={isCard ? classes.actionButton : undefined}
+            onClick={(e) => {
+              e.stopPropagation();
+              history.push(`/flowbuilder/${flow.id}`);
+            }}
+          >
+            <FlowIcon size={18} />
+          </IconButton>
+        </Tooltip>
+      )}
+      {canCreate && (
+        <Tooltip title="Duplicar">
+          <IconButton
+            size="small"
+            className={isCard ? classes.actionButton : undefined}
+            onClick={(e) => {
+              e.stopPropagation();
+              setDeletingContact(flow);
+              setConfirmDuplicateOpen(true);
+            }}
+          >
+            <DuplicateIcon size={18} />
+          </IconButton>
+        </Tooltip>
+      )}
+      {canDelete && (
+        <Tooltip title="Excluir">
+          <IconButton
+            size="small"
+            className={isCard ? classes.actionButton : undefined}
+            onClick={(e) => {
+              e.stopPropagation();
+              setDeletingContact(flow);
+              setConfirmOpen(true);
+            }}
+          >
+            <DeleteIcon size={18} />
+          </IconButton>
+        </Tooltip>
+      )}
+    </>
+  );
 
   return (
-    <MainContainer className={classes.mainContainer}>
+    <MainContainer>
       <NewTicketModal
         modalOpen={newTicketModalOpen}
         initialContact={contactTicket}
@@ -329,198 +569,194 @@ const FlowBuilder = () => {
           ? `Tem certeza que deseja duplicar este fluxo?`
           : `${i18n.t("contacts.confirmationModal.importMessage")}`}
       </ConfirmationModal>
-      <MainHeader>
-        <Title>Fluxos de conversa</Title>
-        <MainHeaderButtonsWrapper>
-          <TextField
-            placeholder={i18n.t("contacts.searchPlaceholder")}
-            type="search"
-            value={searchParam}
-            onChange={handleSearch}
-            InputProps={{
-              style: {
-                color: colorTitleTable()
-              },
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon style={{ color: "gray" }} />
-                </InputAdornment>
-              )
-            }}
-          />
-          {canCreate && (
-            <Button
-              variant="contained"
-              onClick={handleOpenContactModal}
-              style={{
-                textTransform: "none",
-                backgroundColor: theme.palette.primary.main,
-                color: "#fff"
-              }}
-            >
-              <Stack direction={"row"} gap={1}>
-                <AddCircle />
-                {"Adicionar Fluxo"}
-              </Stack>
-            </Button>
-          )}
-        </MainHeaderButtonsWrapper>
-      </MainHeader>
-      <Paper
-        className={classes.mainPaper}
-        variant="outlined"
-        onScroll={handleScroll}
-      >
-        <Stack>
-          <Grid container style={{ padding: "8px" }}>
-            <Grid item xs={4} style={{ color: colorTopTable() }}>
-              {i18n.t("contacts.table.name")}
-            </Grid>
-            <Grid item xs={4} style={{ color: colorTopTable() }} align="center">
-              Status
-            </Grid>
-            <Grid item xs={4} align="end" style={{ color: colorTopTable() }}>
-              {i18n.t("contacts.table.actions")}
-            </Grid>
-          </Grid>
-          <>
-            {webhooks.map(contact => (
-              <Grid               
-                container
-                key={contact.id}
-                sx={{
-                  padding: "8px",
-                  backgroundColor: theme.palette.primary.main,
-                  borderRadius: 2,
-                  marginTop: 0.5,
-                  "&:hover": {
-                    backgroundColor: theme.palette.primary.dark,
-                  }
-                }}
-              >
-                <Grid item xs={4}  onClick={() => history.push(`/flowbuilder/${contact.id}`)}>
-                  <Stack
-                    justifyContent={"center"}
-                    height={"100%"}
-                    style={{ color: "#ededed" }}
-                  >
-                    <Stack direction={"row"}>
-                      <DevicesFold />
-                      <Stack justifyContent={"center"} marginLeft={1}>
-                        {contact.name}
-                      </Stack>
-                    </Stack>
-                  </Stack>
-                </Grid>
-                <Grid item xs={4} align="center" style={{ color: "#ededed" }}  onClick={() => history.push(`/flowbuilder/${contact.id}`)}>
-                  <Stack justifyContent={"center"} height={"100%"}>
-                    {contact.active ? "Ativo" : "Desativado"}
-                  </Stack>
-                </Grid>
-                <Grid item xs={4} align="end">
-                  <Button
-                    id="basic-button"
-                    aria-controls={open ? "basic-menu" : undefined}
-                    aria-haspopup="true"
-                    aria-expanded={open ? "true" : undefined}
-                    onClick={(e) => {
-                      handleClick(e);
-                      setDeletingContact(contact);
-                    }}
-                    sx={{ borderRadius: "36px", minWidth: "24px" }}
-                  >
-                    <MoreVert
-                      sx={{ color: "#ededed", width: "21px", height: "21px" }}
-                    />
-                  </Button>
-                  {/* <IconButton
-                    size="small"
-                    onClick={() => hadleEditContact(contact.id, contact.name)}
-                  >
-                    <EditIcon style={{ color: "#ededed" }} />
-                  </IconButton>
-                  <IconButton
-                    size="small"
-                    onClick={e => {
-                      setConfirmDuplicateOpen(true);
-                      setDeletingContact(contact);
-                    }}
-                  >
-                    <ContentCopy style={{ color: "#ededed" }} />
-                  </IconButton>
-                  <IconButton
-                    size="small"
-                    onClick={() => history.push(`/flowbuilder/${contact.id}`)}
-                  >
-                    <Stack sx={{ width: 24 }}>
-                      <Build sx={{ width: 20, color: "#ededed" }} />
-                    </Stack>
-                  </IconButton>
-                  <Can
-                    user={user}
-                    perform="contacts.delete"
-                    yes={() => (
-                      <IconButton
-                        size="small"
-                        onClick={e => {
-                          setConfirmOpen(true);
-                          setDeletingContact(contact);
-                        }}
-                      >
-                        <DeleteOutlineIcon style={{ color: "#ededed" }} />
-                      </IconButton>
-                    )}
-                  /> */}
-                </Grid>
-              </Grid>
-            ))}
-            <Menu
-              id="basic-menu"
-              anchorEl={anchorEl}
-              open={open}
-              sx={{borderRadius: '40px'}}
-              onClose={handleClose}
-              MenuListProps={{
-                "aria-labelledby": "basic-button"
-              }}
-            >
-              {canEdit && (
-                <MenuItem onClick={() => {
-                  handleClose()
-                  hadleEditContact()
-                  }}>Editar nome</MenuItem>
-              )}
-              {canEdit && (
-                <MenuItem onClick={() => {
-                  handleClose()
-                  exportLink()
-                  }}>Editar fluxo</MenuItem>
-              )}
+
+      {!hasPermission("flowbuilder.view") ? (
+        <ForbiddenPage />
+      ) : (
+        <Paper
+          className={classes.paper}
+          variant="outlined"
+          onScroll={handleScroll}
+        >
+          {/* Cabeçalho: título + contagem + subtítulo + ação primária */}
+          <div className={classes.header}>
+            <div className={classes.headerText}>
+              <Title>Fluxos de conversa ({filteredFlows.length})</Title>
+              <span className={classes.subtitle}>
+                Crie e gerencie fluxos automatizados de atendimento da empresa.
+              </span>
+            </div>
+            <div className={classes.headerActions}>
               {canCreate && (
-                <MenuItem onClick={() => {
-                  handleClose()
-                  setConfirmDuplicateOpen(true);
-                  }}>Duplicar</MenuItem>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  size="small"
+                  startIcon={<AddIcon size={16} />}
+                  onClick={handleOpenContactModal}
+                  style={{ minHeight: 36 }}
+                >
+                  Adicionar Fluxo
+                </Button>
               )}
-              {canDelete && (
-                <MenuItem onClick={() => {
-                  handleClose()
-                  setConfirmOpen(true);
-                  }}>Excluir</MenuItem>
-              )}
-            </Menu>
-            {loading && (
-              <Stack
-                justifyContent={"center"}
-                alignItems={"center"}
-                minHeight={"50vh"}
+            </div>
+          </div>
+
+          {/* Toolbar: busca + filtro de status */}
+          <div className={classes.toolbar}>
+            <TextField
+              className={classes.searchField}
+              size="small"
+              variant="outlined"
+              placeholder={i18n.t("contacts.searchPlaceholder")}
+              type="search"
+              value={searchParam}
+              onChange={handleSearch}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon size={16} />
+                  </InputAdornment>
+                ),
+              }}
+            />
+            <FormControl size="small" variant="outlined" className={classes.filterSelect}>
+              <Select
+                native
+                displayEmpty
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
               >
-                <CircularProgress />
-              </Stack>
-            )}
-          </>
-        </Stack>
-      </Paper>
+                <option value="">Todos os status</option>
+                <option value="active">Ativos</option>
+                <option value="inactive">Desativados</option>
+              </Select>
+            </FormControl>
+          </div>
+
+          {loading && webhooks.length === 0 ? (
+            <Table>
+              <TableBody>
+                <TableRowSkeleton columns={4} />
+              </TableBody>
+            </Table>
+          ) : filteredFlows.length === 0 ? (
+            <div className={classes.emptyState}>
+              <FlowIcon size={44} style={{ color: theme.palette.text.disabled }} />
+              <div>Nenhum fluxo encontrado.</div>
+            </div>
+          ) : (
+            <>
+              {/* Cards — mobile */}
+              <div className={classes.mobileList}>
+                {filteredFlows.map((flow) => (
+                  <div key={flow.id} className={classes.card}>
+                    <div className={classes.cardHeader}>
+                      <div
+                        className={classes.cardTitle}
+                        style={{ cursor: "pointer" }}
+                        onClick={() => history.push(`/flowbuilder/${flow.id}`)}
+                      >
+                        <span className={classes.flowAvatar}>
+                          <FlowIcon size={18} />
+                        </span>
+                        <div className={classes.cardName} title={flow.name}>
+                          {flow.name}
+                        </div>
+                      </div>
+                      <FlowStatusChip flow={flow} />
+                    </div>
+
+                    <div className={classes.cardMeta}>
+                      <div>
+                        <div className={classes.metaLabel}>ID</div>
+                        <div className={classes.metaValue}>#{flow.id}</div>
+                      </div>
+                      <div>
+                        <div className={classes.metaLabel}>Atualizado em</div>
+                        <div className={classes.metaValue}>
+                          {flow.updatedAt
+                            ? format(parseISO(flow.updatedAt), "dd/MM/yy HH:mm")
+                            : "—"}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className={classes.cardActions}>
+                      {renderFlowActions(flow, true)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Tabela — desktop */}
+              <div className={classes.desktopTableWrapper}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell className={classes.headCell}>
+                        {i18n.t("contacts.table.name")}
+                      </TableCell>
+                      <TableCell align="center" className={classes.headCell}>
+                        Status
+                      </TableCell>
+                      <TableCell align="center" className={classes.headCell}>
+                        Atualizado em
+                      </TableCell>
+                      <TableCell align="right" className={classes.headCell}>
+                        {i18n.t("contacts.table.actions")}
+                      </TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {filteredFlows.map((flow) => (
+                      <TableRow key={flow.id} className={classes.rowHover}>
+                        <TableCell className={classes.bodyCell}>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 10,
+                              cursor: "pointer",
+                            }}
+                            onClick={() => history.push(`/flowbuilder/${flow.id}`)}
+                          >
+                            <span className={classes.flowAvatar}>
+                              <FlowIcon size={18} />
+                            </span>
+                            <span className={classes.flowName}>{flow.name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell align="center" className={classes.bodyCell}>
+                          <FlowStatusChip flow={flow} />
+                        </TableCell>
+                        <TableCell align="center" className={classes.bodyCell}>
+                          {flow.updatedAt
+                            ? format(parseISO(flow.updatedAt), "dd/MM/yy HH:mm")
+                            : "—"}
+                        </TableCell>
+                        <TableCell
+                          align="right"
+                          className={`${classes.bodyCell} ${classes.actionsCell}`}
+                        >
+                          {renderFlowActions(flow)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Indicador de "carregar mais" do scroll infinito */}
+              {loading && webhooks.length > 0 && (
+                <div className={classes.loadMore}>
+                  <CircularProgress size={24} />
+                </div>
+              )}
+            </>
+          )}
+        </Paper>
+      )}
     </MainContainer>
   );
 };

@@ -1,15 +1,47 @@
-import React, { useState, useEffect, useContext, useCallback } from 'react';
+import React, { useState, useEffect, useContext, useCallback, useMemo } from 'react';
 import { toast } from 'react-toastify';
-import { Dialog, DialogTitle, DialogContent, DialogActions, Button, List, ListItem, ListItemIcon, ListItemText } from '@material-ui/core';
+import {
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    Button,
+    List,
+    ListItem,
+    ListItemIcon,
+    ListItemText,
+    Paper,
+    TextField,
+    InputAdornment,
+    FormControl,
+    Select,
+    IconButton,
+    Table,
+    TableBody
+} from '@material-ui/core';
+import { makeStyles, useTheme } from '@material-ui/core/styles';
+import useMediaQuery from '@material-ui/core/useMediaQuery';
 import { Folder as FolderIcon } from '@material-ui/icons';
+import {
+    Search as SearchIcon,
+    FolderPlus as NewFolderIcon,
+    Upload as UploadIcon,
+    Database as IndexIcon,
+    LayoutGrid as GridViewIcon,
+    List as ListViewIcon,
+    FolderOpen as EmptyIcon
+} from 'lucide-react';
 
 import MainContainer from '../../components/MainContainer';
+import Title from '../../components/Title';
+import TableRowSkeleton from '../../components/TableRowSkeleton';
+import ForbiddenPage from '../../components/ForbiddenPage';
 import { AuthContext } from '../../context/Auth/AuthContext';
+import usePermissions from '../../hooks/usePermissions';
 import toastError from '../../errors/toastError';
 import ConfirmationModal from '../../components/ConfirmationModal';
 
 import Sidebar from './components/Sidebar';
-import TopBar from './components/TopBar';
 import BreadcrumbNav from './components/BreadcrumbNav';
 import FolderGrid from './components/FolderGrid';
 import FolderList from './components/FolderList';
@@ -23,17 +55,139 @@ import EditFileModal from './components/EditFileModal';
 import RenameModal from './components/RenameModal';
 
 import useLibraryNavigation from './hooks/useLibraryNavigation';
-import useStyles from './styles';
 import * as libraryApi from '../../services/libraryApi';
+
+// ===== Estilos no padrão de layout de listagem (referência: /connections) =====
+const useStyles = makeStyles((theme) => ({
+    paper: {
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        padding: 0,
+        overflow: 'hidden',
+        borderRadius: 12,
+        border: `1px solid ${theme.palette.divider}`,
+        backgroundColor: theme.palette.background.paper
+    },
+    header: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: theme.spacing(2),
+        flexWrap: 'wrap',
+        padding: theme.spacing(2, 2.5)
+    },
+    headerText: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 2
+    },
+    subtitle: {
+        color: theme.palette.text.secondary,
+        fontSize: '0.85rem'
+    },
+    headerActions: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: theme.spacing(1),
+        flexWrap: 'wrap'
+    },
+    toolbar: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: theme.spacing(1.5),
+        flexWrap: 'wrap',
+        padding: theme.spacing(1.5, 2.5),
+        borderTop: `1px solid ${theme.palette.divider}`,
+        borderBottom: `1px solid ${theme.palette.divider}`,
+        background:
+            theme.palette.type === 'dark'
+                ? theme.palette.background.default
+                : '#fafafa'
+    },
+    searchField: {
+        minWidth: 220,
+        flex: '1 1 280px',
+        maxWidth: 380
+    },
+    filterSelect: {
+        minWidth: 150
+    },
+    // Alternador lista/grade — só faz sentido no desktop (mobile sempre vê cards)
+    viewToggle: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: theme.spacing(0.5),
+        marginLeft: 'auto',
+        [theme.breakpoints.down('sm')]: {
+            display: 'none'
+        }
+    },
+    emptyState: {
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: theme.spacing(1),
+        padding: theme.spacing(8, 2),
+        color: theme.palette.text.secondary,
+        textAlign: 'center'
+    },
+    // Corpo da biblioteca: árvore de pastas (esquerda) + conteúdo (direita)
+    libraryBody: {
+        flex: 1,
+        display: 'flex',
+        minHeight: 0,
+        overflow: 'hidden'
+    },
+    sidebarWrap: {
+        display: 'flex',
+        [theme.breakpoints.down('sm')]: {
+            display: 'none'
+        }
+    },
+    libraryMain: {
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        minWidth: 0,
+        overflow: 'hidden'
+    },
+    libraryContent: {
+        flex: 1,
+        padding: theme.spacing(2),
+        overflowY: 'auto',
+        ...theme.scrollbarStyles
+    }
+}));
+
+// Filtro client-side por nome, tags e descrição — função pura em nível de módulo
+// para não entrar como dependência dos useMemo do componente
+const filterItemsBySearch = (items, searchTerm) => {
+    if (!searchTerm) return items;
+    const term = searchTerm.toLowerCase();
+    return items.filter(item => {
+        const name = (item.name || item.title || '').toLowerCase();
+        const tags = (item.defaultTags || []).join(' ').toLowerCase();
+        const description = (item.description || '').toLowerCase();
+        return name.includes(term) || tags.includes(term) || description.includes(term);
+    });
+};
 
 const LibraryManager = () => {
     const classes = useStyles();
+    const theme = useTheme();
+    // Mobile (<sm): sempre renderiza cards, sem alternador de visualização
+    const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const { user, socket } = useContext(AuthContext);
+    const { hasPermission } = usePermissions();
 
     const { currentFolder, breadcrumbs, navigateToFolder, navigateToBreadcrumb } = useLibraryNavigation();
 
     const [viewMode, setViewMode] = useState('list');
     const [searchValue, setSearchValue] = useState('');
+    // Filtro de tipo da toolbar: '' (todos) | 'folders' | 'files'
+    const [typeFilter, setTypeFilter] = useState('');
     const [selectedItems, setSelectedItems] = useState([]);
 
     const [folders, setFolders] = useState([]);
@@ -420,94 +574,193 @@ const LibraryManager = () => {
         }
     };
 
-    // Busca
-    const filterItemsBySearch = (items, searchTerm) => {
-        if (!searchTerm) return items;
-        const term = searchTerm.toLowerCase();
-        return items.filter(item => {
-            const name = (item.name || item.title || '').toLowerCase();
-            const tags = (item.defaultTags || []).join(' ').toLowerCase();
-            const description = (item.description || '').toLowerCase();
-            return name.includes(term) || tags.includes(term) || description.includes(term);
-        });
+    // Indexação completa da biblioteca (ação que ficava na TopBar, agora no header)
+    const handleIndexAll = async () => {
+        try {
+            const result = await libraryApi.indexAllLibrary();
+
+            if (result.failed > 0) {
+                toast.warning(`${result.indexed} indexados, ${result.failed} falharam, ${result.skipped} pulados`);
+            } else {
+                toast.success(`${result.indexed} arquivo(s) indexado(s) com sucesso!`);
+            }
+
+            fetchData();
+        } catch (err) {
+            toastError(err);
+        }
     };
 
-    const filteredFolders = filterItemsBySearch(folders, searchValue);
-    const filteredFiles = filterItemsBySearch(files, searchValue);
+    // Busca + filtro por tipo (client-side, memoizado — padrão das telas de listagem)
+    const filteredFolders = useMemo(
+        () => (typeFilter === 'files' ? [] : filterItemsBySearch(folders, searchValue)),
+        [folders, searchValue, typeFilter]
+    );
+    const filteredFiles = useMemo(
+        () => (typeFilter === 'folders' ? [] : filterItemsBySearch(files, searchValue)),
+        [files, searchValue, typeFilter]
+    );
+    const totalVisible = filteredFolders.length + filteredFiles.length;
+    const totalItems = folders.length + files.length;
 
     return (
         <MainContainer>
-            <div className={classes.root}>
-                <Sidebar
-                    currentFolderId={currentFolder}
-                    onFolderClick={handleFolderClick}
-                />
+            {!hasPermission('files.view') ? <ForbiddenPage /> : (
+                <>
+                    <Paper className={classes.paper} variant="outlined">
+                        {/* 1. Cabeçalho */}
+                        <div className={classes.header}>
+                            <div className={classes.headerText}>
+                                <Title>Base de Conhecimento ({totalItems})</Title>
+                                <span className={classes.subtitle}>
+                                    Gerencie pastas e arquivos usados como fonte de conhecimento (RAG) das filas
+                                </span>
+                            </div>
+                            <div className={classes.headerActions}>
+                                <Button
+                                    variant="outlined"
+                                    size="small"
+                                    startIcon={<NewFolderIcon size={16} />}
+                                    style={{ minHeight: 36 }}
+                                    onClick={() => setCreateFolderModalOpen(true)}
+                                >
+                                    Nova Pasta
+                                </Button>
+                                <Button
+                                    variant="contained"
+                                    color="primary"
+                                    size="small"
+                                    startIcon={<UploadIcon size={16} />}
+                                    style={{ minHeight: 36 }}
+                                    onClick={() => setUploadModalOpen(true)}
+                                >
+                                    Upload
+                                </Button>
+                                <Button
+                                    variant="contained"
+                                    size="small"
+                                    startIcon={<IndexIcon size={16} />}
+                                    style={{ minHeight: 36, backgroundColor: '#2e7d32', color: '#fff' }}
+                                    onClick={handleIndexAll}
+                                >
+                                    Indexar
+                                </Button>
+                            </div>
+                        </div>
 
-                <div className={classes.mainContent}>
-                    <TopBar
-                        searchValue={searchValue}
-                        onSearchChange={setSearchValue}
-                        onCreateClick={() => setCreateFolderModalOpen(true)}
-                        onUploadClick={() => setUploadModalOpen(true)}
-                        onIndexAllClick={async () => {
-                            try {
-                                const result = await libraryApi.indexAllLibrary();
-
-                                if (result.failed > 0) {
-                                    toast.warning(`${result.indexed} indexados, ${result.failed} falharam, ${result.skipped} pulados`);
-                                } else {
-                                    toast.success(`${result.indexed} arquivo(s) indexado(s) com sucesso!`);
-                                }
-
-                                fetchData();
-                            } catch (err) {
-                                toastError(err);
-                            }
-                        }}
-                        viewMode={viewMode}
-                        onViewModeChange={setViewMode}
-                    />
-
-                    <BreadcrumbNav
-                        breadcrumbs={breadcrumbs}
-                        onNavigate={navigateToBreadcrumb}
-                    />
-
-                    <div className={classes.contentArea}>
-                        {viewMode === 'grid' ? (
-                            <FolderGrid
-                                folders={filteredFolders}
-                                files={filteredFiles}
-                                onFolderClick={handleFolderClick}
-                                onFileClick={handleFileClick}
-                                onMenuAction={handleMenuAction}
-                                selectedItems={selectedItems}
-                                onSelectItem={handleSelectItem}
+                        {/* 2. Toolbar de busca/filtros */}
+                        <div className={classes.toolbar}>
+                            <TextField
+                                className={classes.searchField}
+                                size="small"
+                                variant="outlined"
+                                placeholder="Buscar arquivos ou pastas…"
+                                value={searchValue}
+                                onChange={(e) => setSearchValue(e.target.value)}
+                                InputProps={{
+                                    startAdornment: (
+                                        <InputAdornment position="start">
+                                            <SearchIcon size={16} />
+                                        </InputAdornment>
+                                    )
+                                }}
                             />
-                        ) : (
-                            <FolderList
-                                folders={filteredFolders}
-                                files={filteredFiles}
-                                onFolderClick={handleFolderClick}
-                                onFileClick={handleFileClick}
-                                onMenuAction={handleMenuAction}
-                                selectedItems={selectedItems}
-                                onSelectItem={handleSelectItem}
-                                onSelectAll={handleSelectAll}
-                            />
-                        )}
-                    </div>
-                </div>
-            </div>
+                            <FormControl size="small" variant="outlined" className={classes.filterSelect}>
+                                <Select
+                                    native
+                                    displayEmpty
+                                    value={typeFilter}
+                                    onChange={(e) => setTypeFilter(e.target.value)}
+                                >
+                                    <option value="">Todos</option>
+                                    <option value="folders">Pastas</option>
+                                    <option value="files">Arquivos</option>
+                                </Select>
+                            </FormControl>
+                            <div className={classes.viewToggle}>
+                                <IconButton
+                                    size="small"
+                                    onClick={() => setViewMode('grid')}
+                                    color={viewMode === 'grid' ? 'primary' : 'default'}
+                                >
+                                    <GridViewIcon size={18} />
+                                </IconButton>
+                                <IconButton
+                                    size="small"
+                                    onClick={() => setViewMode('list')}
+                                    color={viewMode === 'list' ? 'primary' : 'default'}
+                                >
+                                    <ListViewIcon size={18} />
+                                </IconButton>
+                            </div>
+                        </div>
 
-            <BulkActionsBar
-                selectedCount={selectedItems.length}
-                onClearSelection={() => setSelectedItems([])}
-                onBulkDelete={handleBulkDelete}
-                onBulkMove={handleBulkMove}
-                onBulkCopy={handleBulkCopy}
-                onBulkIndex={handleBulkIndex}
-            />
+                        {/* 3. Conteúdo: árvore de pastas + lista/grade de itens */}
+                        <div className={classes.libraryBody}>
+                            <div className={classes.sidebarWrap}>
+                                <Sidebar
+                                    currentFolderId={currentFolder}
+                                    onFolderClick={handleFolderClick}
+                                />
+                            </div>
+
+                            <div className={classes.libraryMain}>
+                                <BreadcrumbNav
+                                    breadcrumbs={breadcrumbs}
+                                    onNavigate={navigateToBreadcrumb}
+                                />
+
+                                <div className={classes.libraryContent}>
+                                    {loading ? (
+                                        <Table size="small">
+                                            <TableBody>
+                                                <TableRowSkeleton columns={5} />
+                                            </TableBody>
+                                        </Table>
+                                    ) : totalVisible === 0 ? (
+                                        <div className={classes.emptyState}>
+                                            <EmptyIcon size={44} style={{ color: theme.palette.text.disabled }} />
+                                            <div>Nenhum registro encontrado.</div>
+                                        </div>
+                                    ) : isMobile || viewMode === 'grid' ? (
+                                        // Cards — mobile (sempre) e desktop em modo grade
+                                        <FolderGrid
+                                            folders={filteredFolders}
+                                            files={filteredFiles}
+                                            onFolderClick={handleFolderClick}
+                                            onFileClick={handleFileClick}
+                                            onMenuAction={handleMenuAction}
+                                            selectedItems={selectedItems}
+                                            onSelectItem={handleSelectItem}
+                                        />
+                                    ) : (
+                                        // Tabela — desktop (modo lista)
+                                        <FolderList
+                                            folders={filteredFolders}
+                                            files={filteredFiles}
+                                            onFolderClick={handleFolderClick}
+                                            onFileClick={handleFileClick}
+                                            onMenuAction={handleMenuAction}
+                                            selectedItems={selectedItems}
+                                            onSelectItem={handleSelectItem}
+                                            onSelectAll={handleSelectAll}
+                                        />
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </Paper>
+
+                    <BulkActionsBar
+                        selectedCount={selectedItems.length}
+                        onClearSelection={() => setSelectedItems([])}
+                        onBulkDelete={handleBulkDelete}
+                        onBulkMove={handleBulkMove}
+                        onBulkCopy={handleBulkCopy}
+                        onBulkIndex={handleBulkIndex}
+                    />
+                </>
+            )}
 
             <CreateFolderModal
                 open={createFolderModalOpen}
