@@ -29,7 +29,6 @@ import useTags from "../../hooks/useTags";
 import useUsers from "../../hooks/useUsers";
 import usePermissions from "../../hooks/usePermissions";
 
-import { Can } from "../Can";
 import { Avatar, Grid, Input, Paper, Tab, Tabs, Chip, Typography, Divider } from "@material-ui/core";
 import Autocomplete from "@material-ui/lab/Autocomplete";
 import { getBackendUrl } from "../../config";
@@ -165,16 +164,15 @@ const UserModal = ({ open, onClose, userId }) => {
   };
 
   const { user: loggedInUser } = useContext(AuthContext);
-  const { hasPermission, isAdmin } = usePermissions();
+  const { hasPermission } = usePermissions();
 
   // Verifica se está editando próprio perfil e se tem permissão
   const isEditingOwnProfile = userId === loggedInUser?.id;
   const canEditOwnProfile = hasPermission("users.edit-own");
   const canEditUsers = hasPermission("users.edit");
-  const isUserAdmin = isAdmin();
 
   // Determina se pode salvar baseado nas permissões
-  const canSave = !isEditingOwnProfile || canEditOwnProfile || canEditUsers || isUserAdmin;
+  const canSave = !isEditingOwnProfile || canEditOwnProfile || canEditUsers;
 
   const [user, setUser] = useState(initialState);
   const [selectedQueueIds, setSelectedQueueIds] = useState([]);
@@ -396,6 +394,7 @@ const UserModal = ({ open, onClose, userId }) => {
                 >
                   <Tab label={i18n.t("userModal.tabs.general")} value={"general"} />
                   <Tab label={i18n.t("userModal.tabs.permissions")} value={"permissions"} />
+                  <Tab label={i18n.t("userModal.tabs.access")} value={"access"} />
                   {loggedInUser.super && <Tab label="Como usar?" value={"tutorial"} />}
                 </Tabs>
               </Paper>
@@ -486,158 +485,142 @@ const UserModal = ({ open, onClose, userId }) => {
                           margin="dense"
                           fullWidth
                         >
-                          <Can
-                            user={loggedInUser}
-                            perform="users.edit"
-                            yes={() => (
-                              <>
-                                <InputLabel id="profile-selection-input-label">
-                                  {i18n.t("userModal.form.profile")}
-                                </InputLabel>
+                          {hasPermission("users.edit") && (
+                            <>
+                              <InputLabel id="profile-selection-input-label">
+                                {i18n.t("userModal.form.profile")}
+                              </InputLabel>
 
-                                {/* Perfil base (Admin/Usuário) + Perfis de Acesso criados
-                                    em /users → aba Perfis. Escolher um perfil define
-                                    profile="user" e vincula a role selecionada — as
-                                    permissões dela somam às da aba Permissões. */}
-                                <Select
-                                  label={i18n.t("userModal.form.profile")}
-                                  labelId="profile-selection-label"
-                                  id="profile-selection"
-                                  required
-                                  value={
-                                    values.profile === "admin"
-                                      ? "admin"
-                                      : selectedRoleIds.length > 0
-                                        ? `role:${selectedRoleIds[0]}`
-                                        : (values.profile || "user")
+                              {/* Perfil base (Admin/Usuário) + Perfis de Acesso criados
+                                  em /users → aba Perfis. Escolher um perfil define
+                                  profile="user" e vincula a role selecionada — as
+                                  permissões dela somam às da aba Permissões. */}
+                              <Select
+                                label={i18n.t("userModal.form.profile")}
+                                labelId="profile-selection-label"
+                                id="profile-selection"
+                                required
+                                value={
+                                  values.profile === "admin"
+                                    ? "admin"
+                                    : selectedRoleIds.length > 0
+                                      ? `role:${selectedRoleIds[0]}`
+                                      : (values.profile || "user")
+                                }
+                                onChange={e => {
+                                  const v = e.target.value;
+                                  if (typeof v === "string" && v.startsWith("role:")) {
+                                    const rid = Number(v.slice(5));
+                                    setFieldValue("profile", "user");
+                                    setSelectedRoleIds([rid]);
+                                  } else {
+                                    setFieldValue("profile", v);
+                                    setSelectedRoleIds([]);
                                   }
-                                  onChange={e => {
-                                    const v = e.target.value;
-                                    if (typeof v === "string" && v.startsWith("role:")) {
-                                      const rid = Number(v.slice(5));
-                                      setFieldValue("profile", "user");
-                                      setSelectedRoleIds([rid]);
-                                    } else {
-                                      setFieldValue("profile", v);
-                                      setSelectedRoleIds([]);
-                                    }
-                                  }}
-                                >
-                                  <MenuItem value="admin">Admin</MenuItem>
-                                  <MenuItem value="user">User</MenuItem>
-                                  {roleOptions.length > 0 && <Divider />}
-                                  {roleOptions.map(r => (
-                                    <MenuItem key={r.id} value={`role:${r.id}`}>
-                                      {r.name} — perfil de acesso
-                                    </MenuItem>
-                                  ))}
-                                </Select>
-                              </>
-                            )}
-                          />
+                                }}
+                              >
+                                <MenuItem value="admin">Admin</MenuItem>
+                                <MenuItem value="user">User</MenuItem>
+                                {roleOptions.length > 0 && <Divider />}
+                                {roleOptions.map(r => (
+                                  <MenuItem key={r.id} value={`role:${r.id}`}>
+                                    {r.name} — perfil de acesso
+                                  </MenuItem>
+                                ))}
+                              </Select>
+                            </>
+                          )}
                         </FormControl>
                       </Grid>
                     </Grid>
                     <Grid container spacing={1}>
                       <Grid item xs={12} md={12} xl={12}>
-                        <Can
-                          user={loggedInUser}
-                          perform="users.edit"
-                          yes={() => (
-                            <QueueSelect
-                              selectedQueueIds={selectedQueueIds}
-                              onChange={values => setSelectedQueueIds(values)}
-                              fullWidth
-                            />
-                          )}
-                        />
+                        {hasPermission("users.edit") && (
+                          <QueueSelect
+                            selectedQueueIds={selectedQueueIds}
+                            onChange={values => setSelectedQueueIds(values)}
+                            fullWidth
+                          />
+                        )}
                       </Grid>
                     </Grid>
                     <Grid container spacing={1}>
                       <Grid item xs={12} md={12} xl={12}>
-                        <Can
-                          user={loggedInUser}
-                          perform="users.edit"
-                          yes={() => (
-                            <FormControl variant="outlined" margin="dense" className={classes.maxWidth} fullWidth>
-                              <InputLabel>
-                                {i18n.t("userModal.form.whatsapp")}
-                              </InputLabel>
-                              <Select
-                                value={whatsappId || ''}
-                                onChange={(e) => setWhatsappId(e.target.value)}
-                                label={i18n.t("userModal.form.whatsapp")}
-                              >
-                                <MenuItem value="">&nbsp;</MenuItem>
-                                {whatsApps.map((whatsapp) => (
-                                  <MenuItem key={whatsapp.id} value={whatsapp.id}>{whatsapp.name}</MenuItem>
-                                ))}
-                              </Select>
-                            </FormControl>
-                          )}
-                        />
+                        {hasPermission("users.edit") && (
+                          <FormControl variant="outlined" margin="dense" className={classes.maxWidth} fullWidth>
+                            <InputLabel>
+                              {i18n.t("userModal.form.whatsapp")}
+                            </InputLabel>
+                            <Select
+                              value={whatsappId || ''}
+                              onChange={(e) => setWhatsappId(e.target.value)}
+                              label={i18n.t("userModal.form.whatsapp")}
+                            >
+                              <MenuItem value="">&nbsp;</MenuItem>
+                              {whatsApps.map((whatsapp) => (
+                                <MenuItem key={whatsapp.id} value={whatsapp.id}>{whatsapp.name}</MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                        )}
                       </Grid>
                     </Grid>
-                    <Can
-                      user={loggedInUser}
-                      perform="user-modal:editProfile"
-                      yes={() => (
-                        <Grid container spacing={1}>
-                          <Grid item xs={12} md={6} xl={6}>
-                            <Field
-                              as={TextField}
-                              label={i18n.t("userModal.form.startWork")}
-                              type="time"
-                              ampm={"false"}
-                              inputRef={startWorkRef}
-                              InputLabelProps={{
-                                shrink: true,
-                              }}
-                              inputProps={{
-                                step: 600, // 5 min
-                              }}
-                              fullWidth
-                              name="startWork"
-                              error={
-                                touched.startWork && Boolean(errors.startWork)
-                              }
-                              helperText={
-                                touched.startWork && errors.startWork
-                              }
-                              variant="outlined"
-                              margin="dense"
-                              className={classes.textField}
-                            />
-                          </Grid>
-                          <Grid item xs={12} md={6} xl={6}>
-                            <Field
-                              as={TextField}
-                              label={i18n.t("userModal.form.endWork")}
-                              type="time"
-                              ampm={"false"}
-                              inputRef={endWorkRef}
-                              InputLabelProps={{
-                                shrink: true,
-                              }}
-                              inputProps={{
-                                step: 600, // 5 min
-                              }}
-                              fullWidth
-                              name="endWork"
-                              error={
-                                touched.endWork && Boolean(errors.endWork)
-                              }
-                              helperText={
-                                touched.endWork && errors.endWork
-                              }
-                              variant="outlined"
-                              margin="dense"
-                              className={classes.textField}
-                            />
-                          </Grid>
+                    {hasPermission("users.edit") && (
+                      <Grid container spacing={1}>
+                        <Grid item xs={12} md={6} xl={6}>
+                          <Field
+                            as={TextField}
+                            label={i18n.t("userModal.form.startWork")}
+                            type="time"
+                            ampm={"false"}
+                            inputRef={startWorkRef}
+                            InputLabelProps={{
+                              shrink: true,
+                            }}
+                            inputProps={{
+                              step: 600, // 5 min
+                            }}
+                            fullWidth
+                            name="startWork"
+                            error={
+                              touched.startWork && Boolean(errors.startWork)
+                            }
+                            helperText={
+                              touched.startWork && errors.startWork
+                            }
+                            variant="outlined"
+                            margin="dense"
+                            className={classes.textField}
+                          />
                         </Grid>
-                      )}
-                    />
+                        <Grid item xs={12} md={6} xl={6}>
+                          <Field
+                            as={TextField}
+                            label={i18n.t("userModal.form.endWork")}
+                            type="time"
+                            ampm={"false"}
+                            inputRef={endWorkRef}
+                            InputLabelProps={{
+                              shrink: true,
+                            }}
+                            inputProps={{
+                              step: 600, // 5 min
+                            }}
+                            fullWidth
+                            name="endWork"
+                            error={
+                              touched.endWork && Boolean(errors.endWork)
+                            }
+                            helperText={
+                              touched.endWork && errors.endWork
+                            }
+                            variant="outlined"
+                            margin="dense"
+                            className={classes.textField}
+                          />
+                        </Grid>
+                      </Grid>
+                    )}
 
                     <Field
                       as={TextField}
@@ -714,13 +697,10 @@ const UserModal = ({ open, onClose, userId }) => {
                     value={tab}
                     name={"permissions"}
                   >
-                    <Can
-                      user={loggedInUser}
-                      perform="users.edit"
-                      yes={() =>
-                        <>
-                          {/* NOVO: Sistema de Permissões Granulares */}
-                          <Grid container spacing={1}>
+                    {hasPermission("users.edit") && (
+                      <>
+                        {/* NOVO: Sistema de Permissões Granulares */}
+                        <Grid container spacing={1}>
                             <Grid item xs={12}>
                               <PermissionTransferList
                                 value={values.permissions || []}
@@ -770,91 +750,11 @@ const UserModal = ({ open, onClose, userId }) => {
                             </>
                           )}
 
-                          {/* Seção de Grupos Permitidos - aparece quando allowGroup está habilitado */}
-                          {values.allowGroup && userId && (
-                            <>
-                              <Divider style={{ marginTop: 16, marginBottom: 16 }} />
-                              <Typography variant="subtitle2" style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <GroupIcon fontSize="small" />
-                                Grupos Permitidos
-                              </Typography>
-                              <Typography variant="caption" color="textSecondary" style={{ marginBottom: 12, display: 'block' }}>
-                                Selecione quais grupos este usuário poderá visualizar e interagir.
-                              </Typography>
-                              <GroupPermissionSelector
-                                userId={userId}
-                              // disabled={values.profile === 'admin' || values.super} // Agora todos podem ter permissões específicas
-                              />
-                            </>
-                          )}
-
-
-                          {/* Tags permitidas - exibe apenas tags pessoais (com 1x #, não ##) */}
-                          <Divider style={{ marginTop: 16, marginBottom: 16 }} />
-                          <Typography variant="subtitle2" style={{ marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
-                            Tags Pessoais (Carteiras)
-                          </Typography>
-                          <Typography variant="caption" color="textSecondary" style={{ marginBottom: 12, display: 'block' }}>
-                            💡 Tags pessoais definem quais contatos o usuário pode visualizar. Tags devem começar com <strong>#</strong> (ex: #João, #EquipeVendas)
-                          </Typography>
-                          <Grid container spacing={1}>
-                            <Grid item xs={12}>
-                              <Field name="allowedContactTags">
-                                {({ field, form }) => {
-                                  const selectedIds = field.value || [];
-                                  // Filtra para mostrar apenas tags pessoais (começam com # mas NÃO com ##)
-                                  const personalTags = tags.filter(t =>
-                                    t.name && t.name.startsWith('#') && !t.name.startsWith('##')
-                                  );
-                                  // DEBUG removido
-                                  const selectedObjects = personalTags.filter(t => selectedIds.includes(t.id));
-                                  
-                                  // Avisar se há tags sem formato correto
-                                  const invalidTags = tags.filter(t => 
-                                    t.name && !t.name.startsWith('#') && selectedIds.includes(t.id)
-                                  );
-                                  
-                                  return (
-                                    <>
-                                      <Autocomplete
-                                        multiple={false}  // Apenas 1 tag pessoal
-                                        options={personalTags}
-                                        value={selectedObjects[0] || null}  // Apenas primeiro valor
-                                        getOptionLabel={(option) => option?.name || ""}
-                                        isOptionEqualToValue={(option, value) => option.id === value.id}
-                                        onChange={(e, value) => form.setFieldValue("allowedContactTags", value ? [value.id] : [])}
-                                        loading={tagsLoading}
-                                        filterSelectedOptions
-                                        renderInput={(params) => (
-                                          <TextField
-                                            {...params}
-                                            variant="outlined"
-                                            margin="dense"
-                                            label="Tag Pessoal (Carteira) *"
-                                            placeholder="Selecione uma tag que começa com #"
-                                            fullWidth
-                                            required
-                                            InputLabelProps={{ shrink: true }}
-                                            helperText={personalTags.length === 0 ? "⚠️ Nenhuma tag pessoal encontrada. Crie tags com # no início (ex: #João)" : "Obrigatório - define quais contatos o usuário vê"}
-                                          />
-                                        )}
-                                      />
-                                      {invalidTags.length > 0 && (
-                                        <Typography variant="caption" color="error" style={{ marginTop: 8, display: 'block' }}>
-                                          ⚠️ Atenção: {invalidTags.length} tag(s) selecionada(s) não tem formato correto (devem começar com #)
-                                        </Typography>
-                                      )}
-                                    </>
-                                  );
-                                }}
-                              </Field>
-                            </Grid>
-                          </Grid>
-
-                          {/* Usuários gerenciados - para supervisores verem carteiras de outros usuários */}
+                          {/* Elevação total: switch Super Admin por último, junto das capacidades */}
                           {/* Apenas superadmin pode ver esta opção */}
                           {loggedInUser.super && (
                             <>
+                              <Divider style={{ marginTop: 16, marginBottom: 16 }} />
                               <Grid container spacing={1}>
                                 <Grid item xs={12} md={6}>
                                   <FormControlLabel
@@ -875,150 +775,244 @@ const UserModal = ({ open, onClose, userId }) => {
                                   />
                                 </Grid>
                               </Grid>
-
-                              <Divider style={{ marginTop: 16, marginBottom: 16 }} />
-                              <Typography variant="subtitle2" style={{ marginBottom: 8 }}>
-                                {i18n.t("userModal.form.managedUsers") || "Usuários Gerenciados (Supervisor)"}
-                              </Typography>
-                              <Typography variant="caption" color="textSecondary" style={{ marginBottom: 8, display: 'block' }}>
-                                {values.supervisorViewMode === "include"
-                                  ? "Selecione os usuários cujas carteiras este usuário poderá visualizar. Deixe vazio para ver todos como admin normal."
-                                  : "Selecione os usuários cujas carteiras este usuário NÃO poderá visualizar. Verá todos os outros."}
-                              </Typography>
-                              <Grid container spacing={1}>
-                                <Grid item xs={12}>
-                                  <FormControl variant="outlined" margin="dense" fullWidth>
-                                    <InputLabel>Modo de visualização</InputLabel>
-                                    <Field
-                                      as={Select}
-                                      name="supervisorViewMode"
-                                      label="Modo de visualização"
-                                    >
-                                      <MenuItem value="include">Sim - Ver apenas os selecionados</MenuItem>
-                                      <MenuItem value="exclude">Não - Ver todos exceto os selecionados</MenuItem>
-                                    </Field>
-                                  </FormControl>
-                                </Grid>
-                                <Grid item xs={12}>
-                                  <Field name="managedUserIds">
-                                    {({ field, form }) => {
-                                      const selectedIds = field.value || [];
-                                      // Filtra para não mostrar o próprio usuário sendo editado
-                                      const availableUsers = allUsers.filter(u => u.id !== userId);
-                                      const selectedObjects = availableUsers.filter(u => selectedIds.includes(u.id));
-                                      return (
-                                        <Autocomplete
-                                          multiple
-                                          options={availableUsers}
-                                          value={selectedObjects}
-                                          getOptionLabel={(option) => option?.name || ""}
-                                          onChange={(e, value) => form.setFieldValue("managedUserIds", (value || []).map(v => v.id))}
-                                          loading={usersLoading}
-                                          filterSelectedOptions
-                                          renderTags={(value, getTagProps) =>
-                                            value.map((option, index) => (
-                                              <Chip
-                                                {...getTagProps({ index })}
-                                                key={option.id}
-                                                label={option.name}
-                                                style={{ backgroundColor: values.supervisorViewMode === "include" ? "#3f51b5" : "#f44336", color: "#fff" }}
-                                              />
-                                            ))
-                                          }
-                                          renderInput={(params) => (
-                                            <TextField
-                                              {...params}
-                                              variant="outlined"
-                                              margin="dense"
-                                              label={values.supervisorViewMode === "include" ? "Usuários que posso ver" : "Usuários que NÃO posso ver"}
-                                              fullWidth
-                                              InputLabelProps={{ shrink: true }}
-                                            />
-                                          )}
-                                        />
-                                      );
-                                    }}
-                                  </Field>
-                                </Grid>
-                              </Grid>
                             </>
                           )}
+                      </>
+                    )}
+                  </TabPanel>
 
-                          {/* Seção de Conexões Permitidas (Novo Hierarquia) */}
-                          <Divider style={{ marginTop: 16, marginBottom: 16 }} />
-                          <Typography variant="subtitle2" style={{ marginBottom: 8 }}>
-                            Conexões Permitidas (Apenas estas aparecerão para o usuário)
-                          </Typography>
-                          <Grid container spacing={1}>
-                            <Grid item xs={12}>
-                              <Field name="allowedConnectionIds">
-                                {({ field, form }) => {
-                                  const selectedIds = field.value || [];
-                                  const selectedObjects = whatsApps.filter(w => selectedIds.includes(w.id));
-                                  return (
+                  {/* ABA: ACESSO A DADOS — escopo de dados visíveis ao usuário
+                      (carteiras, grupos, usuários gerenciados e conexões).
+                      Capacidades/permissões ficam na aba "Permissões". */}
+                  <TabPanel
+                    className={classes.container}
+                    value={tab}
+                    name={"access"}
+                  >
+                    {hasPermission("users.edit") && (
+                      <>
+                        {/* Seção de Grupos Permitidos - aparece quando allowGroup está habilitado */}
+                        {values.allowGroup && userId && (
+                          <>
+                            <Typography variant="subtitle2" style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <GroupIcon fontSize="small" />
+                              Grupos Permitidos
+                            </Typography>
+                            <Typography variant="caption" color="textSecondary" style={{ marginBottom: 12, display: 'block' }}>
+                              Selecione quais grupos este usuário poderá visualizar e interagir.
+                            </Typography>
+                            <GroupPermissionSelector
+                              userId={userId}
+                            />
+                          </>
+                        )}
+
+                        {/* Tags permitidas - exibe apenas tags pessoais (com 1x #, não ##) */}
+                        <Divider style={{ marginTop: 16, marginBottom: 16 }} />
+                        <Typography variant="subtitle2" style={{ marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+                          Tags Pessoais (Carteiras)
+                        </Typography>
+                        <Typography variant="caption" color="textSecondary" style={{ marginBottom: 12, display: 'block' }}>
+                          💡 Tags pessoais definem quais contatos o usuário pode visualizar. Tags devem começar com <strong>#</strong> (ex: #João, #EquipeVendas)
+                        </Typography>
+                        <Grid container spacing={1}>
+                          <Grid item xs={12}>
+                            <Field name="allowedContactTags">
+                              {({ field, form }) => {
+                                const selectedIds = field.value || [];
+                                // Filtra para mostrar apenas tags pessoais (começam com # mas NÃO com ##)
+                                const personalTags = tags.filter(t =>
+                                  t.name && t.name.startsWith('#') && !t.name.startsWith('##')
+                                );
+                                const selectedObjects = personalTags.filter(t => selectedIds.includes(t.id));
+
+                                // Avisar se há tags sem formato correto
+                                const invalidTags = tags.filter(t =>
+                                  t.name && !t.name.startsWith('#') && selectedIds.includes(t.id)
+                                );
+
+                                return (
+                                  <>
                                     <Autocomplete
-                                      multiple
-                                      options={whatsApps}
-                                      value={selectedObjects}
+                                      multiple={false}  // Apenas 1 tag pessoal
+                                      options={personalTags}
+                                      value={selectedObjects[0] || null}  // Apenas primeiro valor
                                       getOptionLabel={(option) => option?.name || ""}
-                                      onChange={(e, value) => form.setFieldValue("allowedConnectionIds", (value || []).map(v => v.id))}
-                                      loading={loading}
+                                      isOptionEqualToValue={(option, value) => option.id === value.id}
+                                      onChange={(e, value) => form.setFieldValue("allowedContactTags", value ? [value.id] : [])}
+                                      loading={tagsLoading}
                                       filterSelectedOptions
-                                      renderTags={(value, getTagProps) =>
-                                        value.map((option, index) => (
-                                          <Chip
-                                            {...getTagProps({ index })}
-                                            key={option.id}
-                                            label={option.name}
-                                            style={{ backgroundColor: "#25D366", color: "#fff" }} // Cor do WhatsApp
-                                          />
-                                        ))
-                                      }
                                       renderInput={(params) => (
                                         <TextField
                                           {...params}
                                           variant="outlined"
                                           margin="dense"
-                                          label="Conexões Liberadas"
-                                          placeholder="Selecione..."
+                                          label="Tag Pessoal (Carteira) *"
+                                          placeholder="Selecione uma tag que começa com #"
                                           fullWidth
+                                          required
                                           InputLabelProps={{ shrink: true }}
+                                          helperText={personalTags.length === 0 ? "⚠️ Nenhuma tag pessoal encontrada. Crie tags com # no início (ex: #João)" : "Obrigatório - define quais contatos o usuário vê"}
                                         />
                                       )}
                                     />
-                                  );
-                                }}
-                              </Field>
-                            </Grid>
+                                    {invalidTags.length > 0 && (
+                                      <Typography variant="caption" color="error" style={{ marginTop: 8, display: 'block' }}>
+                                        ⚠️ Atenção: {invalidTags.length} tag(s) selecionada(s) não tem formato correto (devem começar com #)
+                                      </Typography>
+                                    )}
+                                  </>
+                                );
+                              }}
+                            </Field>
                           </Grid>
+                        </Grid>
 
-                          {/* Ghost Mode (Apenas para Admins editando Admins? Ou Admin editando qualquer um?) */}
-                          {/* O plano diz: Super Admin tem opção para não exibir nada seu. */}
-                          {/* Então só aparece se o usuário editado FOR Admin ou Super */}
-                          {(values.profile === 'admin') && (
-                            <>
-                              <Divider style={{ marginTop: 16, marginBottom: 16 }} />
-                              <Grid container spacing={1}>
-                                <Grid item xs={12}>
-                                  <FormControlLabel
-                                    control={
-                                      <Switch
-                                        checked={values.isPrivate}
-                                        onChange={(e) => setFieldValue("isPrivate", e.target.checked)}
-                                        name="isPrivate"
-                                        color="secondary"
-                                      />
-                                    }
-                                    label="Modo Privado (Ghost Mode) - Oculta tickets e usuário de não-admins"
-                                  />
-                                </Grid>
+                        {/* Usuários gerenciados - para supervisores verem carteiras de outros usuários */}
+                        {/* Apenas superadmin pode ver esta opção */}
+                        {loggedInUser.super && (
+                          <>
+                            <Divider style={{ marginTop: 16, marginBottom: 16 }} />
+                            <Typography variant="subtitle2" style={{ marginBottom: 8 }}>
+                              {i18n.t("userModal.form.managedUsers") || "Usuários Gerenciados (Supervisor)"}
+                            </Typography>
+                            <Typography variant="caption" color="textSecondary" style={{ marginBottom: 8, display: 'block' }}>
+                              {values.supervisorViewMode === "include"
+                                ? "Selecione os usuários cujas carteiras este usuário poderá visualizar. Deixe vazio para ver todos como admin normal."
+                                : "Selecione os usuários cujas carteiras este usuário NÃO poderá visualizar. Verá todos os outros."}
+                            </Typography>
+                            <Grid container spacing={1}>
+                              <Grid item xs={12}>
+                                <FormControl variant="outlined" margin="dense" fullWidth>
+                                  <InputLabel>Modo de visualização</InputLabel>
+                                  <Field
+                                    as={Select}
+                                    name="supervisorViewMode"
+                                    label="Modo de visualização"
+                                  >
+                                    <MenuItem value="include">Sim - Ver apenas os selecionados</MenuItem>
+                                    <MenuItem value="exclude">Não - Ver todos exceto os selecionados</MenuItem>
+                                  </Field>
+                                </FormControl>
                               </Grid>
-                            </>
-                          )}
-                        </>
+                              <Grid item xs={12}>
+                                <Field name="managedUserIds">
+                                  {({ field, form }) => {
+                                    const selectedIds = field.value || [];
+                                    // Filtra para não mostrar o próprio usuário sendo editado
+                                    const availableUsers = allUsers.filter(u => u.id !== userId);
+                                    const selectedObjects = availableUsers.filter(u => selectedIds.includes(u.id));
+                                    return (
+                                      <Autocomplete
+                                        multiple
+                                        options={availableUsers}
+                                        value={selectedObjects}
+                                        getOptionLabel={(option) => option?.name || ""}
+                                        onChange={(e, value) => form.setFieldValue("managedUserIds", (value || []).map(v => v.id))}
+                                        loading={usersLoading}
+                                        filterSelectedOptions
+                                        renderTags={(value, getTagProps) =>
+                                          value.map((option, index) => (
+                                            <Chip
+                                              {...getTagProps({ index })}
+                                              key={option.id}
+                                              label={option.name}
+                                              style={{ backgroundColor: values.supervisorViewMode === "include" ? "#3f51b5" : "#f44336", color: "#fff" }}
+                                            />
+                                          ))
+                                        }
+                                        renderInput={(params) => (
+                                          <TextField
+                                            {...params}
+                                            variant="outlined"
+                                            margin="dense"
+                                            label={values.supervisorViewMode === "include" ? "Usuários que posso ver" : "Usuários que NÃO posso ver"}
+                                            fullWidth
+                                            InputLabelProps={{ shrink: true }}
+                                          />
+                                        )}
+                                      />
+                                    );
+                                  }}
+                                </Field>
+                              </Grid>
+                            </Grid>
+                          </>
+                        )}
 
-                      }
-                    />
+                        {/* Seção de Conexões Permitidas (Novo Hierarquia) */}
+                        <Divider style={{ marginTop: 16, marginBottom: 16 }} />
+                        <Typography variant="subtitle2" style={{ marginBottom: 8 }}>
+                          Conexões Permitidas (Apenas estas aparecerão para o usuário)
+                        </Typography>
+                        <Grid container spacing={1}>
+                          <Grid item xs={12}>
+                            <Field name="allowedConnectionIds">
+                              {({ field, form }) => {
+                                const selectedIds = field.value || [];
+                                const selectedObjects = whatsApps.filter(w => selectedIds.includes(w.id));
+                                return (
+                                  <Autocomplete
+                                    multiple
+                                    options={whatsApps}
+                                    value={selectedObjects}
+                                    getOptionLabel={(option) => option?.name || ""}
+                                    onChange={(e, value) => form.setFieldValue("allowedConnectionIds", (value || []).map(v => v.id))}
+                                    loading={loading}
+                                    filterSelectedOptions
+                                    renderTags={(value, getTagProps) =>
+                                      value.map((option, index) => (
+                                        <Chip
+                                          {...getTagProps({ index })}
+                                          key={option.id}
+                                          label={option.name}
+                                          style={{ backgroundColor: "#25D366", color: "#fff" }} // Cor do WhatsApp
+                                        />
+                                      ))
+                                    }
+                                    renderInput={(params) => (
+                                      <TextField
+                                        {...params}
+                                        variant="outlined"
+                                        margin="dense"
+                                        label="Conexões Liberadas"
+                                        placeholder="Selecione..."
+                                        fullWidth
+                                        InputLabelProps={{ shrink: true }}
+                                      />
+                                    )}
+                                  />
+                                );
+                              }}
+                            </Field>
+                          </Grid>
+                        </Grid>
+
+                        {/* Ghost Mode (Apenas para Admins editando Admins? Ou Admin editando qualquer um?) */}
+                        {/* O plano diz: Super Admin tem opção para não exibir nada seu. */}
+                        {/* Então só aparece se o usuário editado FOR Admin ou Super */}
+                        {(values.profile === 'admin') && (
+                          <>
+                            <Divider style={{ marginTop: 16, marginBottom: 16 }} />
+                            <Grid container spacing={1}>
+                              <Grid item xs={12}>
+                                <FormControlLabel
+                                  control={
+                                    <Switch
+                                      checked={values.isPrivate}
+                                      onChange={(e) => setFieldValue("isPrivate", e.target.checked)}
+                                      name="isPrivate"
+                                      color="secondary"
+                                    />
+                                  }
+                                  label="Modo Privado (Ghost Mode) - Oculta tickets e usuário de não-admins"
+                                />
+                              </Grid>
+                            </Grid>
+                          </>
+                        )}
+                      </>
+                    )}
                   </TabPanel>
 
                   {/* ABA: COMO USAR? (Visível apenas para Super Admin) */}

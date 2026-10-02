@@ -16,7 +16,6 @@ const useUsers = () => {
         // Se user ainda não está pronto, não tem permissão
         if (!user || user.loading) return false;
         if (user?.super === true) return true;
-        if (user?.profile === "admin") return true;
         return user?.permissions?.includes(permission);
     };
 

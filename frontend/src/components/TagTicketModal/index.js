@@ -27,6 +27,7 @@ import { i18n } from "../../translate/i18n";
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
+import usePermissions from "../../hooks/usePermissions";
 import { IconButton, InputAdornment, FormControl } from "@material-ui/core";
 
 
@@ -78,6 +79,7 @@ const TagSchema = Yup.object().shape({
 const TagModal = ({ open, onClose, tagId, reload }) => {
 	const classes = useStyles();
 	const { user } = useContext(AuthContext);
+	const { hasPermission } = usePermissions();
 	const [colorPickerModalOpen, setColorPickerModalOpen] = useState(false);
     //console.log(user);
 
@@ -214,7 +216,7 @@ const handleKanbanChange = (e) => {
 										margin="dense"
 									/>
 								</div>
-                                {(user.profile === "admin" || user.profile === "supervisor") && (
+                                {hasPermission("tags.edit") && (
                                 <>
 								<div className={classes.multFieldLine}>
         							<FormControlLabel

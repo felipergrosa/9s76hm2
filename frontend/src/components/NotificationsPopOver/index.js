@@ -70,7 +70,7 @@ const NotificationsPopOver = ({ volume = 1 }) => {
   const { user, socket } = useContext(AuthContext);
   const { colorMode } = useContext(ColorModeContext);
   const { viewMode } = colorMode;
-  const { profile, queues } = user;
+  const { queues } = user;
 
   const ticketIdUrl = +history.location.pathname.split("/")[2];
   const ticketIdRef = useRef(ticketIdUrl);
@@ -93,6 +93,9 @@ const NotificationsPopOver = ({ volume = 1 }) => {
   const closeTimeoutRef = useRef(null);
 
   const { hasPermission: checkPerm } = usePermissions();
+
+  // Solicitações de liberação de contato exigem settings.view (paridade com o backend)
+  const canViewReleaseRequests = checkPerm("settings.view");
 
   const { tickets } = useTickets({
     withUnreadMessages: "true",
@@ -260,7 +263,7 @@ const NotificationsPopOver = ({ volume = 1 }) => {
     }
 
     const onCompanyContactReleaseRequest = (data) => {
-      if (profile !== "admin") return;
+      if (!canViewReleaseRequests) return;
       if (!data || !data.action) return;
       if (data.action === "create" && data.record) {
         setReleaseRequests(prev => {
@@ -296,12 +299,12 @@ const NotificationsPopOver = ({ volume = 1 }) => {
         clearTimeout(soundTimeoutRef.current);
       }
     };
-  }, [user?.id, user?.companyId, profile, queues, showTicketWithoutQueue, socket, showNotificationPending, showGroupNotification]);
+  }, [user?.id, user?.companyId, canViewReleaseRequests, queues, showTicketWithoutQueue, socket, showNotificationPending, showGroupNotification]);
 
   useEffect(() => {
     const fetchReleaseRequests = async () => {
       try {
-        if (profile !== "admin") return;
+        if (!canViewReleaseRequests) return;
         const { data } = await api.get("/contact-release-requests");
         const records = Array.isArray(data?.records) ? data.records : [];
         setReleaseRequests(records);
@@ -312,7 +315,7 @@ const NotificationsPopOver = ({ volume = 1 }) => {
     if (user?.id) {
       fetchReleaseRequests();
     }
-  }, [user?.id, profile]);
+  }, [user?.id, canViewReleaseRequests]);
 
   const handleResolveReleaseRequest = async (id) => {
     try {
@@ -480,7 +483,7 @@ const NotificationsPopOver = ({ volume = 1 }) => {
         >
           <Badge
             overlap="rectangular"
-            badgeContent={notifications.length + (profile === "admin" ? releaseRequests.length : 0)}
+            badgeContent={notifications.length + (canViewReleaseRequests ? releaseRequests.length : 0)}
             color="secondary"
           >
             <ChatIcon />
@@ -525,7 +528,7 @@ const NotificationsPopOver = ({ volume = 1 }) => {
           )}
         </Box>
         <List dense className={classes.tabContainer}>
-          {profile === "admin" && releaseRequests.length > 0 && (
+          {canViewReleaseRequests && releaseRequests.length > 0 && (
             <>
               <ListItem>
                 <ListItemText primary="Solicitações de liberação" />

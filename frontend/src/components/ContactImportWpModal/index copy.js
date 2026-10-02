@@ -1,11 +1,10 @@
-import React, { useEffect, useState, useContext} from 'react';
+import React, { useEffect, useState } from 'react';
 import { Dialog, DialogTitle, DialogActions, Button, Box, } from '@mui/material';
 import { i18n } from '../../translate/i18n';
 import { makeStyles } from '@material-ui/core';
 import api from "../../services/api";
-import { Can } from "../Can";
+import usePermissions from "../../hooks/usePermissions";
 import AttachFileIcon from "@material-ui/icons/AttachFile";
-import { AuthContext } from "../../context/Auth/AuthContext";
 import * as XLSX from "xlsx";
 const useStyles = makeStyles((theme) => ({
   multFieldLine: {
@@ -41,7 +40,7 @@ const useStyles = makeStyles((theme) => ({
 
 const ContactImportWpModal = ({ isOpen, handleClose, selectedTags, hideNum, userProfile }) => {
   const classes = useStyles();
-  const { user, socket } = useContext(AuthContext);
+  const { hasPermission } = usePermissions();
 
   const initialContact = { name: "", number: "", error: "" }
 
@@ -150,23 +149,19 @@ const ContactImportWpModal = ({ isOpen, handleClose, selectedTags, hideNum, user
       <DialogTitle>{i18n.t("Exportar / Importar contatos")}</DialogTitle>
       <div>
         <Box style={{ padding: "0px 10px 10px" }} >
-          <Can
-            role={user.profile}
-            perform="contacts-page:deleteContact"
-            yes={() => (
-              <div className={classes.multFieldLine}>
-                <Button
-                  fullWidth
-                  size="small"
-                  color="primary"
-                  variant="contained"
-                  onClick={() => handleOnExportContacts(false)}
-                >
-                  {i18n.t("contactImportWpModal.title")}
-                </Button>
-              </div>
-            )}
-          />
+          {hasPermission("contacts.delete") && (
+            <div className={classes.multFieldLine}>
+              <Button
+                fullWidth
+                size="small"
+                color="primary"
+                variant="contained"
+                onClick={() => handleOnExportContacts(false)}
+              >
+                {i18n.t("contactImportWpModal.title")}
+              </Button>
+            </div>
+          )}
           <div className={classes.multFieldLine}>
             <Button
               fullWidth

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect } from "react";
 
 import * as Yup from "yup";
 import { Formik, Form, Field } from "formik";
@@ -23,8 +23,7 @@ import { i18n } from "../../translate/i18n";
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
 import QueueSelect from "../QueueSelect";
-import { AuthContext } from "../../context/Auth/AuthContext";
-import { Can } from "../Can";
+import usePermissions from "../../hooks/usePermissions";
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -75,7 +74,7 @@ const ModalUsers = ({ open, onClose, userId, companyId }) => {
     profile: "user",
   };
 
-  const { user: loggedInUser } = useContext(AuthContext);
+  const { hasPermission } = usePermissions();
 
   const [user, setUser] = useState(initialState);
   const [selectedQueueIds, setSelectedQueueIds] = useState([]);
@@ -188,41 +187,33 @@ const ModalUsers = ({ open, onClose, userId, companyId }) => {
                     className={classes.formControl}
                     margin="dense"
                   >
-                    <Can
-                      user={loggedInUser}
-                      perform="users.edit"
-                      yes={() => (
-                        <>
-                          <InputLabel id="profile-selection-input-label">
-                            {i18n.t("userModal.form.profile")}
-                          </InputLabel>
+                    {hasPermission("users.edit") && (
+                      <>
+                        <InputLabel id="profile-selection-input-label">
+                          {i18n.t("userModal.form.profile")}
+                        </InputLabel>
 
-                          <Field
-                            as={Select}
-                            label={i18n.t("userModal.form.profile")}
-                            name="profile"
-                            labelId="profile-selection-label"
-                            id="profile-selection"
-                            required
-                          >
-                            <MenuItem value="admin">Admin</MenuItem>
-                            <MenuItem value="user">User</MenuItem>
-                          </Field>
-                        </>
-                      )}
-                    />
+                        <Field
+                          as={Select}
+                          label={i18n.t("userModal.form.profile")}
+                          name="profile"
+                          labelId="profile-selection-label"
+                          id="profile-selection"
+                          required
+                        >
+                          <MenuItem value="admin">Admin</MenuItem>
+                          <MenuItem value="user">User</MenuItem>
+                        </Field>
+                      </>
+                    )}
                   </FormControl>
                 </div>
-                <Can
-                  user={loggedInUser}
-                  perform="users.edit"
-                  yes={() => (
-                    <QueueSelect
-                      selectedQueueIds={selectedQueueIds}
-                      onChange={(values) => setSelectedQueueIds(values)}
-                    />
-                  )}
-                />
+                {hasPermission("users.edit") && (
+                  <QueueSelect
+                    selectedQueueIds={selectedQueueIds}
+                    onChange={(values) => setSelectedQueueIds(values)}
+                  />
+                )}
               </DialogContent>
               <DialogActions>
                 <Button

@@ -75,7 +75,6 @@ import { AuthContext } from "../../context/Auth/AuthContext";
 import usePlans from "../../hooks/usePlans";
 import { useHistory } from "react-router-dom/cjs/react-router-dom.min";
 import ForbiddenPage from "../../components/ForbiddenPage";
-import { Can } from "../../components/Can";
 import usePermissions from "../../hooks/usePermissions";
 
 // ===== Estilos no padrão do gerenciador de Campanhas/Templates Meta =====
@@ -784,135 +783,115 @@ const Connections = () => {
 
     return (
       <>
-        {whatsApp.status === "qrcode" && isBaileys && (
-          <Can
-            user={user}
-            perform="connections.edit"
-            yes={() => (
-              <Tooltip title={i18n.t("connections.buttons.qrcode")}>
-                <span>
-                  <IconButton
-                    size="small"
-                    color="primary"
-                    onClick={() => handleOpenQrModal(whatsApp)}
-                  >
-                    <QrIcon size={18} />
-                  </IconButton>
-                </span>
-              </Tooltip>
-            )}
-          />
+        {whatsApp.status === "qrcode" && isBaileys && hasPermission("connections.edit") && (
+          <Tooltip title={i18n.t("connections.buttons.qrcode")}>
+            <span>
+              <IconButton
+                size="small"
+                color="primary"
+                onClick={() => handleOpenQrModal(whatsApp)}
+              >
+                <QrIcon size={18} />
+              </IconButton>
+            </span>
+          </Tooltip>
         )}
-        {whatsApp.status === "DISCONNECTED" && (
-          <Can
-            user={user}
-            perform="connections.edit"
-            yes={() => (
+        {whatsApp.status === "DISCONNECTED" && hasPermission("connections.edit") && (
+          <Box display="flex" alignItems="center" style={{ gap: 4, flexWrap: "wrap" }}>
+            <Tooltip
+              title={isBaileys ? i18n.t("connections.buttons.tryAgain") : "Recarregar Conexão"}
+            >
+              <span>
+                <IconButton
+                  size="small"
+                  color="primary"
+                  onClick={() => handleStartWhatsAppSession(whatsApp.id)}
+                >
+                  <ReconnectIcon size={18} />
+                </IconButton>
+              </span>
+            </Tooltip>
+
+            {isBaileys && (
               <>
-                <Box display="flex" alignItems="center" style={{ gap: 4, flexWrap: "wrap" }}>
-                  <Tooltip
-                    title={isBaileys ? i18n.t("connections.buttons.tryAgain") : "Recarregar Conexão"}
-                  >
-                    <span>
-                      <IconButton
-                        size="small"
-                        color="primary"
-                        onClick={() => handleStartWhatsAppSession(whatsApp.id)}
-                      >
-                        <ReconnectIcon size={18} />
-                      </IconButton>
-                    </span>
-                  </Tooltip>
+                <Tooltip title={i18n.t("connections.buttons.newQr")}>
+                  <span>
+                    <IconButton
+                      size="small"
+                      color="secondary"
+                      onClick={() => handleRequestNewQrCode(whatsApp.id)}
+                    >
+                      <NewQrIcon size={18} />
+                    </IconButton>
+                  </span>
+                </Tooltip>
 
-                  {isBaileys && (
-                    <>
-                      <Tooltip title={i18n.t("connections.buttons.newQr")}>
-                        <span>
-                          <IconButton
-                            size="small"
-                            color="secondary"
-                            onClick={() => handleRequestNewQrCode(whatsApp.id)}
-                          >
-                            <NewQrIcon size={18} />
-                          </IconButton>
-                        </span>
-                      </Tooltip>
-
-                      <Tooltip
-                        title={
-                          clearAuthById?.[whatsApp.id]
-                            ? "Limpar sessão: ATIVO"
-                            : "Limpar sessão: inativo"
-                        }
-                      >
-                        <span>
-                          <IconButton
-                            size="small"
-                            color={clearAuthById?.[whatsApp.id] ? "secondary" : "default"}
-                            onClick={() =>
-                              setClearAuthById(prev => ({
-                                ...prev,
-                                [whatsApp.id]: !prev?.[whatsApp.id]
-                              }))
-                            }
-                          >
-                            <ClearSessionIcon size={18} />
-                          </IconButton>
-                        </span>
-                      </Tooltip>
-                    </>
-                  )}
-                </Box>
+                <Tooltip
+                  title={
+                    clearAuthById?.[whatsApp.id]
+                      ? "Limpar sessão: ATIVO"
+                      : "Limpar sessão: inativo"
+                  }
+                >
+                  <span>
+                    <IconButton
+                      size="small"
+                      color={clearAuthById?.[whatsApp.id] ? "secondary" : "default"}
+                      onClick={() =>
+                        setClearAuthById(prev => ({
+                          ...prev,
+                          [whatsApp.id]: !prev?.[whatsApp.id]
+                        }))
+                      }
+                    >
+                      <ClearSessionIcon size={18} />
+                    </IconButton>
+                  </span>
+                </Tooltip>
               </>
             )}
-          />
+          </Box>
         )}
         {(whatsApp.status === "CONNECTED" ||
           whatsApp.status === "PAIRING" ||
-          whatsApp.status === "TIMEOUT") && (
-            <Can
-              user={user}
-              perform="connections.edit"
-              yes={() => (
-                <>
-                  {/* Botão de Sincronização de Histórico - só para Baileys */}
-                  {isBaileys && (
-                    <Tooltip title={syncingById[whatsApp.id] ? "Sincronizando..." : "Sincronizar Histórico"}>
-                      <span>
-                        <IconButton
-                          size="small"
-                          style={{ color: syncingById[whatsApp.id] ? green[500] : "#25D366" }}
-                          onClick={() => handleSyncFullHistory(whatsApp.id)}
-                          disabled={syncingById[whatsApp.id]}
-                        >
-                          {syncingById[whatsApp.id] ? (
-                            <CircularProgress size={18} className={classes.buttonProgress} />
-                          ) : (
-                            <SyncIcon size={18} />
-                          )}
-                        </IconButton>
-                      </span>
-                    </Tooltip>
-                  )}
-
-                  <Tooltip title={i18n.t("connections.buttons.disconnect")}>
-                    <span>
-                      <IconButton
-                        size="small"
-                        color="secondary"
-                        onClick={() => {
-                          handleOpenConfirmationModal("disconnect", whatsApp.id);
-                        }}
-                      >
-                        <DisconnectIcon size={18} />
-                      </IconButton>
-                    </span>
-                  </Tooltip>
-
-                  {renderImportButton(whatsApp)}
-                </>
+          whatsApp.status === "TIMEOUT") && hasPermission("connections.edit") && (
+            <>
+              {/* Botão de Sincronização de Histórico - só para Baileys */}
+              {isBaileys && (
+                <Tooltip title={syncingById[whatsApp.id] ? "Sincronizando..." : "Sincronizar Histórico"}>
+                  <span>
+                    <IconButton
+                      size="small"
+                      style={{ color: syncingById[whatsApp.id] ? green[500] : "#25D366" }}
+                      onClick={() => handleSyncFullHistory(whatsApp.id)}
+                      disabled={syncingById[whatsApp.id]}
+                    >
+                      {syncingById[whatsApp.id] ? (
+                        <CircularProgress size={18} className={classes.buttonProgress} />
+                      ) : (
+                        <SyncIcon size={18} />
+                      )}
+                    </IconButton>
+                  </span>
+                </Tooltip>
               )}
-            />
+
+              <Tooltip title={i18n.t("connections.buttons.disconnect")}>
+                <span>
+                  <IconButton
+                    size="small"
+                    color="secondary"
+                    onClick={() => {
+                      handleOpenConfirmationModal("disconnect", whatsApp.id);
+                    }}
+                  >
+                    <DisconnectIcon size={18} />
+                  </IconButton>
+                </span>
+              </Tooltip>
+
+              {renderImportButton(whatsApp)}
+            </>
           )}
         {whatsApp.status === "OPENING" && (
           <Tooltip title={i18n.t("connections.buttons.connecting")}>
@@ -1121,21 +1100,18 @@ const Connections = () => {
               <PopupState variant="popover" popupId="demo-popup-menu">
                 {(popupState) => (
                   <React.Fragment>
-                    <Can
-                      user={user}
-                      perform="connections.create"
-                      yes={() => (
-                        <>
-                          <Button
-                            variant="contained"
-                            color="primary"
-                            size="small"
-                            startIcon={<AddIcon size={16} />}
-                            {...bindTrigger(popupState)}
-                            style={{ minHeight: 36 }}
-                          >
-                            {i18n.t("connections.newConnection")}
-                          </Button>
+                    {hasPermission("connections.create") && (
+                      <>
+                        <Button
+                          variant="contained"
+                          color="primary"
+                          size="small"
+                          startIcon={<AddIcon size={16} />}
+                          {...bindTrigger(popupState)}
+                          style={{ minHeight: 36 }}
+                        >
+                          {i18n.t("connections.newConnection")}
+                        </Button>
                                 <Menu
                                   {...bindMenu(popupState)}
                                   anchorOrigin={{
@@ -1220,9 +1196,8 @@ const Connections = () => {
                                     WebChat
                                   </MenuItem>
                                 </Menu>
-                              </>
-                          )}
-                        />
+                      </>
+                    )}
                       </React.Fragment>
                     )}
                   </PopupState>
@@ -1373,56 +1348,52 @@ const Connections = () => {
 
                       <div className={classes.cardActions}>
                         {renderActionButtons(whatsApp)}
-                        <Can
-                          user={user}
-                          perform="connections.create"
-                          yes={() => (
-                            <>
-                              <IconButton
-                                size="small"
-                                className={classes.actionButton}
-                                onClick={() => handleEditWhatsApp(whatsApp)}
-                              >
-                                <EditIcon size={18} />
-                              </IconButton>
+                        {hasPermission("connections.create") && (
+                          <>
+                            <IconButton
+                              size="small"
+                              className={classes.actionButton}
+                              onClick={() => handleEditWhatsApp(whatsApp)}
+                            >
+                              <EditIcon size={18} />
+                            </IconButton>
 
-                              {isMeta && (
-                                <Tooltip title="Diagnosticar webhook/token Meta">
-                                  <IconButton
-                                    size="small"
-                                    className={classes.actionButton}
-                                    onClick={() => handleMetaHealth(whatsApp)}
-                                  >
-                                    <HealthIcon size={18} />
-                                  </IconButton>
-                                </Tooltip>
-                              )}
-
-                              {whatsApp.channel === 'whatsapp' && whatsApp.channelType === "official" && (
+                            {isMeta && (
+                              <Tooltip title="Diagnosticar webhook/token Meta">
                                 <IconButton
                                   size="small"
                                   className={classes.actionButton}
-                                  onClick={(e) => {
-                                    e.stopPropagation && e.stopPropagation();
-                                    handleOpenMetaMenu(e);
-                                  }}
+                                  onClick={() => handleMetaHealth(whatsApp)}
                                 >
-                                  <MoreIcon size={18} />
+                                  <HealthIcon size={18} />
                                 </IconButton>
-                              )}
+                              </Tooltip>
+                            )}
 
+                            {whatsApp.channel === 'whatsapp' && whatsApp.channelType === "official" && (
                               <IconButton
                                 size="small"
                                 className={classes.actionButton}
-                                onClick={() => {
-                                  handleOpenConfirmationModal("delete", whatsApp.id);
+                                onClick={(e) => {
+                                  e.stopPropagation && e.stopPropagation();
+                                  handleOpenMetaMenu(e);
                                 }}
                               >
-                                <DeleteIcon size={18} />
+                                <MoreIcon size={18} />
                               </IconButton>
-                            </>
-                          )}
-                        />
+                            )}
+
+                            <IconButton
+                              size="small"
+                              className={classes.actionButton}
+                              onClick={() => {
+                                handleOpenConfirmationModal("delete", whatsApp.id);
+                              }}
+                            >
+                              <DeleteIcon size={18} />
+                            </IconButton>
+                          </>
+                        )}
                       </div>
                     </div>
                   );
@@ -1508,41 +1479,37 @@ const Connections = () => {
                           <TableCell align="center" className={`${classes.bodyCell} ${classes.actionsCell}`}>
                             <Box display="flex" alignItems="center" justifyContent="center">
                               {renderActionButtons(whatsApp)}
-                              <Can
-                                user={user}
-                                perform="connections.create"
-                                yes={() => (
-                                  <>
-                                    <IconButton size="small" onClick={() => handleEditWhatsApp(whatsApp)}>
-                                      <EditIcon size={18} />
-                                    </IconButton>
-                                    {isMeta && (
-                                      <Tooltip title="Diagnosticar webhook/token Meta">
-                                        <IconButton size="small" onClick={() => handleMetaHealth(whatsApp)}>
-                                          <HealthIcon size={18} />
-                                        </IconButton>
-                                      </Tooltip>
-                                    )}
-                                    {whatsApp.channel === 'whatsapp' && whatsApp.channelType === "official" && (
-                                      <IconButton
-                                        size="small"
-                                        onClick={(e) => {
-                                          e.stopPropagation && e.stopPropagation();
-                                          handleOpenMetaMenu(e);
-                                        }}
-                                      >
-                                        <MoreIcon size={18} />
+                              {hasPermission("connections.create") && (
+                                <>
+                                  <IconButton size="small" onClick={() => handleEditWhatsApp(whatsApp)}>
+                                    <EditIcon size={18} />
+                                  </IconButton>
+                                  {isMeta && (
+                                    <Tooltip title="Diagnosticar webhook/token Meta">
+                                      <IconButton size="small" onClick={() => handleMetaHealth(whatsApp)}>
+                                        <HealthIcon size={18} />
                                       </IconButton>
-                                    )}
+                                    </Tooltip>
+                                  )}
+                                  {whatsApp.channel === 'whatsapp' && whatsApp.channelType === "official" && (
                                     <IconButton
                                       size="small"
-                                      onClick={() => handleOpenConfirmationModal("delete", whatsApp.id)}
+                                      onClick={(e) => {
+                                        e.stopPropagation && e.stopPropagation();
+                                        handleOpenMetaMenu(e);
+                                      }}
                                     >
-                                      <DeleteIcon size={18} />
+                                      <MoreIcon size={18} />
                                     </IconButton>
-                                  </>
-                                )}
-                              />
+                                  )}
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleOpenConfirmationModal("delete", whatsApp.id)}
+                                  >
+                                    <DeleteIcon size={18} />
+                                  </IconButton>
+                                </>
+                              )}
                             </Box>
                           </TableCell>
                         </TableRow>
@@ -1610,21 +1577,17 @@ const Connections = () => {
               )}
             </DialogContent>
             <DialogActions>
-              <Can
-                user={user}
-                perform="connections.edit"
-                yes={() => (
-                  <Button
-                    color="primary"
-                    variant="outlined"
-                    disabled={metaHealth.loading || metaHealth.resubscribing}
-                    onClick={handleMetaResubscribe}
-                    startIcon={metaHealth.resubscribing ? <CircularProgress size={14} /> : <SyncIcon size={16} />}
-                  >
-                    {metaHealth.resubscribing ? "Reassinando…" : "Reassinar webhook"}
-                  </Button>
-                )}
-              />
+              {hasPermission("connections.edit") && (
+                <Button
+                  color="primary"
+                  variant="outlined"
+                  disabled={metaHealth.loading || metaHealth.resubscribing}
+                  onClick={handleMetaResubscribe}
+                  startIcon={metaHealth.resubscribing ? <CircularProgress size={14} /> : <SyncIcon size={16} />}
+                >
+                  {metaHealth.resubscribing ? "Reassinando…" : "Reassinar webhook"}
+                </Button>
+              )}
               <Button onClick={() => setMetaHealth({ open: false, loading: false, data: null, name: "" })}>
                 Fechar
               </Button>

@@ -28,7 +28,6 @@ import MainHeaderButtonsWrapper from "../../components/MainHeaderButtonsWrapper"
 import MainContainer from "../../components/MainContainer";
 import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
-import { Can } from "../../components/Can";
 import usePermissions from "../../hooks/usePermissions";
 import NewTicketModal from "../../components/NewTicketModal";
 import { SocketContext } from "../../context/Socket/SocketContext";

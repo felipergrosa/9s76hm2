@@ -648,7 +648,7 @@ const TicketListItem = ({ ticket, isNotification }) => {
                     )}
                 </div>
 
-                {(ticket.status === "pending" && (hasPermission("dashboard.view") || user.profile === "admin")) && (
+                {(ticket.status === "pending" && hasPermission("tickets.close")) && (
                     <IconButton
                         className={isNotification ? classes.bottomButtonNotification : classes.bottomButton}
                         size={isNotification ? "small" : "medium"}

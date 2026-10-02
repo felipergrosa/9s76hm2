@@ -673,6 +673,7 @@ const messages = {
         tabs: {
           general: "Geral",
           permissions: "Permissões",
+          access: "Acesso a dados",
         },
         buttons: {
           okAdd: "Adicionar",

@@ -41,7 +41,6 @@ import NewTicketModal from "../NewTicketModal";
 import BulkProcessTicketsModal from "../BulkProcessTicketsModal";
 import TicketsList from "../TicketsListCustom";
 import TabPanel from "../TabPanel";
-import { Can } from "../Can";
 import TicketsQueueSelect from "../TicketsQueueSelect";
 import { TagsFilter } from "../TagsFilter";
 import { UsersFilter } from "../UsersFilter";
@@ -439,11 +438,8 @@ const ToolbarActions = React.memo(({
 
   return (
     <>
-      <Can
-        user={user}
-        perform="tickets.view-all"
-        yes={() => (
-          <Badge
+      {hasPermission("tickets.view-all") && (
+        <Badge
             color="primary"
             invisible={
               !isHoveredAll ||
@@ -473,8 +469,7 @@ const ToolbarActions = React.memo(({
               )}
             </ToggleButton>
           </Badge>
-        )}
-      />
+      )}
       <Snackbar
         open={snackbarOpen}
         onClose={handleSnackbarClose}
@@ -556,7 +551,7 @@ const ToolbarActions = React.memo(({
           </IconButton>
         </Badge>
       )}
-      {user.profile === "admin" && (
+      {hasPermission("tickets.close") && (
         <Badge
           color="primary"
           invisible={

@@ -629,7 +629,8 @@ const messages = {
         },
         tabs: {
           general: "General",
-          permissions: "Permisos"
+          permissions: "Permisos",
+          access: "Acceso a datos"
         },
         buttons: {
           okAdd: "Agregar",

@@ -973,7 +973,7 @@ const handleCloseTicket = async (id) => {
                                 </Tooltip>
                             )}
 
-                            {((ticket.status === "pending" || ticket.status === "lgpd") && (hasPermission("tickets.close") || user.profile === "admin")) && (
+                            {((ticket.status === "pending" || ticket.status === "lgpd") && hasPermission("tickets.close")) && (
                                 <Tooltip title={i18n.t("ticketsList.buttons.ignore")}>
                                     <IconButton
                                         size="small"

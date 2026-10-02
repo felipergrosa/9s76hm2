@@ -1,6 +1,6 @@
 /* eslint-disable no-unused-vars */
 
-import React, { useState, useEffect, useReducer, useContext } from "react";
+import React, { useState, useEffect, useReducer } from "react";
 import { toast } from "react-toastify";
 
 import { useHistory } from "react-router-dom";
@@ -40,8 +40,7 @@ import { useDate } from "../../hooks/useDate";
 import { SocketContext } from "../../context/Socket/SocketContext";
 import { AddCircle, Build, DevicesFold, TextFields } from "@mui/icons-material";
 import { CircularProgress, Grid, Stack } from "@mui/material";
-import { Can } from "../Can";
-import { AuthContext } from "../../context/Auth/AuthContext";
+import usePermissions from "../../hooks/usePermissions";
 import CampaignModalPhrase from "../CampaignModalPhrase";
 import { colorBackgroundTable, colorLineTable, colorLineTableHover, colorTopTable } from "../../styles/styles";
 
@@ -107,7 +106,7 @@ const CampaignsPhrase = () => {
 
   const history = useHistory();
 
-  const { user } = useContext(AuthContext);
+  const { hasPermission } = usePermissions();
 
   const [loading, setLoading] = useState(true);
   const [pageNumber, setPageNumber] = useState(1);
@@ -293,21 +292,17 @@ const CampaignsPhrase = () => {
                     >
                       <EditIcon style={{ color: "#ededed" }} />
                     </IconButton>
-                    <Can
-                      user={user}
-                      perform="contacts.delete"
-                      yes={() => (
-                        <IconButton
-                          size="small"
-                          onClick={e => {
-                            setConfirmModalOpen(true);
-                            setDeletingContact(flow);
-                          }}
-                        >
-                          <DeleteOutlineIcon style={{ color: "#ededed" }} />
-                        </IconButton>
-                      )}
-                    />
+                    {hasPermission("contacts.delete") && (
+                      <IconButton
+                        size="small"
+                        onClick={e => {
+                          setConfirmModalOpen(true);
+                          setDeletingContact(flow);
+                        }}
+                      >
+                        <DeleteOutlineIcon style={{ color: "#ededed" }} />
+                      </IconButton>
+                    )}
                   </Grid>
                 </Grid>
               ))}

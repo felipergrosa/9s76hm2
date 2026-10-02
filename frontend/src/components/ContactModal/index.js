@@ -196,7 +196,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 	const { hasPermission } = usePermissions();
 	const canEditFields = hasPermission("contacts.edit-fields");
 	const canEditTags = hasPermission("contacts.edit-tags");
-	const canEditWallets = hasPermission("contacts.edit-tags"); // Permissão de tags controla wallets também (são tags #)
+	const canEditWallets = hasPermission("contacts.edit-wallets"); // Carteiras são tags pessoais "#" — backend exige contacts.edit-wallets
 	const canEditRepresentative = hasPermission("contacts.edit-representative");
 
 	useEffect(() => {

@@ -12,7 +12,7 @@ import { WhatsApp, Instagram, Facebook } from "@material-ui/icons";
 import { Tooltip } from "@material-ui/core";
 import { instagramProfileUrl, facebookProfileUrl } from "../../utils/socialProfiles";
 import LazyContactAvatar from "../LazyContactAvatar";
-import { Can } from "../Can";
+import usePermissions from "../../hooks/usePermissions";
 
 // Componente de linha de contato memoizado para evitar re-renderizações desnecessárias
 const ContactRow = memo(({
@@ -28,9 +28,9 @@ const ContactRow = memo(({
   formatPhoneNumber,
   CustomTooltipProps,
   rowStyle,
-  rowIndex,
-  userProfile
+  rowIndex
 }) => {
+  const { hasPermission } = usePermissions();
 
   // isSelected chega via prop (boolean) para manter o memo estável:
   // antes recebia o array selectedContactIds, que mudava a cada seleção
@@ -143,51 +143,41 @@ const ContactRow = memo(({
               <WhatsApp className="w-6 h-6" />
             </button>
           </Tooltip>
-          <Can
-            user={userProfile}
-            perform="contacts.edit"
-            yes={() => (
-              <>
-                <Tooltip {...CustomTooltipProps} title="Editar contato">
-                  <button onClick={() => onEdit(contact.id)} className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
-                    <Edit className="w-5 h-5" />
+          {hasPermission("contacts.edit") && (
+            <>
+              <Tooltip {...CustomTooltipProps} title="Editar contato">
+                <button onClick={() => onEdit(contact.id)} className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
+                  <Edit className="w-5 h-5" />
+                </button>
+              </Tooltip>
+              <Tooltip {...CustomTooltipProps} title={contact.active ? "Bloquear contato" : "Desbloquear contato"}>
+                <button
+                  onClick={() => contact.active ? onBlock(contact) : onUnblock(contact)}
+                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                >
+                  {contact.active ? <Lock className="w-5 h-5" /> : <Unlock className="w-5 h-5" />}
+                </button>
+              </Tooltip>
+              {hasPermission("contacts.delete") && (
+                <Tooltip {...CustomTooltipProps} title="Deletar contato">
+                  <button onClick={() => onDelete(contact)} className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300">
+                    <Trash2 className="w-5 h-5" />
                   </button>
                 </Tooltip>
-                <Tooltip {...CustomTooltipProps} title={contact.active ? "Bloquear contato" : "Desbloquear contato"}>
+              )}
+              {/* Botão de validação - aparece apenas quando name == number */}
+              {contact.name === contact.number && (
+                <Tooltip {...CustomTooltipProps} title="Validar nome no WhatsApp">
                   <button
-                    onClick={() => contact.active ? onBlock(contact) : onUnblock(contact)}
-                    className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                    onClick={() => onValidate(contact.id)}
+                    className="text-orange-600 hover:text-orange-800 dark:text-orange-400 dark:hover:text-orange-300"
                   >
-                    {contact.active ? <Lock className="w-5 h-5" /> : <Unlock className="w-5 h-5" />}
+                    <RefreshCw className="w-5 h-5" />
                   </button>
                 </Tooltip>
-                <Can
-                  user={userProfile}
-                  perform="contacts.delete"
-                  yes={() => (
-                    <Tooltip {...CustomTooltipProps} title="Deletar contato">
-                      <button onClick={() => onDelete(contact)} className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300">
-                        <Trash2 className="w-5 h-5" />
-                      </button>
-                    </Tooltip>
-                  )}
-                  no={() => null}
-                />
-                {/* Botão de validação - aparece apenas quando name == number */}
-                {contact.name === contact.number && (
-                  <Tooltip {...CustomTooltipProps} title="Validar nome no WhatsApp">
-                    <button
-                      onClick={() => onValidate(contact.id)}
-                      className="text-orange-600 hover:text-orange-800 dark:text-orange-400 dark:hover:text-orange-300"
-                    >
-                      <RefreshCw className="w-5 h-5" />
-                    </button>
-                  </Tooltip>
-                )}
-              </>
-            )}
-            no={() => null}
-          />
+              )}
+            </>
+          )}
         </div>
       </td>
     </tr>

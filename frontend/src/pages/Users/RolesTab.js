@@ -10,6 +10,7 @@ import TableCell from "@material-ui/core/TableCell";
 import TableHead from "@material-ui/core/TableHead";
 import TableRow from "@material-ui/core/TableRow";
 import IconButton from "@material-ui/core/IconButton";
+import CircularProgress from "@material-ui/core/CircularProgress";
 import SearchIcon from "@material-ui/icons/Search";
 import TextField from "@material-ui/core/TextField";
 import InputAdornment from "@material-ui/core/InputAdornment";
@@ -19,6 +20,7 @@ import Typography from "@material-ui/core/Typography";
 import AddIcon from "@material-ui/icons/Add";
 import DeleteOutlineIcon from "@material-ui/icons/DeleteOutline";
 import EditIcon from "@material-ui/icons/Edit";
+import FileCopyOutlinedIcon from "@material-ui/icons/FileCopyOutlined";
 import { ShieldCheck } from "lucide-react";
 
 import api from "../../services/api";
@@ -95,6 +97,45 @@ const useStyles = makeStyles((theme) => ({
 const chipBaseClass =
   "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium";
 
+// Permissões dos perfis padrão (seed "Criar perfis padrão").
+// Supervisor = Atendente + permissões extras de supervisão.
+const ATENDENTE_PERMISSIONS = [
+  "tickets.view",
+  "tickets.create",
+  "tickets.update",
+  "tickets.transfer",
+  "tickets.close",
+  "quick-messages.view",
+  "contacts.view",
+  "contacts.create",
+  "contacts.edit",
+  "tags.view",
+  "helps.view",
+  "announcements.view",
+  "internal-chat.view",
+  "kanban.view",
+  "schedules.view",
+  "ai-chat-assistant.use",
+];
+
+const SUPERVISOR_EXTRA_PERMISSIONS = [
+  "tickets.view-all",
+  "tickets.view-all-users",
+  "tickets.view-all-historic",
+  "tickets.delete",
+  "dashboard.view",
+  "reports.view",
+  "realtime.view",
+  "contacts.edit-tags",
+  "contacts.edit-wallets",
+  "contacts.edit-representative",
+  "contacts.import",
+  "contacts.export",
+  "contact-lists.view",
+  "contact-lists.create",
+  "contact-lists.edit",
+];
+
 // Aba "Perfis de Acesso" da página /users — sem página/rota própria.
 // Gate interno: só busca e renderiza se o usuário tiver roles.view.
 const RolesTab = () => {
@@ -105,13 +146,16 @@ const RolesTab = () => {
   const canCreate = hasPermission("roles.create");
   const canEdit = hasPermission("roles.edit");
   const canDelete = hasPermission("roles.delete");
-  const canManage = canEdit || canDelete;
+  // canCreate entra aqui para a coluna Ações exibir o botão "Duplicar"
+  const canManage = canEdit || canDelete || canCreate;
 
   const [loading, setLoading] = useState(false);
   const [searchParam, setSearchParam] = useState("");
   const [roles, dispatch] = useReducer(reducer, []);
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
+  const [duplicateData, setDuplicateData] = useState(null);
+  const [seeding, setSeeding] = useState(false);
   const [deleting, setDeleting] = useState(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
@@ -144,17 +188,78 @@ const RolesTab = () => {
 
   const handleOpenModal = () => {
     setSelectedId(null);
+    setDuplicateData(null);
     setModalOpen(true);
   };
 
   const handleEdit = (role) => {
     setSelectedId(role.id);
+    setDuplicateData(null);
+    setModalOpen(true);
+  };
+
+  // Duplicar: abre o RoleModal pré-preenchido sem roleId → salva via POST /roles
+  const handleDuplicate = (role) => {
+    setSelectedId(null);
+    setDuplicateData({
+      name: `${role.name} (cópia)`,
+      description: role.description || "",
+      permissions: Array.isArray(role.permissions) ? role.permissions : [],
+    });
     setModalOpen(true);
   };
 
   const handleModalClose = () => {
     setModalOpen(false);
+    setDuplicateData(null);
     fetchRoles();
+  };
+
+  // Seed: cria os 3 perfis padrão quando a empresa ainda não tem nenhuma role.
+  // "Administrador" recebe TODAS as permissões do catálogo, exceto as de
+  // gestão de empresas (companies.*) e visão global de conexões (all-connections.*).
+  const handleSeedDefaults = async () => {
+    try {
+      setSeeding(true);
+      const { data: catalog } = await api.get("/permissions/catalog");
+      const adminPermissions = (Array.isArray(catalog) ? catalog : [])
+        .flatMap((c) => (c.permissions || []).map((p) => p.key))
+        .filter(
+          (key) =>
+            !key.startsWith("companies.") && !key.startsWith("all-connections.")
+        );
+
+      const defaults = [
+        {
+          name: "Atendente",
+          description: "Atendimento de tickets, contatos e agenda do dia a dia.",
+          permissions: ATENDENTE_PERMISSIONS,
+        },
+        {
+          name: "Supervisor",
+          description:
+            "Atendente + visão de todos os tickets, relatórios e gestão de contatos.",
+          permissions: [...ATENDENTE_PERMISSIONS, ...SUPERVISOR_EXTRA_PERMISSIONS],
+        },
+        {
+          name: "Administrador",
+          description:
+            "Acesso completo às permissões da empresa (exceto empresas e conexões globais).",
+          permissions: adminPermissions,
+        },
+      ];
+
+      // Sequencial para manter a ordem de criação dos perfis
+      for (const role of defaults) {
+        await api.post("/roles", role);
+      }
+      toast.success("Perfis padrão criados com sucesso");
+      fetchRoles();
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setSeeding(false);
+    }
   };
 
   const handleDelete = async (id) => {
@@ -184,7 +289,12 @@ const RolesTab = () => {
         Usuários que tiverem este perfil atribuído perdem as permissões concedidas
         por ele. Essa ação não pode ser desfeita.
       </ConfirmationModal>
-      <RoleModal open={modalOpen} onClose={handleModalClose} roleId={selectedId} />
+      <RoleModal
+        open={modalOpen}
+        onClose={handleModalClose}
+        roleId={selectedId}
+        initialValues={duplicateData}
+      />
 
       {/* Barra de busca + ação primária (padrão FollowUps/MetaTemplates) */}
       <Box className={classes.toolbar}>
@@ -251,6 +361,19 @@ const RolesTab = () => {
                     Perfis concedem permissões adicionais a usuários, somando-se
                     ao que eles já têm.
                   </Typography>
+                  {!searchParam && canCreate && (
+                    <Button
+                      variant="outlined"
+                      color="primary"
+                      onClick={handleSeedDefaults}
+                      disabled={seeding}
+                      startIcon={
+                        seeding ? <CircularProgress size={16} /> : <AddIcon />
+                      }
+                    >
+                      {seeding ? "Criando perfis..." : "Criar perfis padrão"}
+                    </Button>
+                  )}
                 </Box>
               </TableCell>
             </TableRow>
@@ -274,6 +397,16 @@ const RolesTab = () => {
                 </TableCell>
                 {canManage && (
                   <TableCell align="center" className={classes.bodyCell}>
+                    {canCreate && (
+                      <Tooltip title="Duplicar">
+                        <IconButton
+                          size="small"
+                          onClick={() => handleDuplicate(role)}
+                        >
+                          <FileCopyOutlinedIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    )}
                     {canEdit && (
                       <Tooltip title="Editar">
                         <IconButton size="small" onClick={() => handleEdit(role)}>

@@ -118,6 +118,13 @@ const messages = {
         },
         empty: "No templates found.",
       },
+      userModal: {
+        ...ptMessages.pt.translations.userModal,
+        tabs: {
+          ...ptMessages.pt.translations.userModal.tabs,
+          access: "Data access",
+        },
+      },
       connections: {
         ...ptMessages.pt.translations.connections,
         metaSelect: {

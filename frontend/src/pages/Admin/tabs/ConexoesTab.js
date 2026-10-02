@@ -569,7 +569,8 @@ const ConexoesTab = () => {
     return <ForbiddenPage />;
   }
 
-  const isAdmin = user.profile === "admin";
+  // Coluna de ações: super ou quem pode editar conexões
+  const canEditConnections = user.super === true || hasPermission("connections.edit");
 
   return (
     <Box>
@@ -668,7 +669,7 @@ const ConexoesTab = () => {
                 <TableCell align="center" className={classes.headCell}>
                   {i18n.t("connections.table.lastUpdate")}
                 </TableCell>
-                {isAdmin && (
+                {canEditConnections && (
                   <TableCell align="center" className={classes.headCell}>
                     {i18n.t("connections.table.actions")}
                   </TableCell>
@@ -677,7 +678,7 @@ const ConexoesTab = () => {
             </TableHead>
             <TableBody>
               {loading ? (
-                <TableRowSkeleton columns={isAdmin ? 8 : 7} />
+                <TableRowSkeleton columns={canEditConnections ? 8 : 7} />
               ) : (
                 filteredWhats.map((whatsApp) => (
                   <TableRow key={whatsApp.id} className={classes.rowHover}>
@@ -725,7 +726,7 @@ const ConexoesTab = () => {
                         ? format(parseISO(whatsApp.updatedAt), "dd/MM/yy HH:mm")
                         : "—"}
                     </TableCell>
-                    {isAdmin && (
+                    {canEditConnections && (
                       <TableCell align="center" className={classes.bodyCell}>
                         {renderActionButtons(whatsApp)}
                       </TableCell>

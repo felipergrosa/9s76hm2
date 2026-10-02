@@ -60,7 +60,6 @@ import { WhatsAppsContext } from "../context/WhatsApp/WhatsAppsContext";
 import { AuthContext } from "../context/Auth/AuthContext";
 import { useActiveMenu } from "../context/ActiveMenuContext";
 
-import { Can } from "../components/Can";
 import usePermissions from "../hooks/usePermissions";
 
 import { isArray } from "lodash";
@@ -257,7 +256,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
   const { user, socket } = useContext(AuthContext);
   const { setActiveMenu } = useActiveMenu();
   const location = useLocation();
-  const { hasPermission, hasAnyPermission, isAdmin } = usePermissions();
+  const { hasPermission, hasAnyPermission } = usePermissions();
 
   const [connectionWarning, setConnectionWarning] = useState(false);
   const [openCampaignSubmenu, setOpenCampaignSubmenu] = useState(false);
@@ -596,14 +595,16 @@ const MainListItems = ({ collapsed, drawerClose }) => {
 
       {/* PERFIS DE ACESSO movidos para aba dentro de /users */}
 
-      {/* CAMPOS CUSTOMIZADOS (ADMIN) */}
-      <ListItemLink
-        to="/admin-custom-fields"
-        primary="Campos Customizados"
-        icon={<CustomFieldsIcon />}
-        viewMode={viewMode}
-        tooltip={collapsed}
-      />
+      {/* CAMPOS CUSTOMIZADOS (ADMIN) — backend exige settings.edit */}
+      {hasPermission("settings.edit") && (
+        <ListItemLink
+          to="/admin-custom-fields"
+          primary="Campos Customizados"
+          icon={<CustomFieldsIcon />}
+          viewMode={viewMode}
+          tooltip={collapsed}
+        />
+      )}
 
       {/* 2. CONEXÕES */}
       {hasPermission("connections.view") && (

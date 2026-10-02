@@ -5,7 +5,7 @@ import { instagramProfileUrl, facebookProfileUrl } from "../../utils/socialProfi
 import { Tooltip, Checkbox } from "@material-ui/core";
 import { RadioButtonUnchecked, CheckCircle as CheckCircleIcon } from "@material-ui/icons";
 import LazyContactAvatar from "../LazyContactAvatar";
-import { Can } from "../Can";
+import usePermissions from "../../hooks/usePermissions";
 
 // Componente de card de contato para versão mobile, memoizado para evitar re-renders
 const ContactCard = memo(({
@@ -23,9 +23,9 @@ const ContactCard = memo(({
   onDragSelect,
   onLongPressEnd,
   onTapWhileSelection,
-  isSelected = false,
-  userProfile
+  isSelected = false
 }) => {
+  const { hasPermission } = usePermissions();
   const longPressTimerRef = useRef(null);
   const longPressTriggeredRef = useRef(false);
   const [pressing, setPressing] = useState(false);
@@ -190,33 +190,28 @@ const ContactCard = memo(({
               <WhatsApp className="w-4 h-4" />
             </button>
           </Tooltip>
-          <Can
-            user={userProfile}
-            perform="contacts.delete"
-            yes={() => (
-              <>
-                <Tooltip {...CustomTooltipProps} title="Editar contato">
-                  <button onClick={() => onEdit(contact.id)} className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
-                    <Edit className="w-4 h-4" />
-                  </button>
-                </Tooltip>
-                <Tooltip {...CustomTooltipProps} title={contact.active ? "Bloquear contato" : "Desbloquear contato"}>
-                  <button
-                    onClick={() => contact.active ? onBlock(contact) : onUnblock(contact)}
-                    className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-                  >
-                    {contact.active ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
-                  </button>
-                </Tooltip>
-                <Tooltip {...CustomTooltipProps} title="Deletar contato">
-                  <button onClick={() => onDelete(contact)} className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </Tooltip>
-              </>
-            )}
-            no={() => null}
-          />
+          {hasPermission("contacts.delete") && (
+            <>
+              <Tooltip {...CustomTooltipProps} title="Editar contato">
+                <button onClick={() => onEdit(contact.id)} className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
+                  <Edit className="w-4 h-4" />
+                </button>
+              </Tooltip>
+              <Tooltip {...CustomTooltipProps} title={contact.active ? "Bloquear contato" : "Desbloquear contato"}>
+                <button
+                  onClick={() => contact.active ? onBlock(contact) : onUnblock(contact)}
+                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                >
+                  {contact.active ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                </button>
+              </Tooltip>
+              <Tooltip {...CustomTooltipProps} title="Deletar contato">
+                <button onClick={() => onDelete(contact)} className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </Tooltip>
+            </>
+          )}
         </div>
       </div>
     </div>

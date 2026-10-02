@@ -50,6 +50,7 @@ import Title from "../Title";
 import TableRowSkeleton from "../TableRowSkeleton";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import useCompanies from "../../hooks/useCompanies";
+import usePermissions from "../../hooks/usePermissions";
 import api from "../../services/api";
 import WhatsAppModalAdmin from "../WhatsAppModalAdmin";
 import ConfirmationModal from "../ConfirmationModal";
@@ -127,7 +128,12 @@ const WhatsAppModalCompany = ({
   //console.log(companyInfos,"testeeeee")
   const classes = useStyles();
   const { user, socket } = useContext(AuthContext);
+  const { hasPermission } = usePermissions();
   const { list } = useCompanies();
+
+  // Colunas de sessão e ações: super sempre; demais usuários precisam da permissão
+  const canViewConnections = user.super === true || hasPermission("connections.view");
+  const canEditConnections = user.super === true || hasPermission("connections.edit");
   const [loadingComp, setLoadingComp] = useState(false);
   const [clearAuthById, setClearAuthById] = useState({});
   const { whatsApps, loading } = useContext(WhatsAppsContext);
@@ -576,7 +582,7 @@ const WhatsAppModalCompany = ({
                       <TableCell style={{ color: "#fff" }} align="center">
                         {i18n.t("connections.table.status")}
                       </TableCell>
-                      {user.profile === "admin" && (
+                      {canViewConnections && (
                         <TableCell style={{ color: "#fff" }} align="center">
                           {i18n.t("connections.table.session")}
                         </TableCell>
@@ -587,7 +593,7 @@ const WhatsAppModalCompany = ({
                       <TableCell style={{ color: "#fff" }} align="center">
                         {i18n.t("connections.table.default")}
                       </TableCell>
-                      {user.profile === "admin" && (
+                      {canEditConnections && (
                         <TableCell style={{ color: "#fff" }} align="center">
                           {i18n.t("connections.table.actions")}
                         </TableCell>
@@ -611,7 +617,7 @@ const WhatsAppModalCompany = ({
                               <TableCell align="center">
                                 {renderStatusToolTips(whatsApp)}
                               </TableCell>
-                              {user.profile === "admin" && (
+                              {canViewConnections && (
                                 <TableCell align="center">
                                   {renderActionButtons(whatsApp)}
                                 </TableCell>
@@ -631,7 +637,7 @@ const WhatsAppModalCompany = ({
                                   </div>
                                 )}
                               </TableCell>
-                              {user.profile === "admin" && (
+                              {canEditConnections && (
                                 <TableCell align="center">
                                   <IconButton
                                     size="small"

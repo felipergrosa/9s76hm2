@@ -21,7 +21,6 @@ import {
 
 
 import { format, startOfMonth, endOfMonth } from "date-fns";
-import { Can } from "../../components/Can";
 import KanbanFiltersModal from "./KanbanFiltersModal";
 import Title from "../../components/Title"; // Importando Title
 
@@ -807,13 +806,13 @@ const Kanban = () => {
             </Tooltip>
           )}
 
-          <Can user={user} perform="tags.create" yes={() => (
+          {hasPermission("tags.create") && (
             <Tooltip title="Nova fase">
               <IconButton className={classes.actionButton} color="primary" onClick={openAddLane}>
                 <Add />
               </IconButton>
             </Tooltip>
-          )} />
+          )}
 
           <Tooltip title={i18n.t('kanban.resetColumns')}>
             <IconButton className={classes.actionButton} color="primary" onClick={handleResetHiddenLanes}>

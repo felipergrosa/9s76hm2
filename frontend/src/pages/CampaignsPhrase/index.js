@@ -41,7 +41,6 @@ import { useDate } from "../../hooks/useDate";
 import { SocketContext } from "../../context/Socket/SocketContext";
 import { AddCircle, Build, DevicesFold, TextFields } from "@mui/icons-material";
 import { CircularProgress, Grid, Stack } from "@mui/material";
-import { Can } from "../../components/Can";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import usePermissions from "../../hooks/usePermissions";
 import CampaignModalPhrase from "../../components/CampaignModalPhrase";

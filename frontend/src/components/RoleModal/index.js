@@ -27,13 +27,15 @@ const initialState = {
   permissions: []
 };
 
-const RoleModal = ({ open, onClose, roleId }) => {
+// initialValues: pré-preenche o formulário de criação (usado por "Duplicar")
+// — sempre resulta em POST /roles (nova role), nunca PUT.
+const RoleModal = ({ open, onClose, roleId, initialValues }) => {
   const [role, setRole] = useState(initialState);
 
   useEffect(() => {
     if (!open) return;
     if (!roleId) {
-      setRole(initialState);
+      setRole(initialValues || initialState);
       return;
     }
 
@@ -50,6 +52,7 @@ const RoleModal = ({ open, onClose, roleId }) => {
       }
     };
     fetchRole();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roleId, open]);
 
   const handleClose = () => {

@@ -50,7 +50,6 @@ import MainContainer from "../../components/MainContainer";
 import toastError from "../../errors/toastError";
 
 import { AuthContext } from "../../context/Auth/AuthContext";
-import { Can } from "../../components/Can";
 import NewTicketModal from "../../components/NewTicketModal";
 import PopupState, { bindTrigger, bindMenu } from "material-ui-popup-state";
 import { FormatMask } from "../../utils/FormatMask";
@@ -1131,47 +1130,33 @@ const Contacts = () => {
                                 </PopupState>
                             )}
 
-                            <Can
-                                user={user}
-                                perform="contacts.delete"
-                                yes={() => (
-                                    selectedContactIds.length > 0 ? (
-                                        <Tooltip {...CustomTooltipProps} title={`Deletar (${selectedContactIds.length})`}>
-                                            <button
-                                                onClick={() => setConfirmDeleteManyOpen(true)}
-                                                disabled={loading}
-                                                className="shrink-0 w-10 h-10 flex items-center justify-center text-white bg-red-600 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
-                                                aria-label={`Deletar ${selectedContactIds.length} contato(s)`}
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
-                                        </Tooltip>
-                                    ) : null
-                                )}
-                                no={() => null}
-                            />
+                            {hasPermission("contacts.delete") && selectedContactIds.length > 0 && (
+                                <Tooltip {...CustomTooltipProps} title={`Deletar (${selectedContactIds.length})`}>
+                                    <button
+                                        onClick={() => setConfirmDeleteManyOpen(true)}
+                                        disabled={loading}
+                                        className="shrink-0 w-10 h-10 flex items-center justify-center text-white bg-red-600 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+                                        aria-label={`Deletar ${selectedContactIds.length} contato(s)`}
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                </Tooltip>
+                            )}
 
-                            <Can
-                                user={user}
-                                perform="contacts.bulk-edit"
-                                yes={() => (
-                                    selectedContactIds.length > 0 ? (
-                                        <Tooltip {...CustomTooltipProps} title={`Editar em massa (${selectedContactIds.length})`}>
-                                            <span>
-                                                <button
-                                                    onClick={() => setBulkEditOpen(true)}
-                                                    disabled={loading}
-                                                    className="w-10 h-10 flex items-center justify-center text-white bg-yellow-600 rounded-lg hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                                                    aria-label={`Editar em massa ${selectedContactIds.length} contato(s)`}
-                                                >
-                                                    <Edit className="w-4 h-4" />
-                                                </button>
-                                            </span>
-                                        </Tooltip>
-                                    ) : null
-                                )}
-                                no={() => null}
-                            />
+                            {hasPermission("contacts.bulk-edit") && selectedContactIds.length > 0 && (
+                                <Tooltip {...CustomTooltipProps} title={`Editar em massa (${selectedContactIds.length})`}>
+                                    <span>
+                                        <button
+                                            onClick={() => setBulkEditOpen(true)}
+                                            disabled={loading}
+                                            className="w-10 h-10 flex items-center justify-center text-white bg-yellow-600 rounded-lg hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                            aria-label={`Editar em massa ${selectedContactIds.length} contato(s)`}
+                                        >
+                                            <Edit className="w-4 h-4" />
+                                        </button>
+                                    </span>
+                                </Tooltip>
+                            )}
                             {String(user?.profile || "").toLowerCase() === "admin" && (
                                 <Tooltip {...CustomTooltipProps} title="Deduplicar contatos">
                                     <span>
@@ -1381,32 +1366,24 @@ const Contacts = () => {
                             <div className="flex items-center gap-2">
                                 {selectedContactIds.length > 0 && (
                                     <div className="flex items-center gap-2 mr-2 pr-2 border-r border-blue-200 dark:border-blue-800 animate-in fade-in slide-in-from-right duration-500">
-                                        <Can
-                                            user={user}
-                                            perform="contacts.delete"
-                                            yes={() => (
-                                                <button
-                                                    onClick={() => setConfirmDeleteManyOpen(true)}
-                                                    className="w-8 h-8 flex items-center justify-center text-white bg-red-500 rounded-full shadow-sm"
-                                                    aria-label="Deletar selecionados"
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
-                                            )}
-                                        />
-                                        <Can
-                                            user={user}
-                                            perform="contacts.bulk-edit"
-                                            yes={() => (
-                                                <button
-                                                    onClick={() => setBulkEditOpen(true)}
-                                                    className="w-8 h-8 flex items-center justify-center text-white bg-yellow-500 rounded-full shadow-sm"
-                                                    aria-label="Editar selecionados"
-                                                >
-                                                    <Edit className="w-4 h-4" />
-                                                </button>
-                                            )}
-                                        />
+                                        {hasPermission("contacts.delete") && (
+                                            <button
+                                                onClick={() => setConfirmDeleteManyOpen(true)}
+                                                className="w-8 h-8 flex items-center justify-center text-white bg-red-500 rounded-full shadow-sm"
+                                                aria-label="Deletar selecionados"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        )}
+                                        {hasPermission("contacts.bulk-edit") && (
+                                            <button
+                                                onClick={() => setBulkEditOpen(true)}
+                                                className="w-8 h-8 flex items-center justify-center text-white bg-yellow-500 rounded-full shadow-sm"
+                                                aria-label="Editar selecionados"
+                                            >
+                                                <Edit className="w-4 h-4" />
+                                            </button>
+                                        )}
                                     </div>
                                 )}
                                 <span className="text-xs font-bold text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-800 px-2 py-1 rounded-full">

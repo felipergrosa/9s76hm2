@@ -21,9 +21,6 @@ const useCompanySettings = () => {
 		// Super admin sempre tem tudo
 		if (user?.super === true) return true;
 		
-		// Admin tem acesso a settings
-		if (user?.profile === "admin") return true;
-		
 		// Verifica se tem a permissão específica no array
 		if (Array.isArray(user?.permissions) && user.permissions.length > 0) {
 			// Verifica permissão exata

@@ -29,7 +29,6 @@ import { i18n } from "../../translate/i18n";
 import MainContainer from "../../components/MainContainer";
 import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
-import { Can } from "../../components/Can";
 import useContactLists from "../../hooks/useContactLists";
 import usePermissions from "../../hooks/usePermissions";
 import { Chip, Typography, Tooltip, Popover, Button } from "@material-ui/core";
@@ -1077,20 +1076,16 @@ const ContactListItems = () => {
                                       </button>
                                     </span>
                                   </Tooltip>
-                                  <Can
-                                    user={user}
-                                    perform="contact-lists.edit"
-                                    yes={() => (
-                                      <Tooltip {...CustomTooltipProps} title="Excluir">
-                                        <button
-                                          onClick={() => { setConfirmOpen(true); setDeletingContact(contact); }}
-                                          className="inline-flex items-center justify-center w-6 h-6 leading-none rounded hover:bg-red-50/70 dark:hover:bg-gray-700/40 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-                                        >
-                                          <Trash2 className="w-4 h-4" />
-                                        </button>
-                                      </Tooltip>
-                                    )}
-                                  />
+                                  {hasPermission("contact-lists.edit") && (
+                                    <Tooltip {...CustomTooltipProps} title="Excluir">
+                                      <button
+                                        onClick={() => { setConfirmOpen(true); setDeletingContact(contact); }}
+                                        className="inline-flex items-center justify-center w-6 h-6 leading-none rounded hover:bg-red-50/70 dark:hover:bg-gray-700/40 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </button>
+                                    </Tooltip>
+                                  )}
                                 </div>
                               </td>
                             </tr>
@@ -1218,18 +1213,14 @@ const ContactListItems = () => {
                               </button>
                             </span>
                           </Tooltip>
-                          <Can
-                            user={user}
-                            perform="contact-lists.edit"
-                            yes={() => (
-                              <button
-                                onClick={() => { setConfirmOpen(true); setDeletingContact(contact); }}
-                                className="inline-flex items-center justify-center w-6 h-6 leading-none rounded hover:bg-red-50/70 dark:hover:bg-gray-700/40 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            )}
-                          />
+                          {hasPermission("contact-lists.edit") && (
+                            <button
+                              onClick={() => { setConfirmOpen(true); setDeletingContact(contact); }}
+                              className="inline-flex items-center justify-center w-6 h-6 leading-none rounded hover:bg-red-50/70 dark:hover:bg-gray-700/40 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       </div>
                     );

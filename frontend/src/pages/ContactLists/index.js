@@ -26,7 +26,7 @@ import DownloadIcon from "@material-ui/icons/GetApp";
 import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
 import Title from "../../components/Title";
-import { Can } from "../../components/Can";
+import usePermissions from "../../hooks/usePermissions";
 
 import api from "../../services/api";
 import { i18n } from "../../translate/i18n";
@@ -172,6 +172,7 @@ const ContactLists = () => {
   const [contactLists, dispatch] = useReducer(reducer, []);
   //   const socketManager = useContext(SocketContext);
   const { user, socket } = useContext(AuthContext);
+  const { hasPermission } = usePermissions();
 
   // Popover de detalhes do filtro salvo
   const [detailsAnchorEl, setDetailsAnchorEl] = useState(null);
@@ -407,7 +408,7 @@ const ContactLists = () => {
                   }}
                 />
               </Grid>
-              <Can user={user} perform="contact-lists.create" yes={() => (
+              {hasPermission("contact-lists.create") && (
                 <Grid item xs={12} sm="auto">
                   <Button
                     fullWidth={isMobile}
@@ -420,7 +421,7 @@ const ContactLists = () => {
                     {i18n.t("contactLists.buttons.add")}
                   </Button>
                 </Grid>
-              )} />
+              )}
             </Grid>
           </Grid>
         </Grid>
@@ -493,7 +494,7 @@ const ContactLists = () => {
                 >
                   <PeopleIcon />
                 </IconButton>
-                <Can user={user} perform="contact-lists.edit" yes={() => (
+                {hasPermission("contact-lists.edit") && (
                   <IconButton
                     size="small"
                     className={classes.actionButton}
@@ -501,8 +502,8 @@ const ContactLists = () => {
                   >
                     <EditIcon />
                   </IconButton>
-                )} />
-                <Can user={user} perform="contact-lists.delete" yes={() => (
+                )}
+                {hasPermission("contact-lists.delete") && (
                   <IconButton
                     size="small"
                     className={classes.actionButton}
@@ -513,7 +514,7 @@ const ContactLists = () => {
                   >
                     <DeleteOutlineIcon />
                   </IconButton>
-                )} />
+                )}
                 <IconButton size="small" className={classes.actionButton} component="a" href={planilhaExemplo} download="planilha.xlsx" title="Baixar Planilha Exemplo">
                   <DownloadIcon />
                 </IconButton>
@@ -598,16 +599,16 @@ const ContactLists = () => {
                         <PeopleIcon />
                       </IconButton>
 
-                      <Can user={user} perform="contact-lists.edit" yes={() => (
+                      {hasPermission("contact-lists.edit") && (
                         <IconButton
                           size="small"
                           onClick={() => handleEditContactList(contactList)}
                         >
                           <EditIcon />
                         </IconButton>
-                      )} />
+                      )}
 
-                      <Can user={user} perform="contact-lists.delete" yes={() => (
+                      {hasPermission("contact-lists.delete") && (
                         <IconButton
                           size="small"
                           onClick={() => {
@@ -617,7 +618,7 @@ const ContactLists = () => {
                         >
                           <DeleteOutlineIcon />
                         </IconButton>
-                      )} />
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

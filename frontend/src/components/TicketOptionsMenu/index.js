@@ -10,7 +10,7 @@ import api from "../../services/api";
 import ConfirmationModal from "../ConfirmationModal";
 import TransferTicketModalCustom from "../TransferTicketModalCustom";
 import toastError from "../../errors/toastError";
-import { Can } from "../Can";
+import usePermissions from "../../hooks/usePermissions";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import ScheduleModal from "../ScheduleModal";
 
@@ -20,6 +20,7 @@ const TicketOptionsMenu = ({ ticket, menuOpen, handleClose, anchorEl }) => {
 	const [transferToBotModalOpen, setTransferToBotModalOpen] = useState(false);
 	const isMounted = useRef(true);
 	const { user } = useContext(AuthContext);
+	const { hasPermission } = usePermissions();
 	const history = useHistory();
 	const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
 	const [contactId, setContactId] = useState(null);
@@ -147,15 +148,11 @@ const TicketOptionsMenu = ({ ticket, menuOpen, handleClose, anchorEl }) => {
 					/>
 					{i18n.t("ticketOptionsMenu.acceptAudioMessage")}
 				</MenuItem>
-				<Can
-					user={user}
-					perform="tickets.delete"
-					yes={() => (
-						<MenuItem onClick={handleOpenConfirmationModal}>
-							{i18n.t("ticketOptionsMenu.delete")}
-						</MenuItem>
-					)}
-				/>
+				{hasPermission("tickets.delete") && (
+					<MenuItem onClick={handleOpenConfirmationModal}>
+						{i18n.t("ticketOptionsMenu.delete")}
+					</MenuItem>
+				)}
 			</Menu>
 			<ConfirmationModal
 				title={`${i18n.t("ticketOptionsMenu.confirmationModal.title")} ${ticket.contact.name

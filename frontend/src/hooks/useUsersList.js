@@ -14,7 +14,6 @@ const useUsersList = (autoLoad = true) => {
     // Verificação de permissão
     const hasPermission = useCallback((permission) => {
         if (user?.super === true) return true;
-        if (user?.profile === "admin") return true;
         
         if (Array.isArray(user?.permissions) && user.permissions.length > 0) {
             if (user.permissions.includes(permission)) return true;

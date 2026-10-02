@@ -200,7 +200,7 @@ const Routes = () => {
                 <PrivateRoute exact path="/meta-templates" component={MetaTemplates} permission="meta-templates.view" />
                 <PrivateRoute exact path="/lead-scraper" component={LeadScraper} permission="contacts.import" />
                 <PrivateRoute exact path="/knowledge-base" component={KnowledgeBase} permission="helps.view" />
-                <PrivateRoute exact path="/admin-custom-fields" component={AdminCustomFields} permission="contacts.edit" />
+                <PrivateRoute exact path="/admin-custom-fields" component={AdminCustomFields} permission="settings.edit" />
 
                 <PrivateRoute exact path="/messages-api" component={MessagesAPI} permission="external-api.view" />
                 <PrivateRoute exact path="/settings" component={SettingsCustom} permission="settings.view" />

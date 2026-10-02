@@ -40,17 +40,8 @@ const usePermissions = () => {
       });
     }
 
-    // FALLBACK: usa sistema antigo (profile + flags)
-    // Admin tem tudo (exceto super)
-    if (user.profile === "admin") {
-      // Admin não tem permissões de super (companies, all-connections)
-      if (permission.startsWith("companies.") || permission === "all-connections.view") {
-        return false;
-      }
-      return true;
-    }
-
     // FALLBACK: Verifica flags antigas (Sistema Legado)
+    // Nota: admin recebe as permissões via user.permissions (set efetivo calculado no backend)
     // Mapeamento completo: flag legada → permissões granulares equivalentes
     const legacyMap = {
       "dashboard.view": user.showDashboard === "enabled",

@@ -162,6 +162,9 @@ const AllConnections = () => {
     history.push("/tickets")
   }
 
+  // Coluna de ações: super ou quem pode editar conexões
+  const canEditConnections = user.super === true || hasPermission("connections.edit");
+
 
   useEffect(() => {
     setLoadingWhatsapp(true);
@@ -598,7 +601,7 @@ const AllConnections = () => {
                       <TableCell style={{ color: "#fff" }} align="center">
                         {i18n.t("Total de Conexões")}
                       </TableCell>
-                      {user.profile === "admin" && (
+                      {canEditConnections && (
                         <TableCell style={{ color: "#fff" }} align="center">
                           {i18n.t("connections.table.actions")}
                         </TableCell>
@@ -625,7 +628,7 @@ const AllConnections = () => {
                             <TableCell align="center">
                               {whats?.length && whats.filter((item) => item?.companyId === company?.id).length}
                             </TableCell>
-                            {user.profile === "admin" && (
+                            {canEditConnections && (
                               <TableCell align="center">
                                 <IconButton
                                   size="small"
@@ -651,7 +654,7 @@ const AllConnections = () => {
                           <TableCell style={{ color: "#fff" }} align="center">
                             {whats?.length && whats.length}
                           </TableCell>
-                          {user.profile === "admin" && <TableCell style={{ color: "#fff" }} align="center"></TableCell>}
+                          {canEditConnections && <TableCell style={{ color: "#fff" }} align="center"></TableCell>}
                         </TableRow>
                       </>
                     )}

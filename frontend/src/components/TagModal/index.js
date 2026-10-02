@@ -21,6 +21,7 @@ import { i18n } from "../../translate/i18n";
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
+import usePermissions from "../../hooks/usePermissions";
 import { FormControl, IconButton, InputAdornment, InputLabel, MenuItem, Select, Typography, Paper, Divider, Chip, Box } from "@material-ui/core";
 import { Grid } from "@material-ui/core";
 import Autocomplete from '@material-ui/lab/Autocomplete';
@@ -87,6 +88,9 @@ const TagSchema = Yup.object().shape({
 const TagModal = ({ open, onClose, tagId, kanban }) => {
 	const classes = useStyles();
 	const { user } = useContext(AuthContext);
+	const { hasPermission } = usePermissions();
+	// Lista de usuários e select "Dono da Tag" exigem users.view
+	const canViewUsers = hasPermission("users.view");
 	const [colorPickerModalOpen, setColorPickerModalOpen] = useState(false);
 	const [lanes, setLanes] = useState([]);
 	const [loading, setLoading] = useState(false);
@@ -101,7 +105,7 @@ const TagModal = ({ open, onClose, tagId, kanban }) => {
 	const [users, setUsers] = useState([]);
 
 	useEffect(() => {
-		if (user.profile === "admin") {
+		if (canViewUsers) {
 			const fetchUsers = async () => {
 				try {
 					// Usa /users/list que não requer permissão users.view
@@ -116,7 +120,7 @@ const TagModal = ({ open, onClose, tagId, kanban }) => {
 			};
 			fetchUsers();
 		}
-	}, [user]);
+	}, [user, canViewUsers]);
 
 	const fetchFieldValues = async fieldName => {
 		if (!fieldName) return;
@@ -524,7 +528,7 @@ const TagModal = ({ open, onClose, tagId, kanban }) => {
 										)}
 									</Grid>
 
-									{user.profile === 'admin' && (
+									{canViewUsers && (
 										<Grid item xs={12} md={12} xl={12}>
 											<FormControl variant="outlined" margin="dense" fullWidth>
 												<InputLabel>Workspace (Dono da Tag)</InputLabel>

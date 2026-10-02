@@ -633,6 +633,7 @@ const messages = {
         tabs: {
           general: "Genel",
           permissions: "İzinler",
+          access: "Veri erişimi",
         },
         buttons: {
           okAdd: "Ekle",

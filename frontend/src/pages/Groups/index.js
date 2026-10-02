@@ -262,7 +262,7 @@ const Groups = () => {
     };
 
     const { hasPermission: checkPerm } = usePermissions();
-    const canViewGroups = checkPerm("tickets.view-groups") || user.profile === "admin" || user.super;
+    const canViewGroups = checkPerm("tickets.view-groups");
 
     const isConnected = (status) =>
         status === "CONNECTED" || status === "qrcode" || status === "OPENING";

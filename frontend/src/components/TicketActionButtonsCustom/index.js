@@ -1,7 +1,7 @@
 import React, { useContext, useState, useEffect, useRef, lazy, Suspense } from "react";
 import { useHistory } from "react-router-dom";
 
-import { Can } from "../Can";
+import usePermissions from "../../hooks/usePermissions";
 import { makeStyles } from "@material-ui/core/styles";
 import { IconButton, Menu, Hidden } from "@material-ui/core";
 import {
@@ -104,6 +104,7 @@ const TicketActionButtonsCustom = ({ ticket, onSearchClick
     const [isMounted, setIsMounted] = useState(true);
     const [loading, setLoading] = useState(false);
     const { user } = useContext(AuthContext);
+    const { hasPermission } = usePermissions();
     const { setCurrentTicket, setTabOpen } = useContext(TicketsContext);
     const [open, setOpen] = React.useState(false);
     const formRef = React.useRef(null);
@@ -600,13 +601,7 @@ const TicketActionButtonsCustom = ({ ticket, onSearchClick
                     )}
                     <MenuItem onClick={handleOpenConfirmationModal}>
                         <DeleteForeverIcon style={{ color: '#d32f2f', marginRight: 10 }} />
-                        <Can
-                            user={user}
-                            perform="tickets.delete"
-                            yes={() => (
-                                i18n.t("tickets.buttons.deleteTicket")
-                            )}
-                        />
+                        {hasPermission("tickets.delete") && i18n.t("tickets.buttons.deleteTicket")}
                     </MenuItem>
                     <MenuItem onClick={handleEnableIntegration}>
                         <DeviceHubOutlined style={{ color: enableIntegration ? '#ef5350' : '#00897b', marginRight: 10 }} />
