@@ -74,85 +74,55 @@ const PrivateRoute = ({
 	const { isAuth, loading, user } = useContext(AuthContext);
 	const { hasPermission, hasAllPermissions, hasAnyPermission } = usePermissions();
 
-	// Aguarda carregamento completo do usuário antes de verificar permissões
-	// Isso evita race condition onde hasPermission retorna false temporariamente
-	if (loading || !user || !user.id) {
-		return (
-			<>
-				<BackdropLoading />
-			</>
-		);
-	}
+	// Os PrivateRoutes ficam FORA de <Switch> (irmãos dentro de LoggedInLayout),
+	// então TODOS são montados em qualquer URL. Toda verificação precisa ficar
+	// dentro do render da Route — que só executa quando o path realmente bate.
+	// Antes, o Redirect de negação disparava em toda página e jogava o usuário
+	// para /tickets com o toast do último route negado.
+	const denied = (message) => (
+		<Redirect
+			to={{
+				pathname: "/tickets",
+				state: {
+					error: "ERR_NO_PERMISSION",
+					message,
+				}
+			}}
+		/>
+	);
 
-	// Verifica autenticação
-	if (!isAuth) {
-		return (
-			<>
-				<Redirect to={{ pathname: "/login", state: { from: rest.location } }} />
-			</>
-		);
-	}
-
-	// Se não requer permissão específica, renderiza normalmente
-	if (!permission && permissions.length === 0) {
-		return (
-			<>
-				<RouterRoute {...rest} component={Component} />
-			</>
-		);
-	}
-
-	// Verifica permissão única
-	if (permission) {
-		const hasPerm = hasPermission(permission);
-		if (!hasPerm) {
-			return (
-				<>
-					<Redirect 
-						to={{ 
-							pathname: "/tickets", 
-							state: { 
-								error: "ERR_NO_PERMISSION",
-								message: `Você não tem permissão para acessar ${getPermissionLabel(permission)}.`,
-								from: rest.location 
-							} 
-						}} 
-					/>
-				</>
-			);
-		}
-	}
-
-	// Verifica múltiplas permissões
-	if (permissions.length > 0) {
-		const hasRequiredPermissions = requireAll 
-			? hasAllPermissions(permissions)
-			: hasAnyPermission(permissions);
-
-		if (!hasRequiredPermissions) {
-			const labels = permissions.map(getPermissionLabel).join(" ou ");
-			return (
-				<>
-					<Redirect 
-						to={{ 
-							pathname: "/tickets", 
-							state: { 
-								error: "ERR_NO_PERMISSION",
-								message: `Você não tem permissão para acessar ${labels}.`,
-								from: rest.location 
-							} 
-						}} 
-					/>
-				</>
-			);
-		}
-	}
-
-	// Usuário autenticado e com permissão
 	return (
-		<>
-			<RouterRoute {...rest} component={Component} />
-		</>
+		<RouterRoute
+			{...rest}
+			render={(props) => {
+				// Aguarda carregamento completo do usuário antes de verificar
+				// permissões — evita race condition onde hasPermission retorna
+				// false temporariamente
+				if (loading || !user || !user.id) {
+					return <BackdropLoading />;
+				}
+
+				if (!isAuth) {
+					return <Redirect to={{ pathname: "/login", state: { from: props.location } }} />;
+				}
+
+				if (permission && !hasPermission(permission)) {
+					return denied(`Você não tem permissão para acessar ${getPermissionLabel(permission)}.`);
+				}
+
+				if (permissions.length > 0) {
+					const ok = requireAll
+						? hasAllPermissions(permissions)
+						: hasAnyPermission(permissions);
+					if (!ok) {
+						const labels = permissions.map(getPermissionLabel).join(" ou ");
+						return denied(`Você não tem permissão para acessar ${labels}.`);
+					}
+				}
+
+				return <Component {...props} />;
+			}}
+		/>
 	);
 };
 
