@@ -135,6 +135,8 @@ const useStyles = makeStyles((theme) => ({
     flex: 1,
     padding: 0,
     overflow: "hidden",
+    display: "flex",
+    flexDirection: "column",
     borderRadius: 12,
     border: `1px solid ${theme.palette.divider}`,
     backgroundColor: theme.palette.background.paper,
@@ -221,6 +223,13 @@ const useStyles = makeStyles((theme) => ({
     padding: theme.spacing(8, 2),
     color: theme.palette.text.secondary,
     textAlign: "center",
+  },
+  // Área rolável do conteúdo — mantém header/toolbar fixos no topo do Paper
+  listScroll: {
+    flex: 1,
+    minHeight: 0,
+    overflowY: "auto",
+    ...theme.scrollbarStyles,
   },
   // Caixa de ajuda explicando a hierarquia de tags
   helpBox: {
@@ -330,7 +339,7 @@ const Tags = () => {
   const theme = useTheme();
   const { user, socket } = useContext(AuthContext);
 
-  const [selectedTagContacts, setSelectedTagContacts] = useState([]);
+  const [, setSelectedTagContacts] = useState([]);
   const [contactModalOpen, setContactModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selectedTagName, setSelectedTagName] = useState("");
@@ -616,6 +625,8 @@ const Tags = () => {
             </FormControl>
           </div>
 
+          {/* Conteúdo rolável: caixa de ajuda + categorias de tags */}
+          <div className={classes.listScroll}>
           {/* Caixa de ajuda — explica a hierarquia de tags por quantidade de '#' */}
           <Box className={classes.helpBox}>
             <InfoIcon size={20} style={{ flexShrink: 0, marginTop: 2 }} />
@@ -816,6 +827,7 @@ const Tags = () => {
               );
             })
           )}
+          </div>
         </Paper>
       )}
     </MainContainer>

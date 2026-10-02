@@ -2,6 +2,11 @@ import React, { useState, useEffect, useReducer, useCallback, useContext } from 
 import { toast } from "react-toastify";
 import { useHistory } from "react-router-dom";
 import { format } from "date-fns";
+import moment from "moment";
+import { Calendar, momentLocalizer } from "react-big-calendar";
+import "moment/locale/pt-br";
+import "react-big-calendar/lib/css/react-big-calendar.css";
+import "./Schedules.css";
 import { makeStyles, useTheme } from "@material-ui/core/styles";
 import {
   Button,
@@ -24,6 +29,8 @@ import {
   Trash2 as DeleteIcon,
   Plus as AddIcon,
   CalendarClock as ScheduleIcon,
+  Calendar as CalendarViewIcon,
+  List as ListViewIcon,
 } from "lucide-react";
 
 import MainContainer from "../../components/MainContainer";
@@ -44,6 +51,35 @@ function getUrlParam(paramName) {
   const searchParams = new URLSearchParams(window.location.search);
   return searchParams.get(paramName);
 }
+
+// ===== Calendário (react-big-calendar) =====
+const localizer = momentLocalizer(moment);
+
+const calendarMessages = {
+  date: "Data",
+  time: "Hora",
+  event: "Evento",
+  allDay: "Dia Todo",
+  week: "Semana",
+  work_week: "Agendamentos",
+  day: "Dia",
+  month: "Mês",
+  previous: "Anterior",
+  next: "Próximo",
+  yesterday: "Ontem",
+  tomorrow: "Amanhã",
+  today: "Hoje",
+  agenda: "Agenda",
+  noEventsInRange: "Não há agendamentos no período.",
+  showMore: (total) => `+${total} mais`,
+};
+
+const eventTitleStyle = {
+  fontSize: "14px",
+  overflow: "hidden",
+  whiteSpace: "nowrap",
+  textOverflow: "ellipsis",
+};
 
 // Status → chip tailwind (valores definidos no backend: PENDENTE/ENVIADA/ERRO — ver queues.ts)
 const scheduleStatusInfo = (status) => {
@@ -313,6 +349,50 @@ const useStyles = makeStyles((theme) => ({
     minWidth: 44,
     minHeight: 44,
   },
+  // Área do calendário dentro do container rolável
+  calendarWrapper: {
+    padding: theme.spacing(1, 2, 2),
+    height: "100%",
+    minHeight: 420,
+    "& .rbc-calendar": {
+      height: "100%",
+      minHeight: 420,
+    },
+  },
+  // Cores da toolbar do react-big-calendar conforme o tema (claro/escuro)
+  calendarToolbar: {
+    "& .rbc-toolbar-label": {
+      color: theme.palette.text.primary,
+      fontWeight: 600,
+    },
+    "& .rbc-btn-group button": {
+      color: theme.palette.text.secondary,
+      "&.rbc-active": {
+        color: theme.palette.text.primary,
+      },
+    },
+    "& .rbc-header, & .rbc-date-cell, & .rbc-agenda-date-cell, & .rbc-agenda-time-cell": {
+      color: theme.palette.text.secondary,
+    },
+    "& .rbc-today": {
+      backgroundColor:
+        theme.palette.type === "dark"
+          ? "rgba(255,255,255,0.08)"
+          : "rgba(25,118,210,0.08)",
+    },
+    "& .rbc-off-range-bg": {
+      backgroundColor:
+        theme.palette.type === "dark"
+          ? "rgba(255,255,255,0.02)"
+          : "rgba(0,0,0,0.03)",
+    },
+    "& .rbc-month-view, & .rbc-time-view, & .rbc-agenda-view": {
+      borderColor: theme.palette.divider,
+    },
+    "& .rbc-day-bg, & .rbc-time-slot, & .rbc-timeslot-group": {
+      borderColor: theme.palette.divider,
+    },
+  },
 }));
 
 const Schedules = () => {
@@ -329,6 +409,8 @@ const Schedules = () => {
   const [deletingSchedule, setDeletingSchedule] = useState(null);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [searchParam, setSearchParam] = useState("");
+  // Visão padrão: calendário (o usuário pode alternar para a lista)
+  const [viewMode, setViewMode] = useState("calendar");
   const [schedules, dispatch] = useReducer(reducer, []);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [contactId, setContactId] = useState(+getUrlParam("contactId"));
@@ -540,7 +622,7 @@ const Schedules = () => {
             </div>
           </div>
 
-          {/* Toolbar: busca server-side (mesmo searchParam/handler, debounce já existente) */}
+          {/* Toolbar: busca server-side (mesmo searchParam/handler) + alternância Calendário/Lista */}
           <div className={classes.toolbar}>
             <TextField
               className={classes.searchField}
@@ -557,11 +639,84 @@ const Schedules = () => {
                 ),
               }}
             />
+            <Box display="flex" alignItems="center" style={{ gap: 4, marginLeft: "auto" }}>
+              <Tooltip title="Calendário">
+                <IconButton
+                  size="small"
+                  color={viewMode === "calendar" ? "primary" : "default"}
+                  onClick={() => setViewMode("calendar")}
+                >
+                  <CalendarViewIcon size={18} />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Lista">
+                <IconButton
+                  size="small"
+                  color={viewMode === "list" ? "primary" : "default"}
+                  onClick={() => setViewMode("list")}
+                >
+                  <ListViewIcon size={18} />
+                </IconButton>
+              </Tooltip>
+            </Box>
           </div>
 
           {/* Conteúdo rolável — o onScroll do infinite scroll fica neste container */}
           <div className={classes.listScroll} onScroll={handleScroll}>
-            {loading && schedules.length === 0 ? (
+            {viewMode === "calendar" ? (
+              loading && schedules.length === 0 ? (
+                <Table size="small">
+                  <TableBody>
+                    <TableRowSkeleton columns={6} />
+                  </TableBody>
+                </Table>
+              ) : (
+                <div className={`${classes.calendarWrapper} ${classes.calendarToolbar}`}>
+                  <Calendar
+                    messages={calendarMessages}
+                    culture="pt-br"
+                    formats={{
+                      agendaDateFormat: "DD/MM ddd",
+                      weekdayFormat: "dddd",
+                    }}
+                    localizer={localizer}
+                    events={schedules.map((schedule) => ({
+                      title: (
+                        <div key={schedule.id} className="event-container">
+                          <div style={eventTitleStyle}>
+                            {schedule?.contact?.name}
+                          </div>
+                          {canDelete && (
+                            <DeleteIcon
+                              size={14}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleConfirmDeleteSchedule(schedule);
+                              }}
+                              className="delete-icon"
+                            />
+                          )}
+                          {canEdit && (
+                            <EditIcon
+                              size={14}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditSchedule(schedule);
+                              }}
+                              className="edit-icon"
+                            />
+                          )}
+                        </div>
+                      ),
+                      start: new Date(schedule.sendAt),
+                      end: new Date(schedule.sendAt),
+                    }))}
+                    startAccessor="start"
+                    endAccessor="end"
+                  />
+                </div>
+              )
+            ) : loading && schedules.length === 0 ? (
               <Table size="small">
                 <TableBody>
                   <TableRowSkeleton columns={6} />
