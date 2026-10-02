@@ -292,23 +292,23 @@ const Users = () => {
   const canDeleteUser = hasPermission("users.delete");
   const canViewPage = canViewUsers || canViewRoles;
 
-  // Perfis são a primeira aba: o multitenant depende deles.
-  // Quem só tem users.view cai direto na aba de usuários.
-  const [tab, setTab] = useState(canViewRoles ? "roles" : "users");
+  // Usuários é a primeira aba (o uso do dia a dia); quem só tem
+  // roles.view cai direto na aba de perfis.
+  const [tab, setTab] = useState(canViewUsers ? "users" : "roles");
   // Flag: usuário já trocou de aba manualmente (não sobrescrever a escolha dele)
   const tabTouched = useRef(false);
 
   // Corrige a aba ativa quando as permissões não cobrem a aba selecionada.
   // Se as permissões resolverem depois do mount e o usuário ainda não
-  // interagiu, posiciona na primeira aba disponível (perfis primeiro).
+  // interagiu, posiciona na primeira aba disponível (usuários primeiro).
   useEffect(() => {
     if (tabTouched.current) {
-      if (tab === "roles" && !canViewRoles) setTab("users");
       if (tab === "users" && !canViewUsers && canViewRoles) setTab("roles");
+      if (tab === "roles" && !canViewRoles && canViewUsers) setTab("users");
       return;
     }
-    if (canViewRoles && tab !== "roles") setTab("roles");
-    else if (!canViewRoles && canViewUsers && tab !== "users") setTab("users");
+    if (canViewUsers && tab !== "users") setTab("users");
+    else if (!canViewUsers && canViewRoles && tab !== "roles") setTab("roles");
   }, [tab, canViewRoles, canViewUsers]);
 
   const handleTabChange = (_, newTab) => {
@@ -517,24 +517,19 @@ const Users = () => {
             onChange={handleTabChange}
             className={classes.tabs}
           >
-            {canViewRoles && (
-              <Tab
-                value="roles"
-                label={<TabLabel icon={<ShieldCheck />} label="Perfis de Acesso" />}
-              />
-            )}
             {canViewUsers && (
               <Tab
                 value="users"
                 label={<TabLabel icon={<UsersIcon />} label={i18n.t("users.title")} />}
               />
             )}
+            {canViewRoles && (
+              <Tab
+                value="roles"
+                label={<TabLabel icon={<ShieldCheck />} label="Perfis de Acesso" />}
+              />
+            )}
           </Tabs>
-
-          {/* ── Aba: Perfis de Acesso ── */}
-          <TabPanel value={tab} name="roles">
-            <RolesTab />
-          </TabPanel>
 
           {/* ── Aba: Usuários ── */}
           <TabPanel value={tab} name="users">
@@ -801,6 +796,11 @@ const Users = () => {
                 </nav>
               </>
             )}
+          </TabPanel>
+
+          {/* ── Aba: Perfis de Acesso ── */}
+          <TabPanel value={tab} name="roles">
+            <RolesTab />
           </TabPanel>
         </Paper>
       ) : <ForbiddenPage />}
