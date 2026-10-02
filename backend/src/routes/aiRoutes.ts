@@ -1,6 +1,6 @@
 import express from "express";
 import isAuth from "../middleware/isAuth";
-import { checkPermission } from "../middleware/checkPermission";
+import { checkPermission, checkAnyPermission } from "../middleware/checkPermission";
 import * as AiController from "../controllers/AiController";
 import * as AIOrchestatorController from "../controllers/AIOrchestatorController";
 import * as AISandboxController from "../controllers/AISandboxController";
@@ -16,7 +16,9 @@ const routes = express.Router();
 // Rotas existentes (mantidas para compatibilidade)
 routes.post("/ai/generate-campaign-messages", isAuth, checkPermission("ai-settings.view"), AiController.generateCampaignMessages);
 routes.get("/ai/encryption-status", isAuth, checkPermission("ai-settings.view"), AiController.encryptionStatus);
-routes.post("/ai/transform", isAuth, checkPermission("ai-settings.view"), AiController.transformText);
+// O ChatAssistantPanel (assistente no input de mensagem) usa este endpoint e é
+// gateado no frontend por "ai-chat-assistant.use" — aceita qualquer uma das duas.
+routes.post("/ai/transform", isAuth, checkAnyPermission(["ai-chat-assistant.use", "ai-settings.view"]), AiController.transformText);
 routes.get("/ai/models", isAuth, checkPermission("ai-settings.view"), AiController.listModels);
 
 // Rotas para gerenciamento de presets

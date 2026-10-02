@@ -98,10 +98,7 @@ export const update = async (
   req: Request,
   res: Response
 ): Promise<Response> => {
-  if (req.user.profile !== "admin") {
-    throw new AppError("ERR_NO_PERMISSION", 403);
-  }
-
+  // Autorização feita na rota via checkPermission("schedules.edit").
   const { scheduleId } = req.params;
   const scheduleData = req.body;
   const { companyId } = req.user;

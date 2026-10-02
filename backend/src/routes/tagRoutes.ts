@@ -1,6 +1,6 @@
 import express from "express";
 import isAuth from "../middleware/isAuth";
-import { checkAdminOrSuper, checkPermission } from "../middleware/checkPermission";
+import { checkPermission } from "../middleware/checkPermission";
 
 import * as TagController from "../controllers/TagController";
 
@@ -13,7 +13,8 @@ tagRoutes.get("/tags/:tagId", isAuth, checkPermission("tags.view"), TagControlle
 tagRoutes.get("/tag/kanban", isAuth, checkPermission("kanban.view"), TagController.kanban);
 
 tagRoutes.post("/tags", isAuth, checkPermission("tags.create"), TagController.store);
-tagRoutes.post("/tags/sync", isAuth, checkAdminOrSuper(), TagController.syncTags);
+// SyncTagsService substitui as tags de um contato → contacts.edit-tags
+tagRoutes.post("/tags/sync", isAuth, checkPermission("contacts.edit-tags"), TagController.syncTags);
 
 tagRoutes.put("/tags/:tagId", isAuth, checkPermission("tags.edit"), TagController.update);
 

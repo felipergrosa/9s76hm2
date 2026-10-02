@@ -39,7 +39,9 @@ ticketRoutes.delete("/tickets/:ticketId", isAuth, checkPermission("tickets.delet
 
 ticketRoutes.post("/tickets/closeAll", isAuth, checkPermission("tickets.close"), TicketController.closeAll);
 
-ticketRoutes.post("/tickets/bulk-process", isAuth, checkPermission("tickets.update"), TicketController.bulkProcess);
+// Frontend só abre o modal de processamento em massa com "tickets.bulk-process";
+// as ações individuais são verificadas de forma granular no controller.
+ticketRoutes.post("/tickets/bulk-process", isAuth, checkPermission("tickets.bulk-process"), TicketController.bulkProcess);
 
 // Rotas para merge de tickets duplicados (importação)
 ticketRoutes.get("/tickets/duplicate-check", isAuth, checkPermission("tickets.view"), TicketMergeController.checkDuplicateTickets);

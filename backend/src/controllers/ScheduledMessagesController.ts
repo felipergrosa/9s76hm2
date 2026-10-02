@@ -2,8 +2,6 @@ import { Request, Response } from "express";
 import { getIO } from "../libs/socket";
 import { head } from "lodash";
 
-import AppError from "../errors/AppError";
-
 import CreateService from "../services/ScheduledMessagesService/CreateService";
 import ListService from "../services/ScheduledMessagesService/ListService";
 import UpdateService from "../services/ScheduledMessagesService/UpdateService";
@@ -78,10 +76,7 @@ export const show = async (req: Request, res: Response): Promise<Response> => {
 };
 
 export const update = async (req: Request, res: Response): Promise<Response> => {
-    if (req.user.profile !== "admin") {
-        throw new AppError("ERR_NO_PERMISSION", 403);
-    }
-
+    // Autorização feita na rota via checkPermission("schedules.edit").
     const { scheduleId } = req.params;
     const scheduleData = req.body;
     const files = req.files as Express.Multer.File[];

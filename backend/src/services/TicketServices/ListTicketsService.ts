@@ -176,8 +176,7 @@ const ListTicketsService = async ({
         isGroup: true,
       };
 
-      // Super/admin AGORA TAMBÉM respeitam permissões granulares (mudança solicitada)
-      // if (!user.super && user.profile !== "admin") { <-- REMOVIDO PARA APLICAR A TODOS
+      // Super/admin também respeitam as permissões granulares de conexão/grupo.
 
       // Filtro por conexões permitidas
       if (uniqueConnIds.length > 0) {
@@ -208,7 +207,6 @@ const ListTicketsService = async ({
           contactId: { [Op.in]: [0] }, // Nenhum grupo corresponde a contactId=0
         };
       }
-      // }
     }
     else
       if (status === "bot") {

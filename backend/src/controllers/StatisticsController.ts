@@ -2,7 +2,6 @@
 import { Request, Response } from "express";
 import TicketsQueuesService from "../services/Statistics/TicketsQueuesService";
 import ContactsReportService from "../services/Statistics/ContactsReportService";
-import AppError from "../errors/AppError";
 
 type IndexQuery = {
   dateStart: string;
@@ -47,9 +46,6 @@ export const ContactsReport = async (
   res: Response
 ): Promise<Response> => {
   const { companyId } = req.user;
-  // if (req.user.profile !== "admin") {
-  //   throw new AppError("ERR_NO_PERMISSION", 403);
-  // }
   const { startDate, endDate, tags, ddds, wallets, searchParam } =
     req.query as tContactReport;
 

@@ -8,6 +8,8 @@ import Company from "../../models/Company";
 import Queue from "../../models/Queue";
 import Whatsapp from "../../models/Whatsapp";
 import Tag from "../../models/Tag";
+import UserRole from "../../models/UserRole";
+import EnsureAdminRoleService from "../RoleService/EnsureAdminRoleService";
 import {
   AVAILABLE_PERMISSIONS,
   getAllAvailablePermissions
@@ -229,6 +231,16 @@ const CreateUserService = async ({
   );
 
   await user.$set("queues", queueIds);
+
+  // Fase 3 (composição de permissões): profile "admin" não é mais cobertor
+  // automático — os poderes vêm da Role de sistema "Administrador" da empresa.
+  if (profile === "admin" && companyId !== undefined) {
+    const adminRole = await EnsureAdminRoleService(companyId);
+    await UserRole.findOrCreate({
+      where: { userId: user.id, roleId: adminRole.id },
+      defaults: { userId: user.id, roleId: adminRole.id, companyId } as any
+    });
+  }
 
   await user.reload();
 

@@ -40,10 +40,7 @@ type PrivateFileRequest = {
 export const index = async (req: Request, res: Response): Promise<Response> => {
   const { companyId } = req.user;
 
-  // if (req.user.profile !== "admin") {
-  //   throw new AppError("ERR_NO_PERMISSION", 403);
-  // }
-
+  // Autorização feita na rota via checkPermission("settings.view").
   const settings = await ListSettingsService({ companyId });
 
   return res.status(200).json(settings);
@@ -63,15 +60,11 @@ export const update = async (
   res: Response
 ): Promise<Response> => {
 
-  // Autorização com usuário FRESCO do DB: admin ou quem tem settings.edit
+  // Autorização com usuário FRESCO do DB: quem tem settings.edit
   // (a rota já passa por checkPermission("settings.edit"); esta checagem é
-  // defesa em profundidade e substitui a verificação baseada só no JWT).
+  // defesa em profundidade — hasPermissionAsync já cobre super e admin).
   const requestUser = await User.findByPk(req.user.id);
-  const allowed = !!requestUser && (
-    requestUser.profile === "admin" ||
-    requestUser.super === true ||
-    (await hasPermissionAsync(requestUser, "settings.edit"))
-  );
+  const allowed = !!requestUser && (await hasPermissionAsync(requestUser, "settings.edit"));
   if (!allowed) {
     throw new AppError("ERR_NO_PERMISSION", 403);
   }

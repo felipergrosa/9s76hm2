@@ -449,13 +449,11 @@ export const remove = async (
   res: Response
 ): Promise<Response> => {
   const { whatsappId } = req.params;
-  const { companyId, profile } = req.user;
+  const { companyId } = req.user;
   const io = getIO();
 
-  if (profile !== "admin") {
-    throw new AppError("ERR_NO_PERMISSION", 403);
-  }
-  // log de debug removido
+  // Autorização feita na rota via checkPermission("connections.delete");
+  // ShowWhatsAppService confina a conexão à empresa do usuário.
   const whatsapp = await ShowWhatsAppService(whatsappId, companyId);
 
 
@@ -514,15 +512,10 @@ export const restart = async (
   req: Request,
   res: Response
 ): Promise<Response> => {
-  const { companyId, profile, id } = req.user;
+  const { companyId } = req.user;
 
-  const user = await User.findByPk(id);
-  const { allowConnections } = user;
-
-  if (profile !== "admin" && allowConnections === "disabled") {
-    throw new AppError("ERR_NO_PERMISSION", 403);
-  }
-
+  // Autorização feita na rota via checkPermission("connections.edit")
+  // (a flag legada allowConnections já alimenta connections.edit no resolver).
   await restartWbot(companyId);
 
   return res.status(200).json({ message: "Whatsapp restart." });

@@ -1,11 +1,11 @@
 import express from "express";
 import isAuth from "../middleware/isAuth";
-import { checkAdminOrSuper } from "../middleware/checkPermission";
+import { checkPermission } from "../middleware/checkPermission";
 import { cleanFlowbuilderOrphans } from "../controllers/MaintenanceController";
 
 const maintenanceRoutes = express.Router();
 
-// Migrado de isSuper (legado) para checkAdminOrSuper - mais consistente
-maintenanceRoutes.post("/maintenance/cleanup/flowbuilder", isAuth, checkAdminOrSuper(), cleanFlowbuilderOrphans);
+// Rotina de manutenção/limpeza = configuração da empresa → settings.edit
+maintenanceRoutes.post("/maintenance/cleanup/flowbuilder", isAuth, checkPermission("settings.edit"), cleanFlowbuilderOrphans);
 
 export default maintenanceRoutes;

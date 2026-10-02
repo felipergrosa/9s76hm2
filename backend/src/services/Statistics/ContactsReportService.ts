@@ -2,7 +2,6 @@ import { endOfDay, parseISO, startOfDay } from "date-fns";
 import { Includeable, Op, Sequelize } from "sequelize";
 import Contact from "../../models/Contact";
 import Tag from "../../models/Tag";
-// import ContactWallet from "../../models/ContactWallet";
 
 const dddsPorEstado = [
   { estado: "AC", ddds: ["68"] },
@@ -112,26 +111,6 @@ const ListContactsService = async ({
       }
     ];
   }
-
-  // if (wallets) {
-  //   includeCondition.push({
-  //     model: ContactWallet,
-  //     // as: "wallets",
-  //     where: {
-  //       walletId: wallets
-  //     },
-  //     required: true
-  //   });
-  // } else if (profile !== "admin") {
-  //   includeCondition.push({
-  //     model: ContactWallet,
-  //     // as: "wallet",
-  //     where: {
-  //       walletId: userId
-  //     },
-  //     required: true
-  //   });
-  // }
 
   if (ddds) {
     let dddsFilter: string[] = [];

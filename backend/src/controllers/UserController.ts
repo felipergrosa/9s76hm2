@@ -98,11 +98,10 @@ export const remove = async (
   res: Response
 ): Promise<Response> => {
   const { userId } = req.params;
-  const { companyId, id, profile } = req.user;
+  const { companyId, id } = req.user;
 
-  if (profile !== "admin") {
-    throw new AppError("ERR_NO_PERMISSION", 403);
-  }
+  // Autorização feita na rota via checkPermission("users.delete") —
+  // o usuário alvo continua confinado à empresa do editor (super pode cross-tenant).
 
   if (process.env.DEMO === "ON") {
     throw new AppError("ERR_NO_PERMISSION", 403);
@@ -185,17 +184,13 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
   // Previne escalação de privilégio por usuário auto-cadastrado.
   const isPublicSignup = req.url === "/signup";
 
+  // Autorização de criação autenticada fica na rota (checkPermission("users.create"));
+  // aqui só resta o gate do signup público e o anti-escalação de `super`.
   if (
     isPublicSignup &&
     (await CheckSettingsHelper("userCreation")) === "disabled"
   ) {
     throw new AppError("ERR_USER_CREATION_DISABLED", 403);
-  } else if (
-    !isPublicSignup &&
-    requestUser?.profile !== "admin" &&
-    !isRequestSuper
-  ) {
-    throw new AppError("ERR_NO_PERMISSION", 403);
   }
 
   const profile = isPublicSignup ? "user" : rawProfile;
@@ -391,15 +386,14 @@ export const update = async (
   }
 
   // LÓGICA DE PERMISSÃO ATUALIZADA
-  // Admin pode editar qualquer usuário
-  // Usuário comum pode editar próprio perfil se tiver permissão users.edit-own
+  // Quem tem users.edit (admin via Role/blanket, super ou ACL) edita qualquer
+  // usuário; demais só editam o próprio perfil com users.edit-own.
   const isEditingOwnProfile = parseInt(userId) === parseInt(requestUserId);
-  const isAdmin = currentUser.profile === "admin";
   const isRequestSuper = currentUser.super === true;
   const canEditOwnProfile = await hasPermissionAsync(currentUser, "users.edit-own");
   const canEditUsers = await hasPermissionAsync(currentUser, "users.edit");
 
-  if (!isAdmin && !isRequestSuper && !canEditUsers && !(isEditingOwnProfile && canEditOwnProfile)) {
+  if (!isRequestSuper && !canEditUsers && !(isEditingOwnProfile && canEditOwnProfile)) {
     throw new AppError("ERR_NO_PERMISSION", 403);
   }
 
@@ -423,7 +417,7 @@ export const update = async (
     "startWork",
     "endWork"
   ]);
-  const canEditPrivileged = isAdmin || isRequestSuper || canEditUsers;
+  const canEditPrivileged = isRequestSuper || canEditUsers;
   const userData: any = {};
   Object.keys(req.body || {}).forEach(key => {
     if (canEditPrivileged || SELF_EDIT_ALLOWED_FIELDS.has(key)) {
@@ -466,12 +460,11 @@ export const mediaUpload = async (
 
   // Verificação de permissão para upload de avatar via media-upload
   const isEditingOwnProfile = parseInt(userId) === parseInt(requestUserId);
-  const isUserAdmin = currentUser.profile === "admin";
   const isRequestSuper = currentUser.super === true;
   const canEditOwnProfile = await hasPermissionAsync(currentUser, "users.edit-own");
   const canEditUsers = await hasPermissionAsync(currentUser, "users.edit");
 
-  if (!isUserAdmin && !isRequestSuper && !canEditUsers && !(isEditingOwnProfile && canEditOwnProfile)) {
+  if (!isRequestSuper && !canEditUsers && !(isEditingOwnProfile && canEditOwnProfile)) {
     throw new AppError("ERR_NO_PERMISSION", 403);
   }
 
@@ -544,12 +537,11 @@ export const uploadAvatar = async (req: Request, res: Response): Promise<Respons
 
   // Verificação de permissão para upload de avatar
   const isEditingOwnProfile = parseInt(userId) === parseInt(requestUserId);
-  const isAdmin = currentUser.profile === "admin";
   const isRequestSuper = currentUser.super === true;
   const canEditOwnProfile = await hasPermissionAsync(currentUser, "users.edit-own");
   const canEditUsers = await hasPermissionAsync(currentUser, "users.edit");
 
-  if (!isAdmin && !isRequestSuper && !canEditUsers && !(isEditingOwnProfile && canEditOwnProfile)) {
+  if (!isRequestSuper && !canEditUsers && !(isEditingOwnProfile && canEditOwnProfile)) {
     throw new AppError("ERR_NO_PERMISSION", 403);
   }
 
@@ -671,8 +663,10 @@ export const updateLanguage = async (req: Request, res: Response): Promise<Respo
       return res.status(404).json({ error: "User not found" });
     }
 
-    // ACRESCENTADO: Apenas admins podem alterar o idioma (verificado no DB).
-    if (requestUser.profile !== "admin" && requestUser.super !== true) {
+    // Qualquer usuário pode alterar o PRÓPRIO idioma; alterar o idioma de
+    // outro usuário exige users.edit (super/admin passam por hasPermissionAsync).
+    const canEditUsers = await hasPermissionAsync(requestUser, "users.edit");
+    if (!canEditUsers && parseInt(userId) !== parseInt(req.user.id)) {
       throw new AppError("ERR_NO_PERMISSION", 403);
     }
 

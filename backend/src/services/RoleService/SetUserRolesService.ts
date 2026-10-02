@@ -2,6 +2,7 @@ import AppError from "../../errors/AppError";
 import Role from "../../models/Role";
 import User from "../../models/User";
 import UserRole from "../../models/UserRole";
+import { serviceCache } from "../../utils/serviceCache";
 import { invalidateRolePermissionsCache } from "../../helpers/PermissionAdapter";
 
 interface Request {
@@ -41,6 +42,9 @@ const SetUserRolesService = async ({ userId, companyId, roleIds }: Request): Pro
   );
 
   invalidateRolePermissionsCache(Number(userId), companyId);
+  // Também derruba o cache user:{id} do guard (middleware checkPermission),
+  // para que a próxima requisição já enxergue o novo conjunto de Roles.
+  serviceCache.invalidate(`user:${userId}`);
 
   return created;
 };

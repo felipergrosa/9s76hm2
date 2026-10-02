@@ -847,11 +847,19 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
   }
 
   const requestUser = await User.findByPk(req.user.id);
-  if (requestUser && requestUser.profile !== "admin") {
-    const allowedIds = requestUser.allowedConnectionIds || [];
-    // Se a lista estiver vazia ou o ID não estiver nela, bloqueia
-    if (!allowedIds.includes(ticket.whatsappId)) {
-      throw new AppError("ERR_NO_PERMISSION_CONNECTION", 403);
+  if (requestUser) {
+    // Mesmo bypass de ListTicketsService: super, admin ou quem tem
+    // "all-connections.view" não fica restrito a allowedConnectionIds.
+    const hasAllConnectionsPermission =
+      requestUser.permissions?.includes("all-connections.view") ||
+      requestUser.super === true ||
+      requestUser.profile === "admin";
+    if (!hasAllConnectionsPermission) {
+      const allowedIds = requestUser.allowedConnectionIds || [];
+      // Se a lista estiver vazia ou o ID não estiver nela, bloqueia
+      if (!allowedIds.includes(ticket.whatsappId)) {
+        throw new AppError("ERR_NO_PERMISSION_CONNECTION", 403);
+      }
     }
   }
 

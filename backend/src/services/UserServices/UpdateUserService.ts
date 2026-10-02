@@ -9,11 +9,17 @@ import User from "../../models/User";
 import Queue from "../../models/Queue";
 import Whatsapp from "../../models/Whatsapp";
 import Tag from "../../models/Tag";
+import Role from "../../models/Role";
+import UserRole from "../../models/UserRole";
 import { serviceCache } from "../../utils/serviceCache";
+import EnsureAdminRoleService, {
+  ADMIN_ROLE_NAME
+} from "../RoleService/EnsureAdminRoleService";
 import {
   AVAILABLE_PERMISSIONS,
   getAllAvailablePermissions,
-  hasPermissionAsync
+  hasPermissionAsync,
+  invalidateRolePermissionsCache
 } from "../../helpers/PermissionAdapter";
 
 interface UserData {
@@ -276,10 +282,45 @@ const UpdateUserService = async ({
     }
   }
 
+  // Profile anterior à atualização — necessário para detectar promoção/
+  // rebaixamento de admin e sincronizar a UserRole "Administrador" (fase 3).
+  const previousProfile = user.profile;
+
   await user.update(dataToUpdate);
 
   // Invalida o cache do usuário usado pelo middleware checkPermission (chave user:{id})
   serviceCache.invalidate(`user:${user.id}`);
+
+  // Fase 3 (composição de permissões): mudança de profile ⇄ admin sincroniza
+  // a UserRole da Role de sistema "Administrador" da empresa do usuário alvo.
+  // - promoção para admin: garante a Role e vincula (sem ela, o admin cairia
+  //   no fallback legado de blanket total — sem granularidade).
+  // - rebaixamento de admin: remove a UserRole da "Administrador" — rebaixar
+  //   tem que tirar os poderes delegados pela Role.
+  if (dataToUpdate.profile && dataToUpdate.profile !== previousProfile) {
+    if (dataToUpdate.profile === "admin") {
+      const adminRole = await EnsureAdminRoleService(targetCompanyId);
+      await UserRole.findOrCreate({
+        where: { userId: user.id, roleId: adminRole.id },
+        defaults: {
+          userId: user.id,
+          roleId: adminRole.id,
+          companyId: targetCompanyId
+        } as any
+      });
+      invalidateRolePermissionsCache(user.id, targetCompanyId);
+    } else if (previousProfile === "admin") {
+      const adminRole = await Role.findOne({
+        where: { name: ADMIN_ROLE_NAME, companyId: targetCompanyId }
+      });
+      if (adminRole) {
+        await UserRole.destroy({
+          where: { userId: user.id, roleId: adminRole.id, companyId: targetCompanyId }
+        });
+        invalidateRolePermissionsCache(user.id, targetCompanyId);
+      }
+    }
+  }
 
   // Filas são campo privilegiado: só atualizáveis por users.edit/admin/super
   if (queueIds !== undefined && canEditPrivileged) {

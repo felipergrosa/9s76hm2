@@ -2,6 +2,7 @@ import { Op } from "sequelize";
 import AppError from "../../errors/AppError";
 import Role from "../../models/Role";
 import UserRole from "../../models/UserRole";
+import { serviceCache } from "../../utils/serviceCache";
 import {
   AVAILABLE_PERMISSIONS,
   getAllAvailablePermissions,
@@ -66,7 +67,11 @@ const UpdateService = async ({
 
   // Permissões da Role mudaram — invalida o cache de quem está atribuído a ela
   const userRoles = await UserRole.findAll({ where: { roleId: role.id, companyId } });
-  userRoles.forEach(ur => invalidateRolePermissionsCache(ur.userId, companyId));
+  userRoles.forEach(ur => {
+    invalidateRolePermissionsCache(ur.userId, companyId);
+    // Também derruba o cache user:{id} do guard (middleware checkPermission)
+    serviceCache.invalidate(`user:${ur.userId}`);
+  });
 
   return role;
 };

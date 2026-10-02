@@ -6,7 +6,6 @@ import DeleteBaileysService from "../services/BaileysServices/DeleteBaileysServi
 import cacheLayer from "../libs/cache";
 import Whatsapp from "../models/Whatsapp";
 import ClearContactSessionService from "../services/WbotServices/ClearContactSessionService";
-import AppError from "../errors/AppError";
 import logger from "../utils/logger";
 import { acquireWbotLock } from "../libs/wbotMutex";
 import { sanitizeWhatsapp } from "../helpers/sanitizeWhatsapp";
@@ -142,13 +141,11 @@ export const clearWhatsAppSession = async (
   res: Response
 ): Promise<Response> => {
   const { whatsappId } = req.params;
-  const { companyId, profile } = req.user;
+  const { companyId } = req.user;
   const io = getIO();
 
-  if (profile !== "admin") {
-    throw new AppError("ERR_NO_PERMISSION", 403);
-  }
-
+  // Autorização feita na rota via checkPermission("connections.edit");
+  // ShowWhatsAppService confina a conexão à empresa do usuário.
   const whatsapp = await ShowWhatsAppService(whatsappId, companyId);
 
   if (whatsapp.channel === "whatsapp") {

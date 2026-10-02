@@ -1,6 +1,6 @@
 import express from "express";
 import isAuth from "../middleware/isAuth";
-import { checkPermission, checkAdminOrSuper } from "../middleware/checkPermission";
+import { checkPermission } from "../middleware/checkPermission";
 import * as UserController from "../controllers/UserController";
 import { upload } from "../controllers/UserController";
 

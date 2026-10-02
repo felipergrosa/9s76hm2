@@ -84,7 +84,7 @@ import ShowContactImportLogService from "../services/ContactServices/ShowContact
 import GetImportJobStatusService from "../services/ContactServices/GetImportJobStatusService";
 import { v4 as uuidv4 } from "uuid";
 import { createAuditLog, createAuditLogFromRequest, AuditActions, AuditEntities } from "../helpers/AuditLogger";
-import { hasPermission } from "../helpers/PermissionAdapter";
+import { hasPermission, hasPermissionAsync } from "../helpers/PermissionAdapter";
 import ListGroupsService from "../services/ContactServices/ListGroupsService";
 import User from "../models/User";
 
@@ -1144,20 +1144,97 @@ export const update = async (
 
   const oldContact = await ShowContactService(contactId, companyId, Number(req.user.id));
 
-  // Verificar permissões para campos sensíveis
+  // Enforcement por campo: quem tem "contacts.edit" edita tudo; sem ela, cada
+  // grupo sensível exige a permissão específica — mesma regra do ContactModal.
+  // O modal sempre envia todos os campos, então comparamos com o contato atual
+  // (oldContact) para detectar alteração real e não gerar falso 403.
   const user = await User.findByPk(req.user.id);
-  if (user) {
-    // Se usuário não tem permissão para editar tags, remove do body
-    if (!hasPermission(user, "contacts.edit-tags")) {
-      delete (contactData as any).tags;
-      delete (contactData as any).tagIds;
-      logger.info(`[Contacts.update] Usuário ${req.user.id} tentou alterar tags sem permissão. Tags removidas do payload.`);
+  const canEditAllContactFields = user
+    ? await hasPermissionAsync(user, "contacts.edit")
+    : false;
+
+  if (user && !canEditAllContactFields) {
+    const requirePermission = async (perm: string): Promise<void> => {
+      // hasPermissionAsync já resolve admin/super e permissões via Roles
+      if (!(await hasPermissionAsync(user, perm))) {
+        logger.warn(`[Contacts.update] Usuário ${req.user.id} sem permissão "${perm}" tentou alterar campo protegido do contato ${contactId}`);
+        throw new AppError(`ERR_NO_PERMISSION: ${perm}`, 403);
+      }
+    };
+
+    const toSortedIds = (value: any): number[] => {
+      if (!Array.isArray(value)) return [];
+      return value
+        .map(v => (v !== null && typeof v === "object" ? Number(v.id) : Number(v)))
+        .filter(Number.isInteger)
+        .sort((a, b) => a - b);
+    };
+    const sameIds = (a: number[], b: number[]) =>
+      a.length === b.length && a.every((v, i) => v === b[i]);
+    const isPersonalTagName = (n: any) =>
+      typeof n === "string" && n.startsWith("#") && !n.startsWith("##");
+
+    // Tags do contato: separa tags pessoais (# = carteira/responsável) das demais.
+    // O campo "wallets" do payload é derivado no cliente e ignorado pelo service —
+    // a alteração real de carteira sempre chega via tags pessoais dentro de "tags".
+    const incomingTags =
+      (contactData as any).tags !== undefined
+        ? (contactData as any).tags
+        : (contactData as any).tagIds;
+    if (incomingTags !== undefined) {
+      const oldTags: any[] = (oldContact as any).tags || [];
+      const oldPersonalIds = toSortedIds(oldTags.filter(t => isPersonalTagName(t.name)));
+      const oldRegularIds = toSortedIds(oldTags.filter(t => !isPersonalTagName(t.name)));
+
+      const newIds = toSortedIds(incomingTags);
+      const newTagRows = newIds.length
+        ? await Tag.findAll({
+            where: { id: { [Op.in]: newIds }, companyId },
+            attributes: ["id", "name"]
+          })
+        : [];
+      const newPersonalIds = toSortedIds(newTagRows.filter(t => isPersonalTagName(t.name)));
+      const newRegularIds = toSortedIds(newTagRows.filter(t => !isPersonalTagName(t.name)));
+
+      // Alteração em tags pessoais = alteração de carteira (responsável)
+      if (!sameIds(newPersonalIds, oldPersonalIds)) {
+        await requirePermission("contacts.edit-wallets");
+      }
+      if (!sameIds(newRegularIds, oldRegularIds)) {
+        await requirePermission("contacts.edit-tags");
+      }
     }
 
-    // Se usuário não tem permissão para editar representative, remove do body
-    if (!hasPermission(user, "contacts.edit-representative")) {
-      delete (contactData as any).representativeCode;
-      logger.info(`[Contacts.update] Usuário ${req.user.id} tentou alterar representativeCode sem permissão. Campo removido do payload.`);
+    // Representante do contato
+    if ((contactData as any).representativeCode !== undefined) {
+      const normRep = (v: any) =>
+        v === undefined || v === null || (typeof v === "string" && v.trim() === "")
+          ? null
+          : String(v).trim();
+      if (normRep((contactData as any).representativeCode) !== normRep((oldContact as any).representativeCode)) {
+        await requirePermission("contacts.edit-representative");
+      }
+    }
+
+    // Campos customizados (extraInfo)
+    if ((contactData as any).extraInfo !== undefined) {
+      const toMap = (arr: any[]) => {
+        const m = new Map<string, string>();
+        (arr || []).forEach((e: any) => {
+          if (e && e.name !== undefined && e.name !== null) {
+            m.set(String(e.name), String(e.value ?? ""));
+          }
+        });
+        return m;
+      };
+      const oldMap = toMap((oldContact as any).extraInfo || []);
+      const newMap = toMap((contactData as any).extraInfo);
+      const changed =
+        oldMap.size !== newMap.size ||
+        [...newMap.entries()].some(([k, v]) => oldMap.get(k) !== v);
+      if (changed) {
+        await requirePermission("contacts.edit-fields");
+      }
     }
   }
 
@@ -1184,14 +1261,15 @@ export const update = async (
     logger.warn({ contactId: Number(contactId), companyId, error: err?.message }, "[Contacts.update] validação assíncrona falhou");
   });
 
-  // Se usuário tem permissão contacts.edit, contacts.edit-tags, ou é superadmin, pode editar qualquer contato (bypass da restrição de carteira)
-  // 'user' já foi carregado anteriormente na linha 1142
-  const isSuperAdmin = user?.super === true || user?.profile === 'admin';
-  const hasEditPermission = user ? hasPermission(user, "contacts.edit") : false;
-  const hasEditTagsPermission = user ? hasPermission(user, "contacts.edit-tags") : false;
-  const canEditAnyContact = isSuperAdmin || hasEditPermission || hasEditTagsPermission;
-  
-  logger.info(`[Contacts.update] Usuário ${req.user.id} - permissões: ${JSON.stringify(user?.permissions)}, isSuperAdmin: ${isSuperAdmin}, hasEditPermission: ${hasEditPermission}, hasEditTagsPermission: ${hasEditTagsPermission}, canEditAnyContact: ${canEditAnyContact}`);
+  // Se usuário tem permissão contacts.edit ou contacts.edit-tags, pode editar
+  // qualquer contato (bypass da restrição de carteira). hasPermissionAsync já
+  // retorna true para super; admin SEM a permissão granular não tem bypass.
+  // 'user' já foi carregado anteriormente na verificação por campo.
+  const hasEditPermission = user ? await hasPermissionAsync(user, "contacts.edit") : false;
+  const hasEditTagsPermission = user ? await hasPermissionAsync(user, "contacts.edit-tags") : false;
+  const canEditAnyContact = hasEditPermission || hasEditTagsPermission;
+
+  logger.info(`[Contacts.update] Usuário ${req.user.id} - permissões: ${JSON.stringify(user?.permissions)}, hasEditPermission: ${hasEditPermission}, hasEditTagsPermission: ${hasEditTagsPermission}, canEditAnyContact: ${canEditAnyContact}`);
 
   const contact = await UpdateContactService({
     contactData,

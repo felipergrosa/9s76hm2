@@ -29,6 +29,7 @@ import Chatbot from "../models/Chatbot";
 import AIAgent from "../models/AIAgent";
 import GetUserPersonalTagContactIds from "../helpers/GetUserPersonalTagContactIds";
 import { createAuditLogFromRequest, AuditActions, AuditEntities } from "../helpers/AuditLogger";
+import { hasPermissionAsync } from "../helpers/PermissionAdapter";
 
 type IndexQuery = {
   searchParam: string;
@@ -728,6 +729,27 @@ export const bulkProcess = async (req: Request, res: Response): Promise<Response
       return res.status(400).json({ error: "aiAgentId é obrigatório quando responseType é 'ai'" });
     }
 
+    // Enforcement granular: a rota só garante "tickets.bulk-process" (abrir o modal).
+    // Cada ação solicitada exige a permissão específica — mesma regra do frontend
+    // (BulkProcessTicketsModal desabilita cada campo sem a permissão correspondente).
+    // O req.user do token não traz o model completo, então buscamos o usuário.
+    const currentUser = await User.findByPk(req.user.id);
+    const requiredPermissions: string[] = [];
+    if (newStatus) requiredPermissions.push("tickets.bulk-edit-status");
+    if (queueId !== undefined && queueId !== null) requiredPermissions.push("tickets.bulk-edit-queue");
+    if (userId !== undefined && userId !== null) requiredPermissions.push("tickets.bulk-edit-user");
+    if (Array.isArray(tagIds) && tagIds.length > 0) requiredPermissions.push("tickets.bulk-edit-tags");
+    if (responseType !== 'none') requiredPermissions.push("tickets.bulk-edit-response");
+    if (closeTicket) requiredPermissions.push("tickets.bulk-edit-close");
+    if (addNote) requiredPermissions.push("tickets.bulk-edit-notes");
+
+    for (const permission of requiredPermissions) {
+      // hasPermissionAsync já resolve admin/super (acesso total) e permissões via Roles
+      if (!(await hasPermissionAsync(currentUser, permission))) {
+        throw new AppError(`ERR_NO_PERMISSION: ${permission}`, 403);
+      }
+    }
+
     // Importar service dinamicamente para evitar circular dependency
     const BulkProcessTicketsService = (await import("../services/TicketServices/BulkProcessTicketsService")).default;
 
@@ -750,7 +772,9 @@ export const bulkProcess = async (req: Request, res: Response): Promise<Response
     return res.status(200).json(result);
   } catch (error: any) {
     console.error("[BulkProcess] Erro:", error);
-    return res.status(500).json({ error: error.message || "Erro ao processar tickets em massa" });
+    // Preserva o statusCode de AppError (ex.: 403 de permissão granular)
+    const statusCode = error instanceof AppError ? error.statusCode : 500;
+    return res.status(statusCode).json({ error: error.message || "Erro ao processar tickets em massa" });
   }
 };
 

@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { getIO } from "../libs/socket";
 
-import AppError from "../errors/AppError";
+
 import { head } from "lodash";
 
 import CreateService from "../services/FileServices/CreateService";
@@ -75,10 +75,7 @@ export const update = async (
   req: Request,
   res: Response
 ): Promise<Response> => {
-  if (req.user.profile !== "admin") {
-    throw new AppError("ERR_NO_PERMISSION", 403);
-  }
-
+  // Autorização feita na rota via checkPermission("files.upload").
   const { fileId } = req.params;
   const { companyId } = req.user;
   const files = req.files as Express.Multer.File[];

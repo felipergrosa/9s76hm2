@@ -2,8 +2,10 @@ import * as Yup from "yup";
 import AppError from "../../errors/AppError";
 import Company from "../../models/Company";
 import User from "../../models/User";
+import UserRole from "../../models/UserRole";
 import sequelize from "../../database";
 import CompaniesSettings from "../../models/CompaniesSettings";
+import EnsureAdminRoleService from "../RoleService/EnsureAdminRoleService";
 
 interface CompanyData {
   name: string;
@@ -74,6 +76,20 @@ const CreateCompanyService = async (
     },
       { transaction: t }
     );
+
+    // Fase 3 (composição de permissões): o admin da empresa nova recebe a
+    // Role de sistema "Administrador" — sem ela, o profile="admin" cairia no
+    // fallback legado de blanket total em vez da composição granular.
+    const adminRole = await EnsureAdminRoleService(company.id, t);
+    await UserRole.findOrCreate({
+      where: { userId: user.id, roleId: adminRole.id },
+      defaults: {
+        userId: user.id,
+        roleId: adminRole.id,
+        companyId: company.id
+      } as any,
+      transaction: t
+    });
 
     const settings = await CompaniesSettings.create({
           companyId: company.id,
