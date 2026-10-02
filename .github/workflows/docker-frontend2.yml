@@ -33,6 +33,14 @@ jobs:
       - name: Login to DockerHub
         run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
+      - name: Pre-cleanup docker cache
+        run: |
+          # Libera espaço ANTES do build — cache de build e imagens dangling
+          # antigas acumulam e já causaram "No space left on device" no runner
+          docker builder prune -af --filter "until=24h" || true
+          docker image prune -af --filter "until=24h" || true
+          df -h /
+
       - name: Build and push Docker image
         run: |
           docker build \
