@@ -29,8 +29,9 @@ import useTags from "../../hooks/useTags";
 import useUsers from "../../hooks/useUsers";
 import usePermissions from "../../hooks/usePermissions";
 
-import { Avatar, Grid, Input, Paper, Tab, Tabs, Chip, Typography, Divider } from "@material-ui/core";
+import { Avatar, Grid, Input, Paper, Tab, Tabs, Chip, Typography, Divider, Collapse } from "@material-ui/core";
 import Autocomplete from "@material-ui/lab/Autocomplete";
+import ExpandMoreIcon from "@material-ui/icons/ExpandMore";
 import { getBackendUrl } from "../../config";
 import TabPanel from "../TabPanel";
 import AvatarUploader from "../AvatarUpload";
@@ -183,6 +184,7 @@ const UserModal = ({ open, onClose, userId }) => {
   const [roleOptions, setRoleOptions] = useState([]);
   const [selectedRoleIds, setSelectedRoleIds] = useState([]);
   const [permLabels, setPermLabels] = useState({});
+  const [permsExpanded, setPermsExpanded] = useState(false);
   const startWorkRef = useRef();
   const endWorkRef = useRef();
 
@@ -536,21 +538,36 @@ const UserModal = ({ open, onClose, userId }) => {
                     </Grid>
 
                     {/* Preview somente-leitura das permissões da role escolhida —
-                        reforça "perfil define permissões" sem abrir edição manual */}
+                        colapsado por padrão para não poluir o modal; clique
+                        expande/recolhe a lista de chips */}
                     {selectedRoleIds.length > 0 && (() => {
                       const role = roleOptions.find(r => r.id === selectedRoleIds[0]);
                       const perms = Array.isArray(role?.permissions) ? role.permissions : [];
                       return perms.length > 0 ? (
                         <Grid container spacing={1} style={{ marginTop: 4 }}>
                           <Grid item xs={12}>
-                            <Typography variant="caption" color="textSecondary">
-                              Permissões do perfil ({perms.length}):
-                            </Typography>
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
-                              {perms.map(p => (
-                                <Chip key={p} label={permLabels[p] || p} size="small" variant="outlined" />
-                              ))}
-                            </div>
+                            <Button
+                              size="small"
+                              onClick={() => setPermsExpanded(prev => !prev)}
+                              endIcon={
+                                <ExpandMoreIcon
+                                  style={{
+                                    transform: permsExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                                    transition: "transform 0.2s"
+                                  }}
+                                />
+                              }
+                              style={{ textTransform: "none" }}
+                            >
+                              Permissões do perfil ({perms.length})
+                            </Button>
+                            <Collapse in={permsExpanded}>
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
+                                {perms.map(p => (
+                                  <Chip key={p} label={permLabels[p] || p} size="small" variant="outlined" />
+                                ))}
+                              </div>
+                            </Collapse>
                           </Grid>
                         </Grid>
                       ) : null;

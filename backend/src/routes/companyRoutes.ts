@@ -26,8 +26,10 @@ companyRoutes.put("/companies/:id/schedules", isAuth, checkAnyPermission(["compa
 // SEGURANÇA: deletar empresa é exclusivo do console SaaS (super)
 companyRoutes.delete("/companies/:id", isAuth, checkPermission("companies.delete"), CompanyController.remove);
 
-// Rota para listar o plano da empresa
-companyRoutes.get("/companies/listPlan/:id", isAuth, checkPermission("companies.view"), CompanyController.listPlan);
+// Rota para listar o plano da empresa — usada por QUALQUER usuário do tenant
+// para ler as feature flags do próprio plano (menu lateral). O controller
+// já isola: não-super só acessa companyId === :id, então basta isAuth.
+companyRoutes.get("/companies/listPlan/:id", isAuth, CompanyController.listPlan);
 companyRoutes.get("/companiesPlan", isAuth, checkPermission("companies.view"), CompanyController.indexPlan);
 
 export default companyRoutes;
