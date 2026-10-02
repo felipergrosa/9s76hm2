@@ -1069,6 +1069,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 											as={TextField}
 											label="Instagram"
 											name="instagram"
+											placeholder="@usuario"
 											variant="outlined"
 											margin="dense"
 											InputLabelProps={{
@@ -1084,6 +1085,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 											as={TextField}
 											label="Facebook"
 											name="facebook"
+											placeholder="@usuario ou URL do perfil"
 											variant="outlined"
 											margin="dense"
 											InputLabelProps={{

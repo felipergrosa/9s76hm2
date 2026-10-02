@@ -818,6 +818,7 @@ const Contacts = () => {
                     <NewTicketModal
                         modalOpen={newTicketModalOpen}
                         initialContact={contactTicket}
+                        initialWhatsappId={contactTicket?.whatsappId}
                         onClose={(ticket) => {
                             handleCloseOrOpenTicket(ticket);
                         }}

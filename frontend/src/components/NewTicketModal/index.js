@@ -40,7 +40,7 @@ const filter = createFilterOptions({
   trim: true,
 });
 
-const NewTicketModal = ({ modalOpen, onClose, initialContact }) => {
+const NewTicketModal = ({ modalOpen, onClose, initialContact, initialWhatsappId }) => {
   const classes = useStyles();
   const [options, setOptions] = useState([]);
 
@@ -73,8 +73,11 @@ const NewTicketModal = ({ modalOpen, onClose, initialContact }) => {
   // Define fila/conexão padrão uma única vez ao montar
   // (antes refazia fetch de /whatsapp a cada mudança de selectedContact — dep incorreta)
   useEffect(() => {
-    if (whatsappId !== null && whatsappId !== undefined) {
-      setSelectedWhatsapp(whatsappId)
+    // Conexão pré-selecionada: prioriza a conexão de origem do contato
+    // (ex.: contato vindo do Instagram abre já com a conexão IG)
+    const preferred = initialWhatsappId ?? whatsappId;
+    if (preferred !== null && preferred !== undefined) {
+      setSelectedWhatsapp(preferred)
     }
 
     if (user.queues.length === 1) {

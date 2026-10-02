@@ -118,20 +118,28 @@ const ContactRow = memo(({
       </td>
       <td className="pl-3 pr-3 py-3 text-center w-[200px]">
         <div className="flex items-center justify-center gap-1.5">
-          {instagramProfileUrl(contact.instagram) && (
-            <Tooltip {...CustomTooltipProps} title={`Instagram: ${contact.instagram}`}>
+          {/* Ícones de canal social: aparecem quando o contato tem o @
+              preenchido OU veio de um canal Meta (channels). Clique abre o
+              modal de conversa já com a conexão do contato pré-selecionada;
+              se não houver canal Meta, abre o perfil externo. */}
+          {(instagramProfileUrl(contact.instagram) || contact.channels?.includes("instagram")) && (
+            <Tooltip {...CustomTooltipProps} title={contact.channels?.includes("instagram") ? `Conversar no Instagram${contact.instagram ? `: ${contact.instagram}` : ""}` : `Instagram: ${contact.instagram}`}>
               <button
-                onClick={() => window.open(instagramProfileUrl(contact.instagram), "_blank", "noopener")}
+                onClick={() => contact.channels?.includes("instagram")
+                  ? onSendMessage(contact)
+                  : window.open(instagramProfileUrl(contact.instagram), "_blank", "noopener")}
                 className="text-pink-600 hover:text-pink-800 dark:text-pink-400 dark:hover:text-pink-300"
               >
                 <Instagram className="w-6 h-6" />
               </button>
             </Tooltip>
           )}
-          {facebookProfileUrl(contact.facebook) && (
-            <Tooltip {...CustomTooltipProps} title={`Facebook: ${contact.facebook}`}>
+          {(facebookProfileUrl(contact.facebook) || contact.channels?.includes("facebook")) && (
+            <Tooltip {...CustomTooltipProps} title={contact.channels?.includes("facebook") ? `Conversar no Messenger${contact.facebook ? ` • ${contact.facebook}` : ""}` : `Facebook: ${contact.facebook}`}>
               <button
-                onClick={() => window.open(facebookProfileUrl(contact.facebook), "_blank", "noopener")}
+                onClick={() => contact.channels?.includes("facebook")
+                  ? onSendMessage(contact)
+                  : window.open(facebookProfileUrl(contact.facebook), "_blank", "noopener")}
                 className="text-blue-700 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
               >
                 <Facebook className="w-6 h-6" />

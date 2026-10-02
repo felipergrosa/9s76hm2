@@ -544,6 +544,7 @@ const ListContactsService = async ({
       "active",
       "companyId",
       "channels",
+      "whatsappId",
       // Adiciona novos campos aos atributos
       "contactName",
       "cpfCnpj",
