@@ -124,6 +124,29 @@ const HEADER_TYPE_META = {
 const BUTTON_LIMITS = { URL: 2, PHONE_NUMBER: 1, COPY_CODE: 1 };
 const MAX_BUTTONS = 10;
 
+// Faixas de TTL (segundos) aceitas pela Meta por categoria.
+// -1 = "30 dias" apenas para UTILITY e AUTHENTICATION.
+const MESSAGE_TTL_RANGES = {
+  AUTHENTICATION: {
+    min: 30,
+    max: 900,
+    allowMinusOne: true,
+    label: "30s a 900s (15 min), ou -1 para 30 dias"
+  },
+  UTILITY: {
+    min: 30,
+    max: 43200,
+    allowMinusOne: true,
+    label: "30s a 43200s (12h), ou -1 para 30 dias"
+  },
+  MARKETING: {
+    min: 43200,
+    max: 2592000,
+    allowMinusOne: false,
+    label: "43200s a 2592000s (12h a 30 dias)"
+  }
+};
+
 // Emojis comuns para inserção rápida no corpo da mensagem
 const QUICK_EMOJIS = [
   "😀", "😊", "👍", "🙏", "🎉", "✅", "⭐", "❤️",
@@ -972,8 +995,32 @@ const MetaTemplateModal = ({ open, onClose, whatsappId, template, onSaved }) => 
         errors.push(`${label}: ${tt("errors.copyCodeTooLong", "código deve ter no máximo 20 caracteres.")}`);
     });
 
-    if (ttlEnabled && ttl !== "" && (isNaN(Number(ttl)) || Number(ttl) < 0))
-      errors.push(tt("errors.ttlInvalid", "TTL deve ser um número válido."));
+    if (ttlEnabled && ttl !== "") {
+      const ttlNum = Number(ttl);
+      if (!Number.isInteger(ttlNum)) {
+        errors.push(
+          tt("errors.ttlInvalid", "TTL deve ser um inteiro em segundos.")
+        );
+      } else {
+        const range = MESSAGE_TTL_RANGES[values.category];
+        if (ttlNum === -1) {
+          if (range && !range.allowMinusOne)
+            errors.push(
+              tt(
+                "errors.ttlMinusOne",
+                "TTL -1 (30 dias) não é aceito em templates de marketing."
+              )
+            );
+        } else if (range && (ttlNum < range.min || ttlNum > range.max)) {
+          errors.push(
+            tt(
+              "errors.ttlRange",
+              `TTL fora da faixa da Meta para ${values.category}: ${range.label}.`
+            )
+          );
+        }
+      }
+    }
 
     return errors;
   };
@@ -1846,7 +1893,7 @@ const MetaTemplateModal = ({ open, onClose, whatsappId, template, onSaved }) => 
                       <Typography variant="caption" color="textSecondary">
                         {tt(
                           "fields.ttlHint",
-                          "Se não entregue nesse período, a mensagem expira (padrão Meta: 10 min)."
+                          "Se não entregue nesse período, a mensagem expira (padrão Meta: 30 dias; 10 min em autenticação)."
                         )}
                       </Typography>
                     </Box>
@@ -1861,16 +1908,25 @@ const MetaTemplateModal = ({ open, onClose, whatsappId, template, onSaved }) => 
                     />
                   </Box>
                   {ttlEnabled && (
-                    <TextField
-                      label={tt("fields.ttl", "TTL em segundos")}
-                      variant="outlined"
-                      margin="dense"
-                      type="number"
-                      size="small"
-                      value={ttl}
-                      onChange={e => setTtl(e.target.value)}
-                      inputProps={{ min: 0 }}
-                    />
+                    <>
+                      <TextField
+                        label={tt("fields.ttl", "TTL em segundos")}
+                        variant="outlined"
+                        margin="dense"
+                        type="number"
+                        size="small"
+                        value={ttl}
+                        onChange={e => setTtl(e.target.value)}
+                      />
+                      {MESSAGE_TTL_RANGES[values.category] && (
+                        <FormHelperText>
+                          {tt(
+                            "fields.ttlRange",
+                            `Faixa válida para ${values.category}: ${MESSAGE_TTL_RANGES[values.category].label}.`
+                          )}
+                        </FormHelperText>
+                      )}
+                    </>
                   )}
                   {!isEdit && (
                     <Box className={classes.optionRow}>

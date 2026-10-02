@@ -51,6 +51,71 @@ const LIMITS = {
   MAX_QUICK_REPLY_BUTTONS: 10
 };
 
+// Faixas de TTL (segundos) aceitas pela Meta por categoria de template.
+// -1 equivale a "30 dias" e só é aceito em AUTHENTICATION e UTILITY.
+const MESSAGE_TTL_RANGES: Record<
+  string,
+  { min: number; max: number; allowMinusOne: boolean; label: string }
+> = {
+  AUTHENTICATION: {
+    min: 30,
+    max: 900,
+    allowMinusOne: true,
+    label: "30s a 900s (15 min), ou -1 para 30 dias"
+  },
+  UTILITY: {
+    min: 30,
+    max: 43200,
+    allowMinusOne: true,
+    label: "30s a 43200s (12h), ou -1 para 30 dias"
+  },
+  MARKETING: {
+    min: 43200,
+    max: 2592000,
+    allowMinusOne: false,
+    label: "43200s a 2592000s (12h a 30 dias)"
+  }
+};
+
+/**
+ * Valida message_send_ttl_seconds conforme as faixas oficiais da Meta.
+ * Sem categoria conhecida (ex.: update), valida apenas o mínimo geral.
+ */
+export const validateMessageSendTtlSeconds = (
+  ttl: number,
+  category?: string
+): void => {
+  if (!Number.isInteger(ttl)) {
+    throw new AppError("TTL deve ser um inteiro em segundos", 400);
+  }
+
+  if (ttl === -1) {
+    if (category === "MARKETING") {
+      throw new AppError(
+        "TTL -1 (30 dias) não é aceito para templates MARKETING",
+        400
+      );
+    }
+    return;
+  }
+
+  if (ttl < 30) {
+    throw new AppError(
+      "TTL mínimo aceito pela Meta é 30 segundos " +
+        "(-1 equivale a 30 dias apenas em UTILITY/AUTHENTICATION)",
+      400
+    );
+  }
+
+  const range = category ? MESSAGE_TTL_RANGES[category] : undefined;
+  if (range && (ttl < range.min || ttl > range.max)) {
+    throw new AppError(
+      `TTL fora da faixa da Meta para templates ${category}: ${range.label}`,
+      400
+    );
+  }
+};
+
 /**
  * Extrai variáveis {{x}} de um texto. Retorna lista de nomes crus
  * ("1", "2", "nome", ...) na ordem em que aparecem.
@@ -533,6 +598,7 @@ interface ValidateTemplatePayloadInput {
   language: string;
   parameterFormat?: string;
   components: any[];
+  messageSendTtlSeconds?: number;
 }
 
 /**
@@ -542,7 +608,14 @@ interface ValidateTemplatePayloadInput {
 export const validateTemplatePayload = (
   input: ValidateTemplatePayloadInput
 ): void => {
-  const { name, category, language, parameterFormat, components } = input;
+  const {
+    name,
+    category,
+    language,
+    parameterFormat,
+    components,
+    messageSendTtlSeconds
+  } = input;
 
   if (!name || typeof name !== "string") {
     throw new AppError("name do template é obrigatório", 400);
@@ -578,6 +651,10 @@ export const validateTemplatePayload = (
       `Válidos: ${VALID_PARAMETER_FORMATS.join(", ")}`,
       400
     );
+  }
+
+  if (messageSendTtlSeconds !== undefined) {
+    validateMessageSendTtlSeconds(messageSendTtlSeconds, category);
   }
 
   validateTemplateComponents(components, parameterFormat);

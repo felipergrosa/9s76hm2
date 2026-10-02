@@ -25,7 +25,10 @@ import {
   getUsdToBrlRate,
   SyncWabaPricing
 } from "../services/MetaServices/WabaPricingService";
-import { validateTemplatePayload } from "../services/MetaServices/validateTemplateComponents";
+import {
+  validateTemplatePayload,
+  validateMessageSendTtlSeconds
+} from "../services/MetaServices/validateTemplateComponents";
 
 // Busca a conexão WhatsApp da empresa e garante que é do canal oficial (Meta)
 const getOfficialWhatsapp = async (
@@ -353,7 +356,13 @@ export const store = async (
     }
   }
 
-  validateTemplatePayload({ name, category, language, components });
+  validateTemplatePayload({
+    name,
+    category,
+    language,
+    components,
+    messageSendTtlSeconds
+  });
 
   const { id, status: templateStatus } = await CreateWabaTemplate({
     whatsapp,
@@ -401,9 +410,34 @@ export const update = async (
 ): Promise<Response> => {
   const { whatsappId, templateId } = req.params;
   const { companyId } = req.user;
-  const { name, category, messageSendTtlSeconds } = req.body;
+  const { name, category } = req.body;
+
+  // Em multipart boolean/number chegam como string — coagir
+  const messageSendTtlSeconds =
+    req.body.messageSendTtlSeconds === undefined ||
+    req.body.messageSendTtlSeconds === ""
+      ? undefined
+      : Number(req.body.messageSendTtlSeconds);
 
   const whatsapp = await getOfficialWhatsapp(whatsappId, companyId);
+
+  // A faixa de TTL válida depende da categoria — quando não enviada,
+  // usa a categoria do cache local do template
+  if (messageSendTtlSeconds !== undefined) {
+    let ttlCategory = category;
+    if (!ttlCategory) {
+      const cached = await WhatsappTemplate.findOne({
+        where: {
+          companyId,
+          whatsappId: Number(whatsappId),
+          metaTemplateId: templateId
+        },
+        attributes: ["category"]
+      });
+      ttlCategory = cached?.category || undefined;
+    }
+    validateMessageSendTtlSeconds(messageSendTtlSeconds, ttlCategory);
+  }
 
   let components = parseComponents(req.body.components);
 

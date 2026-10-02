@@ -58,11 +58,14 @@ interface ExtractedMetaError {
   message: string;
   code?: number;
   subcode?: number;
+  userMessage?: string;
+  details?: string;
 }
 
 /**
  * Extrai o objeto de erro padrão da Meta:
- * error.response.data.error = { message, code, error_subcode, ... }
+ * error.response.data.error = { message, code, error_subcode,
+ *   error_user_msg, error_data: { details }, ... }
  */
 export const extractMetaError = (error: any): ExtractedMetaError => {
   const metaError = error?.response?.data?.error;
@@ -74,6 +77,14 @@ export const extractMetaError = (error: any): ExtractedMetaError => {
       subcode:
         typeof metaError.error_subcode === "number"
           ? metaError.error_subcode
+          : undefined,
+      userMessage:
+        typeof metaError.error_user_msg === "string"
+          ? metaError.error_user_msg
+          : undefined,
+      details:
+        typeof metaError.error_data?.details === "string"
+          ? metaError.error_data.details
           : undefined
     };
   }
@@ -103,7 +114,9 @@ export const throwMetaError = (context: string, error: any): never => {
     status: responseStatus,
     code: meta.code,
     subcode: meta.subcode,
-    metaMessage: meta.message
+    metaMessage: meta.message,
+    userMessage: meta.userMessage,
+    details: meta.details
   });
 
   // Subcode 2388024: nome de template duplicado no mesmo idioma
@@ -128,7 +141,16 @@ export const throwMetaError = (context: string, error: any): never => {
   }
 
   if (meta.message && error?.response) {
-    throw new AppError(`Erro na API Meta: ${meta.message}`, httpStatus);
+    // error_user_msg/error_data.details indicam o parâmetro exato que falhou
+    // (ex.: "(#100) Invalid parameter" sozinho é genérico demais)
+    const extra = [meta.userMessage, meta.details]
+      .filter(Boolean)
+      .filter((part, index, arr) => arr.indexOf(part) === index)
+      .join(" — ");
+    throw new AppError(
+      `Erro na API Meta: ${meta.message}${extra ? `. ${extra}` : ""}`,
+      httpStatus
+    );
   }
 
   throw new AppError(
