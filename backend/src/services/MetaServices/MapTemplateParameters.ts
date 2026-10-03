@@ -138,8 +138,6 @@ export const MapTemplateParameters = (
         logger.info(
             `[MapTemplateParameters] Mapeando ${parameters.length} parâmetros para contato ${contact.id} (${contact.name})`
         );
-        console.log("[MapTemplateParameters] VariablesConfig:", JSON.stringify(variablesConfig, null, 2));
-        console.log("[MapTemplateParameters] Parameters:", JSON.stringify(parameters, null, 2));
 
         // Agrupar por componente (body, header, footer)
         const bodyParams = parameters.filter(p => p.component === "BODY");
@@ -177,9 +175,13 @@ export const MapTemplateParameters = (
                     );
                 }
 
-                // Meta API NÃO aceita o campo param_name
-                // Parâmetros devem ser enviados em ordem sequencial
-                return { type: "text", text: value };
+                // Templates com variáveis nomeadas (parameter_format=NAMED)
+                // EXIGEM param_name; posicionais ({{1}}) não podem enviá-lo.
+                const mapped: any = { type: "text", text: value };
+                if (param.paramName) {
+                    mapped.param_name = param.paramName;
+                }
+                return mapped;
             });
 
             components.push({
@@ -212,7 +214,11 @@ export const MapTemplateParameters = (
                     `[MapTemplateParameters] Header param ${param.index} -> "${value}"`
                 );
 
-                return { type: "text", text: value };
+                const mapped: any = { type: "text", text: value };
+                if (param.paramName) {
+                    mapped.param_name = param.paramName;
+                }
+                return mapped;
             });
 
             components.push({
@@ -239,7 +245,11 @@ export const MapTemplateParameters = (
                         `[MapTemplateParameters] Button param ${param.index} estava vazio, usando fallback: "${value}"`
                     );
                 }
-                return { type: "text", text: value };
+                const mapped: any = { type: "text", text: value };
+                if (param.paramName) {
+                    mapped.param_name = param.paramName;
+                }
+                return mapped;
             });
 
             // A API da Meta exige um componente por botão modificado

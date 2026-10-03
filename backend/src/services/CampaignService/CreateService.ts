@@ -95,8 +95,18 @@ const CreateService = async (data: Data): Promise<Campaign> => {
     throw new AppError(err.message);
   }
 
+  // Status inicial é definido pelo servidor: nunca confiar no cliente.
+  // EM_ANDAMENTO/FINALIZADA na criação virariam campanhas zumbis
+  // (nenhum fluxo enfileira campanhas criadas nesses estados).
+  if (!["INATIVA", "PROGRAMADA", "CANCELADA"].includes(data.status)) {
+    data.status = "INATIVA";
+  }
+
   if (data.scheduledAt != null && data.scheduledAt != "") {
     data.status = "PROGRAMADA";
+  } else if (data.status === "PROGRAMADA") {
+    // PROGRAMADA sem agendamento nunca é capturada pelo cron → INATIVA
+    data.status = "INATIVA";
   }
 
   // N2: valida que todas as FKs informadas pertencem ao tenant antes de gravar

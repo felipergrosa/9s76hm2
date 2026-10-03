@@ -20,6 +20,7 @@ routes.post("/campaigns", isAuth, checkPermission("campaigns.create"), CampaignC
 routes.put("/campaigns/:id", isAuth, checkPermission("campaigns.edit"), CampaignController.update);
 routes.delete("/campaigns/:id", isAuth, checkPermission("campaigns.delete"), CampaignController.remove);
 routes.post("/campaigns/:id/cancel", isAuth, checkPermission("campaigns.edit"), CampaignController.cancel);
+routes.post("/campaigns/:id/start", isAuth, checkPermission("campaigns.edit"), CampaignController.start);
 routes.post("/campaigns/:id/restart", isAuth, checkPermission("campaigns.edit"), CampaignController.restart);
 routes.post("/campaigns/:id/clone", isAuth, checkPermission("campaigns.create"), CampaignController.clone);
 routes.post("/campaigns/:id/media-upload", isAuth, checkPermission("campaigns.edit"), upload.array("file"), CampaignController.mediaUpload);

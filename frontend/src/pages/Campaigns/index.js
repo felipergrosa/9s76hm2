@@ -465,7 +465,8 @@ const Campaigns = () => {
 
   const restartCampaign = async (campaign) => {
     try {
-      await api.post(`/campaigns/${campaign.id}/restart`);
+      const action = campaign.status === "INATIVA" ? "start" : "restart";
+      await api.post(`/campaigns/${campaign.id}/${action}`);
       toast.success(i18n.t("campaigns.toasts.restart"));
       setPageNumber(1);
       fetchCampaigns();
@@ -498,8 +499,8 @@ const Campaigns = () => {
           </IconButton>
         </Tooltip>
       )}
-      {campaign.status === "CANCELADA" && (
-        <Tooltip title="Retomar campanha">
+      {(campaign.status === "CANCELADA" || campaign.status === "INATIVA") && (
+        <Tooltip title={campaign.status === "CANCELADA" ? "Retomar campanha" : "Iniciar campanha"}>
           <IconButton
             onClick={() => restartCampaign(campaign)}
             size="small"

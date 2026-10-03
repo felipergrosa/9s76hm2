@@ -66,8 +66,8 @@ export const GetTemplateDefinition = async (
         const parameters: TemplateParameter[] = [];
         const buttons: Array<{ type: string; text: string; }> = [];
 
-        // DEBUG: Ver estrutura completa do template
-        console.log("[GetTemplateDefinition] Template completo:", JSON.stringify(template.components, null, 2));
+        // DEBUG: estrutura completa do template (sem dados de contato)
+        logger.debug(`[GetTemplateDefinition] Components do template ${templateName}: ${JSON.stringify(template.components)}`);
 
 
         let body = "";

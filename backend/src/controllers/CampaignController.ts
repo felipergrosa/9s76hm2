@@ -25,6 +25,7 @@ import ContactListItem from "../models/ContactListItem";
 import AppError from "../errors/AppError";
 import { CancelService } from "../services/CampaignService/CancelService";
 import { RestartService } from "../services/CampaignService/RestartService";
+import { StartService } from "../services/CampaignService/StartService";
 import CloneCampaignService from "../services/CampaignService/CloneCampaignService";
 
 type IndexQuery = {
@@ -264,6 +265,18 @@ export const restart = async (
   await RestartService(+id, companyId);
 
   return res.status(204).json({ message: "Reinício dos disparos" });
+};
+
+export const start = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { id } = req.params;
+  const { companyId } = req.user;
+
+  const record = await StartService(+id, companyId);
+
+  return res.status(200).json(record);
 };
 
 export const remove = async (

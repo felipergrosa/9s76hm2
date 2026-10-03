@@ -30,8 +30,10 @@ export async function RestartService(id: number, companyId: number) {
 
   logger.info(`[RESTART CAMPAIGN] ID=${id} | Enviados: ${totalShipped}/${totalContacts}`);
 
-  // Atualiza status para EM_ANDAMENTO
-  await campaign.update({ status: "EM_ANDAMENTO" });
+  // Atualiza status para EM_ANDAMENTO e normaliza scheduledAt:
+  // o pacing dos envios usa scheduledAt como base; mantê-lo no futuro
+  // atrasaria o retomar/iniciar-para-agora até a data antiga.
+  await campaign.update({ status: "EM_ANDAMENTO", scheduledAt: new Date() });
 
   // Reprocessa a campanha - o sistema automaticamente pula os já enviados
   await campaignQueue.add("ProcessCampaign", {

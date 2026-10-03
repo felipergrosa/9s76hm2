@@ -1185,9 +1185,16 @@ const CampaignForm = () => {
       const negativeTagIds = parseStoredIdArray(values.negativeTagListIds);
       const negativeTagListIds = negativeTagIds.length > 0 ? JSON.stringify(negativeTagIds) : null;
       const dv = { ...processed, whatsappId, userId, userIds, contactListIds, contactListId, queueId: selectedQueue || null, dispatchStrategy, allowedWhatsappIds, metaTemplateVariables, tagListId, negativeTagListIds };
-      if (campaignId) { await api.put(`/campaigns/${campaignId}`, dv); if (attachment) { const fd = new FormData(); fd.append("file", attachment); await api.post(`/campaigns/${campaignId}/media-upload`, fd); } }
-      else { const { data } = await api.post("/campaigns", dv); if (attachment) { const fd = new FormData(); fd.append("file", attachment); await api.post(`/campaigns/${data.id}/media-upload`, fd); } }
-      toast.success(i18n.t("campaigns.toasts.success"));
+      // Status de execução é controlado pelo backend; o disparo acontece via /start
+      if (!["INATIVA", "PROGRAMADA", "CANCELADA"].includes(dv.status)) {
+        dv.status = "INATIVA";
+      }
+      let savedId = campaignId;
+      if (campaignId) { await api.put(`/campaigns/${campaignId}`, dv); }
+      else { const { data } = await api.post("/campaigns", dv); savedId = data.id; }
+      if (attachment) { const fd = new FormData(); fd.append("file", attachment); await api.post(`/campaigns/${savedId}/media-upload`, fd); }
+      await api.post(`/campaigns/${savedId}/start`);
+      toast.success("Campanha iniciada! Os disparos foram enfileirados.");
       handleClose();
     } catch (err) { toastError(err); }
   };
@@ -1257,7 +1264,8 @@ const CampaignForm = () => {
   // Funções de controle da campanha
   const restartCampaign = async () => {
     try {
-      await api.post(`/campaigns/${campaignId}/restart`);
+      const action = campaign.status === "INATIVA" ? "start" : "restart";
+      await api.post(`/campaigns/${campaignId}/${action}`);
       toast.success(i18n.t("campaigns.toasts.restart"));
       setCampaign((prev) => ({ ...prev, status: "EM_ANDAMENTO" }));
     } catch (err) {
@@ -2189,8 +2197,8 @@ const CampaignForm = () => {
                  {/* Botões de controle da campanha - aparecem primeiro se campanha existente */}
                  {campaignId && (
                    <Box display="flex" style={{ gap: 8, marginRight: 'auto' }}>
-                     {/* Retomar/Iniciar - para campanhas pausadas ou programadas */}
-                     {(campaign.status === "CANCELADA" || campaign.status === "PROGRAMADA") && (
+                     {/* Retomar/Iniciar - para campanhas inativas, pausadas ou programadas */}
+                     {(campaign.status === "CANCELADA" || campaign.status === "PROGRAMADA" || campaign.status === "INATIVA") && (
                        <Button
                          color="primary"
                          onClick={() => restartCampaign()}

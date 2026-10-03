@@ -1746,6 +1746,13 @@ async function handleProcessCampaign(job) {
 
       if (!isArray(contacts) || contacts.length === 0) {
         logger.warn(`[ProcessCampaign] Campanha ${id} não tem contatos na lista. Verifique se a lista tem contatos válidos.`);
+        // Lista vazia/todos filtrados: finaliza para não ficar EM_ANDAMENTO eterno
+        await Campaign.update(
+          { status: "FINALIZADA", completedAt: moment() },
+          { where: { id } }
+        );
+        campaign.status = "FINALIZADA";
+        emitCampaignUpdateThrottled(campaign.companyId, campaign);
         return;
       }
 
@@ -1771,7 +1778,12 @@ async function handleProcessCampaign(job) {
       const greaterIntervalSec = settings.greaterInterval;
       const messageIntervalSec = settings.messageInterval;
 
-      let baseDelay = campaign.scheduledAt;
+      // Envio imediato pode ter scheduledAt nulo/stale — a base do pacing
+      // precisa ser uma data válida senão todos os delays viram NaN
+      let baseDelay = campaign.scheduledAt ? new Date(campaign.scheduledAt) : new Date();
+      if (isNaN(baseDelay.getTime())) {
+        baseDelay = new Date();
+      }
 
       // const isOpen = await checkTime();
       // const isFds = await checkerWeek();
@@ -1884,7 +1896,7 @@ async function handlePrepareContact(job) {
     campaignShipping.campaignId = campaignId;
     const messages = getCampaignValidMessages(campaign) || [];
 
-    if (messages.length >= 0) {
+    if (messages.length > 0) {
       const radomIndex = randomValue(0, messages.length);
 
       // Enriquecer dados do contato com informações do CRM (Contact)
@@ -1997,6 +2009,27 @@ async function handlePrepareContact(job) {
     logger.error(`campaignQueue -> PrepareContact -> error: ${err.message}`);
   }
 }
+
+// Erros permanentes da Meta: reenviar só gera novos erros e pode degradar
+// a qualidade da WABA (a Meta recomenda não reenviar em <24h para 131026).
+const PERMANENT_META_ERROR_CODES = new Set([
+  "100",    // Invalid parameter
+  "131026", // Message undeliverable (inclui limite de marketing por usuário)
+  "131047", // Mensagem fora da janela de 24h / re-engajamento
+  "131049", // Não entregue p/ manter engajamento saudável do ecossistema
+  "131051", // Mensagem não entregue por restrição de entrega
+  "131053"  // Mídia não suportada
+]);
+
+const isPermanentMetaError = (err: any): boolean => {
+  const code = String(
+    err?.originalError?.response?.data?.error?.code ?? err?.code ?? ""
+  );
+  if (PERMANENT_META_ERROR_CODES.has(code)) return true;
+  const n = Number(code);
+  // Família 132xxx: erros de parâmetro/componente de template
+  return n >= 132000 && n < 133000;
+};
 
 async function handleDispatchCampaign(job) {
   try {
@@ -2746,6 +2779,20 @@ async function handleDispatchCampaign(job) {
         const { campaignShippingId, contactListItemId, campaignData } = job.data as DispatchCampaignData;
         const record = await CampaignShipping.findByPk(campaignShippingId);
         if (record) {
+          // Erro permanente da Meta: marca como falha sem reagendar
+          if (isPermanentMetaError(err)) {
+            await record.update({
+              jobId: null,
+              status: 'failed',
+              attempts: (record.attempts || 0) + 1,
+              lastError: `Erro permanente da Meta: ${err?.message || 'Erro desconhecido'}`,
+              lastErrorAt: moment().toDate()
+            });
+            logger.error(`[CAMPAIGN FAILED][META] Falha permanente (sem retry). Campanha=${campaign.id}; Registro=${campaignShippingId}; Erro=${err?.message}`);
+            await verifyAndFinalizeCampaign(campaign);
+            return;
+          }
+
           const newAttempts = (record.attempts || 0) + 1;
           const maxAttempts = 5;
 

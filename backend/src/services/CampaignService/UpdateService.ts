@@ -125,6 +125,14 @@ const UpdateService = async (data: Data): Promise<Campaign> => {
     data.status = "PROGRAMADA";
   }
 
+  if (
+    (data.scheduledAt == null || data.scheduledAt === "") &&
+    data.status === "PROGRAMADA"
+  ) {
+    // PROGRAMADA sem scheduledAt nunca é capturada pelo cron → INATIVA
+    data.status = "INATIVA";
+  }
+
   // N2: valida que todas as FKs informadas pertencem ao tenant antes de gravar
   await assertSameCompany(ContactList, toIdList(data.contactListId), companyId, "Lista de contatos");
   await assertSameCompany(ContactList, toIdList(data.contactListIds), companyId, "Listas de contatos");

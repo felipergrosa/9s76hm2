@@ -848,30 +848,33 @@ const CampaignModal = ({
       console.log('[CampaignModal] dataValues completo:', JSON.stringify(dataValues, null, 2));
       console.log('[CampaignModal] metaTemplateVariables FINAL que será enviado:', JSON.stringify(dataValues.metaTemplateVariables));
 
+      // Status de execução é controlado pelo backend; o disparo acontece via /start
+      if (!["INATIVA", "PROGRAMADA", "CANCELADA"].includes(dataValues.status)) {
+        dataValues.status = "INATIVA";
+      }
+
+      let savedId = campaignId;
       if (campaignId) {
         console.log('[CampaignModal] Atualizando campanha existente:', campaignId);
         await api.put(`/campaigns/${campaignId}`, dataValues);
-
-        if (attachment != null) {
-          const formData = new FormData();
-          formData.append("file", attachment);
-          await api.post(`/campaigns/${campaignId}/media-upload`, formData);
-        }
-        handleClose();
       } else {
         const { data } = await api.post("/campaigns", dataValues);
-
-        if (attachment != null) {
-          const formData = new FormData();
-          formData.append("file", attachment);
-          await api.post(`/campaigns/${data.id}/media-upload`, formData);
-        }
+        savedId = data.id;
         if (onSave) {
           onSave(data);
         }
-        handleClose();
       }
-      toast.success(i18n.t("campaigns.toasts.success"));
+
+      if (attachment != null) {
+        const formData = new FormData();
+        formData.append("file", attachment);
+        await api.post(`/campaigns/${savedId}/media-upload`, formData);
+      }
+
+      // Dispara o envio imediato (valida pré-requisitos no backend)
+      await api.post(`/campaigns/${savedId}/start`);
+      handleClose();
+      toast.success("Campanha iniciada! Os disparos foram enfileirados.");
     } catch (err) {
       console.log(err);
       toastError(err);
@@ -902,33 +905,36 @@ const CampaignModal = ({
       const userIds = selectedUsers.length > 0
         ? JSON.stringify(selectedUsers.map(u => u.id))
         : null;
+      const userId = selectedUsers.length === 1 ? selectedUsers[0].id : null;
 
-      const queueIds = selectedQueues.length > 0
-        ? JSON.stringify(selectedQueues.map(q => q.id))
-        : null;
-
+      // Mesma montagem de dados do handleSaveCampaign (estados compartilhados do modal)
       const campaignData = {
         ...processedValues,
+        whatsappId,
+        userId,
         userIds,
-        queueIds,
-        whatsappId: whatsapp ? whatsapp.id : null,
-        tagListId: tagListId === "Nenhuma" ? null : tagListId,
-        contactListId: contactListId === "Nenhuma" ? null : contactListId,
-        confirmation: values.confirmation || false,
-        mediaPath: attachment ? attachment.name : campaign.mediaPath || null,
-        mediaName: attachment ? attachment.name : campaign.mediaName || null,
-        templateVariables: metaTemplateVariables
+        queueId: selectedQueue || null,
+        dispatchStrategy,
+        allowedWhatsappIds,
+        metaTemplateVariables
       };
 
+      let savedId = campaignId;
       if (campaignId) {
         await api.put(`/campaigns/${campaignId}`, campaignData);
       } else {
         const { data } = await api.post("/campaigns", campaignData);
-        setCampaignId(data.id);
+        savedId = data.id;
       }
 
-      if (typeof reload === 'function') {
-        reload();
+      if (attachment != null && savedId) {
+        const formData = new FormData();
+        formData.append("file", attachment);
+        await api.post(`/campaigns/${savedId}/media-upload`, formData);
+      }
+
+      if (onSave && savedId) {
+        onSave({ id: savedId });
       }
 
       toast.success("Campanha salva como rascunho!");
@@ -1209,7 +1215,8 @@ const CampaignModal = ({
 
   const restartCampaign = async () => {
     try {
-      await api.post(`/campaigns/${campaign.id}/restart`);
+      const action = campaign.status === "INATIVA" ? "start" : "restart";
+      await api.post(`/campaigns/${campaign.id}/${action}`);
       toast.success(i18n.t("campaigns.toasts.restart"));
       setCampaign((prev) => ({ ...prev, status: "EM_ANDAMENTO" }));
       resetPagination();
@@ -2470,7 +2477,7 @@ const CampaignModal = ({
                     {/* Botões de controle da campanha */}
                     {campaignId && (
                       <div style={{ marginRight: 'auto', display: 'flex', gap: 8 }}>
-                        {(campaign.status === "CANCELADA" || campaign.status === "PROGRAMADA") && (
+                        {(campaign.status === "CANCELADA" || campaign.status === "PROGRAMADA" || campaign.status === "INATIVA") && (
                           <Button
                             color="primary"
                             onClick={() => restartCampaign()}
