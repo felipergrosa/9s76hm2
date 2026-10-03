@@ -52,18 +52,34 @@ export const UpdateSessionWindow = async (
     // atrasado foi processado. Nunca encurtar uma janela já mais recente.
     const expiresAt = new Date(Math.min(receivedAtMs, Date.now()) + HOURS_WINDOW * 60 * 60 * 1000);
 
-    // Atualizar ticket
+    // A janela da Meta é do par contato×conexão: propaga para TODOS os
+    // tickets não-fechados do contato nesta conexão. Sem isso, um segundo
+    // ticket (novo ciclo, campanha, transferência) fica com campo nulo e o
+    // envio/badge são bloqueados apesar da janela estar aberta.
+    const sourceTicket = await Ticket.findByPk(ticketId, {
+      attributes: ["id", "contactId", "whatsappId", "companyId"]
+    });
+
+    const scope: any = {
+      whatsappId,
+      status: { [Op.ne]: "closed" },
+      [Op.or]: [
+        { sessionWindowExpiresAt: null },
+        { sessionWindowExpiresAt: { [Op.lt]: expiresAt } }
+      ]
+    };
+
+    if (sourceTicket?.contactId && sourceTicket?.companyId) {
+      scope.contactId = sourceTicket.contactId;
+      scope.companyId = sourceTicket.companyId;
+    } else {
+      // Fallback seguro: atualiza apenas o ticket de origem
+      scope.id = ticketId;
+    }
+
     await Ticket.update(
       { sessionWindowExpiresAt: expiresAt },
-      {
-        where: {
-          id: ticketId,
-          [Op.or]: [
-            { sessionWindowExpiresAt: null },
-            { sessionWindowExpiresAt: { [Op.lt]: expiresAt } }
-          ]
-        }
-      }
+      { where: scope }
     );
 
     logger.info(
@@ -119,7 +135,22 @@ export const GetSessionWindowStatus = async (
       };
     }
 
-    const expiresAt = ticket.sessionWindowExpiresAt;
+    // A janela da Meta é do par contato×conexão: usa o MAIOR
+    // sessionWindowExpiresAt entre os tickets do contato nesta conexão,
+    // não apenas o deste ticket (senão badge/input mostram "expirada" em
+    // tickets que não receberam a última mensagem do cliente).
+    const windowHolder = await Ticket.findOne({
+      where: {
+        companyId: ticket.companyId,
+        contactId: ticket.contactId,
+        whatsappId: ticket.whatsappId,
+        sessionWindowExpiresAt: { [Op.ne]: null }
+      },
+      attributes: ["sessionWindowExpiresAt"],
+      order: [["sessionWindowExpiresAt", "DESC"]]
+    });
+
+    const expiresAt = windowHolder?.sessionWindowExpiresAt || ticket.sessionWindowExpiresAt;
 
     if (!expiresAt) {
       return {

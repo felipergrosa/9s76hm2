@@ -1,4 +1,5 @@
 import Ticket from "../../models/Ticket";
+import { Op } from "sequelize";
 import AppError from "../../errors/AppError";
 import Contact from "../../models/Contact";
 import User from "../../models/User";
@@ -170,6 +171,38 @@ const ShowTicketService = async (
 
   if (!ticket) {
     throw new AppError("ERR_NO_TICKET_FOUND", 404);
+  }
+
+  // Self-healing da janela 24h: a janela da Meta é do par contato×conexão,
+  // mas é persistida por ticket. Se outro ticket do mesmo contato tem uma
+  // janela mais recente (cliente escreveu em outro ciclo), replica para
+  // este — evita input bloqueado e badge "expirada" indevidos.
+  if (ticket.whatsapp?.channelType === "official" && ticket.contactId && ticket.whatsappId) {
+    try {
+      const windowHolder = await Ticket.findOne({
+        where: {
+          companyId,
+          contactId: ticket.contactId,
+          whatsappId: ticket.whatsappId,
+          sessionWindowExpiresAt: { [Op.ne]: null }
+        },
+        attributes: ["sessionWindowExpiresAt"],
+        order: [["sessionWindowExpiresAt", "DESC"]]
+      });
+
+      const bestExpiresAt = windowHolder?.sessionWindowExpiresAt;
+      const ownExpiresAt = ticket.sessionWindowExpiresAt;
+
+      if (bestExpiresAt && (!ownExpiresAt || new Date(ownExpiresAt) < new Date(bestExpiresAt))) {
+        await Ticket.update(
+          { sessionWindowExpiresAt: bestExpiresAt },
+          { where: { id: ticket.id, companyId } }
+        );
+        ticket.setDataValue("sessionWindowExpiresAt", bestExpiresAt);
+      }
+    } catch (e) {
+      // Não impede a abertura do ticket se o backfill falhar
+    }
   }
 
   // Atualiza/baixa avatar automaticamente ao abrir o ticket (no máximo 1x a cada 24h por contato)
