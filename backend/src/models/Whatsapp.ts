@@ -329,6 +329,13 @@ class Whatsapp extends Model<Whatsapp> {
   @Default("android")
   @Column(DataType.STRING(10))
   devicePlatform: "android" | "ios" | "web";
+
+  // Proxy dedicado para esta conexão (http(s)://user:pass@host:port ou socks5://)
+  // Mantém cada número associado a um IP estável/isolado.
+  // NUNCA logar este campo: pode conter credenciais embutidas.
+  @AllowNull(true)
+  @Column(DataType.TEXT)
+  proxyUrl: string;
 }
 
 export default Whatsapp;

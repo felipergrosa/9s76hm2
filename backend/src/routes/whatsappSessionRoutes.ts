@@ -27,6 +27,14 @@ whatsappSessionRoutes.delete(
   WhatsAppSessionController.remove
 );
 
+// Autenticação via pairing code (alternativa ao QR)
+whatsappSessionRoutes.post(
+  "/whatsappsession/:whatsappId/pairing-code",
+  isAuth,
+  checkPermission("connections.edit"),
+  WhatsAppSessionController.pairingCode
+);
+
 // Limpar sessão criptográfica de contato específico (resolve Bad MAC errors)
 whatsappSessionRoutes.post(
   "/whatsappsession/:whatsappId/clear-contact-session",

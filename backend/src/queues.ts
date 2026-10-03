@@ -1342,6 +1342,19 @@ export function randomValue(min, max) {
   return Math.floor(Math.random() * max) + min;
 }
 
+// Simulação de presença "digitando..." antes de enviar texto via Baileys.
+// Duração proporcional ao tamanho da mensagem (~30 chars/s, cap 4s) + jitter.
+// Falhas de presença não devem bloquear o envio — por isso try/catch interno.
+async function simulateTyping(wbot: any, chatId: string, text: string): Promise<void> {
+  try {
+    const len = (text || "").length;
+    const typingMs = Math.min(Math.max(len / 30, 1), 4) * 1000 + randomValue(0, 800);
+    await wbot.sendPresenceUpdate("composing", chatId);
+    await new Promise(resolve => setTimeout(resolve, typingMs));
+    await wbot.sendPresenceUpdate("paused", chatId);
+  } catch { }
+}
+
 async function getCapBackoffSettings(companyId: number, isOfficialApi: boolean = false): Promise<CapBackoffSettings> {
   try {
     const settings = await CampaignSetting.findAll({
@@ -1768,6 +1781,16 @@ async function handleProcessCampaign(job) {
         isGroup: contact.isGroup
       }));
 
+      // Cadência anti-ban (messageInterval/greaterInterval) só se aplica a
+      // canais não-oficiais (Baileys). Campanha 100% API Oficial usa o
+      // pacing próprio (officialApiMessageInterval, default 1s) — as travas
+      // de cap/backoff por conexão continuam valendo no dispatch.
+      const officialOnly = await isCampaignOfficialOnly(campaign);
+      const officialIntervals = officialOnly
+        ? await getIntervalSettings(campaign.companyId, true)
+        : null;
+      const officialStaggerMs = Math.max(0, officialIntervals?.messageIntervalMs ?? 1000);
+
       // const baseDelay = job.data.delay || 0;
       // longerIntervalAfter representa após quantas mensagens aplicar o intervalo maior (contagem)
       const longerIntervalAfter = settings.longerIntervalAfter;
@@ -1785,15 +1808,23 @@ async function handleProcessCampaign(job) {
         baseDelay = new Date();
       }
 
+      // Para oficial, respeita scheduledAt sem acumular a cadência anti-ban
+      const officialBaseDiffMs = Math.max(0, differenceInSeconds(baseDelay, new Date())) * 1000;
+
       // const isOpen = await checkTime();
       // const isFds = await checkerWeek();
 
       const queuePromises = [];
       for (let i = 0; i < contactData.length; i++) {
-        baseDelay = addSeconds(baseDelay as any, (i > longerIntervalAfter ? greaterIntervalSec : messageIntervalSec) as any);
+        let delay: number;
+        if (officialOnly) {
+          delay = officialBaseDiffMs + (i + 1) * officialStaggerMs;
+        } else {
+          baseDelay = addSeconds(baseDelay as any, (i > longerIntervalAfter ? greaterIntervalSec : messageIntervalSec) as any);
+          delay = calculateDelay(i, baseDelay, longerIntervalAfter, greaterIntervalMs, messageIntervalMs);
+        }
 
         const { contactId, campaignId, variables } = contactData[i];
-        const delay = calculateDelay(i, baseDelay, longerIntervalAfter, greaterIntervalMs, messageIntervalMs);
         // if (isOpen || !isFds) {
         const queuePromise = campaignQueue.add(
           "PrepareContact",
@@ -1822,6 +1853,49 @@ function calculateDelay(
   // jitter anti-spam: 0-2000ms
   const jitterMs = randomValue(0, 2000);
   return diffMs + baseInterval + jitterMs;
+}
+
+// Verifica se TODAS as conexões usadas pela campanha são API Oficial.
+// Campanha mista (oficial + baileys) mantém a cadência anti-ban.
+async function isCampaignOfficialOnly(campaign: any): Promise<boolean> {
+  try {
+    let ids: number[] = [];
+    if (campaign.whatsappId) ids.push(Number(campaign.whatsappId));
+
+    if (campaign.dispatchStrategy === "round_robin") {
+      let allowed: number[] = [];
+      try {
+        const parsed = typeof campaign.allowedWhatsappIds === "string"
+          ? JSON.parse(campaign.allowedWhatsappIds)
+          : campaign.allowedWhatsappIds;
+        if (Array.isArray(parsed)) {
+          allowed = parsed.map((v: any) => Number(v)).filter((n: number) => !Number.isNaN(n));
+        }
+      } catch { }
+
+      if (allowed.length > 0) {
+        ids = allowed;
+      } else {
+        // Round-robin sem lista explícita usa TODAS as conexões ativas da empresa
+        const all = await Whatsapp.findAll({
+          where: { companyId: campaign.companyId, status: "CONNECTED" },
+          attributes: ["id", "channelType"]
+        });
+        return all.length > 0 && all.every(w => w.channelType === "official");
+      }
+    }
+
+    if (ids.length === 0) return false;
+
+    const whatsapps = await Whatsapp.findAll({
+      where: { id: ids, companyId: campaign.companyId },
+      attributes: ["id", "channelType"]
+    });
+
+    return whatsapps.length > 0 && whatsapps.every(w => w.channelType === "official");
+  } catch {
+    return false;
+  }
 }
 
 const rrIndexByCampaign: Map<number, number> = new Map();
@@ -2607,6 +2681,7 @@ async function handleDispatchCampaign(job) {
 
       if (whatsapp.status === "CONNECTED") {
         if (campaign.confirmation && campaignShipping.confirmation === null) {
+          await simulateTyping(wbot, chatId, campaignShipping.confirmationMessage);
           const confirmationMessage = await wbot.sendMessage(chatId, {
             text: `\u200c${campaignShipping.confirmationMessage}`
           });
@@ -2654,6 +2729,7 @@ async function handleDispatchCampaign(job) {
           logger.info(`[DispatchCampaign][MEDIA-DEBUG] perMessageFilePath=${perMessageFilePath} | hasPerMessageMedia=${hasPerMessageMedia} | fileExists=${perMessageFilePath ? fs.existsSync(perMessageFilePath) : 'N/A'}`);
 
           if (!hasPerMessageMedia && !campaign.mediaPath) {
+            await simulateTyping(wbot, chatId, campaignShipping.message);
             const sentMessage = await wbot.sendMessage(chatId, {
               text: `\u200c${campaignShipping.message}`
             });
@@ -2688,6 +2764,7 @@ async function handleDispatchCampaign(job) {
               // Enviar texto primeiro se: sendMediaSeparately OU áudio (PTT não suporta caption)
               if ((sendSeparately || isAudio) && hasText) {
                 logger.info(`[CAMPAIGN-AUDIO-DEBUG] Enviando TEXTO separado para ticket ${ticket.id}`);
+                await simulateTyping(wbot, chatId, campaignShipping.message);
                 const textMessage = await wbot.sendMessage(chatId, {
                   text: `\u200c${campaignShipping.message}`
                 });

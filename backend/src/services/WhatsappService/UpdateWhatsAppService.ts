@@ -71,6 +71,8 @@ interface WhatsappData {
   color?: string;
   // Plataforma do dispositivo (android/ios/web)
   devicePlatform?: "android" | "ios" | "web";
+  // Proxy dedicado da conexão (http(s):// ou socks5://)
+  proxyUrl?: string;
 }
 
 interface Request {
@@ -160,7 +162,9 @@ const UpdateWhatsAppService = async ({
     allowedTemplates,
     color,
     // Plataforma do dispositivo
-    devicePlatform
+    devicePlatform,
+    // Proxy dedicado
+    proxyUrl
   } = whatsappData;
 
   const normalizedColor = typeof color === "string" && color.trim()
@@ -274,7 +278,11 @@ const UpdateWhatsAppService = async ({
     allowedTemplates,
     color: finalColor,
     // Plataforma do dispositivo
-    devicePlatform
+    devicePlatform,
+    // Proxy dedicado: normaliza vazio para null; undefined preserva o valor atual
+    proxyUrl: typeof proxyUrl === "undefined"
+      ? whatsapp.proxyUrl
+      : (proxyUrl && String(proxyUrl).trim() ? String(proxyUrl).trim() : null)
   });
 
   // Invalida o cache token->whatsapp do middleware tokenAuth (chave whatsappToken:{token})

@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { removeWbot } from "../libs/wbot";
+import { removeWbot, setPairingRequest } from "../libs/wbot";
 import ShowWhatsAppService from "../services/WhatsappService/ShowWhatsAppService";
 import { StartWhatsAppSessionUnified as StartWhatsAppSession } from "../services/WbotServices/StartWhatsAppSessionUnified";
 import DeleteBaileysService from "../services/BaileysServices/DeleteBaileysService";
@@ -187,4 +187,56 @@ export const clearWhatsAppSession = async (
   });
 };
 
-export default { store, remove, update, clearContactSession, clearWhatsAppSession };
+// Autenticação via pairing code (alternativa ao QR, mesmo fluxo de linked device)
+// POST /whatsappsession/:whatsappId/pairing-code  body: { phoneNumber: "5511999999999" }
+// O número deve conter apenas dígitos com código do país. O código gerado é
+// temporário, entregue ao frontend via campo qrcode com prefixo "pairing:".
+const pairingCode = async (req: Request, res: Response): Promise<Response> => {
+  const { whatsappId } = req.params;
+  const { companyId } = req.user;
+  const phoneDigits = String((req.body as any)?.phoneNumber || "").replace(/\D/g, "");
+
+  // DDI + DDD + número: faixa realista de um MSISDN
+  if (!phoneDigits || phoneDigits.length < 10 || phoneDigits.length > 15) {
+    return res.status(400).json({
+      error: "Informe o número com código do país (somente dígitos, 10 a 15 caracteres)."
+    });
+  }
+
+  const whatsapp = await Whatsapp.findOne({ where: { id: whatsappId, companyId } });
+  if (!whatsapp) {
+    return res.status(404).json({ error: "WhatsApp não encontrado" });
+  }
+
+  const channelType = (whatsapp as any)?.channelType || "baileys";
+  if (whatsapp.channel !== "whatsapp" || channelType !== "baileys") {
+    return res.status(400).json({ error: "Pairing code disponível apenas para conexões Baileys." });
+  }
+
+  const hasLock = await acquireWbotLock(whatsapp.id, "WhatsAppSessionController");
+  if (!hasLock) {
+    return res.status(409).json({
+      error: "Sessão já está sendo gerenciada por outra instância. Tente novamente em alguns segundos."
+    });
+  }
+
+  // Registra o pedido ANTES de reiniciar a sessão: o socket consome o
+  // telefone na inicialização e solicita o código ao WhatsApp.
+  setPairingRequest(Number(whatsappId), phoneDigits);
+
+  // Pairing exige credenciais não registradas — limpa o auth state,
+  // seguindo o mesmo fluxo de clearAuth do update().
+  try {
+    await removeWbot(Number(whatsappId), true);
+  } catch { }
+
+  await DeleteBaileysService(whatsappId);
+  await cacheLayer.delFromPattern(`sessions:${whatsappId}:*`);
+
+  await whatsapp.update({ session: "", status: "PENDING", qrcode: "" });
+  await StartWhatsAppSession(whatsapp, companyId);
+
+  return res.status(200).json({ message: "Pairing code solicitado. Aguarde a geração do código." });
+};
+
+export default { store, remove, update, clearContactSession, clearWhatsAppSession, pairingCode };

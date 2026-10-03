@@ -14,7 +14,8 @@ const SECRET_FIELDS = [
   "metaAppSecret",
   "metaAccessToken",
   "metaPageAccessToken",
-  "metaWebhookVerifyToken"
+  "metaWebhookVerifyToken",
+  "proxyUrl"
 ] as const;
 
 /**

@@ -101,6 +101,40 @@ const sessions: Session[] = [];
 
 const retriesQrCodeMap = new Map<number, number>();
 
+// Pedidos de pairing code pendentes (whatsappId -> telefone apenas com dígitos).
+// Preenchido pelo endpoint POST /whatsappsession/:id/pairing-code e consumido
+// na criação do socket. É volátil de propósito: o código de pareamento é
+// temporário e nunca deve ser persistido como segredo.
+const pendingPairingRequests = new Map<number, string>();
+
+export const setPairingRequest = (whatsappId: number, phoneDigits: string): void => {
+  pendingPairingRequests.set(whatsappId, phoneDigits);
+};
+
+export const clearPairingRequest = (whatsappId: number): void => {
+  pendingPairingRequests.delete(whatsappId);
+};
+
+// Monta o agente de proxy para a conexão (http(s) ou socks5).
+// Retorna undefined quando não configurado — nunca loga a URL (contém credenciais).
+const buildProxyAgent = (proxyUrl?: string): any => {
+  if (!proxyUrl || !proxyUrl.trim()) return undefined;
+  try {
+    const url = proxyUrl.trim();
+    if (/^socks/i.test(url)) {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { SocksProxyAgent } = require("socks-proxy-agent");
+      return new SocksProxyAgent(url);
+    }
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { HttpsProxyAgent } = require("https-proxy-agent");
+    return new HttpsProxyAgent(url);
+  } catch (e: any) {
+    logger.warn(`[wbot] proxyUrl inválida ou pacote ausente, ignorando proxy: ${e?.message}`);
+    return undefined;
+  }
+};
+
 // ========== CONTROLE DE RECONEXÃO (evita loops e race conditions) ==========
 // Map para rastrear quais whatsappIds estão no processo de reconexão
 // VALOR = timestamp (Date.now()) de quando a flag foi ativada, para detectar deadlocks
@@ -565,6 +599,7 @@ export const removeWbot = async (
       }
 
       sessions.splice(sessionIndex, 1);
+      pendingPairingRequests.delete(whatsappId);
       if (isLogout) {
         await releaseWbotLock(whatsappId);
       }
@@ -679,7 +714,13 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
           shouldIgnoreJid: (jid) => {
             return isJidBroadcast(jid) || (!allowGroup && isJidGroup(jid))
           },
-          browser: ["Whaticket " + (process.env.NODE_ENV === "production" ? "PROD" : "DEV"), "Chrome", "10.0"],
+          // Preset padrão do Baileys (aparece como "Chrome / Mac OS" em
+          // Aparelhos Conectados). Evita a assinatura literal da aplicação,
+          // que é marcador trivial de automação. Não usar preset mobile
+          // primário (inexistente nesta versão e não muda o transporte).
+          browser: Browsers.macOS("Chrome"),
+          agent: buildProxyAgent(whatsappUpdate.proxyUrl),
+          fetchAgent: buildProxyAgent(whatsappUpdate.proxyUrl),
           defaultQueryTimeoutMs: undefined,
           msgRetryCounterCache,
           markOnlineOnConnect: false,
@@ -731,6 +772,38 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
         wsocket.connectionState = "opening";
         (wsocket as any)._sessionToken = mySessionToken;
         sessions.push(wsocket);
+
+        // Pairing code: alternativa ao QR para autenticação por dispositivo
+        // vinculado. Só é solicitado quando o endpoint registrou um pedido
+        // pendente e a sessão ainda NÃO está registrada (creds.registered).
+        // O código é entregue ao frontend via campo qrcode com prefixo
+        // "pairing:" — é temporário e nunca persiste como segredo.
+        const pendingPairingPhone = pendingPairingRequests.get(id);
+        if (pendingPairingPhone) {
+          pendingPairingRequests.delete(id);
+          if (!state.creds.registered) {
+            (async () => {
+              try {
+                const code = await wsocket.requestPairingCode(pendingPairingPhone);
+                await whatsappUpdate.update({
+                  qrcode: `pairing:${code}`,
+                  status: "qrcode",
+                  retries: 0,
+                  number: ""
+                });
+                io?.of(`/workspace-${companyId}`).emit(
+                  `company-${companyId}-whatsappSession`,
+                  { action: "update", session: sanitizeWhatsapp(whatsappUpdate) }
+                );
+                logger.info(`[wbot] Pairing code gerado para whatsappId=${id}`);
+              } catch (pairErr: any) {
+                logger.warn(`[wbot] requestPairingCode falhou para whatsappId=${id}: ${pairErr?.message} — seguindo fluxo de QR`);
+              }
+            })();
+          } else {
+            logger.info(`[wbot] Pedido de pairing ignorado para whatsappId=${id}: sessão já registrada`);
+          }
+        }
 
         wsocket.connectionState = "opening";
         const lockRenewInterval = setInterval(async () => {

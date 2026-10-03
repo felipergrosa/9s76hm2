@@ -60,29 +60,7 @@ export const GetApprovedTemplates = async ({
       throw new Error("WhatsApp não tem configurações da API Oficial");
     }
 
-    // Buscar WABA ID (WhatsApp Business Account ID)
-    // Primeiro precisamos obter o WABA ID através do phoneNumberId
-    let wabaId: string;
     const apiVersion = officialApiVersion();
-
-    try {
-      const phoneResponse = await axios.get(
-        `https://graph.facebook.com/${apiVersion}/${wabaPhoneNumberId}`,
-        {
-          params: {
-            access_token: wabaAccessToken,
-            fields: "verified_name,display_phone_number,quality_rating"
-          }
-        }
-      );
-      
-      // O WABA ID geralmente está na estrutura de dados
-      // Para obter templates, podemos buscar diretamente do WABA
-      // Se não temos o WABA ID, podemos buscar do próprio phoneNumberId
-      logger.info(`[GetApprovedTemplates] Phone info:`, phoneResponse.data);
-    } catch (err: any) {
-      logger.warn(`[GetApprovedTemplates] Erro ao buscar info do phone:`, err.message);
-    }
 
     // Buscar templates
     // API: GET /{api-version}/{whatsapp-business-account-id}/message_templates

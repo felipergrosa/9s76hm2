@@ -70,6 +70,8 @@ interface Request {
   allowedTemplates?: string[];
   // Plataforma do dispositivo (android/ios/web)
   devicePlatform?: "android" | "ios" | "web";
+  // Proxy dedicado da conexão (http(s):// ou socks5://)
+  proxyUrl?: string;
 }
 
 interface Response {
@@ -140,6 +142,8 @@ const CreateWhatsAppService = async ({
   allowedTemplates,
   // Plataforma do dispositivo
   devicePlatform,
+  // Proxy dedicado
+  proxyUrl,
 }: Request): Promise<Response> => {
   const company = await Company.findOne({
     where: {
@@ -313,6 +317,8 @@ const CreateWhatsAppService = async ({
       allowedTemplates,
       // Plataforma do dispositivo
       devicePlatform,
+      // Proxy dedicado (normalizado: vazio vira null)
+      proxyUrl: typeof proxyUrl === "string" && proxyUrl.trim() ? proxyUrl.trim() : null,
     }
   );
 

@@ -25,6 +25,28 @@ export interface TemplateDefinition {
     footer?: string;
 }
 
+// Cache em memória das definições de template: cada chamada custa 2 requests
+// à Graph API e era feita 2x por disparo de campanha. Definições mudam raramente;
+// TTL curto cobre mudanças de status sem degradar o envio.
+const DEFINITION_CACHE_TTL_MS = 5 * 60 * 1000;
+const definitionCache = new Map<string, { expiresAt: number; value: TemplateDefinition }>();
+
+export const invalidateTemplateDefinitionCache = (
+    whatsappId?: number,
+    templateName?: string
+): void => {
+    if (whatsappId === undefined) {
+        definitionCache.clear();
+        return;
+    }
+    const prefix = `${whatsappId}:`;
+    for (const key of definitionCache.keys()) {
+        if (key.startsWith(prefix) && (templateName === undefined || key.includes(`:${templateName}:`))) {
+            definitionCache.delete(key);
+        }
+    }
+};
+
 /**
  * Busca a definição de um template específico da Meta API
  * e extrai informações sobre parâmetros e botões
@@ -34,6 +56,12 @@ export const GetTemplateDefinition = async (
     templateName: string,
     languageCode: string = "pt_BR"
 ): Promise<TemplateDefinition> => {
+    const cacheKey = `${whatsappId}:${templateName}:${languageCode}`;
+    const cached = definitionCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+        return { ...cached.value };
+    }
+
     try {
         logger.info(
             `[GetTemplateDefinition] Buscando definição de ${templateName} (${languageCode}) via whatsappId=${whatsappId}`
@@ -212,7 +240,7 @@ export const GetTemplateDefinition = async (
             `${parameters.length} parâmetros, ${buttons.length} botões`
         );
 
-        return {
+        const definition: TemplateDefinition = {
             name: template.name,
             language: template.language,
             status: template.status,
@@ -227,6 +255,13 @@ export const GetTemplateDefinition = async (
             header,
             footer
         };
+
+        definitionCache.set(cacheKey, {
+            expiresAt: Date.now() + DEFINITION_CACHE_TTL_MS,
+            value: definition
+        });
+
+        return { ...definition };
     } catch (error: any) {
         logger.error(`[GetTemplateDefinition] Erro: ${error.message}`);
         throw error;

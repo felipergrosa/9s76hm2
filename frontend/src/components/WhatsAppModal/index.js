@@ -195,7 +195,9 @@ const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
     sessionWindowRenewalMessage: "",
     sessionWindowRenewalMinutes: 60,
     // Plataforma do dispositivo (android/ios/web)
-    devicePlatform: "android"
+    devicePlatform: "android",
+    // Proxy dedicado da conexão (opcional)
+    proxyUrl: ""
   };
   const [whatsApp, setWhatsApp] = useState(initialState);
   const [selectedQueueIds, setSelectedQueueIds] = useState([]);
@@ -468,6 +470,12 @@ const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
 
     delete whatsappData["queues"];
     delete whatsappData["session"];
+
+    // proxyUrl é write-only (sanitizado no GET): só envia quando preenchido.
+    // Em branco mantém o valor atual; para limpar, usar a API com proxyUrl: "".
+    if (!values.proxyUrl || !String(values.proxyUrl).trim()) {
+      delete whatsappData["proxyUrl"];
+    }
 
     try {
       if (whatsAppId) {
@@ -850,6 +858,25 @@ const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
                           </FormControl>
                           <Typography variant="caption" color="textSecondary" style={{ marginTop: 4, display: "block" }}>
                             Android requer keepalive periódico devido ao Doze Mode. iOS/Web não precisam.
+                          </Typography>
+                        </Grid>
+                      )}
+
+                      {/* Proxy dedicado - apenas para Baileys */}
+                      {values.channelType === "baileys" && (
+                        <Grid item xs={12} sm={6}>
+                          <Field
+                            as={TextField}
+                            label="Proxy dedicado (opcional)"
+                            name="proxyUrl"
+                            placeholder="socks5://user:pass@host:port"
+                            variant="outlined"
+                            margin="dense"
+                            size="small"
+                            fullWidth
+                          />
+                          <Typography variant="caption" color="textSecondary" style={{ marginTop: 4, display: "block" }}>
+                            Mantém este número em um IP fixo/isolado (http(s):// ou socks5://). Aplicado na próxima conexão. Por segurança o valor salvo não é exibido — em branco mantém o atual.
                           </Typography>
                         </Grid>
                       )}
