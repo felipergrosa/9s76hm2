@@ -1,3 +1,4 @@
+import cacheLayer from "../../libs/cache";
 import logger from "../../utils/logger";
 import * as Sentry from "@sentry/node";
 import { Mutex } from "async-mutex";
@@ -35,6 +36,15 @@ const releaseContactLock = (key: string, mutex: Mutex): void => {
   if (!entry || entry.mutex !== mutex) return;
   entry.users -= 1;
   if (entry.users === 0) contactLocks.delete(key);
+};
+
+// Contador cumulativo de não-lidas por contato — mesmo contrato do
+// wbotMessageListener (cache contacts:{id}:unreads, zerado pelo SetTicketMessagesAsRead)
+const nextUnreadCount = async (contactId: number): Promise<number> => {
+  const current = await cacheLayer.get(`contacts:${contactId}:unreads`);
+  const next = Number(current || 0) + 1;
+  await cacheLayer.set(`contacts:${contactId}:unreads`, `${next}`);
+  return next;
 };
 
 const loadRealtimeTicketPayload = async (ticketId: number) => {
@@ -306,11 +316,12 @@ async function processMessageWithExistingContact(
     where: { companyId }
   });
 
-  // Encontrar ou criar ticket
+  // Encontrar ou criar ticket — unreadMessages recebe o total cumulativo
+  // (mesmo contrato do wbotMessageListener; cache zera ao marcar como lido)
   let ticket = await FindOrCreateTicketService(
     contact,
     whatsapp,
-    1,
+    await nextUnreadCount(contact.id),
     companyId,
     null,
     null,
@@ -364,10 +375,8 @@ async function processMessageWithExistingContact(
 
   logger.info(`[WebhookProcessor] Mensagem criada via fallback: ${createdMessage.id}`);
 
-  await ticket.update({
-    lastMessage: body,
-    unreadMessages: (ticket.unreadMessages || 0) + 1
-  });
+  // unreadMessages já veio cumulativo do FindOrCreateTicketService
+  await ticket.update({ lastMessage: body });
   await UpdateSessionWindow(ticket.id, whatsapp.id, timestamp);
 
   // Emitir evento via Socket.IO
@@ -516,11 +525,12 @@ async function processIncomingMessage(
       where: { companyId }
     });
 
-    // Encontrar ou criar ticket
+    // Encontrar ou criar ticket — unreadMessages recebe o total cumulativo
+    // (mesmo contrato do wbotMessageListener; cache zera ao marcar como lido)
     let ticket = await FindOrCreateTicketService(
       contact,
       whatsapp,
-      1,
+      await nextUnreadCount(contact.id),
       companyId,
       null,
       null,
@@ -724,11 +734,10 @@ async function processIncomingMessage(
 
     logger.info(`[WebhookProcessor] Mensagem criada: ${createdMessage.id}`);
 
-    // Atualizar ticket com contador de mensagens não lidas
+    // Atualizar ticket — unreadMessages já veio cumulativo do FindOrCreateTicketService
     await ticket.update({
       lastMessage: body,
-      updatedAt: new Date(),
-      unreadMessages: (ticket.unreadMessages || 0) + 1
+      updatedAt: new Date()
     });
 
     // Atualizar janela de sessão de 24h (API Oficial)

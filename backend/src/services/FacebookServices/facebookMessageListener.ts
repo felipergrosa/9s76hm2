@@ -40,6 +40,7 @@ import { get } from "http";
 import { WebhookModel } from "../../models/Webhook";
 import { is } from "bluebird";
 import ShowTicketService from "../TicketServices/ShowTicketService";
+import cacheLayer from "../../libs/cache";
 import logger from "../../utils/logger";
 
 interface IMe {
@@ -615,7 +616,16 @@ export const handleMessage = async (
         return;
       }
 
-      const unreadCount = fromMe ? 0 : 1;
+      // Contador cumulativo de não-lidas por contato — mesmo contrato do
+      // wbotMessageListener (cache contacts:{id}:unreads, zerado ao ler / em echo)
+      let unreadCount = 0;
+      if (fromMe) {
+        await cacheLayer.set(`contacts:${contact.id}:unreads`, "0");
+      } else {
+        const unreads = await cacheLayer.get(`contacts:${contact.id}:unreads`);
+        unreadCount = +unreads + 1;
+        await cacheLayer.set(`contacts:${contact.id}:unreads`, `${unreadCount}`);
+      }
 
       const getSession = await Whatsapp.findOne({
         where: {
@@ -671,6 +681,14 @@ export const handleMessage = async (
         )
         return createTicket;
       });
+
+      // Paridade com WhatsApp: resposta em ticket de campanha volta ao fluxo normal
+      if (ticket.status === "campaign" && !fromMe) {
+        const newStatus = ticket.isBot ? "bot" : "pending";
+        await ticket.update({ status: newStatus });
+        const { ticketEventBus } = await import("../TicketServices/TicketEventBus");
+        ticketEventBus.publishStatusChanged(companyId, ticket.id, ticket.uuid, ticket, "campaign", newStatus);
+      }
 
       let bodyRollbackTag = "";
       let bodyNextTag = "";

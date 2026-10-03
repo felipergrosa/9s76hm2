@@ -2439,12 +2439,9 @@ export const verifyMediaMessage = async (
       isCampaign  // Passa para CreateMessageService para evitar emit na conversa
     };
 
-    // Atualizar lastMessage e incrementar unreadMessages se não for fromMe
-    const updateData: any = { lastMessage: body || media.filename };
-    if (!msg.key.fromMe) {
-      updateData.unreadMessages = (ticket.unreadMessages || 0) + 1;
-    }
-    await ticket.update(updateData);
+    // unreadMessages já foi atualizado pelo FindOrCreateTicketService com o
+    // total cumulativo (cache contacts:{id}:unreads). Somar +1 aqui inflava o badge.
+    await ticket.update({ lastMessage: body || media.filename });
 
     const newMessage = await CreateMessageService({
       messageData,
@@ -2684,12 +2681,9 @@ export const verifyMessage = async (
     isCampaign  // Passa para CreateMessageService para evitar emit na conversa
   };
 
-  // Atualizar lastMessage e incrementar unreadMessages se não for fromMe
-  const updateData: any = { lastMessage: body };
-  if (!msg.key.fromMe) {
-    updateData.unreadMessages = (ticket.unreadMessages || 0) + 1;
-  }
-  await ticket.update(updateData);
+  // unreadMessages já foi atualizado pelo FindOrCreateTicketService com o
+  // total cumulativo (cache contacts:{id}:unreads). Somar +1 aqui inflava o badge.
+  await ticket.update({ lastMessage: body });
 
   await CreateMessageService({ messageData, companyId: companyId });
 

@@ -957,7 +957,7 @@ const handleCloseTicket = async (id) => {
                                 </Tooltip>
                             )}
 
-                            {(ticket.status === "open" || ticket.status === "group" || ticket.status === "bot" || ticket.status === "campaign") && (
+                            {!ticket.isGroup && (ticket.status === "open" || ticket.status === "group" || ticket.status === "bot" || ticket.status === "campaign") && (
                                 <Tooltip title={i18n.t("ticketsList.buttons.closed")}>
                                     <IconButton
                                         size="small"
