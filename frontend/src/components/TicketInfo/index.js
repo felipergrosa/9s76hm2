@@ -15,7 +15,7 @@ const TicketInfo = ({ contact, ticket, onClick }) => {
 	const [presenceStatus, setPresenceStatus] = useState(null); // "composing" | "recording" | null
 	const presenceTimerRef = useRef(null);
 
-    const useStyles = makeStyles(() => ({
+    const useStyles = makeStyles(theme => ({
         avatarContainer: {
             position: 'relative',
             display: 'inline-block',
@@ -51,6 +51,11 @@ const TicketInfo = ({ contact, ticket, onClick }) => {
             wordBreak: 'break-word',
             overflowWrap: 'break-word',
             lineHeight: '1.2',
+            [theme.breakpoints.down("sm")]: {
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+            },
         },
         subheaderRoot: {
             display: 'flex',

@@ -25,6 +25,14 @@ const useStyles = makeStyles(theme => ({
 			minHeight: 56,
 		},
 	},
+	backButton: {
+		alignSelf: 'flex-start',
+		marginTop: 8,
+		[theme.breakpoints.down("sm")]: {
+			alignSelf: 'center',
+			marginTop: 0,
+		},
+	},
 }));
 
 const TicketHeader = ({ loading, children }) => {
@@ -63,9 +71,9 @@ const TicketHeader = ({ loading, children }) => {
 						edge="start"
 						aria-label="voltar"
 						onClick={handleBack}
-						style={{ alignSelf: 'flex-start', marginTop: 8 }}
+						className={classes.backButton}
 					>
-						<ArrowBackIos fontSize="small" />
+						<ArrowBackIos size={26} />
 					</IconButton>
 					{children}
 				</Card>
