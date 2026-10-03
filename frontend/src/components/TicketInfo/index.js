@@ -263,6 +263,7 @@ export default React.memo(TicketInfo, (prevProps, nextProps) => {
 		prevProps.contact?.name === nextProps.contact?.name &&
 		prevProps.contact?.profilePicUrl === nextProps.contact?.profilePicUrl &&
 		prevProps.ticket?.user?.id === nextProps.ticket?.user?.id &&
+		prevProps.ticket?.sessionWindowExpiresAt === nextProps.ticket?.sessionWindowExpiresAt &&
 		JSON.stringify(prevProps.contact?.tags) === JSON.stringify(nextProps.contact?.tags)
 	);
 });
