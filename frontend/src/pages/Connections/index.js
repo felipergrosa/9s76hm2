@@ -82,10 +82,12 @@ const useStyles = makeStyles((theme) => ({
   paper: {
     flex: 1,
     padding: 0,
-    overflow: "hidden",
+    // overflowY auto: lista de conexões rola dentro do Paper (o MainContainer não usa useWindowScroll)
+    overflowY: "auto",
     borderRadius: 12,
     border: `1px solid ${theme.palette.divider}`,
     backgroundColor: theme.palette.background.paper,
+    ...theme.scrollbarStyles,
   },
   header: {
     display: "flex",
