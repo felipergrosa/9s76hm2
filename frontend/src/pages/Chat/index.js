@@ -177,6 +177,8 @@ export function ChatModal({
     <Dialog
       open={open}
       onClose={handleClose}
+      fullWidth
+      maxWidth="sm"
       aria-labelledby="alert-dialog-title"
       aria-describedby="alert-dialog-description"
     >

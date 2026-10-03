@@ -80,6 +80,16 @@ const useStyles = makeStyles(theme => ({
   card: {
     padding: theme.spacing(3),
     borderRadius: 12,
+    [theme.breakpoints.down("sm")]: {
+      padding: theme.spacing(2),
+    },
+  },
+  // Touch target mínimo 44px em mobile (regra 2 do checklist mobile)
+  actionBtn: {
+    [theme.breakpoints.down("sm")]: {
+      minWidth: 44,
+      minHeight: 44,
+    },
   },
   cardTitle: {
     fontSize: "1.15rem",
@@ -113,6 +123,8 @@ const useStyles = makeStyles(theme => ({
   footerBar: {
     display: "flex",
     justifyContent: "space-between",
+    gap: theme.spacing(1),
+    flexWrap: "wrap",
     marginTop: theme.spacing(3),
   },
   primaryBtn: {
@@ -133,8 +145,14 @@ const useStyles = makeStyles(theme => ({
   summaryRow: {
     display: "flex",
     justifyContent: "space-between",
+    gap: theme.spacing(1),
     padding: theme.spacing(1, 0),
     borderBottom: `1px dashed ${theme.palette.divider}`,
+  },
+  summaryValue: {
+    textAlign: "right",
+    minWidth: 0,
+    wordBreak: "break-word",
   },
 }));
 
@@ -403,7 +421,7 @@ const FollowUpForm = () => {
         />
       </Suspense>
       <Tooltip title="Respostas rápidas">
-        <IconButton size="small" onClick={() => setQuickPickerStepIndex(index)}>
+        <IconButton size="small" className={classes.actionBtn} onClick={() => setQuickPickerStepIndex(index)}>
           <Zap size={20} />
         </IconButton>
       </Tooltip>
@@ -411,6 +429,7 @@ const FollowUpForm = () => {
         <Tooltip title="Assistente de IA — melhorar, corrigir, traduzir ou criar">
           <IconButton
             size="small"
+            className={classes.actionBtn}
             color={assistantStepIndex === index ? "primary" : "default"}
             onClick={() =>
               setAssistantStepIndex(prev => (prev === index ? null : index))
@@ -441,7 +460,7 @@ const FollowUpForm = () => {
   return (
     <div className={classes.root}>
       <div className={classes.headerRow}>
-        <IconButton size="small" onClick={() => history.push("/follow-ups")}>
+        <IconButton size="small" className={classes.actionBtn} onClick={() => history.push("/follow-ups")}>
           <ArrowBackIcon />
         </IconButton>
         <Typography className={classes.title}>
@@ -690,9 +709,11 @@ const FollowUpForm = () => {
                         </>
                       )}
                     </Grid>
-                    <Grid item xs={1}>
+                    {/* xs=2 garante espaço para o touch target de 44px no mobile */}
+                    <Grid item xs={2} sm={1}>
                       <IconButton
                         size="small"
+                        className={classes.actionBtn}
                         onClick={() => setSteps(prev => prev.filter((_, i) => i !== index))}
                         disabled={steps.length === 1}
                       >
@@ -835,25 +856,25 @@ const FollowUpForm = () => {
                   <Typography variant="subtitle2" gutterBottom>Resumo</Typography>
                   <div className={classes.summaryRow}>
                     <Typography variant="body2" color="textSecondary">Nome</Typography>
-                    <Typography variant="body2">{form.name || "—"}</Typography>
+                    <Typography variant="body2" className={classes.summaryValue}>{form.name || "—"}</Typography>
                   </div>
                   <div className={classes.summaryRow}>
                     <Typography variant="body2" color="textSecondary">Gatilho</Typography>
-                    <Typography variant="body2">
+                    <Typography variant="body2" className={classes.summaryValue}>
                       {triggerTag ? `${triggerTag.isLane ? "Lane" : "Tag"}: ${triggerTag.name}` : "—"}
                     </Typography>
                   </div>
                   <div className={classes.summaryRow}>
                     <Typography variant="body2" color="textSecondary">Conexão</Typography>
-                    <Typography variant="body2">{selectedWhatsapp?.name || "—"}</Typography>
+                    <Typography variant="body2" className={classes.summaryValue}>{selectedWhatsapp?.name || "—"}</Typography>
                   </div>
                   <div className={classes.summaryRow}>
                     <Typography variant="body2" color="textSecondary">Etapas</Typography>
-                    <Typography variant="body2">{steps.length}</Typography>
+                    <Typography variant="body2" className={classes.summaryValue}>{steps.length}</Typography>
                   </div>
                   <div className={classes.summaryRow}>
                     <Typography variant="body2" color="textSecondary">Janela</Typography>
-                    <Typography variant="body2">
+                    <Typography variant="body2" className={classes.summaryValue}>
                       {form.sendWindowStart && form.sendWindowEnd
                         ? `${form.sendWindowStart}–${form.sendWindowEnd}`
                         : "Qualquer horário"}
@@ -861,7 +882,7 @@ const FollowUpForm = () => {
                   </div>
                   <div className={classes.summaryRow}>
                     <Typography variant="body2" color="textSecondary">Ação final</Typography>
-                    <Typography variant="body2">
+                    <Typography variant="body2" className={classes.summaryValue}>
                       {END_ACTION_OPTIONS.find(o => o.value === form.endAction)?.label}
                     </Typography>
                   </div>

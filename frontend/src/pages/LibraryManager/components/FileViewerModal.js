@@ -28,7 +28,13 @@ const useStyles = makeStyles((theme) => ({
         '& .MuiDialog-paper': {
             maxWidth: '70vw',
             width: '70vw',
-            maxHeight: '85vh'
+            maxHeight: '85vh',
+            // No mobile o viewer usa quase toda a viewport
+            [theme.breakpoints.down('sm')]: {
+                maxWidth: '95vw',
+                width: '95vw',
+                maxHeight: '90vh'
+            }
         }
     },
     header: {

@@ -297,6 +297,7 @@ const useStyles = makeStyles(theme => ({
     lineHeight: 1.2,
     overflow: "hidden",
     textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
   },
   cardMeta: {
     display: "grid",
@@ -406,7 +407,20 @@ const useStyles = makeStyles(theme => ({
     "&:hover": { background: theme.palette.primary.dark },
   },
 
-  searchGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: theme.spacing(1.5), marginTop: 16 },
+  searchGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: theme.spacing(1.5),
+    marginTop: 16,
+    // Formulário vira 1 coluna no mobile (spec mobile)
+    [theme.breakpoints.down("sm")]: { gridTemplateColumns: "1fr" },
+  },
+  // Alvo de toque de 44px nos botões de ação dos jobs no mobile
+  jobActionBtn: {
+    padding: 2,
+    marginLeft: 4,
+    [theme.breakpoints.down("sm")]: { minWidth: 44, minHeight: 44 },
+  },
   fullRow: { gridColumn: "1 / -1" },
   checkRow: {
     gridColumn: "1 / -1",
@@ -1003,7 +1017,15 @@ export default function LeadScraper() {
         {/* ── Left: form ── */}
         <Grid item xs={12} md={7}>
           <Paper className={classes.paper} elevation={0} variant="outlined">
-            <Tabs value={tab} onChange={(_, v) => { setTab(v); setHelpOpen(false); }} indicatorColor="primary" textColor="primary">
+            {/* variant="scrollable": 5 abas com rótulo longo não cabem em 375px sem scroll */}
+            <Tabs
+              value={tab}
+              onChange={(_, v) => { setTab(v); setHelpOpen(false); }}
+              indicatorColor="primary"
+              textColor="primary"
+              variant="scrollable"
+              scrollButtons="auto"
+            >
               <Tab label={<Box display="flex" alignItems="center" style={{ gap: 6 }}><MapsIcon size={16} /> Google Maps</Box>} />
               <Tab label={<Box display="flex" alignItems="center" style={{ gap: 6 }}><CnpjIcon size={16} /> CNPJ / Receita Federal</Box>} />
               <Tab label={<Box display="flex" alignItems="center" style={{ gap: 6 }}><FollowersIcon size={16} /> Seguidores IG</Box>} />
@@ -1874,7 +1896,7 @@ export default function LeadScraper() {
                       <Tooltip title="Parar busca">
                         <IconButton
                           size="small"
-                          style={{ marginLeft: 4, padding: 2 }}
+                          className={classes.jobActionBtn}
                           onClick={(e) => { e.stopPropagation(); setConfirmDelete({ type: "stop", job: j }); }}
                         >
                           <StopIcon size={15} />
@@ -1885,7 +1907,7 @@ export default function LeadScraper() {
                       <Tooltip title="Excluir busca">
                         <IconButton
                           size="small"
-                          style={{ marginLeft: 4, padding: 2 }}
+                          className={classes.jobActionBtn}
                           onClick={(e) => { e.stopPropagation(); setConfirmDelete({ type: "job", job: j }); }}
                         >
                           <DeleteIcon size={15} />

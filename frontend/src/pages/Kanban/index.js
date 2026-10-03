@@ -34,6 +34,10 @@ const useStyles = makeStyles(theme => ({
     overflow: "hidden",
     width: "100%",
     boxSizing: "border-box",
+    // Em mobile desconta o appBarSpacer (48px) para o board não ficar abaixo da dobra
+    [theme.breakpoints.down("sm")]: {
+      height: "calc(100vh - 48px)",
+    },
   },
   headerContainer: {
     padding: "0 10px",
@@ -61,6 +65,9 @@ const useStyles = makeStyles(theme => ({
     "&::-webkit-scrollbar": {
       display: "none",
     },
+    // Scroll horizontal contido no board + snap suave de colunas no touch
+    WebkitOverflowScrolling: "touch",
+    scrollSnapType: "x proximity",
   },
   actionsBar: {
     display: "flex",
@@ -844,7 +851,7 @@ const Kanban = () => {
                 {!file || !file.lanes ? (
                   <div style={{ display: 'flex', gap: 12 }}>
                     {[1, 2, 3].map(i => (
-                      <div key={i} style={{ width: 350, height: "100%", borderRadius: 8, padding: 8, background: '#f5f5f5' }} />
+                      <div key={i} style={{ width: 350, maxWidth: "80vw", flexShrink: 0, height: "100%", borderRadius: 8, padding: 8, background: '#f5f5f5' }} />
                     ))}
                   </div>
                 ) : file.lanes.length === 0 || file.lanes.every(l => (l.cards || []).length === 0) ? (

@@ -21,6 +21,16 @@ const useStyles = makeStyles(theme => ({
         overflow: "hidden",
         height: "100%",
         maxHeight: "calc(100vh - 200px)",
+        // Snap de coluna no scroll horizontal do board (mobile)
+        scrollSnapAlign: "start",
+        [theme.breakpoints.down("sm")]: {
+            // Em telas <600px a coluna cabe no viewport com "peek" da próxima
+            width: "calc(100vw - 76px)",
+            minWidth: "calc(100vw - 76px)",
+            maxWidth: "calc(100vw - 76px)",
+            // Altura governada pela linha do grid, não por 100vh
+            maxHeight: "100%",
+        },
     },
     cardsContainer: {
         flex: 1,

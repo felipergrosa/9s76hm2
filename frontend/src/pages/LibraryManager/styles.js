@@ -136,7 +136,10 @@ const useStyles = makeStyles((theme) => ({
     menuButton: {
         position: 'absolute',
         top: theme.spacing(0.5),
-        right: theme.spacing(0.5)
+        right: theme.spacing(0.5),
+        // Área de toque mínima de 44px nos cards (mobile)
+        minWidth: 44,
+        minHeight: 44
     },
     emptyState: {
         textAlign: 'center',

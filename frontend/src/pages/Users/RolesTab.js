@@ -27,6 +27,7 @@ import api from "../../services/api";
 import TableRowSkeleton from "../../components/TableRowSkeleton";
 import RoleModal from "../../components/RoleModal";
 import ConfirmationModal from "../../components/ConfirmationModal";
+import { i18n } from "../../translate/i18n";
 import toastError from "../../errors/toastError";
 import usePermissions from "../../hooks/usePermissions";
 
@@ -91,6 +92,86 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: "column",
     alignItems: "center",
     gap: theme.spacing(1.5),
+  },
+  // Cards mobile (padrão SPEC-LAYOUT-PADRAO)
+  mobileList: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gap: theme.spacing(1.5),
+    padding: theme.spacing(2),
+    [theme.breakpoints.up("sm")]: {
+      display: "none",
+    },
+  },
+  desktopTableWrapper: {
+    [theme.breakpoints.down("sm")]: {
+      display: "none",
+    },
+  },
+  card: {
+    borderRadius: 12,
+    padding: theme.spacing(2),
+    border: `1px solid ${theme.palette.divider}`,
+    display: "flex",
+    flexDirection: "column",
+    gap: theme.spacing(1.25),
+    background: theme.palette.background.paper,
+  },
+  cardHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing(1),
+  },
+  cardTitle: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1),
+    fontWeight: 700,
+    fontSize: "1rem",
+    lineHeight: 1.2,
+    minWidth: 0,
+  },
+  cardName: {
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    minWidth: 0,
+  },
+  cardMeta: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+    gap: theme.spacing(1),
+  },
+  metaLabel: {
+    fontSize: "0.72rem",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    color: theme.palette.text.secondary,
+  },
+  metaValue: {
+    fontSize: "0.9rem",
+    fontWeight: 600,
+    wordBreak: "break-word",
+  },
+  cardActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(0.5),
+    flexWrap: "wrap",
+  },
+  actionButton: {
+    minWidth: 44,
+    minHeight: 44,
+  },
+  loadingContainer: {
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: theme.spacing(3),
+  },
+  loadingText: {
+    marginLeft: theme.spacing(2),
   },
 }));
 
@@ -278,6 +359,35 @@ const RolesTab = () => {
 
   if (!canView) return null;
 
+  // Empty state compartilhado entre os cards mobile e a linha vazia da tabela
+  const rolesEmptyState = (
+    <Box className={classes.emptyState}>
+      <ShieldCheck size={44} style={{ opacity: 0.35 }} />
+      <Typography variant="subtitle1">
+        {searchParam
+          ? "Nenhum perfil encontrado para essa busca"
+          : "Nenhum perfil de acesso criado ainda"}
+      </Typography>
+      <Typography variant="body2">
+        Perfis concedem permissões adicionais a usuários, somando-se
+        ao que eles já têm.
+      </Typography>
+      {!searchParam && canCreate && (
+        <Button
+          variant="outlined"
+          color="primary"
+          onClick={handleSeedDefaults}
+          disabled={seeding}
+          startIcon={
+            seeding ? <CircularProgress size={16} /> : <AddIcon />
+          }
+        >
+          {seeding ? "Criando perfis..." : "Criar perfis padrão"}
+        </Button>
+      )}
+    </Box>
+  );
+
   return (
     <>
       <ConfirmationModal
@@ -321,12 +431,92 @@ const RolesTab = () => {
             startIcon={<AddIcon />}
             onClick={handleOpenModal}
             className={classes.toolbarButton}
+            style={{ minHeight: 44 }}
           >
             Novo perfil
           </Button>
         )}
       </Box>
 
+      {/* Cards — mobile */}
+      <div className={classes.mobileList}>
+        {loading && (
+          <div className={classes.loadingContainer}>
+            <CircularProgress />
+            <span className={classes.loadingText}>{i18n.t("loading")}</span>
+          </div>
+        )}
+        {!loading && roles.length === 0 && rolesEmptyState}
+        {!loading &&
+          roles.map((role) => (
+            <div key={role.id} className={classes.card}>
+              <div className={classes.cardHeader}>
+                <div className={classes.cardTitle}>
+                  <span className={classes.cardName} title={role.name}>
+                    {role.name}
+                  </span>
+                </div>
+                <span
+                  className={`${chipBaseClass} bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200`}
+                >
+                  {(role.permissions || []).length} permissões
+                </span>
+              </div>
+              <div className={classes.cardMeta}>
+                <div>
+                  <div className={classes.metaLabel}>ID</div>
+                  <div className={classes.metaValue}>#{role.id}</div>
+                </div>
+                <div>
+                  <div className={classes.metaLabel}>Descrição</div>
+                  <div className={classes.metaValue}>
+                    {role.description || "—"}
+                  </div>
+                </div>
+              </div>
+              {canManage && (
+                <div className={classes.cardActions}>
+                  {canCreate && (
+                    <IconButton
+                      size="small"
+                      className={classes.actionButton}
+                      title="Duplicar"
+                      onClick={() => handleDuplicate(role)}
+                    >
+                      <FileCopyOutlinedIcon fontSize="small" />
+                    </IconButton>
+                  )}
+                  {canEdit && (
+                    <IconButton
+                      size="small"
+                      className={classes.actionButton}
+                      title="Editar"
+                      onClick={() => handleEdit(role)}
+                    >
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                  )}
+                  {canDelete && (
+                    <IconButton
+                      size="small"
+                      className={classes.actionButton}
+                      title="Excluir"
+                      onClick={() => {
+                        setDeleting(role);
+                        setConfirmOpen(true);
+                      }}
+                    >
+                      <DeleteOutlineIcon fontSize="small" />
+                    </IconButton>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+      </div>
+
+      {/* Tabela — desktop */}
+      <div className={classes.desktopTableWrapper}>
       <Table size="small">
         <TableHead>
           <TableRow>
@@ -350,31 +540,7 @@ const RolesTab = () => {
           {!loading && roles.length === 0 && (
             <TableRow>
               <TableCell colSpan={colSpan}>
-                <Box className={classes.emptyState}>
-                  <ShieldCheck size={44} style={{ opacity: 0.35 }} />
-                  <Typography variant="subtitle1">
-                    {searchParam
-                      ? "Nenhum perfil encontrado para essa busca"
-                      : "Nenhum perfil de acesso criado ainda"}
-                  </Typography>
-                  <Typography variant="body2">
-                    Perfis concedem permissões adicionais a usuários, somando-se
-                    ao que eles já têm.
-                  </Typography>
-                  {!searchParam && canCreate && (
-                    <Button
-                      variant="outlined"
-                      color="primary"
-                      onClick={handleSeedDefaults}
-                      disabled={seeding}
-                      startIcon={
-                        seeding ? <CircularProgress size={16} /> : <AddIcon />
-                      }
-                    >
-                      {seeding ? "Criando perfis..." : "Criar perfis padrão"}
-                    </Button>
-                  )}
-                </Box>
+                {rolesEmptyState}
               </TableCell>
             </TableRow>
           )}
@@ -433,6 +599,7 @@ const RolesTab = () => {
             ))}
         </TableBody>
       </Table>
+      </div>
     </>
   );
 };

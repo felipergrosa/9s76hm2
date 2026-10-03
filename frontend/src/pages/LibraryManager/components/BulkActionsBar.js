@@ -2,7 +2,6 @@ import React from 'react';
 import {
     Box,
     Paper,
-    Typography,
     Button,
     IconButton,
     Chip
@@ -29,8 +28,14 @@ const useStyles = makeStyles((theme) => ({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: theme.spacing(1),
         boxShadow: theme.shadows[8],
-        animation: '$slideUp 0.3s ease-out'
+        animation: '$slideUp 0.3s ease-out',
+        // No mobile o drawer lateral fica oculto — a barra ocupa a largura toda
+        [theme.breakpoints.down('sm')]: {
+            left: 0
+        }
     },
     '@keyframes slideUp': {
         from: {
@@ -43,11 +48,13 @@ const useStyles = makeStyles((theme) => ({
     leftSection: {
         display: 'flex',
         alignItems: 'center',
-        gap: theme.spacing(2)
+        gap: theme.spacing(2),
+        flexWrap: 'wrap'
     },
     actions: {
         display: 'flex',
-        gap: theme.spacing(1)
+        gap: theme.spacing(1),
+        flexWrap: 'wrap'
     },
     actionButton: {
         color: theme.palette.primary.contrastText,

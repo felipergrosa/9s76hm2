@@ -6,6 +6,9 @@ const useStyles = makeStyles(theme => ({
 	MainHeaderButtonsWrapper: {
 		flex: "none",
 		marginLeft: "auto",
+		// Botões quebram linha no mobile (ex.: header do canvas de fluxos)
+		display: "flex",
+		flexWrap: "wrap",
 		"& > *": {
 			margin: theme.spacing(1),
 		},

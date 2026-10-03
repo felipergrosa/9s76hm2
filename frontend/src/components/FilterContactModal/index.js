@@ -626,6 +626,7 @@ const FilterContactModal = ({ isOpen, onClose, onFiltered, initialFilter = {} })
     <Dialog
       open={isOpen}
       onClose={handleClose}
+      fullWidth
       maxWidth="sm"
       scroll="paper"
     >

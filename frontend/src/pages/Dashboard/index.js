@@ -204,7 +204,13 @@ const Dashboard = () => {
       <Container maxWidth={false} sx={{ px: 2 }}>
         {/* Header with filter button */}
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
-          <Typography variant="h4" fontWeight="bold" color={viewMode === "modern" ? "text.primary" : "primary"}>
+          <Typography
+            variant="h4"
+            fontWeight="bold"
+            color={viewMode === "modern" ? "text.primary" : "primary"}
+            // Título menor no mobile para não estourar a viewport
+            sx={{ fontSize: { xs: "1.5rem", sm: "2.125rem" } }}
+          >
             {i18n.t("dashboard.title") || "Dashboard"}
           </Typography>
 
@@ -508,6 +514,9 @@ const Dashboard = () => {
                 color="primary"
                 size="small"
                 sx={{
+                  // Touch target mínimo de 44px no mobile
+                  minWidth: 44,
+                  minHeight: 44,
                   bgcolor: "rgba(53, 152, 220, 0.1)",
                   "&:hover": {
                     bgcolor: "rgba(53, 152, 220, 0.2)"

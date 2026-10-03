@@ -64,6 +64,14 @@ const useStyles = makeStyles((theme) => ({
     minWidth: 350,
     maxWidth: 350,
     flex: "0 0 350px",
+    // No mobile a coluna ocupa 82% da viewport: mostra 1 coluna inteira
+    // + "espiada" da próxima, mantendo o pan horizontal contido
+    [theme.breakpoints.down("sm")]: {
+      width: "82vw",
+      minWidth: "82vw",
+      maxWidth: "82vw",
+      flex: "0 0 82vw",
+    },
     display: "flex",
     flexDirection: "column",
     height: "100%",
@@ -140,6 +148,10 @@ const useStyles = makeStyles((theme) => ({
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
     maxWidth: 200,
+    // Coluna mobile é mais estreita: reduzir o limite do ellipsis
+    [theme.breakpoints.down("sm")]: {
+      maxWidth: 150,
+    },
   },
   ticketMessage: {
     fontSize: "0.8rem",
@@ -523,7 +535,8 @@ const MomentsUser = ({ onPanStart }) => {
                 <IconButton
                   size="small"
                   onClick={(e) => handleOpenMessageDialog(e, ticket)}
-                  style={{ padding: 4, color: blue[700] }}
+                  // Touch target mínimo de 44px no mobile
+                  style={{ padding: 4, color: blue[700], minWidth: 44, minHeight: 44 }}
                 >
                   <VisibilityIcon size={20} />
                 </IconButton>

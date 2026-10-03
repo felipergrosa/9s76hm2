@@ -121,6 +121,11 @@ const useStyles = makeStyles(theme => ({
     right: 2,
     padding: 4,
     zIndex: 10,
+    // Alvo de toque mínimo 44x44 no mobile
+    [theme.breakpoints.down("sm")]: {
+      minWidth: 44,
+      minHeight: 44,
+    },
   },
   menuBtn: {
     position: 'absolute',
@@ -128,6 +133,11 @@ const useStyles = makeStyles(theme => ({
     left: 2,
     padding: 4,
     zIndex: 10,
+    // Alvo de toque mínimo 44x44 no mobile
+    [theme.breakpoints.down("sm")]: {
+      minWidth: 44,
+      minHeight: 44,
+    },
   },
   priorityDot: {
     position: 'absolute',
@@ -277,6 +287,12 @@ const useStyles = makeStyles(theme => ({
     padding: 8,
     zIndex: 10,
     color: blue[700],
+    // Alvo de toque mínimo 44x44 no mobile (desce para não sobrepor o botão fechar)
+    [theme.breakpoints.down("sm")]: {
+      minWidth: 44,
+      minHeight: 44,
+      top: 48,
+    },
   },
 }));
 

@@ -185,6 +185,77 @@ const useStyles = makeStyles(theme => ({
     opacity: 0.35,
     marginBottom: theme.spacing(1),
   },
+  // Cards mobile
+  mobileList: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gap: theme.spacing(1.5),
+    padding: theme.spacing(1.5),
+    [theme.breakpoints.up("sm")]: {
+      display: "none",
+    },
+  },
+  desktopTableWrapper: {
+    [theme.breakpoints.down("sm")]: {
+      display: "none",
+    },
+  },
+  card: {
+    borderRadius: 12,
+    padding: theme.spacing(1.75),
+    border: `1px solid ${theme.palette.divider}`,
+    display: "flex",
+    flexDirection: "column",
+    gap: theme.spacing(1.25),
+    background: theme.palette.background.paper,
+  },
+  cardHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing(1),
+  },
+  cardTitle: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1.25),
+    minWidth: 0,
+  },
+  cardName: {
+    fontWeight: 700,
+    fontSize: "1rem",
+    lineHeight: 1.2,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    minWidth: 0,
+  },
+  cardMeta: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+    gap: theme.spacing(1),
+  },
+  metaLabel: {
+    fontSize: "0.72rem",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    color: theme.palette.text.secondary,
+  },
+  metaValue: {
+    fontSize: "0.9rem",
+    fontWeight: 600,
+    wordBreak: "break-word",
+  },
+  cardActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(0.5),
+    flexWrap: "wrap",
+  },
+  actionButton: {
+    minWidth: 44,
+    minHeight: 44,
+  },
 }));
 
 const EmailCampaigns = () => {
@@ -310,7 +381,9 @@ const EmailCampaigns = () => {
             <Button
               variant="contained"
               color="primary"
-              startIcon={<AddIcon size={18} />}
+              size="small"
+              style={{ minHeight: 36 }}
+              startIcon={<AddIcon size={16} />}
               onClick={handleOpenModal}
             >
               Nova campanha
@@ -338,7 +411,119 @@ const EmailCampaigns = () => {
           />
         </Box>
 
-        <Table size="small">
+        {loading ? (
+          <Table size="small">
+            <TableBody>
+              <TableRowSkeleton columns={5} />
+            </TableBody>
+          </Table>
+        ) : records.length === 0 ? (
+          <Box className={classes.emptyState}>
+            <MailIcon className={classes.emptyIcon} />
+            <Typography variant="subtitle1" style={{ fontWeight: 600 }}>
+              {searchParam
+                ? "Nenhuma campanha encontrada para a busca."
+                : "Nenhuma campanha de e-mail criada ainda."}
+            </Typography>
+            <Typography variant="body2" color="textSecondary">
+              {!searchParam && "Crie sua primeira campanha de e-mail em massa."}
+            </Typography>
+          </Box>
+        ) : (
+          <>
+            {/* Cards — mobile */}
+            <div className={classes.mobileList}>
+              {records.map(record => (
+                <div key={record.id} className={classes.card}>
+                  <div className={classes.cardHeader}>
+                    <div className={classes.cardTitle}>
+                      <div className={classes.cardName} title={record.name}>
+                        {record.name}
+                      </div>
+                    </div>
+                    <StatusChip status={record.status} />
+                  </div>
+                  <div className={classes.cardMeta}>
+                    <div>
+                      <div className={classes.metaLabel}>ID</div>
+                      <div className={classes.metaValue}>#{record.id}</div>
+                    </div>
+                    <div>
+                      <div className={classes.metaLabel}>Assunto</div>
+                      <div className={classes.metaValue}>{record.subject}</div>
+                    </div>
+                  </div>
+                  <div className={classes.cardActions}>
+                    <Tooltip title="Ver relatório">
+                      <IconButton
+                        size="small"
+                        className={classes.actionButton}
+                        onClick={() => handleShowReport(record.id)}
+                      >
+                        <AssessmentIcon size={18} />
+                      </IconButton>
+                    </Tooltip>
+                    {canEdit && ["INATIVA", "PROGRAMADA"].includes(record.status) && (
+                      <Tooltip title="Enviar agora">
+                        <IconButton
+                          size="small"
+                          className={classes.actionButton}
+                          onClick={() => handleSendNow(record.id)}
+                        >
+                          <SendIcon size={18} />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                    {canEdit && ["PROGRAMADA", "EM_ANDAMENTO"].includes(record.status) && (
+                      <Tooltip title="Cancelar">
+                        <IconButton
+                          size="small"
+                          className={classes.actionButton}
+                          onClick={() => handleCancel(record.id)}
+                        >
+                          <CancelIcon size={18} />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                    {canEdit && (
+                      <Tooltip title="Editar">
+                        <span>
+                          <IconButton
+                            size="small"
+                            className={classes.actionButton}
+                            onClick={() => handleEdit(record)}
+                            disabled={record.status === "EM_ANDAMENTO"}
+                          >
+                            <EditIcon size={18} />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                    )}
+                    {canDelete && (
+                      <Tooltip title="Excluir">
+                        <span>
+                          <IconButton
+                            size="small"
+                            className={classes.actionButton}
+                            onClick={() => {
+                              setDeleting(record);
+                              setConfirmOpen(true);
+                            }}
+                            disabled={record.status === "EM_ANDAMENTO"}
+                          >
+                            <DeleteOutlineIcon size={18} />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Tabela — desktop */}
+            <div className={classes.desktopTableWrapper}>
+              <Table size="small">
           <TableHead>
             <TableRow>
               <TableCell className={classes.headCell}>ID</TableCell>
@@ -411,22 +596,10 @@ const EmailCampaigns = () => {
                 </TableCell>
               </TableRow>
             ))}
-            {loading && <TableRowSkeleton columns={5} />}
           </TableBody>
-        </Table>
-
-        {!loading && records.length === 0 && (
-          <Box className={classes.emptyState}>
-            <MailIcon className={classes.emptyIcon} />
-            <Typography variant="subtitle1" style={{ fontWeight: 600 }}>
-              {searchParam
-                ? "Nenhuma campanha encontrada para a busca."
-                : "Nenhuma campanha de e-mail criada ainda."}
-            </Typography>
-            <Typography variant="body2" color="textSecondary">
-              {!searchParam && "Crie sua primeira campanha de e-mail em massa."}
-            </Typography>
-          </Box>
+              </Table>
+            </div>
+          </>
         )}
       </Paper>
     </MainContainer>

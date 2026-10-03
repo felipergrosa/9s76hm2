@@ -696,7 +696,7 @@ const ContactListItems = () => {
             disableEnforceFocus
             disableRestoreFocus
           >
-            <div style={{ padding: 16, maxWidth: 440 }}>
+            <div style={{ padding: 16, maxWidth: 'min(440px, calc(100vw - 32px))' }}>
               <Typography variant="subtitle2" gutterBottom>Detalhes do filtro salvo</Typography>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {Array.isArray(f.channel) && f.channel.length > 0 && (
@@ -1152,6 +1152,11 @@ const ContactListItems = () => {
 
                 {/* Lista (Mobile) */}
                 <div id="mobile-list" className="lg:hidden flex flex-col gap-2 mt-4 items-center">
+                  {!loading && sortedContacts.length === 0 && (
+                    <div className="w-full max-w-[375px] text-center text-sm text-gray-500 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                      Nenhum contato encontrado nesta lista.
+                    </div>
+                  )}
                   {sortedContacts.map((contact) => {
                     const isUnlinked = !contact?.contact?.id;
                     return (
@@ -1201,13 +1206,14 @@ const ContactListItems = () => {
                             </div>
                           )}
                         </div>
+                        {/* Alvos de toque >= 44px (margem negativa mantém o espaçamento visual) */}
                         <div className="flex items-center gap-2 flex-nowrap whitespace-nowrap shrink-0">
                           <Tooltip {...CustomTooltipProps} title={contact?.contact?.id ? "Editar" : "Contato não vinculado"}>
                             <span className="inline-flex">
                               <button
                                 disabled={!contact?.contact?.id}
                                 onClick={() => contact?.contact?.id && hadleEditContact(contact.contact.id)}
-                                className={`inline-flex items-center justify-center w-6 h-6 leading-none rounded hover:bg-blue-50/70 dark:hover:bg-gray-700/40 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 ${!contact?.contact?.id ? 'opacity-50 cursor-not-allowed hover:text-blue-600 dark:hover:text-blue-400' : ''}`}
+                                className={`inline-flex items-center justify-center min-w-[44px] min-h-[44px] -m-2 leading-none rounded hover:bg-blue-50/70 dark:hover:bg-gray-700/40 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 ${!contact?.contact?.id ? 'opacity-50 cursor-not-allowed hover:text-blue-600 dark:hover:text-blue-400' : ''}`}
                               >
                                 <Edit className="w-4 h-4" />
                               </button>
@@ -1216,7 +1222,7 @@ const ContactListItems = () => {
                           {hasPermission("contact-lists.edit") && (
                             <button
                               onClick={() => { setConfirmOpen(true); setDeletingContact(contact); }}
-                              className="inline-flex items-center justify-center w-6 h-6 leading-none rounded hover:bg-red-50/70 dark:hover:bg-gray-700/40 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                              className="inline-flex items-center justify-center min-w-[44px] min-h-[44px] -m-2 leading-none rounded hover:bg-red-50/70 dark:hover:bg-gray-700/40 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>

@@ -26,6 +26,16 @@ const useStyles = makeStyles(theme => ({
     display: "flex",
     alignItems: "center",
     gap: 8,
+    flex: 1,
+    minWidth: 0, // permite o título elidir sem estourar a coluna
+  },
+  title: {
+    fontWeight: 800,
+    cursor: "grab",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    minWidth: 0,
   },
   dot: {
     width: 10,
@@ -92,7 +102,7 @@ export default function KanbanLaneHeader(props) {
         <div {...props.dragHandleProps} style={{ cursor: 'grab', display: 'flex', alignItems: 'center', marginRight: 4 }}>
           <DragIndicatorIcon style={{ color: "#999", fontSize: 20 }} />
         </div>
-        <Typography variant="subtitle2" style={{ fontWeight: 800, color: color || "#333", cursor: "grab" }}>{title}</Typography>
+        <Typography variant="subtitle2" className={classes.title} style={{ color: color || "#333" }}>{title}</Typography>
         <Chip size="small" label={label} variant="default" style={{ height: 20, fontSize: "0.7rem", fontWeight: 600 }} />
         {typeof unreadCount === 'number' && unreadCount > 0 && (
           <Chip size="small" color="secondary" label={`${unreadCount}`} style={{ height: 20, fontSize: "0.7rem", marginLeft: 4 }} />

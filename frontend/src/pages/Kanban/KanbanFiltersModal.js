@@ -137,7 +137,8 @@ export default function KanbanFiltersModal({
           </Grid>
         </Grid>
 
-        <Popover open={rangeOpen} anchorEl={rangeAnchor} onClose={()=> setRangeOpen(false)} anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }} transformOrigin={{ vertical: 'top', horizontal: 'left' }}>
+        {/* Scroll horizontal contido: o calendário duplo do picker é mais largo que 375px */}
+        <Popover open={rangeOpen} anchorEl={rangeAnchor} onClose={()=> setRangeOpen(false)} anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }} transformOrigin={{ vertical: 'top', horizontal: 'left' }} PaperProps={{ style: { maxWidth: '100vw', overflowX: 'auto' } }}>
           <DateRangePicker
             open
             toggle={() => setRangeOpen(false)}

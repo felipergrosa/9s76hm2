@@ -605,6 +605,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 			<Dialog
 				open={open}
 				onClose={handleClose}
+				fullWidth
 				maxWidth="sm"
 				scroll="paper"
 				PaperProps={{

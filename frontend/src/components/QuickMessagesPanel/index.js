@@ -78,6 +78,11 @@ const useStyles = makeStyles((theme) => ({
     borderRadius: '20px',
     marginLeft: '4px',
     transition: 'all 0.2s ease-in-out',
+    // Alvo de toque mínimo de 36px no mobile (regra de toolbar da spec mobile)
+    [theme.breakpoints.down("sm")]: {
+      minWidth: 36,
+      minHeight: 36,
+    },
     "&:hover": {
       backgroundColor: theme.palette.primary.main,
       color: "#fff",
@@ -162,6 +167,11 @@ const useStyles = makeStyles((theme) => ({
   },
   actionIcon: {
     padding: "4px",
+    // Alvo de toque de 44px nos itens/cards no mobile (spec mobile)
+    [theme.breakpoints.down("sm")]: {
+      minWidth: 44,
+      minHeight: 44,
+    },
     "& svg": {
       fontSize: "16px",
     },

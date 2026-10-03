@@ -29,7 +29,9 @@ const useStyles = makeStyles((theme) => ({
     scrollbarWidth: "thin",
     alignItems: "stretch",
     minHeight: 0,
-    height: "calc(100vh - 100px)",
+    // Altura 100% do Grid pai (que já limita em calc(100vh - 160px)):
+    // evita clipe do rodapé e do scroll horizontal no mobile
+    height: "100%",
     backgroundColor: "transparent",
     border: "none",
     boxShadow: "none",

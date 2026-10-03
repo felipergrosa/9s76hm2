@@ -64,10 +64,12 @@ const useStyles = makeStyles((theme) => ({
   paper: {
     flex: 1,
     padding: 0,
-    overflow: "hidden",
+    // overflowY auto: conteúdo longo rola dentro do Paper (o MainContainer não usa useWindowScroll)
+    overflowY: "auto",
     borderRadius: 12,
     border: `1px solid ${theme.palette.divider}`,
     backgroundColor: theme.palette.background.paper,
+    ...theme.scrollbarStyles,
   },
   header: {
     display: "flex",
@@ -1648,13 +1650,15 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
                           primary={link.title}
                           secondary={link.url}
                           primaryTypographyProps={{ variant: 'body2' }}
-                          secondaryTypographyProps={{ variant: 'caption' }}
+                          // URL longa sem espaços: quebra para não estourar a viewport no mobile
+                          secondaryTypographyProps={{ variant: 'caption', style: { wordBreak: 'break-all' } }}
                         />
                         <ListItemSecondaryAction>
                           <IconButton
                             edge="end"
                             size="small"
                             onClick={() => removeExternalLink(link.url)}
+                            style={{ minWidth: 44, minHeight: 44 }}
                           >
                             <DeleteIcon fontSize="small" />
                           </IconButton>

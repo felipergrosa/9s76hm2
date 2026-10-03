@@ -1370,7 +1370,7 @@ const Contacts = () => {
                                         {hasPermission("contacts.delete") && (
                                             <button
                                                 onClick={() => setConfirmDeleteManyOpen(true)}
-                                                className="w-8 h-8 flex items-center justify-center text-white bg-red-500 rounded-full shadow-sm"
+                                                className="w-10 h-10 flex items-center justify-center text-white bg-red-500 rounded-full shadow-sm"
                                                 aria-label="Deletar selecionados"
                                             >
                                                 <Trash2 className="w-4 h-4" />
@@ -1379,7 +1379,7 @@ const Contacts = () => {
                                         {hasPermission("contacts.bulk-edit") && (
                                             <button
                                                 onClick={() => setBulkEditOpen(true)}
-                                                className="w-8 h-8 flex items-center justify-center text-white bg-yellow-500 rounded-full shadow-sm"
+                                                className="w-10 h-10 flex items-center justify-center text-white bg-yellow-500 rounded-full shadow-sm"
                                                 aria-label="Editar selecionados"
                                             >
                                                 <Edit className="w-4 h-4" />
@@ -1392,7 +1392,8 @@ const Contacts = () => {
                                 </span>
                                 <button
                                     onClick={handleCancelSelection}
-                                    className="ml-1 p-1 hover:bg-blue-200 dark:hover:bg-blue-800 rounded-full text-blue-700 dark:text-blue-300 transition-colors"
+                                    aria-label="Cancelar seleção"
+                                    className="ml-1 w-10 h-10 flex items-center justify-center hover:bg-blue-200 dark:hover:bg-blue-800 rounded-full text-blue-700 dark:text-blue-300 transition-colors"
                                 >
                                     <X className="w-5 h-5" />
                                 </button>

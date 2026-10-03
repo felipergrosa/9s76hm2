@@ -690,6 +690,7 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
     <Dialog
       open={open}
       onClose={handleClose}
+      fullWidth
       maxWidth="sm"
       scroll="paper"
     >

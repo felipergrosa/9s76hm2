@@ -147,7 +147,7 @@ const ContactListItemModal = ({
 
   return (
     <div className={classes.root}>
-      <Dialog open={open} onClose={handleClose} maxWidth="lg" scroll="paper">
+      <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm" scroll="paper">
         <DialogTitle id="form-dialog-title">
           {contactId
             ? `${i18n.t("contactModal.title.edit")}`

@@ -27,7 +27,6 @@ import { AuthContext } from "../../context/Auth/AuthContext";
 
 import { CircularProgress, FormControl, FormControlLabel, Grid, IconButton, InputLabel, MenuItem, Select, Switch, TextField, Tooltip, Typography } from "@material-ui/core";
 import { UsersFilter } from "../../components/UsersFilter";
-import { TagsFilter } from "../../components/TagsFilter";
 import { WhatsappsFilter } from "../../components/WhatsappsFilter";
 import { StatusFilter } from "../../components/StatusFilter";
 import useDashboard from "../../hooks/useDashboard";
@@ -39,7 +38,6 @@ import ShowTicketLogModal from "../../components/ShowTicketLogModal";
 import { blue, green } from "@material-ui/core/colors";
 import { Facebook, Forward, History, Instagram, SaveAlt, Visibility, WhatsApp } from "@material-ui/icons";
 import Autocomplete, { createFilterOptions } from "@material-ui/lab/Autocomplete";
-import { Field } from "formik";
 
 const useStyles = makeStyles((theme) => ({
   mainContainer: {
@@ -65,11 +63,23 @@ const useStyles = makeStyles((theme) => ({
     flex: 1,
     // Removido overflow/height para usar scroll externo da janela
   },
+  // Tabela do relatório é genuinamente tabular (12 colunas):
+  // scroll horizontal contido no wrapper, nunca na página
+  tableWrapper: {
+    overflowX: 'auto',
+    maxWidth: '100%',
+    WebkitOverflowScrolling: 'touch',
+  },
   mainPaperFilter: {
     flex: 1,
     overflow: 'auto',
     height: '20vh',
     ...theme.scrollbarStylesSoftBig,
+    // Em mobile os filtros empilham (xs=12): deixar o Paper crescer naturalmente
+    [theme.breakpoints.down('sm')]: {
+      height: 'auto',
+      maxHeight: 'none',
+    },
   },
   mainHeaderBlock: {
     [theme.breakpoints.down('md')]: {
@@ -423,7 +433,7 @@ const Reports = () => {
                 }}
               />
             </Grid>
-            <Grid item xs={12} sm={3} md={3} style={{ display: 'flex', justifyContent: 'center' }}>
+            <Grid item xs={12} sm={3} md={3} style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: 4 }}>
               <FormControlLabel
                 control={
                   <Switch
@@ -455,6 +465,7 @@ const Reports = () => {
         className={classes.mainPaperTable}
         variant="outlined"
       >
+        <div className={classes.tableWrapper}>
         <Table size="small" id="grid-attendants">
           <TableHead>
             <TableRow>
@@ -526,10 +537,18 @@ const Reports = () => {
                   </TableCell>
                 </TableRow>
               ))}
-              {loading && <TableRowSkeleton avatar columns={3} />}
+              {loading && <TableRowSkeleton avatar columns={12} />}
+              {!loading && tickets.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={12} align="center">
+                    Nenhum registro encontrado.
+                  </TableCell>
+                </TableRow>
+              )}
             </>
           </TableBody>
         </Table>
+        </div>
 
       </Paper>
 

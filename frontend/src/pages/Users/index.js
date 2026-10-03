@@ -210,6 +210,13 @@ const useStyles = makeStyles((theme) => ({
     fontWeight: 700,
     fontSize: "1.05rem",
     lineHeight: 1.2,
+    minWidth: 0,
+  },
+  cardName: {
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    minWidth: 0,
   },
   cardMeta: {
     display: "grid",
@@ -581,7 +588,7 @@ const Users = () => {
                       <div className={classes.cardHeader}>
                         <div className={classes.cardTitle}>
                           {renderProfileImage(user)}
-                          <span>{user.name}</span>
+                          <span className={classes.cardName} title={user.name}>{user.name}</span>
                           {user.super && (
                             <span title="Super Admin" style={{ fontSize: "1.2rem", marginLeft: "4px" }}>👑</span>
                           )}

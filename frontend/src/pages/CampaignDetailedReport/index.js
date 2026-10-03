@@ -506,7 +506,7 @@ const CampaignDetailedReport = () => {
           <Grid xs={12} item>
             <Title>
               Relatório Detalhado - {campaign.name}
-              <IconButton size="small" onClick={fetchReport} style={{ marginLeft: 8 }}>
+              <IconButton size="small" onClick={fetchReport} style={{ marginLeft: 8, minWidth: 36, minHeight: 36 }}>
                 <RefreshIcon />
               </IconButton>
             </Title>
@@ -984,6 +984,15 @@ const CampaignDetailedReport = () => {
             <TableBody>
               {loading ? (
                 <TableRowSkeleton columns={8} />
+              ) : records.length === 0 ? (
+                // Estado vazio também visível no mobile (tabela rola dentro do wrapper)
+                <TableRow>
+                  <TableCell colSpan={8} align="center" style={{ padding: 24 }}>
+                    <Typography variant="body2" color="textSecondary">
+                      Nenhum registro encontrado.
+                    </Typography>
+                  </TableCell>
+                </TableRow>
               ) : (
                 records.map((record) => (
                   <TableRow key={record.id}>
@@ -1047,8 +1056,8 @@ const CampaignDetailedReport = () => {
           </Table>
         </div>
 
-        {/* Paginação */}
-        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16 }}>
+        {/* Paginação — quebra linha no mobile para não estourar a viewport */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginTop: 16 }}>
           <Button
             disabled={pageNumber === 1}
             onClick={() => handlePageChange(pageNumber - 1)}

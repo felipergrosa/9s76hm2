@@ -15,16 +15,22 @@ const useStyles = makeStyles((theme)=> ({
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    margin: '2rem'
+    margin: '2rem',
+    // Em mobile a margem de 2rem de cada lado come quase 20% da tela
+    [theme.breakpoints.down('xs')]: {
+      margin: theme.spacing(2)
+    }
   },
   inputContainer: {
     display: 'flex',
     width: '100%',
-    marginBottom: '1rem'
+    marginBottom: '1rem',
+    // gap cobre espaçamento horizontal e vertical quando quebra linha no mobile
+    flexWrap: 'wrap',
+    gap: '1rem'
   },
   input: {
-    flexGrow: 1,
-    marginRight: '1rem'
+    flexGrow: 1
   },
   listContainer: {
     width: '100%',

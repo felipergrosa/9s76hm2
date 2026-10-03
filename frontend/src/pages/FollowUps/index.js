@@ -29,8 +29,6 @@ import PeopleIcon from "@material-ui/icons/People";
 import RepeatIcon from "@material-ui/icons/Repeat";
 
 import MainContainer from "../../components/MainContainer";
-import MainHeader from "../../components/MainHeader";
-import MainHeaderButtonsWrapper from "../../components/MainHeaderButtonsWrapper";
 import Title from "../../components/Title";
 
 import api from "../../services/api";
@@ -63,10 +61,32 @@ const useStyles = makeStyles(theme => ({
     flex: 1,
     padding: 0,
     overflow: "hidden",
+    borderRadius: 12,
+    border: `1px solid ${theme.palette.divider}`,
+    backgroundColor: theme.palette.background.paper,
+  },
+  header: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing(2),
+    flexWrap: "wrap",
+    padding: theme.spacing(2, 2.5),
+  },
+  headerText: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+  },
+  headerActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1),
+    flexWrap: "wrap",
   },
   subtitle: {
     color: theme.palette.text.secondary,
-    marginTop: theme.spacing(0.5),
+    fontSize: "0.85rem",
   },
   toolbar: {
     display: "flex",
@@ -80,6 +100,10 @@ const useStyles = makeStyles(theme => ({
     minWidth: 220,
     flex: "1 1 220px",
     maxWidth: 320,
+    [theme.breakpoints.down("sm")]: {
+      maxWidth: "none",
+      flexBasis: "100%",
+    },
   },
   filterSelect: {
     minWidth: 150,
@@ -130,6 +154,77 @@ const useStyles = makeStyles(theme => ({
   emptyIcon: {
     fontSize: 44,
     opacity: 0.35,
+  },
+  // Cards mobile
+  mobileList: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gap: theme.spacing(1.5),
+    padding: theme.spacing(1.5),
+    [theme.breakpoints.up("sm")]: {
+      display: "none",
+    },
+  },
+  desktopTableWrapper: {
+    [theme.breakpoints.down("sm")]: {
+      display: "none",
+    },
+  },
+  card: {
+    borderRadius: 12,
+    padding: theme.spacing(1.75),
+    border: `1px solid ${theme.palette.divider}`,
+    display: "flex",
+    flexDirection: "column",
+    gap: theme.spacing(1.25),
+    background: theme.palette.background.paper,
+  },
+  cardHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing(1),
+  },
+  cardTitle: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1.25),
+    minWidth: 0,
+  },
+  cardName: {
+    fontWeight: 700,
+    fontSize: "1rem",
+    lineHeight: 1.2,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    minWidth: 0,
+  },
+  cardMeta: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+    gap: theme.spacing(1),
+  },
+  metaLabel: {
+    fontSize: "0.72rem",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    color: theme.palette.text.secondary,
+  },
+  metaValue: {
+    fontSize: "0.9rem",
+    fontWeight: 600,
+    wordBreak: "break-word",
+  },
+  cardActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(0.5),
+    flexWrap: "wrap",
+  },
+  actionButton: {
+    minWidth: 44,
+    minHeight: 44,
   },
 }));
 
@@ -245,28 +340,31 @@ const FollowUps = () => {
         Etapas e inscrições associadas também serão removidas. Essa ação não pode ser desfeita.
       </ConfirmationModal>
 
-      <MainHeader>
-        <Box>
-          <Title>Follow-ups ({filteredRecords.length})</Title>
-          <Typography variant="body2" className={classes.subtitle}>
-            Sequências automáticas disparadas por tag ou lane do Kanban
-          </Typography>
-        </Box>
-        <MainHeaderButtonsWrapper>
-          {canCreate && (
-            <Button
-              variant="contained"
-              color="primary"
-              onClick={() => history.push("/follow-ups/new")}
-              startIcon={<AddIcon />}
-            >
-              Novo follow-up
-            </Button>
-          )}
-        </MainHeaderButtonsWrapper>
-      </MainHeader>
-
       <Paper className={classes.mainPaper} variant="outlined">
+        {/* Header — padrão do gerenciador de Templates Meta */}
+        <Box className={classes.header}>
+          <div className={classes.headerText}>
+            <Title>Follow-ups ({filteredRecords.length})</Title>
+            <span className={classes.subtitle}>
+              Sequências automáticas disparadas por tag ou lane do Kanban
+            </span>
+          </div>
+          <div className={classes.headerActions}>
+            {canCreate && (
+              <Button
+                variant="contained"
+                color="primary"
+                size="small"
+                style={{ minHeight: 36 }}
+                onClick={() => history.push("/follow-ups/new")}
+                startIcon={<AddIcon fontSize="small" />}
+              >
+                Novo follow-up
+              </Button>
+            )}
+          </div>
+        </Box>
+
         {/* Barra de busca e filtros — mesmo padrão de /meta-templates */}
         <Box className={classes.toolbar}>
           <TextField
@@ -311,7 +409,110 @@ const FollowUps = () => {
           </FormControl>
         </Box>
 
-        <Table size="small">
+        {loading ? (
+          <Table size="small">
+            <TableBody>
+              <TableRowSkeleton columns={6} />
+            </TableBody>
+          </Table>
+        ) : filteredRecords.length === 0 ? (
+          <Box className={classes.emptyState}>
+            <RepeatIcon className={classes.emptyIcon} />
+            <Typography variant="subtitle1">
+              {searchParam || statusFilter || triggerFilter
+                ? "Nenhum follow-up encontrado com esses filtros"
+                : "Nenhum follow-up criado ainda"}
+            </Typography>
+            <Typography variant="body2">
+              Crie uma sequência para engajar contatos que entram na lane automaticamente.
+            </Typography>
+          </Box>
+        ) : (
+          <>
+            {/* Cards — mobile */}
+            <div className={classes.mobileList}>
+              {filteredRecords.map(record => (
+                <div key={record.id} className={classes.card}>
+                  <div className={classes.cardHeader}>
+                    <div className={classes.cardTitle}>
+                      <div className={classes.cardName} title={record.name}>
+                        {record.name}
+                      </div>
+                    </div>
+                    <StatusChip active={record.active} />
+                  </div>
+                  <div className={classes.cardMeta}>
+                    <div>
+                      <div className={classes.metaLabel}>Gatilho</div>
+                      <div className={classes.metaValue}>
+                        <TriggerChip tag={record.tag} />
+                      </div>
+                    </div>
+                    <div>
+                      <div className={classes.metaLabel}>Conexão</div>
+                      <div className={classes.metaValue}>
+                        {record.whatsapp?.name || "—"}
+                        {record.whatsapp?.channelType === "official" && " (API Oficial)"}
+                      </div>
+                    </div>
+                    <div>
+                      <div className={classes.metaLabel}>Janela</div>
+                      <div className={classes.metaValue}>
+                        {record.sendWindowStart && record.sendWindowEnd
+                          ? `${record.sendWindowStart}–${record.sendWindowEnd}`
+                          : "Qualquer horário"}
+                      </div>
+                    </div>
+                    <div>
+                      <div className={classes.metaLabel}>Ação final</div>
+                      <div className={classes.metaValue}>
+                        {END_ACTION_LABELS[record.endAction] || "—"}
+                      </div>
+                    </div>
+                  </div>
+                  <div className={classes.cardActions}>
+                    <Tooltip title="Ver inscritos">
+                      <IconButton
+                        size="small"
+                        className={classes.actionButton}
+                        onClick={() => handleShowEnrollments(record.id)}
+                      >
+                        <PeopleIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    {canEdit && (
+                      <Tooltip title="Editar">
+                        <IconButton
+                          size="small"
+                          className={classes.actionButton}
+                          onClick={() => history.push(`/follow-ups/${record.id}`)}
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                    {canDelete && (
+                      <Tooltip title="Excluir">
+                        <IconButton
+                          size="small"
+                          className={classes.actionButton}
+                          onClick={() => {
+                            setDeleting(record);
+                            setConfirmOpen(true);
+                          }}
+                        >
+                          <DeleteOutlineIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Tabela — desktop */}
+            <div className={classes.desktopTableWrapper}>
+              <Table size="small">
           <TableHead>
             <TableRow>
               <TableCell className={classes.headCell}>Nome</TableCell>
@@ -323,26 +524,7 @@ const FollowUps = () => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {loading && <TableRowSkeleton columns={6} />}
-            {!loading && filteredRecords.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={6}>
-                  <Box className={classes.emptyState}>
-                    <RepeatIcon className={classes.emptyIcon} />
-                    <Typography variant="subtitle1">
-                      {searchParam || statusFilter || triggerFilter
-                        ? "Nenhum follow-up encontrado com esses filtros"
-                        : "Nenhum follow-up criado ainda"}
-                    </Typography>
-                    <Typography variant="body2">
-                      Crie uma sequência para engajar contatos que entram na lane automaticamente.
-                    </Typography>
-                  </Box>
-                </TableCell>
-              </TableRow>
-            )}
-            {!loading &&
-              filteredRecords.map(record => (
+            {filteredRecords.map(record => (
                 <TableRow key={record.id} className={classes.rowHover} hover={false}>
                   <TableCell className={classes.bodyCell}>
                     <Typography className={classes.recordName}>{record.name}</Typography>
@@ -401,7 +583,10 @@ const FollowUps = () => {
                 </TableRow>
               ))}
           </TableBody>
-        </Table>
+              </Table>
+            </div>
+          </>
+        )}
       </Paper>
     </MainContainer>
   );

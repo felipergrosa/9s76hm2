@@ -12,6 +12,7 @@ import { AuthContext } from "../../context/Auth/AuthContext";
 
 import WarningIcon from '@material-ui/icons/Warning';
 import SendIcon from '@material-ui/icons/Send';
+import MainContainer from "../../components/MainContainer";
 
 const useStyles = makeStyles((theme) => ({
   mainPaper: {
@@ -191,6 +192,7 @@ const MessagesAPI = () => {
   };
 
   return (
+    <MainContainer useWindowScroll>
     <Paper className={classes.mainPaper} variant="elevation" elevation={0}>
       <Typography variant="h4" className={classes.title}>
         Envio de Mensagens
@@ -203,7 +205,8 @@ const MessagesAPI = () => {
       </Alert>
 
       <AppBar position="static" color="default" elevation={0}>
-        <Tabs value={tab} onChange={handleTabChange} indicatorColor="primary" textColor="primary" variant="fullWidth">
+        {/* variant="scrollable": labels longas não esmagam as abas em telas <600px */}
+        <Tabs value={tab} onChange={handleTabChange} indicatorColor="primary" textColor="primary" variant="scrollable" scrollButtons="auto">
           <Tab label="Mensagens de Texto" />
           <Tab label="Mensagens de Mídia" />
           <Tab label="Sincronização de Contatos" />
@@ -402,6 +405,7 @@ Content-Type: application/json
         </Grid>
       </TabPanel>
     </Paper>
+    </MainContainer>
   );
 };
 

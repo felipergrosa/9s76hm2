@@ -242,7 +242,12 @@ const useStyles = makeStyles((theme) => ({
     fontSize: "1rem",
     fontWeight: 700,
     lineHeight: 1.25,
-    wordBreak: "break-word",
+    // Ellipsis no título do card mobile (precisa de minWidth 0 no item flex)
+    minWidth: 0,
+    flex: 1,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
   },
   cardMeta: {
     display: "grid",
@@ -258,12 +263,18 @@ const useStyles = makeStyles((theme) => ({
   metaValue: {
     fontSize: "0.9rem",
     fontWeight: 600,
+    wordBreak: "break-word",
   },
   cardActions: {
     display: "flex",
     alignItems: "center",
     gap: theme.spacing(0.5),
     flexWrap: "wrap",
+    // Área de toque mínima de 44px nos botões de ação do card mobile
+    "& .MuiIconButton-root": {
+      minWidth: 44,
+      minHeight: 44,
+    },
   },
 }));
 
@@ -584,7 +595,9 @@ const Campaigns = () => {
             <Button
               variant="contained"
               color="primary"
-              startIcon={<AddIcon size={18} />}
+              size="small"
+              style={{ minHeight: 36 }}
+              startIcon={<AddIcon size={16} />}
               onClick={() => history.push("/campaigns/new")}
             >
               Nova campanha

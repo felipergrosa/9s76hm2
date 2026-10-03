@@ -68,14 +68,30 @@ const useStyles = makeStyles((theme) => ({
     "& .MuiStepLabel-label": { fontSize: "0.85rem" },
     "& .MuiStepIcon-root.MuiStepIcon-active": { color: "#005c53" },
     "& .MuiStepIcon-root.MuiStepIcon-completed": { color: "#005c53" },
+    // Mobile: reduz padding e fonte dos labels para caber os 4 steps sem estourar
+    [theme.breakpoints.down("sm")]: {
+      padding: theme.spacing(1.5, 0.5),
+      overflowX: "auto",
+      "& .MuiStepLabel-label": { fontSize: "0.68rem" },
+    },
   },
-  body: { flex: 1, overflowY: "auto", padding: theme.spacing(0, 4, 4) },
-  card: { 
-    borderRadius: 20, 
-    padding: theme.spacing(4), 
-    boxShadow: "0 2px 16px rgba(0,0,0,0.04)", 
+  body: {
+    flex: 1,
+    overflowY: "auto",
+    padding: theme.spacing(0, 4, 4),
+    [theme.breakpoints.down("sm")]: {
+      padding: theme.spacing(0, 1.5, 2),
+    },
+  },
+  card: {
+    borderRadius: 20,
+    padding: theme.spacing(4),
+    boxShadow: "0 2px 16px rgba(0,0,0,0.04)",
     backgroundColor: "#fff",
     "&.MuiPaper-root": { padding: "20px !important" },
+    [theme.breakpoints.down("sm")]: {
+      "&.MuiPaper-root": { padding: "16px !important" },
+    },
   },
   sideCard: { borderRadius: 20, padding: theme.spacing(3), backgroundColor: "#fff", boxShadow: "0 2px 12px rgba(0,0,0,0.03)", position: "sticky", top: 16 },
   sideCardHeader: {
@@ -254,6 +270,9 @@ const useStyles = makeStyles((theme) => ({
   footer: {
     padding: theme.spacing(2, 4), backgroundColor: "transparent", borderTop: "1px solid #f1f5f9",
     display: "flex", justifyContent: "space-between", alignItems: "center",
+    // Mobile: botões quebram linha em vez de estourar a viewport
+    flexWrap: "wrap", gap: theme.spacing(1),
+    [theme.breakpoints.down("sm")]: { padding: theme.spacing(1.5, 2) },
   },
   primaryBtn: { borderRadius: 12, padding: "10px 28px", textTransform: "none", fontWeight: 700, backgroundColor: "#005c53", color: "#fff", "&:hover": { backgroundColor: "#004d45" } },
   secondaryBtn: { borderRadius: 12, padding: "10px 24px", textTransform: "none", fontWeight: 600 },
@@ -1289,7 +1308,7 @@ const CampaignForm = () => {
     const nf = getMediaNameFieldByTab(idx), uf = getMediaUrlFieldByTab(idx);
     const name = values[nf], url = values[uf], has = !!name;
     return (
-      <Box display="flex" alignItems="center" style={{ gap: 12, margin: "8px 0" }}>
+      <Box display="flex" alignItems="center" style={{ gap: 12, margin: "8px 0", flexWrap: "wrap" }}>
         <Button size="small" variant="outlined" onClick={() => { setFileLibraryTargetIndex(idx); setFileLibraryOpen(true); }} disabled={disabled}>
           {has ? `Trocar anexo` : `Anexar Arquivo`}
         </Button>
@@ -1813,14 +1832,14 @@ const CampaignForm = () => {
                         <Typography className={classes.stepTitle}>Confirmação da Campanha</Typography>
                         <Typography className={classes.stepSub}>Revise a estratégia e defina quando os disparos devem iniciar.</Typography>
                         <Grid container spacing={2}>
-                          <Grid item xs={6}>
+                          <Grid item xs={12} sm={6}>
                             <Paper className={`${classes.schedCard} ${!values.scheduledAt ? classes.schedCardActive : ""}`} onClick={() => setFieldValue("scheduledAt", "")}>
                               <Rocket size={28} color={!values.scheduledAt ? "#005c53" : "#94a3b8"} style={{ marginBottom: 8 }} />
                               <Typography variant="subtitle1" style={{ fontWeight: 700 }}>Envio Imediato</Typography>
                               <Typography variant="body2" color="textSecondary">Dispara ao finalizar a configuração.</Typography>
                             </Paper>
                           </Grid>
-                          <Grid item xs={6}>
+                          <Grid item xs={12} sm={6}>
                             <Paper className={`${classes.schedCard} ${values.scheduledAt ? classes.schedCardActive : ""}`} onClick={() => { if (!values.scheduledAt) setFieldValue("scheduledAt", moment().add(1,"hour").format("YYYY-MM-DDTHH:mm")); }}>
                               <Calendar size={28} color={values.scheduledAt ? "#005c53" : "#94a3b8"} style={{ marginBottom: 8 }} />
                               <Typography variant="subtitle1" style={{ fontWeight: 700 }}>Agendamento Programado</Typography>
@@ -1830,7 +1849,7 @@ const CampaignForm = () => {
                         </Grid>
                         {values.scheduledAt && (
                           <Box mt={3}><Grid container spacing={2}>
-                            <Grid item xs={6}>
+                            <Grid item xs={12} sm={6}>
                               <Box display="flex" alignItems="center" mb={1} gap={0.5}>
                                 <label className={classes.label} style={{ marginBottom: 0 }}>Data e Hora</label>
                                 <Tooltip title="Escolha uma data e horário futuros para o início automático dos disparos."><InfoOutlinedIcon style={{ fontSize: 16, color: "#64748b", cursor: "pointer" }} /></Tooltip>
@@ -2080,7 +2099,7 @@ const CampaignForm = () => {
                          ) : null}
 
                          {!isOfficialConnection && (
-                           <Box display="flex" mb={2} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                           <Box display="flex" mb={2} style={{ borderBottom: "1px solid #f1f5f9", flexWrap: "wrap" }}>
                              {[1,2,3,4,5].map((n,idx) => (
                                <Button key={n} className={`${classes.msgTab} ${messageTab === idx ? classes.msgTabActive : ""}`}
                                  variant={messageTab === idx ? "contained" : "text"} onClick={() => setMessageTab(idx)}>Msg {n}</Button>
@@ -2196,7 +2215,7 @@ const CampaignForm = () => {
                <div className={classes.footer}>
                  {/* Botões de controle da campanha - aparecem primeiro se campanha existente */}
                  {campaignId && (
-                   <Box display="flex" style={{ gap: 8, marginRight: 'auto' }}>
+                   <Box display="flex" style={{ gap: 8, marginRight: 'auto', flexWrap: "wrap" }}>
                      {/* Retomar/Iniciar - para campanhas inativas, pausadas ou programadas */}
                      {(campaign.status === "CANCELADA" || campaign.status === "PROGRAMADA" || campaign.status === "INATIVA") && (
                        <Button
@@ -2228,7 +2247,7 @@ const CampaignForm = () => {
                  
                  {/* Botões de navegação/salvar - só aparecem se campaignEditable ou status CANCELADA */}
                  {(campaignEditable || campaign.status === "CANCELADA") && (
-                   <Box display="flex" style={{ gap: 8 }}>
+                   <Box display="flex" style={{ gap: 8, flexWrap: "wrap", justifyContent: "flex-end", maxWidth: "100%" }}>
                      {activeStep === 0 && (
                        <Button variant="contained" onClick={async () => { 
                          const isValid = await validateStepAndShowErrors(validateForm, values, whatsappId, selectedQueue, 0, isOfficialConnection);

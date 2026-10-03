@@ -85,6 +85,10 @@ const useStyles = makeStyles(theme => ({
   },
   tabContent: {
     padding: theme.spacing(3),
+    // Em mobile reduz o padding para dar mais área útil às abas
+    [theme.breakpoints.down("xs")]: {
+      padding: theme.spacing(1.5),
+    },
   },
   loader: {
     display: "flex",

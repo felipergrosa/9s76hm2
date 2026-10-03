@@ -304,8 +304,9 @@ const Groups = () => {
                             </span>
                         </div>
 
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <div style={{ position: "relative" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                            {/* flex+maxWidth: busca ocupa largura total em mobile sem estourar */}
+                            <div style={{ position: "relative", flex: "1 1 200px", maxWidth: 240, minWidth: 0 }}>
                                 <Search
                                     size={16}
                                     color="#8696a0"
@@ -322,7 +323,7 @@ const Groups = () => {
                                     value={searchParam}
                                     onChange={handleSearch}
                                     style={{
-                                        width: 240,
+                                        width: "100%",
                                         height: 36,
                                         paddingLeft: 34,
                                         paddingRight: 12,
@@ -340,12 +341,16 @@ const Groups = () => {
                                 disabled={loading}
                                 style={{
                                     padding: 8,
+                                    // Touch target mínimo de 44px no mobile
+                                    minWidth: 44,
+                                    minHeight: 44,
                                     border: "none",
                                     background: "transparent",
                                     cursor: loading ? "not-allowed" : "pointer",
                                     borderRadius: 8,
                                     display: "flex",
                                     alignItems: "center",
+                                    justifyContent: "center",
                                 }}
                             >
                                 <RefreshCw size={18} color="#667781" />
@@ -356,6 +361,8 @@ const Groups = () => {
                                 disabled={syncing}
                                 style={{
                                     padding: "6px 12px",
+                                    // Touch target mínimo de 36px para botão de toolbar
+                                    minHeight: 36,
                                     border: "1px solid #00a884",
                                     background: syncing ? "#e8f5e9" : "#fff",
                                     cursor: syncing ? "not-allowed" : "pointer",
@@ -388,7 +395,9 @@ const Groups = () => {
                             // Skeleton de lanes
                             [...Array(3)].map((_, i) => (
                                 <div key={i} style={{
-                                    minWidth: 320,
+                                    // Lane nunca excede a viewport: em telas <368px
+                                    // ocupa a largura disponível em vez de estourar
+                                    minWidth: "min(320px, calc(100vw - 48px))",
                                     maxWidth: 320,
                                     backgroundColor: "#fff",
                                     borderRadius: 12,
@@ -435,7 +444,9 @@ const Groups = () => {
                                 const color = LANE_COLORS[laneIdx % LANE_COLORS.length];
                                 return (
                                     <div key={lane.whatsappId} style={{
-                                        minWidth: 320,
+                                        // Lane nunca excede a viewport: em telas <368px
+                                        // ocupa a largura disponível em vez de estourar
+                                        minWidth: "min(320px, calc(100vw - 48px))",
                                         maxWidth: 320,
                                         display: "flex",
                                         flexDirection: "column",

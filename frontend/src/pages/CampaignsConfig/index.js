@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useContext } from "react";
 import { Field } from "formik";
 import { useHistory } from "react-router-dom";
-import { makeStyles } from "@material-ui/core/styles";
+import { makeStyles, useTheme } from "@material-ui/core/styles";
 import Paper from "@material-ui/core/Paper";
 import { toast } from "react-toastify";
 
@@ -26,7 +26,8 @@ import {
   InputAdornment,
   FormHelperText,
   Tabs,
-  Tab
+  Tab,
+  useMediaQuery
 } from "@material-ui/core";
 import InfoOutlinedIcon from "@material-ui/icons/InfoOutlined";
 import WhatsAppIcon from "@material-ui/icons/WhatsApp";
@@ -143,6 +144,9 @@ const initialSettings = {
 const CampaignsConfig = () => {
   const classes = useStyles();
   const history = useHistory();
+  const theme = useTheme();
+  // Mobile: abas viram scroll horizontal contido para não esmagar os labels
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
   const [settings, setSettings] = useState(initialSettings);
   const [showVariablesForm, setShowVariablesForm] = useState(false);
@@ -347,7 +351,8 @@ const CampaignsConfig = () => {
                 className={classes.tabs}
                 indicatorColor="primary"
                 textColor="primary"
-                variant="fullWidth"
+                variant={isMobile ? "scrollable" : "fullWidth"}
+                scrollButtons="auto"
               >
                 <Tab 
                   icon={<WhatsAppIcon className={classes.tabIcon} />}

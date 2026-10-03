@@ -85,10 +85,12 @@ const useStyles = makeStyles((theme) => ({
   paper: {
     flex: 1,
     padding: 0,
-    overflow: "hidden",
+    // overflowY auto no Paper: habilita o scroll que dispara a paginação infinita (handleScroll)
+    overflowY: "auto",
     borderRadius: 12,
     border: `1px solid ${theme.palette.divider}`,
     backgroundColor: theme.palette.background.paper,
+    ...theme.scrollbarStyles,
   },
   header: {
     display: "flex",
@@ -509,11 +511,13 @@ const Invoices = () => {
   // Botão de ação por status — "PAGAR"/"PAGAR AGORA" abre o modal de assinatura
   const renderActionButton = (invoice, isMobileView) => {
     const statusInfo = getInvoiceStatus(invoice);
+    // No card mobile garante área de toque mínima de 44px
+    const mobileTouch = isMobileView ? classes.actionButton : "";
     return statusInfo.text !== "Pago" ? (
       <Button
         size="small"
         variant="contained"
-        className={classes.paymentButton}
+        className={`${classes.paymentButton} ${mobileTouch}`}
         startIcon={<PaymentIcon />}
         onClick={() => handleOpenContactModal(invoice)}
       >
@@ -523,7 +527,7 @@ const Invoices = () => {
       <Button
         size="small"
         variant="outlined"
-        className={classes.paidButton}
+        className={`${classes.paidButton} ${mobileTouch}`}
         startIcon={<CheckCircleIcon />}
       >
         PAGO

@@ -638,6 +638,8 @@ const ConexoesTab = () => {
               size="small"
               onClick={() => loadConnections()}
               disabled={loading}
+              // Touch target mínimo de 36px no mobile
+              style={{ minWidth: 36, minHeight: 36 }}
             >
               <RefreshIcon fontSize="small" />
             </IconButton>

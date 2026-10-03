@@ -37,8 +37,6 @@ import { Info } from "@material-ui/icons";
 import { WhatsApp as WhatsAppIcon } from "@material-ui/icons";
 
 import MainContainer from "../../components/MainContainer";
-import MainHeader from "../../components/MainHeader";
-import MainHeaderButtonsWrapper from "../../components/MainHeaderButtonsWrapper";
 import Title from "../../components/Title";
 
 import api from "../../services/api";
@@ -98,10 +96,34 @@ const useStyles = makeStyles((theme) => ({
     flex: 1,
     padding: 0,
     overflow: "hidden",
+    borderRadius: 12,
+    border: `1px solid ${theme.palette.divider}`,
+    backgroundColor: theme.palette.background.paper,
+    display: "flex",
+    flexDirection: "column",
+  },
+  header: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing(2),
+    flexWrap: "wrap",
+    padding: theme.spacing(2, 2.5),
+  },
+  headerText: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
   },
   subtitle: {
     color: theme.palette.text.secondary,
-    marginTop: theme.spacing(0.5),
+    fontSize: "0.85rem",
+  },
+  headerActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1),
+    flexWrap: "wrap",
   },
   connectionSelector: {
     minWidth: 200,
@@ -110,14 +132,94 @@ const useStyles = makeStyles((theme) => ({
     display: "flex",
     alignItems: "center",
     gap: theme.spacing(1.5),
-    padding: theme.spacing(1.5, 2),
+    padding: theme.spacing(1.5, 2.5),
+    borderTop: `1px solid ${theme.palette.divider}`,
     borderBottom: `1px solid ${theme.palette.divider}`,
     flexWrap: "wrap",
+    background:
+      theme.palette.type === "dark"
+        ? theme.palette.background.default
+        : "#fafafa",
   },
   searchField: {
     minWidth: 220,
     flex: "1 1 220px",
-    maxWidth: 320,
+    maxWidth: 380,
+  },
+  desktopTableWrapper: {
+    [theme.breakpoints.down("sm")]: {
+      display: "none",
+    },
+  },
+  mobileList: {
+    display: "none",
+    [theme.breakpoints.down("sm")]: {
+      display: "grid",
+      gridTemplateColumns: "1fr",
+      gap: theme.spacing(1.5),
+      padding: theme.spacing(1.5),
+    },
+  },
+  card: {
+    borderRadius: 12,
+    padding: theme.spacing(1.75),
+    border: `1px solid ${theme.palette.divider}`,
+    display: "flex",
+    flexDirection: "column",
+    gap: theme.spacing(1.25),
+    background: theme.palette.background.paper,
+  },
+  cardHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing(1),
+  },
+  cardTitle: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1),
+    minWidth: 0,
+    flex: 1,
+  },
+  cardName: {
+    fontWeight: 700,
+    fontSize: "1rem",
+    lineHeight: 1.2,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  cardBody: {
+    color: theme.palette.text.secondary,
+    fontSize: "0.8rem",
+    lineHeight: 1.45,
+    whiteSpace: "pre-line",
+    display: "-webkit-box",
+    WebkitLineClamp: 3,
+    WebkitBoxOrient: "vertical",
+    overflow: "hidden",
+  },
+  cardMeta: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+    gap: theme.spacing(1),
+  },
+  metaLabel: {
+    fontSize: "0.72rem",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    color: theme.palette.text.secondary,
+  },
+  cardActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(0.5),
+    flexWrap: "wrap",
+  },
+  actionButton: {
+    minWidth: 44,
+    minHeight: 44,
   },
   filterSelect: {
     minWidth: 140,
@@ -449,7 +551,7 @@ const MetaTemplates = () => {
   // Filtros client-side: busca por nome/snippet + selects de categoria/status/idioma
   const filteredTemplates = templates.filter((t) => {
     if (searchParam) {
-      const hay = `${t.name || ""} ${bodySnippet(t)}`.toLowerCase();
+      const hay = `${t.name || ""} ${bodyText(t)}`.toLowerCase();
       if (!hay.includes(searchParam)) return false;
     }
     if (categoryFilter && (t.category || "").toUpperCase() !== categoryFilter)
@@ -518,60 +620,63 @@ const MetaTemplates = () => {
         template={selectedTemplate}
         onSaved={fetchTemplates}
       />
-      <MainHeader>
-        <Box>
-          <Title>
-            {i18n.t("metaTemplates.title")} ({filteredTemplates.length})
-          </Title>
-          <Typography variant="body2" className={classes.subtitle}>
-            {i18n.t("metaTemplates.subtitle")}
-          </Typography>
-        </Box>
-        <MainHeaderButtonsWrapper>
-          <FormControl
-            variant="outlined"
-            size="small"
-            className={classes.connectionSelector}
-          >
-            <InputLabel>{i18n.t("metaTemplates.selectConnection")}</InputLabel>
-            <Select
-              value={selectedWhatsAppId}
-              onChange={handleChangeConnection}
-              label={i18n.t("metaTemplates.selectConnection")}
-              disabled={loadingWhatsApps || !hasOfficialConnection}
-            >
-              {officialWhatsApps.map((w) => (
-                <MenuItem key={w.id} value={w.id}>
-                  {w.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <Tooltip title={i18n.t("metaTemplates.buttons.sync")}>
-            <span>
-              <IconButton
-                onClick={handleSync}
-                disabled={!selectedWhatsAppId || loading}
-                size="small"
-              >
-                <SyncIcon className={loading ? classes.spinning : undefined} />
-              </IconButton>
-            </span>
-          </Tooltip>
-          {canCreate && (
-            <Button
-              variant="contained"
-              color="primary"
-              onClick={handleOpenTemplateModal}
-              disabled={!selectedWhatsAppId}
-              startIcon={<AddIcon />}
-            >
-              {i18n.t("metaTemplates.buttons.add")}
-            </Button>
-          )}
-        </MainHeaderButtonsWrapper>
-      </MainHeader>
       <Paper className={classes.mainPaper} variant="outlined">
+        {/* Cabeçalho no padrão novo: título + total + subtítulo + ações */}
+        <div className={classes.header}>
+          <div className={classes.headerText}>
+            <Title>
+              {i18n.t("metaTemplates.title")} ({filteredTemplates.length})
+            </Title>
+            <span className={classes.subtitle}>
+              {i18n.t("metaTemplates.subtitle")}
+            </span>
+          </div>
+          <div className={classes.headerActions}>
+            <FormControl
+              variant="outlined"
+              size="small"
+              className={classes.connectionSelector}
+            >
+              <InputLabel>{i18n.t("metaTemplates.selectConnection")}</InputLabel>
+              <Select
+                value={selectedWhatsAppId}
+                onChange={handleChangeConnection}
+                label={i18n.t("metaTemplates.selectConnection")}
+                disabled={loadingWhatsApps || !hasOfficialConnection}
+              >
+                {officialWhatsApps.map((w) => (
+                  <MenuItem key={w.id} value={w.id}>
+                    {w.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Tooltip title={i18n.t("metaTemplates.buttons.sync")}>
+              <span>
+                <IconButton
+                  onClick={handleSync}
+                  disabled={!selectedWhatsAppId || loading}
+                  size="small"
+                >
+                  <SyncIcon className={loading ? classes.spinning : undefined} />
+                </IconButton>
+              </span>
+            </Tooltip>
+            {canCreate && (
+              <Button
+                variant="contained"
+                color="primary"
+                size="small"
+                onClick={handleOpenTemplateModal}
+                disabled={!selectedWhatsAppId}
+                startIcon={<AddIcon />}
+                style={{ minHeight: 36 }}
+              >
+                {i18n.t("metaTemplates.buttons.add")}
+              </Button>
+            )}
+          </div>
+        </div>
         {!loadingWhatsApps && !hasOfficialConnection && (
           <Box className={classes.infoBox}>
             <Info color="primary" />
@@ -701,6 +806,105 @@ const MetaTemplates = () => {
           </Box>
         )}
 
+        {/* Skeleton — mobile */}
+        {loading && hasOfficialConnection && (
+          <div className={classes.mobileList}>
+            {[0, 1, 2].map((i) => (
+              <div key={i} className={classes.card} style={{ minHeight: 120, opacity: 0.5 }} />
+            ))}
+          </div>
+        )}
+
+        {/* Cards — mobile (lista de templates em formato nativo) */}
+        {!loading && hasOfficialConnection && filteredTemplates.length > 0 && (
+          <div className={classes.mobileList}>
+            {filteredTemplates.map((template) => (
+              <div key={template.id} className={classes.card}>
+                <div className={classes.cardHeader}>
+                  <div className={classes.cardTitle}>
+                    {canDelete && (
+                      <Checkbox
+                        size="small"
+                        checked={checkedIds.includes(template.id)}
+                        onChange={() => toggleChecked(template.id)}
+                      />
+                    )}
+                    <div className={classes.cardName} title={template.name}>
+                      {template.name}
+                    </div>
+                  </div>
+                  <StatusChip status={template.status} />
+                </div>
+                {bodyText(template) && (
+                  <div className={classes.cardBody}>{bodyText(template)}</div>
+                )}
+                <div className={classes.cardMeta}>
+                  <div>
+                    <div className={classes.metaLabel}>
+                      {i18n.t("metaTemplates.table.category")}
+                    </div>
+                    <CategoryChip category={template.category} />
+                  </div>
+                  <div>
+                    <div className={classes.metaLabel}>
+                      {i18n.t("metaTemplates.table.cost", { defaultValue: "Custo/envio" })}
+                    </div>
+                    <div>
+                      {template.estimatedCost !== null &&
+                      template.estimatedCost !== undefined
+                        ? formatBrl(template.estimatedCost)
+                        : "—"}
+                    </div>
+                  </div>
+                  <div>
+                    <div className={classes.metaLabel}>
+                      {i18n.t("metaTemplates.table.language")}
+                    </div>
+                    <div>{template.language || "—"}</div>
+                  </div>
+                  <div>
+                    <div className={classes.metaLabel}>
+                      {i18n.t("metaTemplates.table.quality")}
+                    </div>
+                    <QualityChip score={template.quality_score?.score} />
+                  </div>
+                </div>
+                {template.rejected_reason && (
+                  <div className={classes.cardBody} style={{ color: "#d32f2f" }}>
+                    {template.rejected_reason}
+                  </div>
+                )}
+                <div className={classes.cardActions}>
+                  {canEdit && (
+                    <IconButton
+                      size="small"
+                      className={classes.actionButton}
+                      onClick={() => handleEditTemplate(template)}
+                    >
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                  )}
+                  {canDelete && (
+                    <IconButton
+                      size="small"
+                      className={classes.actionButton}
+                      onClick={() => {
+                        setDeletingBulk(false);
+                        setDeletingTemplate(template);
+                        setConfirmModalOpen(true);
+                      }}
+                    >
+                      <DeleteOutlineIcon fontSize="small" />
+                    </IconButton>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Tabela — desktop */}
+        <div className={classes.desktopTableWrapper}>
         <Table size="small">
           <TableHead>
             <TableRow>
@@ -829,6 +1033,7 @@ const MetaTemplates = () => {
             )}
           </TableBody>
         </Table>
+        </div>
         {!loading && hasOfficialConnection && filteredTemplates.length === 0 && (
           <Box className={classes.emptyState}>
             <WhatsAppIcon className={classes.emptyIcon} />

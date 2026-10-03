@@ -439,12 +439,14 @@ const Announcements = () => {
   };
 
   // Ações compartilhadas entre tabela (desktop) e cards (mobile)
-  const renderActionButtons = (announcement) => (
+  // isCard aplica a classe actionButton (área de toque mínima 44px no mobile)
+  const renderActionButtons = (announcement, isCard = false) => (
     <>
       {canEdit && (
         <Tooltip title={i18n.t("announcements.dialog.edit")}>
           <IconButton
             size="small"
+            className={isCard ? classes.actionButton : undefined}
             onClick={() => handleEditAnnouncement(announcement)}
           >
             <EditIcon size={18} />
@@ -455,6 +457,7 @@ const Announcements = () => {
         <Tooltip title={i18n.t("announcements.confirmationModal.deleteTitle")}>
           <IconButton
             size="small"
+            className={isCard ? classes.actionButton : undefined}
             onClick={() => {
               setConfirmModalOpen(true);
               setDeletingAnnouncement(announcement);
@@ -587,7 +590,7 @@ const Announcements = () => {
 
                   {(canEdit || canDelete) && (
                     <div className={classes.cardActions}>
-                      {renderActionButtons(announcement)}
+                      {renderActionButtons(announcement, true)}
                     </div>
                   )}
                 </div>

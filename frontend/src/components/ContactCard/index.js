@@ -164,12 +164,13 @@ const ContactCard = memo(({
         </span>
 
         {/* Ações */}
+        {/* Alvos de toque >= 44px (margem negativa mantém o espaçamento visual) */}
         <div className="flex items-center gap-2">
           {instagramProfileUrl(contact.instagram) && (
             <Tooltip {...CustomTooltipProps} title={`Instagram: ${contact.instagram}`}>
               <button
                 onClick={() => window.open(instagramProfileUrl(contact.instagram), "_blank", "noopener")}
-                className="text-pink-600 hover:text-pink-800 dark:text-pink-400 dark:hover:text-pink-300"
+                className="inline-flex items-center justify-center min-w-[44px] min-h-[44px] -m-2 text-pink-600 hover:text-pink-800 dark:text-pink-400 dark:hover:text-pink-300"
               >
                 <Instagram className="w-4 h-4" />
               </button>
@@ -179,34 +180,34 @@ const ContactCard = memo(({
             <Tooltip {...CustomTooltipProps} title={`Facebook: ${contact.facebook}`}>
               <button
                 onClick={() => window.open(facebookProfileUrl(contact.facebook), "_blank", "noopener")}
-                className="text-blue-700 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                className="inline-flex items-center justify-center min-w-[44px] min-h-[44px] -m-2 text-blue-700 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
               >
                 <Facebook className="w-4 h-4" />
               </button>
             </Tooltip>
           )}
           <Tooltip {...CustomTooltipProps} title="Enviar mensagem pelo WhatsApp">
-            <button onClick={() => onSendMessage(contact)} className="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300">
+            <button onClick={() => onSendMessage(contact)} className="inline-flex items-center justify-center min-w-[44px] min-h-[44px] -m-2 text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300">
               <WhatsApp className="w-4 h-4" />
             </button>
           </Tooltip>
           {hasPermission("contacts.delete") && (
             <>
               <Tooltip {...CustomTooltipProps} title="Editar contato">
-                <button onClick={() => onEdit(contact.id)} className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
+                <button onClick={() => onEdit(contact.id)} className="inline-flex items-center justify-center min-w-[44px] min-h-[44px] -m-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
                   <Edit className="w-4 h-4" />
                 </button>
               </Tooltip>
               <Tooltip {...CustomTooltipProps} title={contact.active ? "Bloquear contato" : "Desbloquear contato"}>
                 <button
                   onClick={() => contact.active ? onBlock(contact) : onUnblock(contact)}
-                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                  className="inline-flex items-center justify-center min-w-[44px] min-h-[44px] -m-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
                 >
                   {contact.active ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
                 </button>
               </Tooltip>
               <Tooltip {...CustomTooltipProps} title="Deletar contato">
-                <button onClick={() => onDelete(contact)} className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300">
+                <button onClick={() => onDelete(contact)} className="inline-flex items-center justify-center min-w-[44px] min-h-[44px] -m-2 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </Tooltip>

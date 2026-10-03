@@ -677,7 +677,9 @@ const Schedules = () => {
                     culture="pt-br"
                     formats={{
                       agendaDateFormat: "DD/MM ddd",
-                      weekdayFormat: "dddd",
+                      // "ddd" (seg/ter/…) mantém o cabeçalho do mês legível em 375px;
+                      // "dddd" ("segunda-feira") era cortado nas colunas de ~46px
+                      weekdayFormat: "ddd",
                     }}
                     localizer={localizer}
                     events={schedules.map((schedule) => ({

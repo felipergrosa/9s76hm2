@@ -386,7 +386,7 @@ const NewTicketModal = ({ modalOpen, onClose, initialContact, initialWhatsappId 
   return (
     <>
 
-      <Dialog open={modalOpen} onClose={handleClose}>
+      <Dialog open={modalOpen} onClose={handleClose} fullWidth maxWidth="sm">
         <DialogTitle id="form-dialog-title">
           {i18n.t("newTicketModal.title")}
         </DialogTitle>
