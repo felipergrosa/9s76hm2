@@ -1,4 +1,4 @@
-/* Bento Dashboard — superfícies e micro-interações
+/* Bento Design System — superfícies e micro-interações (padrão do projeto)
    Usa as CSS vars do modern-ui.css (--card, --border, --text, --shadow),
    com fallbacks para o modo clássico. */
 
@@ -39,6 +39,15 @@
 .bento-card:hover {
   box-shadow: 0 14px 44px rgba(31, 38, 135, 0.13);
   border-color: rgba(var(--primary-color-rgb, 6, 81, 131), 0.35);
+}
+
+/* Painel bento: mesma superfície do card, sem padding (para envolver
+   tabelas/toolbars que já controlam seu próprio espaçamento interno) */
+.bento-panel {
+  background: var(--card, #fff);
+  border: 1px solid var(--border, #e2e8f0) !important;
+  border-radius: 20px !important;
+  box-shadow: var(--shadow, 0 8px 32px rgba(31, 38, 135, 0.07)) !important;
 }
 
 /* ── Tipografia interna ────────────────────────────────────── */

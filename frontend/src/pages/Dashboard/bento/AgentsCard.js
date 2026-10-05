@@ -1,7 +1,7 @@
 import React from "react";
 import { Headset } from "lucide-react";
-import BentoCard from "./BentoCard";
-import useCountUp from "./useCountUp";
+import BentoCard from "../../../components/bento/BentoCard";
+import useCountUp from "../../../components/bento/useCountUp";
 import { i18n } from "../../../translate/i18n";
 
 // Card de atendentes: online/total com count-up + dot pulsante ao vivo.

@@ -4,13 +4,13 @@ import { render } from "@testing-library/react";
 // lucide-react é ESM-only e o jest do CRA não transpila node_modules
 jest.mock("lucide-react", () => ({ Headset: () => null }));
 import { motion } from "framer-motion";
-import { bentoContainer } from "../motionPresets";
-import StatCard from "../StatCard";
+import { bentoContainer } from "../../../../components/bento/motionPresets";
+import StatCard from "../../../../components/bento/StatCard";
+import BentoCard from "../../../../components/bento/BentoCard";
+import useCountUp from "../../../../components/bento/useCountUp";
 import HeroCard from "../HeroCard";
 import AgentsCard from "../AgentsCard";
 import RatingsCard from "../RatingsCard";
-import BentoCard from "../BentoCard";
-import useCountUp from "../useCountUp";
 
 const wrap = (ui) =>
   render(

@@ -1,6 +1,6 @@
 import React from "react";
 import { motion } from "framer-motion";
-import BentoCard from "./BentoCard";
+import BentoCard from "../../../components/bento/BentoCard";
 import ChartDonut from "../ChartDonut";
 import { i18n } from "../../../translate/i18n";
 

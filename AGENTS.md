@@ -31,6 +31,23 @@ cd backend; npx sequelize db:migrate      # aplicar migrations pendentes
 - `.md` internos em `docs/privado/`; `.sql` em `backend/database/scripts/`
 - Isolamento por `companyId` em todas as queries; paginação em listagens
 
+## Design system bento (padrão de UI novo)
+
+Stack: Tailwind v4 (já ativo) + `framer-motion@6.5.1` (pinned — última versão compatível com React 17) + CSS vars do `modern-ui.css`.
+
+- Primitivos compartilhados em `frontend/src/components/bento/`:
+  - `BentoCard` — card com entrada spring + hover lift (`whileHover y:-4`); span do grid via className tailwind (`col-span-*`, `row-span-*`)
+  - `StatCard` — KPI: label uppercase + valor com count-up + ícone colorido (`accent` aceita `var(--primary-color)` para seguir whitelabel)
+  - `useCountUp` — retorna `number` (espelha MotionValue em state). **NUNCA renderizar `<motion.*>{motionValue}</motion.*>` — FM6 não suporta; quebra a página inteira** (já causou tela branca em prod)
+  - `motionPresets` — `bentoContainer` (stagger 50ms) / `bentoItem` (spring stiffness 320 damping 30) / `bentoItemReduced` (só fade) / `springHover`
+  - `bento.css` — `.bento-card`, `.bento-panel` (superfície sem padding p/ tabelas), `.bento-embed` (achata `MuiPaper` interno), `.bento-icon-btn`, `.bento-input`, `.bento-btn-primary`, `.bento-pulse`, `.bento-shimmer`, `.bento-bar-*`, `.bento-minis`
+- Cards de domínio do Dashboard ficam em `pages/Dashboard/bento/` (HeroCard, AgentsCard, NpsCard, RatingsCard, PeriodFilter)
+- Entrada de página: `<motion.div variants={bentoContainer} initial="hidden" animate="show">` no topo; variants propagam por contexto mesmo através de divs comuns — itens internos usam `variants={bentoItem}`
+- Sempre respeitar `useReducedMotion()` (FM6) — trocar `bentoItem` por `bentoItemReduced`
+- Smoke test de regressão: `pages/Dashboard/bento/__tests__/bento.smoke.test.js` (jest não transpila ESM de node_modules — mockar `lucide-react`)
+- Exemplo de página migrada: `pages/Connections` (strip de KPIs + `.bento-panel` + entrada spring)
+- Palette de accents usada: `#3598dc` (azul), `#32c5d2` (ciano), `#26c281` (verde), `#8e44ad` (roxo), `#e7505a` (vermelho), `#f39c12` (âmbar)
+
 ## Meta / WhatsApp API Oficial
 
 - Custos: `pricing_analytics` (por mensagem, pós jul/2025) → `WabaPricingRates` (rate = Σcost/Σvolume por categoria) → `estimatedCost` carimbado em `CampaignShipping`/`Message`

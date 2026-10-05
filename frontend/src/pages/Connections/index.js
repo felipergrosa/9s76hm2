@@ -56,6 +56,7 @@ import {
   Plus as AddIcon,
   LifeBuoy as SupportIcon,
   RotateCw as RestartIcon,
+  Link2 as LinkIcon,
 } from "lucide-react";
 
 import MainContainer from "../../components/MainContainer";
@@ -76,6 +77,10 @@ import usePlans from "../../hooks/usePlans";
 import { useHistory } from "react-router-dom/cjs/react-router-dom.min";
 import ForbiddenPage from "../../components/ForbiddenPage";
 import usePermissions from "../../hooks/usePermissions";
+import { motion, useReducedMotion } from "framer-motion";
+import StatCard from "../../components/bento/StatCard";
+import { bentoContainer, bentoItem, bentoItemReduced } from "../../components/bento/motionPresets";
+import "../../components/bento/bento.css";
 
 // ===== Estilos no padrão do gerenciador de Campanhas/Templates Meta =====
 const useStyles = makeStyles((theme) => ({
@@ -467,6 +472,21 @@ const Connections = () => {
     });
     return list;
   }, [whatsApps, orderBy, orderDir, searchParam, channelFilter, statusFilter]);
+
+  // KPIs do strip bento — derivados da mesma lista (socket já atualiza em tempo real)
+  const connStats = useMemo(() => {
+    const list = whatsApps || [];
+    const live = ["CONNECTED", "OPENING", "PAIRING", "qrcode"];
+    return {
+      total: list.length,
+      connected: list.filter(w => w.status === "CONNECTED").length,
+      connecting: list.filter(w => ["OPENING", "PAIRING", "qrcode"].includes(w.status)).length,
+      disconnected: list.filter(w => !live.includes(w.status || "")).length,
+    };
+  }, [whatsApps]);
+
+  const reducedMotion = useReducedMotion();
+  const itemVariant = reducedMotion ? bentoItemReduced : bentoItem;
 
   const [whatsAppModalOpen, setWhatsAppModalOpen] = useState(false);
   const [, setStatusImport] = useState([]);
@@ -1068,7 +1088,22 @@ const Connections = () => {
         <ForbiddenPage />
         :
         <>
-        <Paper className={classes.paper} variant="outlined">
+        <motion.div
+          variants={bentoContainer}
+          initial="hidden"
+          animate="show"
+          style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, gap: 12 }}
+        >
+          {/* Strip de KPIs bento — espelha os status da lista em tempo real */}
+          <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+            <StatCard label="Conexões" value={connStats.total} icon={<LinkIcon size={20} />} accent="var(--primary-color)" loading={loading} />
+            <StatCard label="Conectadas" value={connStats.connected} icon={<CheckIcon size={20} />} accent="#26c281" loading={loading} />
+            <StatCard label="Conectando / QR" value={connStats.connecting} icon={<QrIcon size={20} />} accent="#f39c12" loading={loading} />
+            <StatCard label="Desconectadas" value={connStats.disconnected} icon={<DisconnectIcon size={20} />} accent="#e7505a" loading={loading} />
+          </div>
+
+        <motion.div variants={itemVariant} style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+        <Paper className={`${classes.paper} bento-panel`} variant="outlined">
           {/* Cabeçalho no padrão /campaigns: título + subtítulo + ações */}
           <div className={classes.header}>
             <div className={classes.headerText}>
@@ -1300,7 +1335,7 @@ const Connections = () => {
                   const isMeta = whatsApp.channel === "facebook" || whatsApp.channel === "instagram";
 
                   return (
-                    <div key={whatsApp.id} className={classes.card}>
+                    <motion.div key={whatsApp.id} className={classes.card} variants={itemVariant}>
                       <div className={classes.cardHeader}>
                         <div className={classes.cardTitle}>
                           <span
@@ -1397,7 +1432,7 @@ const Connections = () => {
                           </>
                         )}
                       </div>
-                    </div>
+                    </motion.div>
                   );
                 })}
               </div>
@@ -1523,6 +1558,8 @@ const Connections = () => {
               </>
             )}
           </Paper>
+        </motion.div>
+        </motion.div>
 
           {/* Diagnóstico Meta — token, assinatura da página e dicas */}
           <Dialog

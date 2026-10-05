@@ -1,6 +1,6 @@
 import React from "react";
-import BentoCard from "./BentoCard";
-import useCountUp from "./useCountUp";
+import BentoCard from "../../../components/bento/BentoCard";
+import useCountUp from "../../../components/bento/useCountUp";
 import { i18n } from "../../../translate/i18n";
 
 // Card hero do bento: KPI principal em destaque + lista viva de

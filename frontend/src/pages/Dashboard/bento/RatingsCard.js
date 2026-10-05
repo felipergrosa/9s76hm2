@@ -1,5 +1,5 @@
 import React from "react";
-import BentoCard from "./BentoCard";
+import BentoCard from "../../../components/bento/BentoCard";
 import { i18n } from "../../../translate/i18n";
 
 // Resumo de avaliações: total de atendimentos, avaliados e índice.

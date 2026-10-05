@@ -21,15 +21,15 @@ import { ChartsDate } from "./ChartsDate";
 import ForbiddenPage from "../../components/ForbiddenPage";
 import { i18n } from "../../translate/i18n";
 import usePermissions from "../../hooks/usePermissions";
-import BentoCard from "./bento/BentoCard";
-import StatCard from "./bento/StatCard";
+import BentoCard from "../../components/bento/BentoCard";
+import StatCard from "../../components/bento/StatCard";
 import HeroCard from "./bento/HeroCard";
 import AgentsCard from "./bento/AgentsCard";
 import NpsCard from "./bento/NpsCard";
 import RatingsCard from "./bento/RatingsCard";
 import PeriodFilter from "./bento/PeriodFilter";
-import { bentoContainer } from "./bento/motionPresets";
-import "./bento/bento.css";
+import { bentoContainer } from "../../components/bento/motionPresets";
+import "../../components/bento/bento.css";
 
 const Dashboard = () => {
   const [counters, setCounters] = useState({});
