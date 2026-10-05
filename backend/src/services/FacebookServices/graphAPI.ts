@@ -2,6 +2,7 @@ import axios from "axios";
 import FormData from "form-data";
 import { createReadStream } from "fs";
 import logger from "../../utils/logger";
+import { signPublicMediaUrl } from "../../utils/publicMediaAccess";
 
 const formData: FormData = new FormData();
 
@@ -88,6 +89,18 @@ export const sendText = async (
   }
 };
 
+// URLs locais de /public/companyX são protegidas — os servidores da Meta
+// baixam o anexo sem cookie/JWT, então a URL precisa ir assinada (TTL curto).
+const maybeSignPublicMediaUrl = (url: string): string => {
+  const match = /\/public\/company(\d+)\//i.exec(url || "");
+  if (!match) return url;
+  try {
+    return signPublicMediaUrl(url, Number(match[1]));
+  } catch {
+    return url;
+  }
+};
+
 export const sendAttachmentFromUrl = async (
   id: string,
   url: string,
@@ -103,7 +116,7 @@ export const sendAttachmentFromUrl = async (
         attachment: {
           type,
           payload: {
-            url
+            url: maybeSignPublicMediaUrl(url)
           }
         }
       }

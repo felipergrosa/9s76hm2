@@ -211,7 +211,7 @@ const MessageOptionsMenu = ({ message, menuOpen, handleClose, anchorEl }) => {
 		try {
 			const url = message?.mediaUrl;
 			if (!url) return;
-			const response = await fetch(url);
+			const response = await fetch(url, { credentials: "include" });
 			if (!response.ok) throw new Error("download-failed");
 			const blob = await response.blob();
 			const blobUrl = window.URL.createObjectURL(blob);

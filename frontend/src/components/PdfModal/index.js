@@ -94,7 +94,7 @@ const PdfModal = ({ url }) => {
 
   const handleDownload = async () => {
     try {
-      const res = await fetch(url);
+      const res = await fetch(url, { credentials: "include" });
       if (!res.ok) return;
       const blob = await res.blob();
       const blobUrl = window.URL.createObjectURL(blob);
@@ -112,7 +112,7 @@ const PdfModal = ({ url }) => {
     <>
       <div ref={wrapRef} className={classes.thumbWrapper} onClick={handleOpen} title="Visualizar PDF">
         {!loadError ? (
-          <Document file={url} onLoadSuccess={onLoadSuccess} onLoadError={onLoadError} loading={
+          <Document file={{ url, withCredentials: true }} onLoadSuccess={onLoadSuccess} onLoadError={onLoadError} loading={
             <PictureAsPdf className={classes.pdfIconFallback} />
           }>
             <Page pageNumber={1} width={thumbWidth} renderAnnotationLayer={false} renderTextLayer={false} className={classes.pageCanvas} />
@@ -131,7 +131,7 @@ const PdfModal = ({ url }) => {
           </Tooltip>
         </div>
         <DialogContent className={classes.modalContent}>
-          <Document file={url} onLoadSuccess={onLoadSuccess} onLoadError={onLoadError}>
+          <Document file={{ url, withCredentials: true }} onLoadSuccess={onLoadSuccess} onLoadError={onLoadError}>
             <Page pageNumber={1} renderAnnotationLayer={false} renderTextLayer={false} className={classes.modalPage} />
           </Document>
         </DialogContent>

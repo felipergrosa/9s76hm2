@@ -215,8 +215,28 @@ export default {
       // Documentos
       'application/pdf',
       'text/plain',
-      // Removido 'application/octet-stream' por segurança (aceitava qualquer binário).
-      // validateUploadedFiles middleware valida magic bytes para casos legítimos.
+      'text/csv',
+      'application/json',
+      'application/rtf',
+      'text/rtf',
+      // Office
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      // Compactados
+      'application/zip',
+      'application/x-zip-compressed',
+      'application/vnd.rar',
+      'application/x-rar-compressed',
+      'application/x-7z-compressed',
+      'application/gzip',
+      // Fallback: browsers/servidores sem mimetype conhecido enviam
+      // octet-stream — necessário para "qualquer tipo de arquivo".
+      // Extensões renderizáveis/executáveis continuam bloqueadas abaixo.
+      'application/octet-stream',
 
       // Áudio (permitir formatos comuns usados por navegadores e celulares)
       'audio/mpeg',
@@ -241,6 +261,13 @@ export default {
       'video/mpeg',
       'video/avi'
     ];
+
+    // Extensões que renderizam/executam no domínio do backend quando servidas
+    // por express.static (html/svg/js) — bloqueadas para não reabrir XSS
+    // armazenado, independente do mimetype declarado.
+    if (/\.(x?html?|svg|js|mjs)$/i.test(file.originalname || "")) {
+      return cb(new Error("Extensão de arquivo não permitida"));
+    }
 
     if (allowedMimes.includes(file.mimetype)) {
       cb(null, true);

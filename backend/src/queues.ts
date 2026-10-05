@@ -34,6 +34,7 @@ import UpdateTicketService from "./services/TicketServices/UpdateTicketService";
 import { addSeconds, differenceInSeconds } from "date-fns";
 import { GetWhatsapp } from "./helpers/GetWhatsapp";
 import { safeNormalizePhoneNumber } from "./utils/phone";
+import { signPublicMediaUrl } from "./utils/publicMediaAccess";
 import { sendFacebookMessageMedia } from "./services/FacebookServices/sendFacebookMessageMedia";
 import sendFaceMessage from "./services/FacebookServices/sendFacebookMessage";
 import SendWhatsAppMedia from "./services/WbotServices/SendWhatsAppMedia";
@@ -2437,7 +2438,9 @@ async function handleDispatchCampaign(job) {
                 parameters: [{
                   type: templateDef.headerFormat.toLowerCase(),
                   [templateDef.headerFormat.toLowerCase()]: {
-                    link: headerMediaUrl
+                    // /public/companyX exige credencial — Meta baixa a URL
+                    // sem cookie/JWT, então envia com assinatura temporária
+                    link: signPublicMediaUrl(headerMediaUrl, campaign.companyId)
                   }
                 }]
               };

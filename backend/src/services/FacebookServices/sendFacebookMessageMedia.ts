@@ -1,4 +1,5 @@
 import fs from "fs";
+import path from "path";
 import AppError from "../../errors/AppError";
 import Ticket from "../../models/Ticket";
 import { sendAttachmentFromUrl } from "./graphAPI";
@@ -33,7 +34,14 @@ export const sendFacebookMessageMedia = async ({
   try {
     const type = typeAttachment(media);
 
-    const domain = `${process.env.BACKEND_URL}/public/company${ticket.companyId}/${media.filename}`
+    // Caminho relativo real do arquivo (o multer grava em
+    // companyX/contactY/ — montar só companyX/filename gerava 404)
+    const publicFolder = path.resolve(__dirname, "..", "..", "..", "public");
+    const relPath = path
+      .relative(publicFolder, media.path)
+      .split(path.sep)
+      .join("/");
+    const domain = `${process.env.BACKEND_URL}/public/${relPath}`;
 
 
     const sendMessage = await sendAttachmentFromUrl(

@@ -67,7 +67,7 @@ const ScheduleModal = lazy(() => import("../ScheduleModal"));
 const ChatAssistantPanel = lazy(() => import("../ChatAssistantPanel"));
 const WhatsAppPopover = lazy(() => import("../WhatsAppPopover"));
 const OfficialTemplateStartModal = lazy(() => import("../OfficialTemplateStartModal"));
-import axios from "axios";
+
 import useCompanySettings from "../../hooks/useSettings/companySettings";
 import { ForwardMessageContext } from "../../context/ForwarMessage/ForwardMessageContext";
 import { EditMessageContext } from "../../context/EditingMessage/EditingMessageContext";
@@ -1484,11 +1484,12 @@ const MessageInput = ({
               setUploadProgress(progress);
             }
             
-            // Download do arquivo
-            const { data: blob } = await axios.get(optimisticData.mediaUrl, { responseType: "blob" });
-            
-            // Upload para o servidor
-            await handleUploadQuickMessageMedia(blob, caption);
+            // Download do arquivo — /public/companyX exige credencial
+            // (cookie wm_media / JWT), então usa o axios autenticado (api)
+            const { data: blob } = await api.get(optimisticData.mediaUrl, { responseType: "blob" });
+
+            // Upload para o servidor com o nome/extensão reais do anexo
+            await handleUploadQuickMessageMedia(blob, caption, optimisticData.filename);
             
             // Confirmar mensagem otimista - o servidor vai emitir a real via socket
             confirmOptimisticMessage(ticketId, optimisticData.tempId, null);
@@ -1980,14 +1981,30 @@ const MessageInput = ({
     setLoading(false);
   };
 
-  const handleUploadQuickMessageMedia = async (blob, message) => {
+  const handleUploadQuickMessageMedia = async (blob, message, fileName) => {
     setLoading(true);
     try {
-      const extension = blob.type.split("/")[1];
+      // Preserva nome/extensão do anexo original: o download pode chegar com
+      // Content-Type genérico e o multer do backend rejeita mimetype inválido.
+      const ext = (fileName || "").split(".").pop()?.toLowerCase();
+      const mimeByExt = {
+        pdf: "application/pdf", txt: "text/plain", csv: "text/csv", json: "application/json",
+        doc: "application/msword", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        xls: "application/vnd.ms-excel", xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ppt: "application/vnd.ms-powerpoint", pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        zip: "application/zip", rar: "application/vnd.rar", "7z": "application/x-7z-compressed",
+        jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif", webp: "image/webp",
+        mp3: "audio/mpeg", ogg: "audio/ogg", opus: "audio/opus", m4a: "audio/mp4", wav: "audio/wav", aac: "audio/aac",
+        mp4: "video/mp4", mov: "video/quicktime", avi: "video/x-msvideo", "3gp": "video/3gpp"
+      }[ext] || null;
+      const type = (blob.type && !["", "text/html", "application/octet-stream"].includes(blob.type))
+        ? blob.type
+        : (mimeByExt || "application/octet-stream");
+      const safeName = fileName || `arquivo-${new Date().getTime()}${ext ? `.${ext}` : ""}`;
+      const file = new File([blob], safeName, { type });
 
       const formData = new FormData();
-      const filename = `${new Date().getTime()}.${extension}`;
-      formData.append("medias", blob, filename);
+      formData.append("medias", file);
       formData.append("body", privateMessage ? `\u200d${message}` : message);
       formData.append("fromMe", true);
 
