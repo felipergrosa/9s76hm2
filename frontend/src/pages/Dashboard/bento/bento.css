@@ -1,0 +1,352 @@
+/* Bento Dashboard — superfícies e micro-interações
+   Usa as CSS vars do modern-ui.css (--card, --border, --text, --shadow),
+   com fallbacks para o modo clássico. */
+
+.dash-bento {
+  min-height: 100vh;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  color: var(--text, #1e293b);
+}
+
+.dash-title {
+  font-size: clamp(1.4rem, 2vw, 1.9rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text, #1e293b);
+  margin: 0;
+}
+
+.dash-subtitle {
+  font-size: 0.8rem;
+  color: var(--text-muted, #64748b);
+  margin: 2px 0 0;
+}
+
+/* ── Card base ─────────────────────────────────────────────── */
+.bento-card {
+  position: relative;
+  background: var(--card, #fff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 20px;
+  box-shadow: var(--shadow, 0 8px 32px rgba(31, 38, 135, 0.07));
+  padding: 20px;
+  overflow: hidden;
+  height: 100%;
+  box-sizing: border-box;
+  transition: box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.bento-card:hover {
+  box-shadow: 0 14px 44px rgba(31, 38, 135, 0.13);
+  border-color: rgba(var(--primary-color-rgb, 6, 81, 131), 0.35);
+}
+
+/* ── Tipografia interna ────────────────────────────────────── */
+.bento-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted, #64748b);
+}
+
+.bento-value {
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--text, #1e293b);
+  font-variant-numeric: tabular-nums;
+}
+
+.bento-value--hero {
+  font-size: clamp(2.6rem, 4vw, 3.6rem);
+}
+
+.bento-muted {
+  color: var(--text-muted, #64748b);
+  font-size: 0.8rem;
+}
+
+/* ── Ícone de stat ─────────────────────────────────────────── */
+.bento-icon {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+}
+
+.bento-icon--soft {
+  background: rgba(var(--primary-color-rgb, 6, 81, 131), 0.12) !important;
+  color: var(--primary-color, #065183);
+  box-shadow: none;
+}
+
+.bento-stat {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  height: 100%;
+}
+
+/* ── Hero ──────────────────────────────────────────────────── */
+.bento-hero {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.bento-hero-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.bento-hero-divider {
+  border: none;
+  border-top: 1px solid var(--border, #e2e8f0);
+  margin: 14px 0;
+}
+
+.bento-agent-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  font-size: 0.82rem;
+  color: var(--text, #1e293b);
+  min-width: 0;
+}
+
+.bento-agent-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bento-avatar-dot {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #fff;
+  background: var(--primary-color, #065183);
+}
+
+/* ── Indicador "online" pulsante ───────────────────────────── */
+.bento-pulse {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #22c55e;
+  animation: bento-pulse 2s ease-out infinite;
+}
+
+.bento-pulse--off {
+  background: var(--text-muted, #94a3b8);
+  animation: none;
+}
+
+@keyframes bento-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.45); }
+  70% { box-shadow: 0 0 0 9px rgba(34, 197, 94, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+}
+
+/* ── Barras de progresso (NPS) ─────────────────────────────── */
+.bento-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+}
+
+.bento-bar-row .bento-bar-label {
+  width: 84px;
+  flex-shrink: 0;
+  color: var(--text-muted, #64748b);
+  font-weight: 600;
+}
+
+.bento-bar-track {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--card-elevated, #f1f5f9);
+  overflow: hidden;
+}
+
+.bento-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+}
+
+.bento-bar-value {
+  width: 42px;
+  text-align: right;
+  font-weight: 700;
+  color: var(--text, #1e293b);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Mini stats (rodapé de cards) ──────────────────────────── */
+.bento-minis {
+  display: flex;
+  gap: 8px;
+}
+
+.bento-mini {
+  flex: 1;
+  text-align: center;
+  padding: 10px 4px;
+  border-radius: 12px;
+  background: var(--card-elevated, #f1f5f9);
+}
+
+.bento-mini strong {
+  display: block;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--text, #1e293b);
+  font-variant-numeric: tabular-nums;
+}
+
+.bento-mini span {
+  font-size: 0.66rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted, #64748b);
+}
+
+/* ── Header de seção dentro do card ────────────────────────── */
+.bento-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.bento-card-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text, #1e293b);
+  margin: 0;
+}
+
+/* ── Botões/inputs do bento ────────────────────────────────── */
+.bento-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid var(--border, #e2e8f0);
+  background: var(--card, #fff);
+  color: var(--text-muted, #64748b);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.bento-icon-btn:hover,
+.bento-icon-btn.is-active {
+  color: var(--primary-color, #065183);
+  border-color: rgba(var(--primary-color-rgb, 6, 81, 131), 0.45);
+  background: var(--primary-bg-fade, rgba(6, 81, 131, 0.05));
+}
+
+.bento-input {
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border, #e2e8f0);
+  background: var(--input-bg, #fff);
+  color: var(--text, #1e293b);
+  font-family: inherit;
+  font-size: 0.85rem;
+}
+
+.bento-input:focus {
+  outline: none;
+  border-color: var(--primary-color, #065183);
+  box-shadow: 0 0 0 3px var(--primary-glow, rgba(6, 81, 131, 0.15));
+}
+
+.bento-btn-primary {
+  height: 40px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 12px;
+  background: var(--primary-color, #065183);
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+
+.bento-btn-primary:hover { filter: brightness(1.1); }
+.bento-btn-primary:disabled { opacity: 0.6; cursor: default; }
+
+/* ── Skeleton de loading ───────────────────────────────────── */
+.bento-shimmer {
+  display: inline-block;
+  height: 1em;
+  min-width: 56px;
+  border-radius: 8px;
+  background: linear-gradient(90deg,
+    var(--card-elevated, #eef2f7) 25%,
+    rgba(var(--primary-color-rgb, 6, 81, 131), 0.12) 50%,
+    var(--card-elevated, #eef2f7) 75%);
+  background-size: 200% 100%;
+  animation: bento-shimmer 1.4s linear infinite;
+  vertical-align: middle;
+}
+
+@keyframes bento-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Label central do donut (SVG) ──────────────────────────── */
+.bento-donut-label {
+  fill: var(--text, #1e293b);
+}
+
+/* ── Embed: achata Paper/Card MUI internos para superfície única ── */
+/* !importants vencem os estilos inline dos componentes legados (v4/v5) */
+.bento-embed .MuiPaper-root,
+.bento-embed .MuiCard-root {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+}
+
+/* ── Reduced motion: sem pulse/shimmer animados ────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .bento-pulse { animation: none; }
+  .bento-shimmer { animation: none; }
+  .bento-card { transition: none; }
+}
