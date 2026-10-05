@@ -30,9 +30,13 @@ export const generateCustomSkillsPrompt = (skills: Skill[]): string => {
       ? `\n  Condições: ${skill.conditions.map(c => `${c.field} ${c.operator}`).join(", ")}`
       : "";
 
+    // Omitir seções vazias — sem gatilhos/condições não imprime o rótulo
+    const triggersLine = triggers.length > 0
+      ? `\n  Gatilhos: ${triggers.join(", ")}`
+      : "";
+
     return `### ${(skill.name || "").toUpperCase()}
-${skill.description || ""}
-  Gatilhos: ${triggers.join(", ")}${functions}${conditions}${examples ? `\n  Exemplos:\n${examples}` : ""}`;
+${skill.description || ""}${triggersLine}${functions}${conditions}${examples ? `\n  Exemplos:\n${examples}` : ""}`;
   });
 
   return `

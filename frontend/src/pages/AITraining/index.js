@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Accordion,
   AccordionDetails,
   AccordionSummary,
   Box,
   Button,
+  Chip,
   CircularProgress,
   Dialog,
   DialogActions,
@@ -19,6 +20,7 @@ import {
   Tab,
   Tabs,
   TextField,
+  Tooltip,
   Typography,
   makeStyles
 } from "@material-ui/core";
@@ -30,6 +32,7 @@ import HistoryIcon from "@material-ui/icons/History";
 import CompareArrowsIcon from "@material-ui/icons/CompareArrows";
 import AccountTreeIcon from "@material-ui/icons/AccountTree";
 import BugReportIcon from "@material-ui/icons/BugReport";
+import SchoolIcon from "@material-ui/icons/School";
 import { toast } from "react-toastify";
 import { Eraser as ClearIcon } from "lucide-react";
 
@@ -46,7 +49,8 @@ import {
   ABTestingComparison,
   PromptFlowVisualization,
   ToolCallsHistory,
-  OnboardingTour
+  OnboardingTour,
+  AgentCapabilities
 } from "../../components/AITraining";
 
 import api from "../../services/api";
@@ -192,6 +196,9 @@ const AITraining = () => {
   const classes = useStyles();
 
   const { hasPermission } = usePermissions();
+  const canEditSettings = hasPermission("ai-settings.edit");
+  const canEditAgents = hasPermission("ai-agents.edit");
+  const canViewContacts = hasPermission("contacts.view");
   const { whatsApps, loading: loadingWhatsApps } = useWhatsApps();
 
   const [activeTab, setActiveTab] = useState(0);
@@ -211,7 +218,10 @@ const AITraining = () => {
   const [loadingGroups, setLoadingGroups] = useState(false);
 
   const [promptOverride, setPromptOverride] = useState("");
+  // Prompt original salvo na etapa — usado para só enviar override quando o usuário editar
+  const originalPromptRef = useRef("");
   const [messageText, setMessageText] = useState("");
+  const [pendingImprovements, setPendingImprovements] = useState(0);
 
   const [sessionId, setSessionId] = useState("");
   const [sending, setSending] = useState(false);
@@ -237,7 +247,7 @@ const AITraining = () => {
         const { agents: data } = await getAIAgents();
         setAgents(Array.isArray(data) ? data : []);
       } catch (err) {
-        toast.error("Erro ao carregar agentes");
+        toast.error(err.response?.data?.error || err.response?.data?.message || "Erro ao carregar agentes");
       }
       setLoadingAgents(false);
     };
@@ -246,7 +256,7 @@ const AITraining = () => {
 
   useEffect(() => {
     const loadGroups = async () => {
-      if (!selectedWhatsappId || simulate) {
+      if (!selectedWhatsappId || simulate || !canViewContacts) {
         setGroups([]);
         setSelectedGroupId("");
         return;
@@ -261,23 +271,82 @@ const AITraining = () => {
         const { data } = await api.get(`/wbot/${selectedWhatsappId}/groups`);
         setGroups(Array.isArray(data?.groups) ? data.groups : []);
       } catch (err) {
-        toast.error("Erro ao carregar grupos da conexão");
+        toast.error(err.response?.data?.error || err.response?.data?.message || "Erro ao carregar grupos da conexão");
         setGroups([]);
       }
       setLoadingGroups(false);
     };
     loadGroups();
-  }, [selectedWhatsappId, simulate, selectedWhatsapp?.channelType]);
+  }, [selectedWhatsappId, simulate, selectedWhatsapp?.channelType, canViewContacts]);
+
+  // Fila de melhorias pendentes da etapa (viram skills do agente ao aplicar)
+  const loadPendingImprovements = async () => {
+    if (!selectedAgentId || !selectedStageId) {
+      setPendingImprovements(0);
+      return;
+    }
+    try {
+      const { data } = await api.get("/ai/training/improvements", {
+        params: {
+          agentId: Number(selectedAgentId),
+          stageId: Number(selectedStageId),
+          status: "pending",
+          limit: 1
+        }
+      });
+      setPendingImprovements(Number(data?.total) || 0);
+    } catch (err) {
+      setPendingImprovements(0);
+    }
+  };
+
+  useEffect(() => {
+    loadPendingImprovements();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedAgentId, selectedStageId]);
+
+  // Aplica melhorias pendentes: backend converte em skills do agente
+  const handleApplyImprovements = async () => {
+    if (!selectedAgentId) return toast.error("Selecione um agente");
+    if (!selectedStageId) return toast.error("Selecione uma etapa");
+
+    try {
+      const { data } = await api.post("/ai/training/improvements/apply", {
+        agentId: Number(selectedAgentId),
+        stageId: Number(selectedStageId)
+      });
+      const applied = Number(data?.applied) || 0;
+      const skillNames = (Array.isArray(data?.skills) ? data.skills : [])
+        .map((s) => s?.name)
+        .filter(Boolean);
+      appendLog(`[improvement] aplicadas=${applied} skills=${skillNames.join(", ") || "-"}`);
+      toast.success(`${applied} melhoria(s) convertida(s) em habilidade(s) do agente`);
+      loadPendingImprovements();
+    } catch (err) {
+      appendLog("[error] falha ao aplicar melhorias");
+      toast.error(err.response?.data?.error || err.response?.data?.message || "Falha ao aplicar melhorias no agente");
+    }
+  };
+
+  // Reseta conversa e avaliações (sessão nova não conhece as mensagens antigas)
+  const resetConversationState = () => {
+    setSessionId("");
+    setMessages([]);
+    setLogs([]);
+    setToolCalls([]);
+    setMessageRatings({});
+    setRateModalOpen(false);
+    setRateTargetMessageId(null);
+    setRateCorrectedText("");
+    setRateExplanation("");
+  };
 
   const appendLog = (line) => {
     setLogs((prev) => [...prev, `${new Date().toLocaleTimeString()} ${line}`]);
   };
 
   const handleClear = () => {
-    setMessages([]);
-    setLogs([]);
-    setToolCalls([]);
-    setSessionId("");
+    resetConversationState();
     appendLog("[sandbox] conversa limpa");
   };
 
@@ -286,6 +355,7 @@ const AITraining = () => {
       setStages([]);
       setSelectedStageId("");
       setPromptOverride("");
+      originalPromptRef.current = "";
       return;
     }
     setLoadingStages(true);
@@ -296,15 +366,18 @@ const AITraining = () => {
       if (nextStages[0]?.id) {
         setSelectedStageId(String(nextStages[0].id));
         setPromptOverride(nextStages[0].systemPrompt || "");
+        originalPromptRef.current = nextStages[0].systemPrompt || "";
       } else {
         setSelectedStageId("");
         setPromptOverride("");
+        originalPromptRef.current = "";
       }
     } catch (err) {
-      toast.error("Erro ao carregar etapas do funil");
+      toast.error(err.response?.data?.error || err.response?.data?.message || "Erro ao carregar etapas do funil");
       setStages([]);
       setSelectedStageId("");
       setPromptOverride("");
+      originalPromptRef.current = "";
     } finally {
       setLoadingStages(false);
     }
@@ -334,7 +407,7 @@ const AITraining = () => {
       toast.success("Prompt aplicado no agente");
     } catch (err) {
       appendLog("[error] falha ao aplicar prompt no agente");
-      toast.error("Erro ao aplicar prompt no agente");
+      toast.error(err.response?.data?.error || err.response?.data?.message || "Erro ao aplicar prompt no agente");
     }
   };
   const ensureSession = async () => {
@@ -350,7 +423,11 @@ const AITraining = () => {
           : undefined,
       toNumber: !simulate && String(selectedWhatsapp?.channelType) === "official" ? String(toNumber) : undefined,
       simulate: Boolean(simulate),
-      promptOverride: String(promptOverride || "")
+      // Só envia override quando o usuário editou o prompt da etapa (backend deduplica, mas evitamos ruído)
+      promptOverride:
+        String(promptOverride || "") !== String(originalPromptRef.current || "")
+          ? String(promptOverride || "")
+          : undefined
     });
 
     const newId = data?.session?.id;
@@ -380,9 +457,9 @@ const AITraining = () => {
 
 
     const text = messageText.trim();
-    setMessageText("");
+    const customerMsgId = `m-${Date.now()}-${Math.random()}`;
 
-    setMessages((prev) => [...prev, { id: `m-${Date.now()}-${Math.random()}`, from: "customer", text }]);
+    setMessages((prev) => [...prev, { id: customerMsgId, from: "customer", text }]);
     appendLog(`[input] ${text}`);
 
     try {
@@ -391,12 +468,17 @@ const AITraining = () => {
 
       const { data } = await api.post(`/ai/sandbox/sessions/${sId}/messages`, { text });
 
-      const assistantText = data?.message?.text;
-      if (assistantText) {
-        setMessages((prev) => [...prev, { id: `m-${Date.now()}-${Math.random()}`, from: "assistant", text: assistantText }]);
-      }
+      // Limpa o input só depois do sucesso — em erro o texto digitado não se perde
+      setMessageText("");
 
       const meta = data?.metadata || {};
+      const assistantText = data?.message?.text;
+      if (assistantText) {
+        // messageCount conta as mensagens reais da sessão (multi-turno no backend);
+        // a resposta do assistente é a última, então o índice é messageCount - 1
+        const realIndex = typeof meta.messageCount === "number" ? meta.messageCount - 1 : undefined;
+        setMessages((prev) => [...prev, { id: `m-${Date.now()}-${Math.random()}`, from: "assistant", text: assistantText, messageIndex: realIndex }]);
+      }
       appendLog(`[ai] provider=${meta.provider || "?"} model=${meta.model || "?"} time=${meta.processingTime || "?"}ms`);
 
       if (meta.toolCalls && Array.isArray(meta.toolCalls)) {
@@ -414,11 +496,28 @@ const AITraining = () => {
       }
 
     } catch (err) {
+      // Remove a bolha otimista do cliente — o texto continua no input para reenvio
+      setMessages((prev) => prev.filter((m) => m.id !== customerMsgId));
       appendLog("[error] falha ao executar sandbox");
-      toast.error("Erro ao executar sandbox");
+      toast.error(err.response?.data?.error || err.response?.data?.message || "Erro ao executar sandbox");
     } finally {
       setSending(false);
     }
+  };
+
+  // Índice da mensagem dentro das mensagens REAIS da sessão:
+  // usa o messageIndex carimbado via metadata.messageCount quando disponível,
+  // senão conta só customer/assistant (exclui bolhas "improved" inseridas pela UI)
+  const getSessionMessageData = (messageId) => {
+    const realMessages = messages.filter((m) => !m.improved);
+    const idx = realMessages.findIndex((m) => String(m.id ?? "") === String(messageId));
+    if (idx < 0) return null;
+    const target = realMessages[idx];
+    return {
+      messageIndex: typeof target.messageIndex === "number" ? target.messageIndex : idx,
+      assistantMsg: target,
+      customerMsg: idx > 0 ? realMessages[idx - 1] : null
+    };
   };
 
   const closeRateModal = () => {
@@ -436,11 +535,8 @@ const AITraining = () => {
 
     if (messageRatings[String(messageId)]) return;
 
-    const idx = messages.findIndex((m) => String(m.id ?? "") === String(messageId));
-    if (idx < 0) return;
-
-    const assistantMsg = messages[idx];
-    const customerMsg = idx > 0 ? messages[idx - 1] : null;
+    const msgData = getSessionMessageData(messageId);
+    if (!msgData) return;
 
     if (rating === "correct") {
       try {
@@ -448,15 +544,15 @@ const AITraining = () => {
           agentId: Number(selectedAgentId),
           stageId: Number(selectedStageId),
           sandboxSessionId: String(sessionId),
-          messageIndex: idx,
-          customerText: customerMsg?.from === "customer" ? customerMsg.text : null,
-          assistantText: assistantMsg?.text || null,
+          messageIndex: msgData.messageIndex,
+          customerText: msgData.customerMsg?.from === "customer" ? msgData.customerMsg.text : null,
+          assistantText: msgData.assistantMsg?.text || null,
           rating: "correct"
         });
         setMessageRatings((prev) => ({ ...prev, [String(messageId)]: "correct" }));
         appendLog(`[rating] correto messageId=${messageId}`);
       } catch (err) {
-        toast.error("Erro ao salvar avaliação");
+        toast.error(err.response?.data?.error || err.response?.data?.message || "Erro ao salvar avaliação");
       }
       return;
     }
@@ -476,18 +572,18 @@ const AITraining = () => {
       return;
     }
 
-    const idx = messages.findIndex((m) => String(m.id ?? "") === String(rateTargetMessageId));
-    if (idx < 0) return;
+    const msgData = getSessionMessageData(rateTargetMessageId);
+    if (!msgData) return;
 
-    const assistantMsg = messages[idx];
-    const customerMsg = idx > 0 ? messages[idx - 1] : null;
+    const assistantMsg = msgData.assistantMsg;
+    const customerMsg = msgData.customerMsg;
 
     try {
       const feedbackRes = await api.post("/ai/training/feedback", {
         agentId: Number(selectedAgentId),
         stageId: Number(selectedStageId),
         sandboxSessionId: String(sessionId),
-        messageIndex: idx,
+        messageIndex: msgData.messageIndex,
         customerText: customerMsg?.from === "customer" ? customerMsg.text : null,
         assistantText: assistantMsg?.text || null,
         rating: "wrong",
@@ -519,21 +615,14 @@ const AITraining = () => {
       appendLog(`[rating] errado messageId=${rateTargetMessageId} -> resposta melhorada inserida`);
 
       if (opts?.applyNow) {
-        try {
-          const applied = await api.post("/ai/training/improvements/apply", {
-            agentId: Number(selectedAgentId),
-            stageId: Number(selectedStageId)
-          });
-          appendLog(`[improvement] aplicado=${applied?.data?.applied || 0}`);
-          toast.success("Melhoria aplicada na etapa");
-        } catch (e) {
-          toast.error("Falha ao aplicar melhoria na etapa");
-        }
+        await handleApplyImprovements();
+      } else {
+        loadPendingImprovements();
       }
 
       closeRateModal();
     } catch (err) {
-      toast.error("Erro ao salvar correção");
+      toast.error(err.response?.data?.error || err.response?.data?.message || "Erro ao salvar correção");
     }
   };
 
@@ -557,10 +646,7 @@ const AITraining = () => {
           onChange={async (e) => {
             const next = e.target.value;
             setSelectedAgentId(next);
-            setSessionId("");
-            setMessages([]);
-            setLogs([]);
-            setToolCalls([]);
+            resetConversationState();
             await loadStages(next);
           }}
           label="Agente"
@@ -579,11 +665,10 @@ const AITraining = () => {
           onChange={(e) => {
             const stageId = e.target.value;
             setSelectedStageId(stageId);
-            setSessionId("");
+            resetConversationState();
             const stage = stages.find((s) => String(s.id) === stageId);
-            if (stage) {
-              setPromptOverride(stage.systemPrompt || "");
-            }
+            setPromptOverride(stage?.systemPrompt || "");
+            originalPromptRef.current = stage?.systemPrompt || "";
           }}
           label="Etapa do funil"
           disabled={!selectedAgentId || loadingStages}
@@ -671,6 +756,7 @@ const AITraining = () => {
           <Tab icon={<HistoryIcon />} label="Versões" />
           <Tab icon={<CompareArrowsIcon />} label="A/B Testing" />
           <Tab icon={<AssessmentIcon />} label="Métricas" data-tour="metrics" />
+          <Tab icon={<SchoolIcon />} label="Habilidades" />
         </Tabs>
 
         <TabPanel value={activeTab} index={0} className={classes.tabPanel}>
@@ -727,23 +813,56 @@ const AITraining = () => {
 
                 {!simulate && String(selectedWhatsapp?.channelType) !== "official" && (
                   <Grid item xs={12} md={4}>
-                    <FormControl fullWidth variant="outlined" size="small">
-                      <InputLabel>Grupo (destino)</InputLabel>
-                      <Select
-                        value={selectedGroupId}
-                        onChange={(e) => setSelectedGroupId(e.target.value)}
-                        label="Grupo (destino)"
-                        disabled={!selectedWhatsappId || loadingGroups}
-                      >
-                        <MenuItem value=""><em>Selecione</em></MenuItem>
-                        {groups.map((g) => (
-                          <MenuItem key={g.id} value={String(g.id)}>{g.subject} ({g.participantsCount})</MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
+                    <Tooltip title={canViewContacts ? "" : "Requer permissão contacts.view para listar grupos"}>
+                      <FormControl fullWidth variant="outlined" size="small">
+                        <InputLabel>Grupo (destino)</InputLabel>
+                        <Select
+                          value={selectedGroupId}
+                          onChange={(e) => setSelectedGroupId(e.target.value)}
+                          label="Grupo (destino)"
+                          disabled={!canViewContacts || !selectedWhatsappId || loadingGroups}
+                        >
+                          <MenuItem value=""><em>Selecione</em></MenuItem>
+                          {groups.map((g) => (
+                            <MenuItem key={g.id} value={String(g.id)}>{g.subject} ({g.participantsCount})</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Tooltip>
                   </Grid>
                 )}
               </Grid>
+            </Grid>
+
+            {/* Fila de melhorias pendentes: viram skills do agente ao aplicar */}
+            <Grid item xs={12}>
+              <Box display="flex" alignItems="center" style={{ gap: 8, flexWrap: "wrap" }}>
+                <Chip
+                  size="small"
+                  color={pendingImprovements > 0 ? "secondary" : "default"}
+                  variant={pendingImprovements > 0 ? "default" : "outlined"}
+                  label={`${pendingImprovements} melhoria(s) pendente(s)`}
+                />
+                <Tooltip
+                  title={
+                    !canEditAgents
+                      ? "Requer permissão ai-agents.edit"
+                      : "Converte as melhorias pendentes em habilidades (skills) do agente"
+                  }
+                >
+                  <span>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="primary"
+                      onClick={handleApplyImprovements}
+                      disabled={!canEditAgents || pendingImprovements === 0 || !selectedAgentId || !selectedStageId}
+                    >
+                      Aplicar melhorias no agente
+                    </Button>
+                  </span>
+                </Tooltip>
+              </Box>
             </Grid>
 
             <Grid item xs={12} md={6}>
@@ -827,14 +946,18 @@ const AITraining = () => {
               <PromptFlowVisualization prompt={promptOverride} />
             </Grid>
             <Grid item xs={12}>
-              <Button
-                color="primary"
-                variant="contained"
-                onClick={handleApplyToAgentStage}
-                disabled={!selectedAgentId || !selectedStageId || !promptOverride.trim()}
-              >
-                Aplicar no agente (etapa selecionada)
-              </Button>
+              <Tooltip title={canEditAgents ? "" : "Requer permissão ai-agents.edit para alterar o prompt do agente"}>
+                <span>
+                  <Button
+                    color="primary"
+                    variant="contained"
+                    onClick={handleApplyToAgentStage}
+                    disabled={!canEditAgents || !selectedAgentId || !selectedStageId || !promptOverride.trim()}
+                  >
+                    Aplicar no agente (etapa selecionada)
+                  </Button>
+                </span>
+              </Tooltip>
             </Grid>
           </Grid>
         </TabPanel>
@@ -843,7 +966,7 @@ const AITraining = () => {
           <TestScenarios
             agentId={selectedAgentId}
             stageId={selectedStageId}
-            currentPrompt={promptOverride}
+            promptOverride={promptOverride}
           />
         </TabPanel>
 
@@ -876,6 +999,13 @@ const AITraining = () => {
               stageId={selectedStageId || null}
             />
           </Box>
+        </TabPanel>
+
+        <TabPanel value={activeTab} index={7} className={classes.tabPanel}>
+          <AgentCapabilities
+            agentId={selectedAgentId}
+            stageId={selectedStageId}
+          />
         </TabPanel>
       </Paper>
       )}
@@ -910,7 +1040,11 @@ const AITraining = () => {
         <DialogActions>
           <Button onClick={closeRateModal}>Cancelar</Button>
           <Button onClick={() => submitWrongFeedback({ applyNow: false })} color="primary" variant="outlined">Salvar correção</Button>
-          <Button onClick={() => submitWrongFeedback({ applyNow: true })} color="primary" variant="contained">Salvar e aplicar na etapa</Button>
+          <Tooltip title={canEditSettings ? "Converte as melhorias pendentes em habilidades (skills) do agente" : "Requer permissão ai-settings.edit"}>
+            <span>
+              <Button onClick={() => submitWrongFeedback({ applyNow: true })} color="primary" variant="contained" disabled={!canEditSettings}>Salvar e aplicar na etapa</Button>
+            </span>
+          </Tooltip>
         </DialogActions>
       </Dialog>
     </MainContainer>

@@ -188,6 +188,7 @@ describe("AI Training Sandbox (E2E API)", () => {
         stageId: stage.id,
         whatsappId: 1,
         groupId: "120363000000000000@g.us",
+        simulate: true,
         promptOverride: "teste"
       });
     expect(forbiddenRes.status).toBe(403);
@@ -217,11 +218,13 @@ describe("AI Training Sandbox (E2E API)", () => {
         stageId: stage.id,
         whatsappId: 1,
         groupId: "120363000000000000@g.us",
+        simulate: true,
         promptOverride: "Override da sessão"
       });
     expect(createSessionRes.status).toBe(201);
     const sessionId = createSessionRes.body?.session?.id;
     expect(sessionId).toBeTruthy();
+    expect(createSessionRes.body?.session?.expiresAt).toBeTruthy();
 
     const sendMessageRes = await request(app)
       .post(`/ai/sandbox/sessions/${sessionId}/messages`)
@@ -229,10 +232,15 @@ describe("AI Training Sandbox (E2E API)", () => {
       .send({ text: "Olá" });
     expect(sendMessageRes.status).toBe(200);
     expect(sendMessageRes.body?.message?.text).toBe("Resposta mockada do agente");
+    expect(sendMessageRes.body?.metadata?.messageCount).toBe(2);
+    expect(sendMessageRes.body?.metadata?.usedPromptHash).toBeTruthy();
 
     expect((AIOrchestrator as any).processRequest).toHaveBeenCalled();
     const callArg = (AIOrchestrator as any).processRequest.mock.calls[0][0];
     expect(callArg?.systemPrompt).toContain("Prompt atualizado");
     expect(callArg?.systemPrompt).toContain("Override da sessão");
+    // Novo contrato: histórico é passado ao orquestrador
+    expect(Array.isArray(callArg?.history)).toBe(true);
+    expect(callArg?.module).toBe("training");
   });
 });

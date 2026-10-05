@@ -1,9 +1,6 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import {
   Box,
-  Button,
-  Card,
-  CardContent,
   Chip,
   IconButton,
   Paper,
@@ -12,7 +9,6 @@ import {
   makeStyles
 } from "@material-ui/core";
 import AccountTreeIcon from "@material-ui/icons/AccountTree";
-import RefreshIcon from "@material-ui/icons/Refresh";
 import ZoomInIcon from "@material-ui/icons/ZoomIn";
 import ZoomOutIcon from "@material-ui/icons/ZoomOut";
 import CenterFocusStrongIcon from "@material-ui/icons/CenterFocusStrong";
@@ -194,26 +190,13 @@ const parsePromptToFlow = (prompt) => {
     description: "Ponto de entrada da conversa com o cliente"
   });
 
-  // Extrair seções principais do prompt
-  const sections = [
-    { name: "objective", pattern: /#\s*(?:objetivo|Objetivo|PROPÓSITO|Papel e objetivo)[\s\S]*?(?=#|$)/i },
-    { name: "persona", pattern: /#\s*(?:perfil|Persona|Tom e estilo|Voz da marca)[\s\S]*?(?=#|$)/i },
-    { name: "rules", pattern: /#\s*(?:regras|Regras|Instruções|DIRETRIZES)[\s\S]*?(?=#|$)/i },
-    { name: "instructions", pattern: /#\s*(?:instruções|Instruções de|Como responder)[\s\S]*?(?=#|$)/i },
-    { name: "functions", pattern: /#\s*(?:funções|Ferramentas|Funções disponíveis)[\s\S]*?(?=#|$)/i },
-    { name: "conditions", pattern: /(?:se\s+(?:o\s+)?cliente|quando\s+(?:o\s+)?|caso\s+|if\s+|when\s+)/i },
-    { name: "actions", pattern: /(?:responda|envie|pergunte|solicite|transferir|aguarde)/i }
-  ];
-
   // Processar linha por linha com contexto
   const lines = prompt.split("\n").map(l => l.trim()).filter(l => l.length > 0);
-  
+
   let currentSection = null;
   let sectionContent = [];
 
-  lines.forEach((line, idx) => {
-    const lowerLine = line.toLowerCase();
-    
+  lines.forEach((line) => {
     // Detectar headers de seção
     if (line.startsWith('#') || line.startsWith('===') || line.startsWith('---')) {
       // Salvar seção anterior
@@ -227,7 +210,7 @@ const parsePromptToFlow = (prompt) => {
         });
         sectionContent = [];
       }
-      currentSection = line.replace(/[#=\-]/g, '').trim();
+      currentSection = line.replace(/[#=-]/g, '').trim();
       return;
     }
 
@@ -237,8 +220,7 @@ const parsePromptToFlow = (prompt) => {
       if (cleanLine.length > 5) {
         const isConditional = /\b(se|quando|caso|if|when|senão|else)\b/i.test(cleanLine);
         const isTransfer = /\b(transferir|falar com|atendente|humano|vendedor)\b/i.test(cleanLine);
-        const isQuestion = /\b(pergunte|perguntar|qual|quais|quando|como|por que)\b/i.test(cleanLine);
-        
+
         nodes.push({
           id: nodeId++,
           type: isConditional ? "condition" : isTransfer ? "end" : "action",

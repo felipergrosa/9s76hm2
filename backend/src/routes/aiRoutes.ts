@@ -10,6 +10,8 @@ import * as AIPromptAssistantController from "../controllers/AIPromptAssistantCo
 import * as AITestScenariosController from "../controllers/AITestScenariosController";
 import * as AIPromptVersionController from "../controllers/AIPromptVersionController";
 import * as AITrainingMetricsController from "../controllers/AITrainingMetricsController";
+import * as AICapabilitiesController from "../controllers/AICapabilitiesController";
+import * as AISandboxTestController from "../controllers/AISandboxTestController";
 
 const routes = express.Router();
 
@@ -40,11 +42,25 @@ routes.post(
   AISandboxController.createSession
 );
 
+routes.get(
+  "/ai/sandbox/sessions/:sessionId",
+  isAuth,
+  checkPermission("ai-training.view"),
+  AISandboxController.getSession
+);
+
 routes.post(
   "/ai/sandbox/sessions/:sessionId/messages",
   isAuth,
   checkPermission("ai-training.view"),
   AISandboxController.sendMessage
+);
+
+routes.post(
+  "/ai/sandbox/test",
+  isAuth,
+  checkPermission("ai-training.view"),
+  AISandboxTestController.test
 );
 
 // Training feedback / scoring
@@ -60,6 +76,20 @@ routes.get(
   isAuth,
   checkPermission("ai-training.view"),
   AITrainingFeedbackController.getStats
+);
+
+routes.get(
+  "/ai/training/feedbacks",
+  isAuth,
+  checkPermission("ai-training.view"),
+  AITrainingFeedbackController.listFeedbacks
+);
+
+routes.get(
+  "/ai/training/improvements",
+  isAuth,
+  checkPermission("ai-training.view"),
+  AITrainingImprovementController.listImprovements
 );
 
 routes.post(
@@ -104,6 +134,14 @@ routes.get(
   isAuth,
   checkPermission("ai-training.view"),
   AITrainingMetricsController.getTrainingMetrics
+);
+
+// ========== CAPACIDADES DE IA ==========
+routes.get(
+  "/ai/capabilities",
+  isAuth,
+  checkAnyPermission(["ai-training.view", "ai-settings.view", "ai-agents.view"]),
+  AICapabilitiesController.getCapabilities
 );
 
 // ========== NOVAS ROTAS - ASSISTENTE DE PROMPT ==========
@@ -178,6 +216,15 @@ routes.get(
   AIPromptVersionController.listVersions
 );
 
+// "compare" precisa vir antes de ":versionId" — caso contrário o Express
+// trata o literal "compare" como um id e a rota nunca é alcançada.
+routes.get(
+  "/ai/prompt-versions/compare",
+  isAuth,
+  checkPermission("ai-training.view"),
+  AIPromptVersionController.compareVersions
+);
+
 routes.get(
   "/ai/prompt-versions/:versionId",
   isAuth,
@@ -190,13 +237,6 @@ routes.post(
   isAuth,
   checkPermission("ai-settings.edit"),
   AIPromptVersionController.rollbackToVersion
-);
-
-routes.get(
-  "/ai/prompt-versions/compare",
-  isAuth,
-  checkPermission("ai-training.view"),
-  AIPromptVersionController.compareVersions
 );
 
 export default routes;

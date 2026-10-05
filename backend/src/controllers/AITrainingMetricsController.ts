@@ -1,8 +1,7 @@
 import { Request, Response } from "express";
-import { Op, fn, col, literal } from "sequelize";
+import { Op, fn, col } from "sequelize";
 import AITrainingFeedback from "../models/AITrainingFeedback";
 import AITrainingImprovement from "../models/AITrainingImprovement";
-import AITestScenario from "../models/AITestScenario";
 import AITestResult from "../models/AITestResult";
 import AIPromptVersion from "../models/AIPromptVersion";
 
@@ -20,155 +19,142 @@ export const getTrainingMetrics = async (
   const { companyId } = req.user;
   const { agentId, stageId, startDate, endDate } = req.query as MetricsQuery;
 
-  try {
-    const dateFilter: any = {};
-    if (startDate) {
-      dateFilter.createdAt = { [Op.gte]: new Date(startDate) };
+  // Sem try/catch de "dados zerados": falhas de banco devem propagar para
+  // o middleware de erro (500) em vez de mascarar o problema com 200.
+  const dateFilter: any = {};
+  if (startDate) {
+    dateFilter.createdAt = { [Op.gte]: new Date(startDate) };
+  }
+  if (endDate) {
+    dateFilter.createdAt = {
+      ...dateFilter.createdAt,
+      [Op.lte]: new Date(endDate)
+    };
+  }
+
+  const feedbackWhere: any = { companyId, ...dateFilter };
+  if (agentId) feedbackWhere.agentId = agentId;
+  if (stageId) feedbackWhere.stageId = stageId;
+
+  const totalFeedbacks = await AITrainingFeedback.count({ where: feedbackWhere });
+
+  const positiveFeedbacks = await AITrainingFeedback.count({
+    where: { ...feedbackWhere, rating: "correct" }
+  });
+
+  const negativeFeedbacks = await AITrainingFeedback.count({
+    where: { ...feedbackWhere, rating: "wrong" }
+  });
+
+  const improvementWhere: any = { companyId, ...dateFilter };
+  if (agentId) improvementWhere.agentId = agentId;
+  if (stageId) improvementWhere.stageId = stageId;
+
+  const improvementsSuggested = await AITrainingImprovement.count({
+    where: improvementWhere
+  });
+
+  const improvementsApplied = await AITrainingImprovement.count({
+    where: { ...improvementWhere, appliedAt: { [Op.ne]: null } }
+  });
+
+  const testResultWhere: any = { companyId };
+  if (agentId) testResultWhere.agentId = agentId;
+  if (stageId) testResultWhere.stageId = stageId;
+
+  // Denominador correto: execuções de teste (AITestResult), não cenários
+  // (AITestScenario) — testsPassed usa a mesma base para a taxa ser real.
+  const testsTotal = await AITestResult.count({ where: testResultWhere });
+
+  const testsPassed = await AITestResult.count({
+    where: { ...testResultWhere, passRate: { [Op.gte]: 80 } }
+  });
+
+  // Mede AVG(overallScore) dos resultados — a coluna "similarity" não existe;
+  // mantido o alias avgSimilarity por compatibilidade com o frontend.
+  const avgScoreResult = await AITestResult.findOne({
+    attributes: [[fn("AVG", col("overallScore")), "avgScore"]],
+    where: testResultWhere,
+    raw: true
+  });
+  const avgOverallScore = Number((avgScoreResult as any)?.avgScore || 0);
+
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+  const recentNegatives = await AITrainingFeedback.count({
+    where: {
+      ...feedbackWhere,
+      rating: "wrong",
+      createdAt: { [Op.gte]: sevenDaysAgo }
     }
-    if (endDate) {
-      dateFilter.createdAt = {
-        ...dateFilter.createdAt,
-        [Op.lte]: new Date(endDate)
-      };
-    }
+  });
 
-    const feedbackWhere: any = { companyId, ...dateFilter };
-    if (agentId) feedbackWhere.agentId = agentId;
-    if (stageId) feedbackWhere.stageId = stageId;
+  const versionWhere: any = { companyId };
+  if (agentId) versionWhere.agentId = agentId;
+  if (stageId) versionWhere.stageId = stageId;
 
-    const totalFeedbacks = await AITrainingFeedback.count({ where: feedbackWhere });
+  const promptVersions = await AIPromptVersion.count({ where: versionWhere });
 
-    const positiveFeedbacks = await AITrainingFeedback.count({
-      where: { ...feedbackWhere, rating: "correct" }
+  const feedbackTrend: any[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const date = new Date();
+    date.setDate(date.getDate() - i);
+    const dayStart = new Date(date.setHours(0, 0, 0, 0));
+    const dayEnd = new Date(date.setHours(23, 59, 59, 999));
+
+    const dayWhere = {
+      ...feedbackWhere,
+      createdAt: { [Op.between]: [dayStart, dayEnd] }
+    };
+
+    const positive = await AITrainingFeedback.count({
+      where: { ...dayWhere, rating: "correct" }
+    });
+    const negative = await AITrainingFeedback.count({
+      where: { ...dayWhere, rating: "wrong" }
     });
 
-    const negativeFeedbacks = await AITrainingFeedback.count({
-      where: { ...feedbackWhere, rating: "wrong" }
-    });
-
-    const improvementWhere: any = { companyId, ...dateFilter };
-    if (agentId) improvementWhere.agentId = agentId;
-    if (stageId) improvementWhere.stageId = stageId;
-
-    const improvementsSuggested = await AITrainingImprovement.count({
-      where: improvementWhere
-    });
-
-    const improvementsApplied = await AITrainingImprovement.count({
-      where: { ...improvementWhere, appliedAt: { [Op.ne]: null } }
-    });
-
-    const testResultWhere: any = { companyId };
-    if (agentId) testResultWhere.agentId = agentId;
-    if (stageId) testResultWhere.stageId = stageId;
-
-    // Contar total de cenários de teste (não resultados)
-    const testsTotal = await AITestScenario.count({ where: testResultWhere });
-
-    // Contar resultados com passRate >= 80% como "passando"
-    const testsPassed = await AITestResult.count({
-      where: { ...testResultWhere, passRate: { [Op.gte]: 80 } }
-    });
-
-    // Média do overallScore (não existe coluna similarity)
-    const avgScoreResult = await AITestResult.findOne({
-      attributes: [[fn("AVG", col("overallScore")), "avgScore"]],
-      where: testResultWhere,
-      raw: true
-    });
-    const avgSimilarity = (avgScoreResult as any)?.avgScore || 0;
-
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-    const recentNegatives = await AITrainingFeedback.count({
-      where: {
-        ...feedbackWhere,
-        rating: "wrong",
-        createdAt: { [Op.gte]: sevenDaysAgo }
-      }
-    });
-
-    const versionWhere: any = { companyId };
-    if (agentId) versionWhere.agentId = agentId;
-    if (stageId) versionWhere.stageId = stageId;
-
-    const promptVersions = await AIPromptVersion.count({ where: versionWhere });
-
-    const feedbackTrend: any[] = [];
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      const dayStart = new Date(date.setHours(0, 0, 0, 0));
-      const dayEnd = new Date(date.setHours(23, 59, 59, 999));
-
-      const dayWhere = {
-        ...feedbackWhere,
-        createdAt: { [Op.between]: [dayStart, dayEnd] }
-      };
-
-      const positive = await AITrainingFeedback.count({
-        where: { ...dayWhere, rating: "correct" }
-      });
-      const negative = await AITrainingFeedback.count({
-        where: { ...dayWhere, rating: "wrong" }
-      });
-
-      feedbackTrend.push({
-        date: dayStart.toISOString().split("T")[0],
-        positive,
-        negative
-      });
-    }
-
-    // Distribuição por categoria vem de AITrainingImprovement, não de AITrainingFeedback
-    const categoryDistribution: Record<string, number> = {};
-    const categories = await AITrainingImprovement.findAll({
-      attributes: [
-        "category",
-        [fn("COUNT", col("id")), "count"]
-      ],
-      where: { ...improvementWhere, category: { [Op.ne]: null } },
-      group: ["category"],
-      raw: true
-    });
-
-    categories.forEach((c: any) => {
-      if (c.category) {
-        categoryDistribution[c.category] = parseInt(c.count, 10);
-      }
-    });
-
-    return res.json({
-      totalFeedbacks,
-      positiveFeedbacks,
-      negativeFeedbacks,
-      improvementsSuggested,
-      improvementsApplied,
-      testsTotal,
-      testsPassed,
-      avgSimilarity: parseFloat(avgSimilarity.toFixed(2)),
-      recentNegatives,
-      promptVersions,
-      feedbackTrend,
-      categoryDistribution
-    });
-  } catch (err: any) {
-    console.error("Error getting training metrics:", err);
-    // Retornar dados padrão em vez de erro 500
-    return res.json({
-      totalFeedbacks: 0,
-      positiveFeedbacks: 0,
-      negativeFeedbacks: 0,
-      improvementsSuggested: 0,
-      improvementsApplied: 0,
-      testsTotal: 0,
-      testsPassed: 0,
-      avgSimilarity: 0,
-      recentNegatives: 0,
-      promptVersions: 0,
-      feedbackTrend: [],
-      categoryDistribution: {}
+    feedbackTrend.push({
+      date: dayStart.toISOString().split("T")[0],
+      positive,
+      negative
     });
   }
+
+  // Distribuição por categoria vem de AITrainingImprovement, não de AITrainingFeedback
+  const categoryDistribution: Record<string, number> = {};
+  const categories = await AITrainingImprovement.findAll({
+    attributes: [
+      "category",
+      [fn("COUNT", col("id")), "count"]
+    ],
+    where: { ...improvementWhere, category: { [Op.ne]: null } },
+    group: ["category"],
+    raw: true
+  });
+
+  categories.forEach((c: any) => {
+    if (c.category) {
+      categoryDistribution[c.category] = parseInt(c.count, 10);
+    }
+  });
+
+  return res.json({
+    totalFeedbacks,
+    positiveFeedbacks,
+    negativeFeedbacks,
+    improvementsSuggested,
+    improvementsApplied,
+    testsTotal,
+    testsPassed,
+    avgOverallScore: parseFloat(avgOverallScore.toFixed(2)),
+    // alias legado — mesmo valor de avgOverallScore; remover quando o
+    // frontend migrar para o nome correto
+    avgSimilarity: parseFloat(avgOverallScore.toFixed(2)),
+    recentNegatives,
+    promptVersions,
+    feedbackTrend,
+    categoryDistribution
+  });
 };

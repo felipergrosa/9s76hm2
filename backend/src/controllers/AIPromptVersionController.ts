@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { Op } from "sequelize";
 import AppError from "../errors/AppError";
+import sequelize from "../database";
 import AIAgent from "../models/AIAgent";
 import FunnelStage from "../models/FunnelStage";
 import AIPromptVersion from "../models/AIPromptVersion";
@@ -23,30 +24,50 @@ export const createVersion = async (req: Request, res: Response): Promise<Respon
   const stage = await FunnelStage.findOne({ where: { id: Number(stageId), agentId: agent.id } });
   if (!stage) throw new AppError("ERR_FUNNEL_STAGE_NOT_FOUND", 404);
 
-  const lastVersion = await AIPromptVersion.findOne({
-    where: { companyId, agentId: agent.id, stageId: stage.id },
-    order: [["version", "DESC"]]
-  });
+  // Transação + FOR UPDATE na última versão evita race no número da versão;
+  // o unique index (companyId, agentId, stageId, version) é o último bastião
+  // — se dois requests correrem em dialects/ilhas sem lock efetivo, a
+  // segunda tentativa recomputa o número e tenta uma vez.
+  const runCreate = () =>
+    sequelize.transaction(async t => {
+      const lastVersion = await AIPromptVersion.findOne({
+        where: { companyId, agentId: agent.id, stageId: stage.id },
+        order: [["version", "DESC"]],
+        lock: t.LOCK.UPDATE,
+        transaction: t
+      });
 
-  const newVersionNumber = lastVersion ? lastVersion.version + 1 : 1;
+      const newVersionNumber = lastVersion ? lastVersion.version + 1 : 1;
 
-  await AIPromptVersion.update(
-    { isActive: false },
-    { where: { companyId, agentId: agent.id, stageId: stage.id } }
-  );
+      await AIPromptVersion.update(
+        { isActive: false },
+        { where: { companyId, agentId: agent.id, stageId: stage.id }, transaction: t }
+      );
 
-  const version = await AIPromptVersion.create({
-    companyId,
-    userId: Number(userId),
-    agentId: agent.id,
-    stageId: stage.id,
-    version: newVersionNumber,
-    systemPrompt: String(systemPrompt).trim(),
-    changeDescription: changeDescription ? String(changeDescription).trim() : null,
-    changeType: changeType || "manual",
-    isActive: true,
-    testScore: null
-  });
+      return AIPromptVersion.create({
+        companyId,
+        userId: Number(userId),
+        agentId: agent.id,
+        stageId: stage.id,
+        version: newVersionNumber,
+        systemPrompt: String(systemPrompt).trim(),
+        changeDescription: changeDescription ? String(changeDescription).trim() : null,
+        changeType: changeType || "manual",
+        isActive: true,
+        testScore: null
+      }, { transaction: t });
+    });
+
+  let version: AIPromptVersion;
+  try {
+    version = await runCreate();
+  } catch (err: any) {
+    if (err?.name === "SequelizeUniqueConstraintError") {
+      version = await runCreate();
+    } else {
+      throw err;
+    }
+  }
 
   return res.status(201).json({ version });
 };

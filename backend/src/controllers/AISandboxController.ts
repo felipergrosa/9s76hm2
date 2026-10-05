@@ -3,73 +3,136 @@ import crypto from "crypto";
 import AIAgent from "../models/AIAgent";
 import FunnelStage from "../models/FunnelStage";
 import Whatsapp from "../models/Whatsapp";
+import AISandboxSession, { AISandboxMessage } from "../models/AISandboxSession";
 import AIOrchestrator from "../services/IA/AIOrchestrator";
+import skillCache from "../services/IA/SkillCacheService";
+import generateCustomSkillsPrompt from "../services/IA/CustomSkillPrompt";
+import { DEFAULT_SKILLS, generateSkillsPrompt } from "../services/IA/AISkill";
+import { getWbot } from "../libs/wbot";
+import logger from "../utils/logger";
 
-type SandboxRole = "customer" | "assistant";
-
-type SandboxMessage = {
-  role: SandboxRole;
-  text: string;
-  timestamp: string;
-};
-
-type SandboxSession = {
-  id: string;
-  companyId: number;
-  userId: number;
-  agentId: number;
-  stageId: number;
-  whatsappId?: number;
-  groupId?: string;
-  toNumber?: string;
-  simulate?: boolean;
-  promptOverride: string;
-  createdAt: string;
-  messages: SandboxMessage[];
-};
-
-const sessionsById = new Map<string, SandboxSession>();
+// Sessões de sandbox expiram em 24h (persistidas em AISandboxSessions)
+const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 
 const nowIso = () => new Date().toISOString();
 
-const buildSystemPrompt = (params: {
+const isExpired = (session: AISandboxSession): boolean =>
+  !!session.expiresAt && new Date(session.expiresAt).getTime() <= Date.now();
+
+const serializeSession = (session: AISandboxSession) => ({
+  id: session.id,
+  agentId: session.agentId,
+  stageId: session.stageId,
+  whatsappId: session.whatsappId,
+  groupId: session.groupId,
+  toNumber: session.toNumber,
+  simulate: session.simulate,
+  promptOverride: session.promptOverride,
+  expiresAt: session.expiresAt,
+  createdAt: session.createdAt
+});
+
+/**
+ * Monta o system prompt do sandbox reproduzindo, na medida do possível,
+ * o resolveSystemPromptForTicket do OpenAiService (produção) — sem
+ * depender de ticket/contato real: identidade do agente, etapa do funil,
+ * bloco de skills padrão + skills customizadas ativas (via skillCache) e
+ * o promptOverride da sessão (deduplicado contra stage.systemPrompt).
+ */
+export const buildSandboxSystemPrompt = async (params: {
   agent: AIAgent;
   stage: FunnelStage;
+  companyId: number;
   promptOverride?: string;
-}) => {
-  const { agent, stage, promptOverride } = params;
+}): Promise<string> => {
+  const { agent, stage, companyId, promptOverride } = params;
 
-  const parts: string[] = [];
-
-  parts.push(`Você é um agente de IA chamado "${agent.name}".`);
-  if (agent.profile) {
-    parts.push(`Perfil: ${agent.profile}.`);
-  }
-  parts.push(`Etapa do funil: ${stage.name} (ordem ${stage.order}).`);
-
-  if (agent.brandVoice) {
-    parts.push(`Voz da marca: ${agent.brandVoice}`);
-  }
-
-  if (stage.tone) {
-    parts.push(`Tom: ${stage.tone}.`);
+  // Skills customizadas — mesma lógica de OpenAiService.ts
+  // (skillCache.getSkills + filtro status "active" && enabled)
+  let customSkillsBlock = "";
+  try {
+    const dbSkills = await skillCache.getSkills(companyId, agent.id);
+    const activeSkills = dbSkills.filter(s => s.status === "active" && s.enabled);
+    customSkillsBlock = generateCustomSkillsPrompt(activeSkills);
+  } catch (skillError) {
+    logger.error("[AISandbox] Erro ao buscar skills personalizadas:", skillError);
   }
 
-  if (stage.objective) {
-    parts.push(`Objetivo: ${stage.objective}`);
+  const stagePrompt = String(stage.systemPrompt || "").trim();
+  const override = String(promptOverride || "").trim();
+
+  // O frontend costuma enviar o prompt da etapa como promptOverride —
+  // dedupe por trim-compare para não duplicar o texto no system prompt.
+  const effectiveOverride = override && override !== stagePrompt ? override : "";
+
+  return `Instruções do Sistema:
+  - Seu nome é ${agent.name}. Se perguntarem quem você é ou qual seu nome, responda: "Meu nome é ${agent.name}".
+  ${agent.profile ? `- Perfil do agente: ${agent.profile}.` : ""}
+  - Etapa do atendimento: ${stage.name} (ordem ${stage.order})${stage.objective ? ` - ${stage.objective}` : ""}
+  - Tom de comunicação: ${stage.tone || "Profissional"}
+  ${agent.brandVoice ? `- Voz da marca: ${agent.brandVoice}` : ""}
+  - Contexto de simulação (sandbox): dados de CRM, memória de contato, horário de funcionamento e execução de funções reais não estão disponíveis.
+
+  // ========== BLOCO DE SKILLS ==========
+  ${generateSkillsPrompt(DEFAULT_SKILLS)}
+  ${customSkillsBlock}
+
+  Prompt Específico do Agente (etapa "${stage.name}"):
+  ${stage.systemPrompt || ""}
+  ${effectiveOverride ? `\n  REGRAS/OVERRIDE (Sessão de Training):\n  ${effectiveOverride}\n` : ""}
+  Siga essas instruções com cuidado para garantir um atendimento claro, personalizado e amigável em todas as respostas.
+  Responda sempre em português (Brasil).`;
+};
+
+/**
+ * Envio real (simulate=false) via conexão Baileys — best-effort:
+ * qualquer falha propaga para o caller responder 500 com erro visível.
+ * Não cria Ticket nem Message — é sandbox, só entrega a mensagem.
+ */
+const sendRealWhatsAppMessage = async (
+  session: AISandboxSession,
+  text: string
+): Promise<void> => {
+  let jid: string;
+
+  if (session.groupId) {
+    // JID de grupo Baileys — se já vier com sufixo @g.us, usa direto
+    jid = session.groupId.includes("@")
+      ? session.groupId
+      : `${session.groupId}@g.us`;
+  } else {
+    const digits = String(session.toNumber || "").replace(/\D/g, "");
+    if (!digits) {
+      throw new Error("Destino inválido para envio real (toNumber vazio)");
+    }
+    jid = `${digits}@s.whatsapp.net`;
   }
 
-  if (stage.systemPrompt) {
-    parts.push(stage.systemPrompt);
+  // getWbot lança AppError se a sessão Baileys não estiver inicializada
+  const wbot = getWbot(Number(session.whatsappId));
+  await wbot.sendMessage(jid, { text });
+};
+
+const loadSessionOr404 = async (
+  sessionId: string,
+  companyId: number,
+  res: Response
+): Promise<AISandboxSession | null> => {
+  const session = await AISandboxSession.findOne({
+    where: { id: sessionId, companyId }
+  });
+
+  if (!session) {
+    res.status(404).json({ error: "Sessão não encontrada" });
+    return null;
   }
 
-  parts.push("Responda sempre em português (Brasil).");
-
-  if (promptOverride && String(promptOverride).trim()) {
-    parts.push("\nREGRAS/OVERRIDE (Sessão de Training):\n" + String(promptOverride).trim());
+  if (isExpired(session)) {
+    res.status(404).json({ error: "Sessão expirada" });
+    return null;
   }
 
-  return parts.join("\n");
+  return session;
 };
 
 export const createSession = async (req: Request, res: Response) => {
@@ -81,7 +144,8 @@ export const createSession = async (req: Request, res: Response) => {
     return res.status(400).json({ error: "agentId e stageId são obrigatórios" });
   }
 
-  const isSimulate = Boolean(simulate);
+  // simulate é opcional — default true (consistente com a coluna do model)
+  const isSimulate = simulate === undefined || simulate === null ? true : Boolean(simulate);
 
   if (!isSimulate && !whatsappId) {
     return res.status(400).json({ error: "whatsappId é obrigatório quando simulate=false" });
@@ -101,6 +165,12 @@ export const createSession = async (req: Request, res: Response) => {
     if (!whatsapp) {
       return res.status(404).json({ error: "Conexão WhatsApp não encontrada" });
     }
+
+    // Envio real implementado apenas via Baileys (wbot.sendMessage). O
+    // fluxo oficial exige Ticket/janela de sessão — indisponível em sandbox.
+    if (whatsapp.channelType === "official" || (whatsapp as any).isOfficial) {
+      return res.status(400).json({ error: "Envio real suportado apenas em conexões Baileys" });
+    }
   }
 
   const agent = await AIAgent.findOne({
@@ -119,36 +189,36 @@ export const createSession = async (req: Request, res: Response) => {
     return res.status(404).json({ error: "Etapa do funil não encontrada" });
   }
 
-  const sessionId = crypto.randomBytes(16).toString("hex");
-  const session: SandboxSession = {
-    id: sessionId,
+  const session = await AISandboxSession.create({
+    id: crypto.randomBytes(16).toString("hex"),
     companyId,
     userId: Number(userId),
     agentId: Number(agentId),
     stageId: Number(stageId),
-    whatsappId: whatsappId ? Number(whatsappId) : undefined,
-    groupId: groupId ? String(groupId) : undefined,
-    toNumber: toNumber ? String(toNumber) : undefined,
+    whatsappId: whatsappId ? Number(whatsappId) : null,
+    groupId: groupId ? String(groupId) : null,
+    toNumber: toNumber ? String(toNumber) : null,
     simulate: isSimulate,
     promptOverride: String(promptOverride || ""),
-    createdAt: nowIso(),
-    messages: []
-  };
-
-  sessionsById.set(sessionId, session);
+    messages: [],
+    expiresAt: new Date(Date.now() + SESSION_TTL_MS)
+  } as any);
 
   return res.status(201).json({
-    session: {
-      id: session.id,
-      agentId: session.agentId,
-      stageId: session.stageId,
-      whatsappId: session.whatsappId,
-      groupId: session.groupId,
-      toNumber: session.toNumber,
-      simulate: session.simulate,
-      promptOverride: session.promptOverride,
-      createdAt: session.createdAt
-    }
+    session: serializeSession(session)
+  });
+};
+
+export const getSession = async (req: Request, res: Response) => {
+  const { companyId } = req.user;
+  const sessionId = String(req.params.sessionId || "");
+
+  const session = await loadSessionOr404(sessionId, companyId, res);
+  if (!session) return;
+
+  return res.status(200).json({
+    session: serializeSession(session),
+    messages: session.messages || []
   });
 };
 
@@ -162,11 +232,8 @@ export const sendMessage = async (req: Request, res: Response) => {
     return res.status(400).json({ error: "Campo 'text' é obrigatório" });
   }
 
-  const session = sessionsById.get(sessionId);
-
-  if (!session || session.companyId !== companyId) {
-    return res.status(404).json({ error: "Sessão não encontrada" });
-  }
+  const session = await loadSessionOr404(sessionId, companyId, res);
+  if (!session) return;
 
   const agent = await AIAgent.findOne({
     where: { id: session.agentId, companyId }
@@ -184,26 +251,39 @@ export const sendMessage = async (req: Request, res: Response) => {
     return res.status(404).json({ error: "Etapa do funil não encontrada" });
   }
 
-  const customerMsg: SandboxMessage = {
+  // Histórico: mensagens anteriores da sessão mapeadas para o contrato
+  // do orquestrador ("customer" vira "user"; a mensagem atual vai em `text`)
+  const history = (session.messages || [])
+    .map(m => ({
+      role: (m.role === "assistant" ? "assistant" : "user") as "user" | "assistant",
+      content: m.text
+    }));
+
+  const customerMsg: AISandboxMessage = {
     role: "customer",
     text: text.trim(),
     timestamp: nowIso()
   };
 
-  session.messages.push(customerMsg);
+  // Persiste a mensagem do cliente antes de chamar a IA (espelha a
+  // produção, onde o inbound é gravado antes do processamento)
+  session.messages = [...(session.messages || []), customerMsg];
+  await session.save();
 
-  const systemPrompt = buildSystemPrompt({
+  const systemPrompt = await buildSandboxSystemPrompt({
     agent,
     stage,
+    companyId,
     promptOverride: session.promptOverride
   });
 
   const response = await AIOrchestrator.processRequest({
-    module: "general",
+    module: "training",
     mode: "chat",
     companyId,
     userId: userId ? Number(userId) : undefined,
     text: customerMsg.text,
+    history,
     systemPrompt,
     whatsappId: session.whatsappId || undefined,
     temperature: agent.temperature || undefined,
@@ -235,28 +315,42 @@ export const sendMessage = async (req: Request, res: Response) => {
 
   const assistantText = String(response.result || "").trim();
 
-  const assistantMsg: SandboxMessage = {
+  const assistantMsg: AISandboxMessage = {
     role: "assistant",
     text: assistantText,
     timestamp: nowIso()
   };
 
-  session.messages.push(assistantMsg);
+  // Envio real (simulate=false): entrega a resposta do assistente de
+  // verdade via Baileys. Best-effort com erro visível — falha vira 500.
+  if (!session.simulate) {
+    try {
+      await sendRealWhatsAppMessage(session, assistantText);
+    } catch (sendError: any) {
+      logger.error("[AISandbox] Falha no envio real da mensagem do sandbox:", {
+        sessionId: session.id,
+        whatsappId: session.whatsappId,
+        error: sendError?.message
+      });
+      return res.status(500).json({
+        error: `Falha ao enviar mensagem real no WhatsApp: ${sendError?.message || "erro desconhecido"}`
+      });
+    }
+  }
 
-  sessionsById.set(sessionId, session);
+  session.messages = [...(session.messages || []), assistantMsg];
+  await session.save();
+
+  // Hash curto do system prompt para o frontend detectar mudanças de
+  // prompt entre turnos da mesma sessão
+  const usedPromptHash = crypto
+    .createHash("sha256")
+    .update(systemPrompt)
+    .digest("hex")
+    .substring(0, 8);
 
   return res.status(200).json({
-    session: {
-      id: session.id,
-      agentId: session.agentId,
-      stageId: session.stageId,
-      whatsappId: session.whatsappId,
-      groupId: session.groupId,
-      toNumber: session.toNumber,
-      simulate: session.simulate,
-      promptOverride: session.promptOverride,
-      createdAt: session.createdAt
-    },
+    session: serializeSession(session),
     message: assistantMsg,
     metadata: {
       provider: response.provider,
@@ -265,6 +359,8 @@ export const sendMessage = async (req: Request, res: Response) => {
       ragUsed: response.ragUsed,
       requestId: response.requestId,
       timestamp: response.timestamp,
+      messageCount: session.messages.length,
+      usedPromptHash,
       systemPrompt
     }
   });

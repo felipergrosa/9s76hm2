@@ -44,10 +44,34 @@ import api from "../../services/api";
 import { createAIAgent, updateAIAgent, getAIAgent } from "../../services/aiAgents";
 import AIModelSelector from "../AIModelSelector";
 
-const PROMPT_TEMPLATES = [
-    { id: "sales", name: "Vendas", tone: "Persuasivo", description: "Focado em converter leads em clientes.", prompt: "Você é um especialista em vendas..." },
-    { id: "support", name: "Suporte", tone: "Empático", description: "Focado em resolver problemas do cliente.", prompt: "Você é um especialista em suporte..." },
+// Fallback completo das funções do bot — espelha backend/src/services/IA/BotFunctions.ts.
+// Usado se GET /ai/capabilities falhar.
+const FALLBACK_BOT_FUNCTIONS = [
+    { name: "listar_catalogos", label: "📋 Listar Catálogos" },
+    { name: "enviar_catalogo", label: "📄 Enviar Catálogo" },
+    { name: "listar_tabelas_precos", label: "📋 Listar Tabelas de Preços" },
+    { name: "enviar_tabela_precos", label: "💰 Enviar Tabela de Preços" },
+    { name: "listar_informativos", label: "📋 Listar Informativos" },
+    { name: "enviar_informativo", label: "📑 Enviar Informativo" },
+    { name: "buscar_produto_detalhado", label: "🔍 Buscar Produto Detalhado" },
+    { name: "buscar_e_enviar_arquivo", label: "📎 Buscar e Enviar Arquivo" },
+    { name: "listar_arquivos_disponiveis", label: "📂 Listar Arquivos Disponíveis" },
+    { name: "transferir_para_vendedor_responsavel", label: "👤 Transferir para Vendedor Responsável" },
+    { name: "transferir_para_atendente", label: "🙋 Transferir para Atendente" },
+    { name: "atualizar_contato", label: "✏️ Atualizar Contato" },
+    { name: "verificar_cadastro_completo", label: "✅ Verificar Cadastro Completo" },
+    { name: "salvar_memoria_contato", label: "🧠 Salvar Memória do Contato" },
+    { name: "calcular_score_lead", label: "📊 Calcular Score do Lead" },
+    { name: "registrar_resposta_qualificacao", label: "📝 Registrar Resposta de Qualificação" },
+    { name: "enviar_link_agendamento", label: "📅 Enviar Link de Agendamento" },
+    { name: "transferir_para_closer", label: "🤝 Transferir para Closer" }
 ];
+
+// Rótulos amigáveis por nome de função (o endpoint retorna apenas name/description)
+const FUNCTION_LABELS = FALLBACK_BOT_FUNCTIONS.reduce((acc, f) => {
+    acc[f.name] = f.label;
+    return acc;
+}, {});
 
 const AgentSchema = Yup.object().shape({
     name: Yup.string().min(2, "Nome muito curto").required("Nome é obrigatório"),
@@ -119,14 +143,14 @@ const SectionTitle = ({ icon, title, tooltip }) => (
 const AIAgentModal = ({ open, onClose, agentId, onSave }) => {
     const [agent, setAgent] = useState(null);
     const [queues, setQueues] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [selectedTemplate, setSelectedTemplate] = useState("");
+    const [, setLoading] = useState(false);
     const [useGlobalAISettings, setUseGlobalAISettings] = useState(true);
     const [activeTab, setActiveTab] = useState(0);
     const [openSystemHelp, setOpenSystemHelp] = useState(false);
     const [openPromptPreview, setOpenPromptPreview] = useState(false);
     const [helpStageIndex, setHelpStageIndex] = useState(0);
     const [promptPreviewText, setPromptPreviewText] = useState("");
+    const [botFunctions, setBotFunctions] = useState(FALLBACK_BOT_FUNCTIONS);
 
     const formikRef = useRef({ values: null, setFieldValue: null });
 
@@ -318,10 +342,34 @@ ${stage?.systemPrompt || ""}
         loadQueues();
     }, []);
 
+    // Carrega dinamicamente as funções do bot; se falhar, mantém o fallback hardcoded
+    useEffect(() => {
+        if (!open) return;
+        const loadBotFunctions = async () => {
+            try {
+                const { data } = await api.get("/ai/capabilities");
+                const fns = Array.isArray(data?.functions) ? data.functions : [];
+                if (fns.length) {
+                    setBotFunctions(
+                        fns.map((f) => ({
+                            name: f.name,
+                            label: FUNCTION_LABELS[f.name] || f.name,
+                            description: f.description
+                        }))
+                    );
+                }
+            } catch (err) {
+                setBotFunctions(FALLBACK_BOT_FUNCTIONS);
+            }
+        };
+        loadBotFunctions();
+    }, [open]);
+
     useEffect(() => {
         if (agentId && open) {
             loadAgent();
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [agentId, open]);
 
     const loadQueues = async () => {
@@ -379,33 +427,10 @@ ${stage?.systemPrompt || ""}
 
     const handleClose = () => {
         setAgent(null);
-        setSelectedTemplate("");
         setOpenSystemHelp(false);
         setOpenPromptPreview(false);
         setPromptPreviewText("");
         onClose();
-    };
-
-    const handleApplyTemplate = (setFieldValue, values) => {
-        if (!selectedTemplate) {
-            toast.warning("Selecione um template primeiro");
-            return;
-        }
-
-        const template = PROMPT_TEMPLATES.find(t => t.id === selectedTemplate);
-        if (template) {
-            // Aplicar template à primeira etapa do funil
-            const updatedStages = [...values.funnelStages];
-            updatedStages[0] = {
-                ...updatedStages[0],
-                name: template.name,
-                tone: template.tone,
-                objective: template.description,
-                systemPrompt: template.prompt
-            };
-            setFieldValue("funnelStages", updatedStages);
-            toast.success(`Template "${template.name}" aplicado!`);
-        }
     };
 
     return (
@@ -1365,16 +1390,11 @@ ${stage?.systemPrompt || ""}
                                                                             </Box>
                                                                         )}
                                                                     >
-                                                                        <MenuItem value="enviar_catalogo">📄 Enviar Catálogo</MenuItem>
-                                                                        <MenuItem value="listar_catalogos">📋 Listar Catálogos</MenuItem>
-                                                                        <MenuItem value="enviar_tabela_precos">💰 Enviar Tabela de Preços</MenuItem>
-                                                                        <MenuItem value="listar_tabelas_precos">📋 Listar Tabelas de Preços</MenuItem>
-                                                                        <MenuItem value="enviar_informativo">📑 Enviar Informativo</MenuItem>
-                                                                        <MenuItem value="listar_informativos">📋 Listar Informativos</MenuItem>
-                                                                        <MenuItem value="buscar_produto_detalhado">🔍 Buscar Produto Detalhado</MenuItem>
-                                                                        <MenuItem value="transferir_para_vendedor_responsavel">👤 Transferir para Vendedor Responsável</MenuItem>
-                                                                        <MenuItem value="transferir_para_atendente">🙋 Transferir para Atendente</MenuItem>
-                                                                        <MenuItem value="salvar_memoria_contato">🧠 Salvar Memória do Contato</MenuItem>
+                                                                        {botFunctions.map((fn) => (
+                                                                            <MenuItem key={fn.name} value={fn.name} title={fn.description || ""}>
+                                                                                {fn.label}
+                                                                            </MenuItem>
+                                                                        ))}
                                                                     </Select>
                                                                     <Typography variant="caption" color="textSecondary" style={{ marginTop: 4 }}>
                                                                         Deixe vazio para permitir todas as funções. Selecione funções específicas para restringir o que a IA pode fazer nesta etapa.

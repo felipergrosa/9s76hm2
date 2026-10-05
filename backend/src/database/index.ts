@@ -84,6 +84,7 @@ import LeadScraperJob from "../models/LeadScraperJob";
 import CustomFieldConfig from "../models/CustomFieldConfig";
 import WhatsappTemplate from "../models/WhatsappTemplate";
 import WabaPricingRate from "../models/WabaPricingRate";
+import AISandboxSession from "../models/AISandboxSession";
 
 // eslint-disable-next-line
 const dbConfig = require("../config/database");
@@ -247,7 +248,8 @@ const models = [
   LeadScraperJob,
   CustomFieldConfig,
   WhatsappTemplate,
-  WabaPricingRate
+  WabaPricingRate,
+  AISandboxSession
 ];
 
 sequelize.addModels(models);

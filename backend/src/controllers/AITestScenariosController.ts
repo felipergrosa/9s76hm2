@@ -78,6 +78,23 @@ export const runScenario = async (req: Request, res: Response): Promise<Response
     throw new AppError("Conversas do cenário inválidas", 400);
   }
 
+  if (!Array.isArray(conversations) || conversations.length === 0) {
+    throw new AppError("Conversas do cenário inválidas", 400);
+  }
+
+  for (const conv of conversations) {
+    if (
+      !conv ||
+      typeof conv.customer !== "string" ||
+      typeof conv.expectedResponse !== "string"
+    ) {
+      throw new AppError(
+        "Cada conversa deve ter o formato { customer: string, expectedResponse: string }",
+        400
+      );
+    }
+  }
+
   const systemPrompt = promptOverride || stage.systemPrompt || "";
   const results: Array<{
     index: number;
@@ -89,14 +106,12 @@ export const runScenario = async (req: Request, res: Response): Promise<Response
     toolCalls: string[];
   }> = [];
 
-  const conversationHistory: Array<{ role: string; content: string }> = [];
+  const conversationHistory: Array<{ role: "user" | "assistant"; content: string }> = [];
   let totalSimilarity = 0;
   let passedCount = 0;
 
   for (let i = 0; i < conversations.length; i++) {
     const conv = conversations[i];
-
-    conversationHistory.push({ role: "user", content: conv.customer });
 
     const ai = await AIOrchestrator.processRequest({
       module: "general",
@@ -109,18 +124,27 @@ export const runScenario = async (req: Request, res: Response): Promise<Response
       model: agent.aiModel || undefined,
       temperature: 0.3,
       maxTokens: agent.maxTokens || 1000,
+      // Turnos anteriores do cenário — aguarda suporte a `history` no
+      // AIOrchestrator (contrato novo implementado em paralelo). Cópia
+      // rasa porque o array continua sendo acumulado no loop.
+      history: [...conversationHistory],
       metadata: {
         testScenario: true,
         scenarioId: scenario.id,
-        messageIndex: i,
-        conversationHistory
+        messageIndex: i
       }
-    });
+    } as any);
 
     const actualResponse = ai.success ? String(ai.result || "").trim() : "[ERRO]";
+
+    conversationHistory.push({ role: "user", content: conv.customer });
     conversationHistory.push({ role: "assistant", content: actualResponse });
 
-    const similarity = calculateSimilarity(conv.expectedResponse, actualResponse);
+    const similarity = await calculateSimilarity(
+      conv.expectedResponse,
+      actualResponse,
+      { companyId, agent }
+    );
     const passed = similarity >= 70;
 
     totalSimilarity += similarity;
@@ -207,7 +231,57 @@ export const deleteScenario = async (req: Request, res: Response): Promise<Respo
   return res.status(200).json({ ok: true });
 };
 
-function calculateSimilarity(expected: string, actual: string): number {
+// Tenta score semântico via IA (0-100, barato: maxTokens baixo); se a IA
+// falhar ou responder algo não numérico, cai no cálculo lexical determinístico
+// — assim o cenário de teste não quebra quando o provedor está indisponível.
+async function calculateSimilarity(
+  expected: string,
+  actual: string,
+  ctx: { companyId: number; agent: AIAgent }
+): Promise<number> {
+  const exp = String(expected || "").trim();
+  const act = String(actual || "").trim();
+
+  if (exp === act) return 100;
+  if (!exp || !act) return 0;
+  if (act === "[ERRO]") return 0;
+
+  try {
+    const ai = await AIOrchestrator.processRequest({
+      module: "training",
+      mode: "chat",
+      companyId: ctx.companyId,
+      text: [
+        "Compare a resposta esperada com a resposta real e avalie a equivalência semântica.",
+        "",
+        `ESPERADA: ${exp}`,
+        `REAL: ${act}`,
+        "",
+        "Responda APENAS com um número de 0 a 100 indicando a similaridade semântica."
+      ].join("\n"),
+      systemPrompt: "Você avalia similaridade semântica entre respostas de atendimento. Responda apenas um número de 0 a 100.",
+      preferProvider: ctx.agent.aiProvider || undefined,
+      model: ctx.agent.aiModel || undefined,
+      temperature: 0,
+      maxTokens: 20,
+      metadata: { testSimilarity: true }
+    });
+
+    if (ai.success) {
+      const match = String(ai.result || "").match(/\d{1,3}/);
+      if (match) {
+        const score = Math.min(100, Math.max(0, parseInt(match[0], 10)));
+        return score;
+      }
+    }
+  } catch (_) {
+    // cai no fallback lexical abaixo
+  }
+
+  return lexicalSimilarity(exp, act);
+}
+
+function lexicalSimilarity(expected: string, actual: string): number {
   const exp = String(expected || "").toLowerCase().trim();
   const act = String(actual || "").toLowerCase().trim();
 

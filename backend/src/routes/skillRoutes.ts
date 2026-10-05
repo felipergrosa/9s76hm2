@@ -12,7 +12,10 @@ import * as SkillController from "../controllers/SkillController";
 
 const skillRoutes = Router();
 
-// ========== CRUD BÁSICO ==========
+// ========== ROTAS LITERAIS ==========
+// IMPORTANTE: rotas literais (/skills/export, /skills/validate, etc.) devem
+// vir ANTES de /skills/:id — registradas depois ficam inalcançáveis
+// (Express casa ":id" primeiro).
 
 // Listar todas as skills
 skillRoutes.get(
@@ -21,6 +24,40 @@ skillRoutes.get(
   checkPermission("ai-settings.view"),
   SkillController.index
 );
+
+// Exportar skills
+skillRoutes.get(
+  "/skills/export",
+  isAuth,
+  checkPermission("ai-settings.view"),
+  SkillController.exportSkills
+);
+
+// Estatísticas do cache e WebSocket
+skillRoutes.get(
+  "/skills/cache/stats",
+  isAuth,
+  checkPermission("ai-settings.view"),
+  SkillController.cacheStats
+);
+
+// Validar skill
+skillRoutes.post(
+  "/skills/validate",
+  isAuth,
+  checkPermission("ai-settings.view"),
+  SkillController.validate
+);
+
+// Importar skills em massa
+skillRoutes.post(
+  "/skills/import",
+  isAuth,
+  checkPermission("ai-settings.edit"),
+  SkillController.importSkills
+);
+
+// ========== CRUD BÁSICO ==========
 
 // Buscar skill específica
 skillRoutes.get(
@@ -78,42 +115,6 @@ skillRoutes.post(
   isAuth,
   checkPermission("ai-settings.edit"),
   SkillController.publish
-);
-
-// Validar skill
-skillRoutes.post(
-  "/skills/validate",
-  isAuth,
-  checkPermission("ai-settings.view"),
-  SkillController.validate
-);
-
-// ========== IMPORT/EXPORT ==========
-
-// Importar skills em massa
-skillRoutes.post(
-  "/skills/import",
-  isAuth,
-  checkPermission("ai-settings.edit"),
-  SkillController.importSkills
-);
-
-// Exportar skills
-skillRoutes.get(
-  "/skills/export",
-  isAuth,
-  checkPermission("ai-settings.view"),
-  SkillController.exportSkills
-);
-
-// ========== ESTATÍSTICAS ==========
-
-// Estatísticas do cache e WebSocket
-skillRoutes.get(
-  "/skills/cache/stats",
-  isAuth,
-  checkPermission("ai-settings.view"),
-  SkillController.cacheStats
 );
 
 export default skillRoutes;

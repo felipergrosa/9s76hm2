@@ -56,9 +56,11 @@ class Skill extends Model<Skill> {
   @Column
   companyId: number;
 
+  // Nullable no banco (migration allowNull: true): null = skill global
+  // da empresa, aplicável a qualquer agente via skillCache.
   @ForeignKey(() => AIAgent)
   @Column
-  agentId: number;
+  agentId: number | null;
 
   @Column
   name: string;

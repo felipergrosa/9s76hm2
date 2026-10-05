@@ -3,6 +3,7 @@ import Whatsapp from "../../models/Whatsapp";
 import QueueIntegrations from "../../models/QueueIntegrations";
 import GetIntegrationByTypeService from "../QueueIntegrationServices/GetIntegrationByTypeService";
 import { decryptString } from "../../utils/crypto";
+import logger from "../../utils/logger";
 
 export type Provider = "openai" | "gemini";
 
@@ -28,7 +29,13 @@ const maybeDecryptKey = (type: string, cfg: any) => {
   if (!cfg) return cfg;
   const key = cfg.apiKey;
   if (typeof key === "string" && key.startsWith("ENC::")) {
-    try { cfg.apiKey = decryptString(key); } catch { /* keep masked */ }
+    try {
+      cfg.apiKey = decryptString(key);
+    } catch (err) {
+      // Sem a env de decrypt a apiKey fica "ENC::..." mascarada e a
+      // integração falharia mais adiante de forma opaca — logar explícito.
+      logger.error(`[ResolveAIIntegration] Falha ao descriptografar apiKey (type=${type}) — configure OPENAI_ENCRYPTION_KEY/DATA_KEY`, err);
+    }
   }
   return cfg;
 };

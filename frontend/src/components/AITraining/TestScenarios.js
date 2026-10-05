@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Box,
   Button,
@@ -18,8 +18,6 @@ import {
   ListItem,
   ListItemText,
   Paper,
-  Tab,
-  Tabs,
   TextField,
   Tooltip,
   Typography,
@@ -40,6 +38,7 @@ import {
   deleteTestScenario,
   getTestHistory
 } from "../../services/aiTraining";
+import usePermissions from "../../hooks/usePermissions";
 
 const useStyles = makeStyles((theme) => ({
   container: {
@@ -120,6 +119,8 @@ const useStyles = makeStyles((theme) => ({
 
 const TestScenarios = ({ agentId, stageId, promptOverride }) => {
   const classes = useStyles();
+  const { hasPermission } = usePermissions();
+  const canEditSettings = hasPermission("ai-settings.edit");
   const [scenarios, setScenarios] = useState([]);
   const [selectedScenario, setSelectedScenario] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -128,7 +129,6 @@ const TestScenarios = ({ agentId, stageId, promptOverride }) => {
   const [history, setHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
-  const [tab, setTab] = useState(0);
 
   const [newScenario, setNewScenario] = useState({
     name: "",
@@ -140,6 +140,7 @@ const TestScenarios = ({ agentId, stageId, promptOverride }) => {
     if (agentId && stageId) {
       loadScenarios();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentId, stageId]);
 
   const loadScenarios = async () => {
@@ -148,7 +149,7 @@ const TestScenarios = ({ agentId, stageId, promptOverride }) => {
       const data = await listTestScenarios({ agentId, stageId });
       setScenarios(data.scenarios || []);
     } catch (err) {
-      toast.error("Erro ao carregar cenários");
+      toast.error(err.response?.data?.error || err.response?.data?.message || "Erro ao carregar cenários");
     } finally {
       setLoading(false);
     }
@@ -160,7 +161,7 @@ const TestScenarios = ({ agentId, stageId, promptOverride }) => {
       setHistory(data.results || []);
       setShowHistory(true);
     } catch (err) {
-      toast.error("Erro ao carregar histórico");
+      toast.error(err.response?.data?.error || err.response?.data?.message || "Erro ao carregar histórico");
     }
   };
 
@@ -198,7 +199,7 @@ const TestScenarios = ({ agentId, stageId, promptOverride }) => {
       });
       loadScenarios();
     } catch (err) {
-      toast.error("Erro ao criar cenário");
+      toast.error(err.response?.data?.error || err.response?.data?.message || "Erro ao criar cenário");
     } finally {
       setLoading(false);
     }
@@ -214,7 +215,7 @@ const TestScenarios = ({ agentId, stageId, promptOverride }) => {
       setTestResults(data.testResult);
       toast.success(`Teste concluído: ${data.testResult.passRate}% de acerto`);
     } catch (err) {
-      toast.error("Erro ao executar teste");
+      toast.error(err.response?.data?.error || err.response?.data?.message || "Erro ao executar teste");
     } finally {
       setRunning(false);
     }
@@ -233,7 +234,7 @@ const TestScenarios = ({ agentId, stageId, promptOverride }) => {
         setTestResults(null);
       }
     } catch (err) {
-      toast.error("Erro ao excluir cenário");
+      toast.error(err.response?.data?.error || err.response?.data?.message || "Erro ao excluir cenário");
     }
   };
 
@@ -336,13 +337,16 @@ const TestScenarios = ({ agentId, stageId, promptOverride }) => {
                             )}
                           </IconButton>
                         </Tooltip>
-                        <Tooltip title="Excluir">
-                          <IconButton
-                            size="small"
-                            onClick={(e) => handleDeleteScenario(scenario, e)}
-                          >
-                            <DeleteIcon />
-                          </IconButton>
+                        <Tooltip title={canEditSettings ? "Excluir" : "Requer permissão ai-settings.edit"}>
+                          <span>
+                            <IconButton
+                              size="small"
+                              onClick={(e) => handleDeleteScenario(scenario, e)}
+                              disabled={!canEditSettings}
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          </span>
                         </Tooltip>
                       </Box>
                     </Box>

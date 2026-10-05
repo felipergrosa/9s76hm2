@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   Box,
   Button,
@@ -16,9 +16,7 @@ import {
   Chip,
   makeStyles
 } from "@material-ui/core";
-import Autocomplete from "@material-ui/lab/Autocomplete";
 import AutoFixHighIcon from "@material-ui/icons/Build";
-import SendIcon from "@material-ui/icons/Send";
 import LightbulbIcon from "@material-ui/icons/EmojiObjects";
 import { toast } from "react-toastify";
 
@@ -118,18 +116,21 @@ const PromptAssistant = ({
     if (initialPrompt !== undefined && initialPrompt !== internalValue) {
       setInternalValue(initialPrompt);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialPrompt]);
 
   useEffect(() => {
     if (valueProp !== undefined && valueProp !== internalValue) {
       setInternalValue(valueProp);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [valueProp]);
 
   useEffect(() => {
     if (agentId) {
       loadVariables();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentId]);
 
   const loadVariables = async () => {

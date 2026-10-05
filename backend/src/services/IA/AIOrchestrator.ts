@@ -1,6 +1,7 @@
 import IAClientFactory from "./IAClientFactory";
 import ResolveAIIntegrationService, { Provider } from "./ResolveAIIntegrationService";
-import { IAClient, ChatRequest, ChatWithHistoryRequest } from "./IAClient";
+import { IAClient, ChatRequest, ChatWithHistoryRequest, ChatHistoryMessage } from "./IAClient";
+import type { ModuleType } from "./ResolvePresetConfigService";
 import { search as ragSearch } from "../RAG/RAGSearchService";
 import AIUsageLogger from "./AIUsageLogger";
 
@@ -23,6 +24,11 @@ export interface AIRequest {
   text: string;
   systemPrompt?: string;
   targetLang?: string;
+
+  // Histórico opcional (ordem cronológica) — usado pelo sandbox e por
+  // fluxos conversacionais. Quando presente e não-vazio, a chamada ao
+  // provider usa chatWithHistory em vez de chat.
+  history?: ChatHistoryMessage[];
   
   // Configurações específicas
   temperature?: number;
@@ -258,21 +264,52 @@ export default class AIOrchestrator {
       }
     }
 
+    const resolvedModel = request.model || integration.config.model || this.getDefaultModel(integration.provider);
+    const resolvedTemperature = request.temperature ?? integration.config.temperature ?? 0.7;
+    const resolvedMaxTokens = request.maxTokens ?? integration.config.maxTokens ?? 1000;
+
     const chatRequest: ChatRequest = {
-      model: request.model || integration.config.model || this.getDefaultModel(integration.provider),
+      model: resolvedModel,
       system: systemPrompt,
       user: userPrompt,
-      temperature: request.temperature ?? integration.config.temperature ?? 0.7,
-      max_tokens: request.maxTokens ?? integration.config.maxTokens ?? 1000
+      temperature: resolvedTemperature,
+      max_tokens: resolvedMaxTokens
     };
 
     console.log(`[AIOrchestrator] Executing on ${integration.provider}`, {
       requestId,
       model: chatRequest.model,
-      temperature: chatRequest.temperature
+      temperature: chatRequest.temperature,
+      historyLength: request.history?.length || 0
     });
 
-    const result = await client.chat(chatRequest);
+    // Quando há histórico de conversa, usar chatWithHistory (mantém o
+    // turno atual como última mensagem user, passada em `user`).
+    const hasHistory = Array.isArray(request.history) && request.history.length > 0;
+    let result: string;
+
+    if (hasHistory && typeof client.chatWithHistory === "function") {
+      const historyRequest: ChatWithHistoryRequest = {
+        model: resolvedModel,
+        system: systemPrompt,
+        history: request.history!,
+        user: userPrompt,
+        temperature: resolvedTemperature,
+        max_tokens: resolvedMaxTokens
+      };
+      result = await client.chatWithHistory(historyRequest);
+    } else {
+      // Fallback para providers sem chatWithHistory: concatena o histórico
+      // como texto dentro da mensagem do usuário.
+      if (hasHistory) {
+        const historyText = request.history!
+          .map(m => `${m.role === "user" ? "Cliente" : "Você"}: ${m.content}`)
+          .join("\n");
+        chatRequest.user = `Histórico:\n${historyText}\n\nMensagem atual:\n${userPrompt}`;
+        console.warn(`[AIOrchestrator] Provider ${integration.provider} sem chatWithHistory — histórico concatenado no user message`);
+      }
+      result = await client.chat(chatRequest);
+    }
     
     return {
       success: true,
@@ -329,9 +366,15 @@ export default class AIOrchestrator {
     // Primeiro tenta usar ResolvePresetConfigService para suporte a presets
     try {
       const ResolvePresetConfigService = (await import("./ResolvePresetConfigService")).default;
+      // "training" (sandbox/treinamento) não é um ModuleType com preset
+      // próprio — normaliza para "general" em vez de cast `as any`.
+      const VALID_PRESET_MODULES: ModuleType[] = ["general", "campaign", "ticket", "prompt"];
+      const presetModule: ModuleType = VALID_PRESET_MODULES.includes(request.module as ModuleType)
+        ? (request.module as ModuleType)
+        : "general";
       const resolved = await ResolvePresetConfigService({
         companyId: request.companyId,
-        module: request.module as any,
+        module: presetModule,
         preferProvider: request.preferProvider
       });
       

@@ -10,8 +10,6 @@ import {
   makeStyles
 } from "@material-ui/core";
 import ThumbUpIcon from "@material-ui/icons/ThumbUp";
-import ThumbDownIcon from "@material-ui/icons/ThumbDown";
-import TrendingUpIcon from "@material-ui/icons/TrendingUp";
 import AssessmentIcon from "@material-ui/icons/Assessment";
 import BuildIcon from "@material-ui/icons/Build";
 import CheckCircleIcon from "@material-ui/icons/CheckCircle";
@@ -118,6 +116,7 @@ const TrainingMetricsDashboard = ({ agentId, stageId }) => {
 
   useEffect(() => {
     loadMetrics();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentId, stageId]);
 
   const loadMetrics = async () => {

@@ -1,3 +1,5 @@
+import { Op } from "sequelize";
+import AppError from "../../errors/AppError";
 import AITrainingFeedback from "../../models/AITrainingFeedback";
 import AITrainingImprovement from "../../models/AITrainingImprovement";
 import AIOrchestrator from "../IA/AIOrchestrator";
@@ -17,6 +19,46 @@ interface CategorizationResult {
 }
 
 /**
+ * Extrai o primeiro objeto/array JSON balanceado de uma resposta de LLM,
+ * tolerando fences ```json e texto ao redor.
+ */
+const extractJson = (text: string): any => {
+  let cleaned = String(text || "").trim();
+  cleaned = cleaned.replace(/```(?:json)?/gi, "").trim();
+
+  // Encontra o primeiro delimitador e caminha contando profundidade,
+  // respeitando strings escapadas.
+  const start = cleaned.search(/[\[{]/);
+  if (start === -1) throw new Error("JSON não encontrado na resposta");
+
+  const open = cleaned[start];
+  const close = open === "{" ? "}" : "]";
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = start; i < cleaned.length; i++) {
+    const ch = cleaned[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === open) depth++;
+    else if (ch === close) {
+      depth--;
+      if (depth === 0) {
+        return JSON.parse(cleaned.slice(start, i + 1));
+      }
+    }
+  }
+
+  throw new Error("JSON incompleto na resposta");
+};
+
+/**
  * Analisa padrões de erro nos feedbacks de treinamento
  * para identificar áreas que precisam de melhorias sistemáticas
  */
@@ -26,12 +68,12 @@ export const analyzeErrorPatterns = async (
   stageId?: number,
   daysBack: number = 30
 ): Promise<PatternAnalysis> => {
-  const whereClause: any = { 
-    companyId, 
-    agentId, 
+  const whereClause: any = {
+    companyId,
+    agentId,
     rating: "wrong",
     createdAt: {
-      $gte: new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000)
+      [Op.gte]: new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000)
     }
   };
 
@@ -64,28 +106,34 @@ export const analyzeErrorPatterns = async (
     maxTokens: 1000
   });
 
+  // Falha do provedor não pode virar "padrões vazios" silenciosos —
+  // propaga 502 para o chamador conseguir distinguir "sem dados" de "IA fora".
+  if (!ai.success) {
+    throw new AppError(ai.error || "Falha do provedor de IA ao analisar padrões", 502);
+  }
+
   // Parse da resposta da IA
   const patterns = parsePatternsResponse(ai.result || "");
 
   // Calcula tendência (últimos 7 dias vs 7 dias anteriores)
   const recentWrong = await AITrainingFeedback.count({
-    where: { 
-      ...whereClause, 
-      createdAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } 
+    where: {
+      ...whereClause,
+      createdAt: { [Op.gte]: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
     }
   });
 
   const previousWrong = await AITrainingFeedback.count({
-    where: { 
-      ...whereClause, 
-      createdAt: { 
-        $gte: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
-        $lt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-      } 
+    where: {
+      ...whereClause,
+      createdAt: {
+        [Op.gte]: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
+        [Op.lt]: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+      }
     }
   });
 
-  const trendDirection: "improving" | "declining" | "stable" = 
+  const trendDirection: "improving" | "declining" | "stable" =
     recentWrong < previousWrong * 0.8 ? "improving" :
     recentWrong > previousWrong * 1.2 ? "declining" : "stable";
 
@@ -133,8 +181,12 @@ export const categorizeImprovement = async (
     maxTokens: 100
   });
 
+  if (!ai.success) {
+    throw new AppError(ai.error || "Falha do provedor de IA ao categorizar melhoria", 502);
+  }
+
   try {
-    const parsed = JSON.parse(ai.result || "{}");
+    const parsed = extractJson(ai.result || "{}");
     return {
       category: parsed.category || "other",
       severity: parsed.severity || "medium",
@@ -193,8 +245,13 @@ export const generateProactiveSuggestions = async (
     maxTokens: 500
   });
 
+  if (!ai.success) {
+    throw new AppError(ai.error || "Falha do provedor de IA ao gerar sugestões", 502);
+  }
+
   try {
-    return JSON.parse(ai.result || "[]");
+    const parsed = extractJson(ai.result || "[]");
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
   }
@@ -235,7 +292,7 @@ const buildPatternsPrompt = (feedbacks: AITrainingFeedback[]): string => {
 
 const parsePatternsResponse = (response: string): Partial<PatternAnalysis> => {
   try {
-    return JSON.parse(response);
+    return extractJson(response);
   } catch {
     return {
       topErrorCategories: [],

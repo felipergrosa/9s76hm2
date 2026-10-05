@@ -6,12 +6,9 @@ import {
   CardContent,
   Chip,
   CircularProgress,
-  Divider,
   Grid,
   IconButton,
   Paper,
-  Tab,
-  Tabs,
   TextField,
   Typography,
   makeStyles
@@ -19,7 +16,6 @@ import {
 import CompareArrowsIcon from "@material-ui/icons/CompareArrows";
 import PlayArrowIcon from "@material-ui/icons/PlayArrow";
 import ThumbUpIcon from "@material-ui/icons/ThumbUp";
-import ThumbDownIcon from "@material-ui/icons/ThumbDown";
 import SwapHorizIcon from "@material-ui/icons/SwapHoriz";
 import EmojiEventsIcon from "@material-ui/icons/EmojiEvents";
 import { toast } from "react-toastify";
@@ -154,7 +150,7 @@ const ABTestingComparison = ({ agentId, stageId }) => {
 
       setTestInput("");
     } catch (err) {
-      toast.error("Erro ao executar comparação");
+      toast.error(err.response?.data?.error || err.response?.data?.message || "Erro ao executar comparação");
     } finally {
       setLoading(false);
     }
@@ -271,14 +267,14 @@ const ABTestingComparison = ({ agentId, stageId }) => {
             {resultsA && (
               <Box className={classes.responsePane}>
                 <Typography variant="caption" color="textSecondary" gutterBottom>
-                  Resposta A ({resultsA.responseTime}ms):
+                  Resposta A ({resultsA.processingTime}ms):
                 </Typography>
                 <Box className={`${classes.responseMessage} ${classes.assistantMessage}`}>
                   <Typography variant="body2">{resultsA.response}</Typography>
                 </Box>
-                {resultsA.tokensUsed && (
+                {(resultsA.provider || resultsA.model) && (
                   <Typography variant="caption" color="textSecondary">
-                    Tokens: {resultsA.tokensUsed}
+                    {resultsA.provider}{resultsA.model ? ` / ${resultsA.model}` : ""}
                   </Typography>
                 )}
               </Box>
@@ -328,14 +324,14 @@ const ABTestingComparison = ({ agentId, stageId }) => {
             {resultsB && (
               <Box className={classes.responsePane}>
                 <Typography variant="caption" color="textSecondary" gutterBottom>
-                  Resposta B ({resultsB.responseTime}ms):
+                  Resposta B ({resultsB.processingTime}ms):
                 </Typography>
                 <Box className={`${classes.responseMessage} ${classes.assistantMessage}`}>
                   <Typography variant="body2">{resultsB.response}</Typography>
                 </Box>
-                {resultsB.tokensUsed && (
+                {(resultsB.provider || resultsB.model) && (
                   <Typography variant="caption" color="textSecondary">
-                    Tokens: {resultsB.tokensUsed}
+                    {resultsB.provider}{resultsB.model ? ` / ${resultsB.model}` : ""}
                   </Typography>
                 )}
               </Box>

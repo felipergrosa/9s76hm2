@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Box,
   Paper,
@@ -6,17 +6,12 @@ import {
   Button,
   Fade,
   Tooltip,
-  IconButton,
-  Stepper,
-  Step,
-  StepLabel,
-  MobileStepper
+  IconButton
 } from "@material-ui/core";
 import {
   makeStyles
 } from "@material-ui/core/styles";
 import {
-  Close as CloseIcon,
   NavigateNext as NextIcon,
   NavigateBefore as BackIcon,
   Help as HelpIcon,
@@ -324,7 +319,7 @@ const OnboardingTour = ({ onComplete, onSkip }) => {
           Bem-vindo ao AI Training!
         </Typography>
         <Typography variant="body1" color="textSecondary" paragraph>
-          Aprenda a criar agentes de IA poderosos em apenas 5 passos.
+          Aprenda a criar agentes de IA poderosos em apenas 6 passos.
         </Typography>
         
         <Box className={classes.featureList}>

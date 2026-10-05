@@ -1,40 +1,14 @@
 import { Request, Response } from "express";
 import AppError from "../errors/AppError";
+import sequelize from "../database";
 import AIAgent from "../models/AIAgent";
 import FunnelStage from "../models/FunnelStage";
+import AITrainingFeedback from "../models/AITrainingFeedback";
 import AITrainingImprovement from "../models/AITrainingImprovement";
-import AIOrchestrator from "../services/IA/AIOrchestrator";
+import Skill from "../models/Skill";
+import skillCache from "../services/IA/SkillCacheService";
+import buildImprovementText from "../utils/buildImprovementText";
 import { categorizeImprovement, analyzeErrorPatterns, generateProactiveSuggestions } from "../services/AIAgentServices/TrainingPatternAnalyzer";
-
-const buildConsolidationSystemPrompt = () => {
-  return [
-    "Você é um assistente especialista em escrita de prompts para agentes de atendimento/vendas.",
-    "Sua tarefa é consolidar um prompt existente com uma lista de melhorias incrementais.",
-    "Regras:",
-    "- Mantenha a estrutura e organização do prompt original (seções, títulos, ordem).",
-    "- Integre as melhorias no local apropriado sem duplicar regras.",
-    "- Se houver conflitos, priorize a melhoria mais recente.",
-    "- Não crie informações novas: use apenas o prompt atual e as melhorias fornecidas.",
-    "- Responda APENAS com o prompt final consolidado, sem explicações.",
-  ].join("\n");
-};
-
-const buildConsolidationUserPrompt = (params: {
-  currentPrompt: string;
-  improvements: Array<{ id: number; improvementText: string }>;
-}) => {
-  const { currentPrompt, improvements } = params;
-
-  const improvementsText = improvements
-    .map((i, idx) => `#${idx + 1} (id=${i.id})\n${String(i.improvementText).trim()}`)
-    .join("\n\n");
-
-  return [
-    "PROMPT_ATUAL:\n" + String(currentPrompt || "").trim(),
-    "\n\nMELHORIAS (em ordem, da mais antiga para a mais nova):\n" + improvementsText,
-    "\n\nENTREGUE O PROMPT CONSOLIDADO FINAL:" 
-  ].join("\n");
-};
 
 export const createImprovement = async (req: Request, res: Response): Promise<Response> => {
   const { companyId, id: userId } = req.user;
@@ -55,13 +29,39 @@ export const createImprovement = async (req: Request, res: Response): Promise<Re
   const stage = await FunnelStage.findOne({ where: { id: Number(stageId), agentId: agent.id } });
   if (!stage) throw new AppError("ERR_FUNNEL_STAGE_NOT_FOUND", 404);
 
+  let finalText = String(improvementText).trim();
+
+  if (feedbackId) {
+    const feedback = await AITrainingFeedback.findOne({
+      where: { id: Number(feedbackId), companyId }
+    });
+    if (!feedback) throw new AppError("ERR_FEEDBACK_NOT_FOUND", 404);
+
+    // Se o improvement manual não embute a correção do feedback, anexa
+    // usando o mesmo formato do loop automático.
+    const suffix = buildImprovementText({
+      customerText: null,
+      correctedText:
+        feedback.correctedText && !finalText.includes(feedback.correctedText)
+          ? feedback.correctedText
+          : null,
+      explanation:
+        feedback.explanation && !finalText.includes(feedback.explanation)
+          ? feedback.explanation
+          : null
+    });
+    if (suffix) {
+      finalText = `${finalText} ${suffix}`;
+    }
+  }
+
   const improvement = await AITrainingImprovement.create({
     companyId,
     userId: Number(userId),
     agentId: agent.id,
     stageId: stage.id,
     feedbackId: feedbackId ? Number(feedbackId) : null,
-    improvementText: String(improvementText).trim(),
+    improvementText: finalText,
     category: null,
     severity: null,
     intentDetected: null,
@@ -100,74 +100,80 @@ export const applyImprovements = async (req: Request, res: Response): Promise<Re
   const stage = await FunnelStage.findOne({ where: { id: Number(stageId), agentId: agent.id } });
   if (!stage) throw new AppError("ERR_FUNNEL_STAGE_NOT_FOUND", 404);
 
-  const improvements = await AITrainingImprovement.findAll({
-    where: {
-      companyId,
-      agentId: agent.id,
-      stageId: stage.id,
-      status: "pending"
-    },
-    order: [["id", "ASC"]]
-  });
+  // Decisão de produto: melhoria aplicada vira SKILL do agente, não rewrite
+  // do prompt. As skills customizadas já são injetadas no prompt real em
+  // produção — sem chamada LLM de consolidação aqui.
+  const skills: Array<{ id: number; name: string; description: string }> = [];
 
-  if (!improvements.length) {
-    return res.status(200).json({
-      ok: true,
-      applied: 0,
-      systemPrompt: stage.systemPrompt
+  await sequelize.transaction(async t => {
+    const improvements = await AITrainingImprovement.findAll({
+      where: {
+        companyId,
+        agentId: agent.id,
+        stageId: stage.id,
+        status: "pending"
+      },
+      order: [["id", "ASC"]],
+      transaction: t
     });
-  }
 
-  const systemPrompt = buildConsolidationSystemPrompt();
-  const userPrompt = buildConsolidationUserPrompt({
-    currentPrompt: stage.systemPrompt || "",
-    improvements: improvements.map(i => ({ id: i.id, improvementText: i.improvementText }))
-  });
+    if (!improvements.length) return;
 
-  const ai = await AIOrchestrator.processRequest({
-    module: "prompt",
-    mode: "chat",
-    companyId,
-    userId: userId ? Number(userId) : undefined,
-    text: userPrompt,
-    systemPrompt,
-    preferProvider: agent.aiProvider || undefined,
-    model: agent.aiModel || undefined,
-    temperature: 0.2,
-    maxTokens: agent.maxTokens || undefined,
-    metadata: {
-      training: true,
-      trainingType: "prompt_consolidation",
-      agentId: agent.id,
-      stageId: stage.id,
-      improvementsCount: improvements.length
+    // Dedupe via metadata JSONB (filter em JS: mais simples e portável
+    // que operador ->> do Postgres dentro do where do Sequelize v5).
+    const existingSkills = await Skill.findAll({
+      where: { companyId, agentId: agent.id },
+      transaction: t
+    });
+
+    const appliedAt = new Date();
+
+    for (const imp of improvements) {
+      let skill = existingSkills.find(
+        s => (s.metadata as any)?.improvementId === imp.id
+      );
+
+      if (!skill) {
+        skill = await Skill.create({
+          companyId,
+          agentId: agent.id,
+          name: `aprendizado-${imp.category || "geral"}-${imp.id}`,
+          category: "custom",
+          description: imp.improvementText,
+          triggers: [],
+          examples: [],
+          functions: [],
+          conditions: [],
+          priority: 7,
+          enabled: true,
+          status: "active",
+          metadata: {
+            source: "training",
+            improvementId: imp.id,
+            feedbackId: imp.feedbackId,
+            stageId: stage.id,
+            createdBy: Number(userId)
+          } as any
+        }, { transaction: t });
+      }
+
+      skills.push({ id: skill.id, name: skill.name, description: skill.description });
+
+      await imp.update(
+        { status: "applied", appliedAt },
+        { transaction: t }
+      );
     }
   });
 
-  if (!ai.success) {
-    throw new AppError(ai.error || "Falha ao consolidar prompt", 500);
-  }
-
-  const consolidated = String(ai.result || "").trim();
-  if (!consolidated) {
-    throw new AppError("Consolidação retornou vazia", 500);
-  }
-
-  await stage.update({ systemPrompt: consolidated });
-
-  const appliedAt = new Date();
-  for (const imp of improvements) {
-    await imp.update({
-      status: "applied",
-      appliedAt,
-      consolidatedPrompt: consolidated
-    });
-  }
+  // Hot-reload: invalida o cache de skills do agente para o bloco de
+  // skills customizadas refletir as melhorias no próximo prompt.
+  skillCache.invalidate(companyId, agent.id);
 
   return res.status(200).json({
     ok: true,
-    applied: improvements.length,
-    systemPrompt: consolidated
+    applied: skills.length,
+    skills
   });
 };
 
@@ -200,6 +206,7 @@ export const getProactiveSuggestions = async (req: Request, res: Response): Prom
   const { companyId } = req.user;
 
   const agentId = Number(req.query.agentId);
+  const stageId = req.query.stageId ? Number(req.query.stageId) : undefined;
 
   if (!agentId) {
     throw new AppError("agentId é obrigatório", 400);
@@ -208,14 +215,20 @@ export const getProactiveSuggestions = async (req: Request, res: Response): Prom
   const agent = await AIAgent.findOne({ where: { id: agentId, companyId } });
   if (!agent) throw new AppError("ERR_AGENT_NOT_FOUND", 404);
 
-  // Busca prompt atual da primeira etapa
-  const stages = await FunnelStage.findAll({ 
-    where: { agentId: agent.id }, 
-    order: [["order", "ASC"]], 
-    limit: 1 
-  });
+  // Usa o prompt da etapa informada; sem stageId cai na primeira etapa
+  // (comportamento anterior).
+  let stage: FunnelStage | null = null;
+  if (stageId) {
+    stage = await FunnelStage.findOne({ where: { id: stageId, agentId: agent.id } });
+    if (!stage) throw new AppError("ERR_FUNNEL_STAGE_NOT_FOUND", 404);
+  } else {
+    stage = await FunnelStage.findOne({
+      where: { agentId: agent.id },
+      order: [["order", "ASC"]]
+    });
+  }
 
-  const currentPrompt = stages[0]?.systemPrompt || "";
+  const currentPrompt = stage?.systemPrompt || "";
 
   const suggestions = await generateProactiveSuggestions(companyId, agentId, currentPrompt);
 
@@ -253,4 +266,38 @@ export const getImprovementsByCategory = async (req: Request, res: Response): Pr
   }, {} as Record<string, AITrainingImprovement[]>);
 
   return res.status(200).json({ grouped, total: improvements.length });
+};
+
+/**
+ * Lista paginada de melhorias de treinamento
+ */
+export const listImprovements = async (req: Request, res: Response): Promise<Response> => {
+  const { companyId } = req.user;
+
+  const agentId = Number(req.query.agentId);
+  if (!agentId) {
+    throw new AppError("agentId é obrigatório", 400);
+  }
+
+  const where: any = { companyId, agentId };
+  if (req.query.stageId) where.stageId = Number(req.query.stageId);
+  if (req.query.status) where.status = String(req.query.status);
+
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
+  const offset = (page - 1) * limit;
+
+  const { rows: improvements, count: total } = await AITrainingImprovement.findAndCountAll({
+    where,
+    order: [["createdAt", "DESC"]],
+    limit,
+    offset
+  });
+
+  return res.status(200).json({
+    improvements,
+    total,
+    page,
+    pages: Math.ceil(total / limit)
+  });
 };

@@ -25,9 +25,10 @@ import Queue from "../../models/Queue";
 import { BOT_AVAILABLE_FUNCTIONS } from "../IA/BotFunctions";
 import ActionExecutor from "../IA/ActionExecutor";
 import ResolveAIAgentForTicketService from "../AIAgentServices/ResolveAIAgentForTicketService";
-import { DEFAULT_SKILLS, generateSkillsPrompt, findApplicableSkills } from "../IA/AISkill";
+import { DEFAULT_SKILLS, generateSkillsPrompt } from "../IA/AISkill";
 import skillCache from "../IA/SkillCacheService";
 import generateCustomSkillsPrompt from "../IA/CustomSkillPrompt";
+import logger from "../../utils/logger";
 
 type Session = WASocket & {
   id?: number;
@@ -176,7 +177,9 @@ const resolveRAGConfigForTicket = async (
         console.log(`[RAG] Using legacy ragCollection: ${coll}`);
       }
     }
-  } catch { }
+  } catch (err) {
+    logger.warn(`[RAG][Config] Falha ao resolver tags da fila (queueId=${ticket.queueId}, ticketId=${ticket.id}):`, err);
+  }
 
   try {
     const knowledge = await GetIntegrationByTypeService({ companyId: ticket.companyId, type: "knowledge" });
@@ -186,7 +189,9 @@ const resolveRAGConfigForTicket = async (
     if (typeof ve === "string") ragEnabled = ["enabled", "true", "on", "1"].includes(ve.toLowerCase());
     const k = Number(j?.ragTopK);
     if (!isNaN(k) && k > 0) ragTopK = Math.min(20, Math.max(1, k));
-  } catch { }
+  } catch (err) {
+    logger.warn(`[RAG][Config] Falha ao ler integração "knowledge" (companyId=${ticket.companyId}):`, err);
+  }
 
   try {
     if (!ragEnabled) {
@@ -194,13 +199,17 @@ const resolveRAGConfigForTicket = async (
       const v2 = (en as any)?.[0]?.["ragEnabled"];
       ragEnabled = String(v2 || "").toLowerCase() === "enabled";
     }
-  } catch { }
+  } catch (err) {
+    logger.warn(`[RAG][Config] Falha ao ler CompaniesSettings.ragEnabled (companyId=${ticket.companyId}):`, err);
+  }
 
   try {
     const rk = await FindCompanySettingOneService({ companyId: ticket.companyId, column: "ragTopK" });
     const k2 = Number((rk as any)?.[0]?.["ragTopK"]);
     if (!isNaN(k2)) ragTopK = Math.min(20, Math.max(1, k2));
-  } catch { }
+  } catch (err) {
+    logger.warn(`[RAG][Config] Falha ao ler CompaniesSettings.ragTopK (companyId=${ticket.companyId}):`, err);
+  }
 
   console.log("[IA][RAG][Config] Resolvido:", {
     companyId: ticket.companyId,
@@ -386,9 +395,8 @@ ${onlineUsers === 0 ? "- ⚠️ Nenhum atendente humano online no momento. Você
 - Este cliente NÃO possui cadastro completo.
 - Campos faltantes: ${missingFields.join(", ")}
 - REGRA DA EMPRESA:
-  - ✅ Catálogos (incluindo catálogo lite e premium) PODEM ser enviados mesmo sem CNPJ/email.
-  - ⛔ TABELA DE PREÇOS (e condições comerciais) SÓ pode ser enviada após coletar e salvar CNPJ + email.
-- ANTES de enviar TABELA DE PREÇOS, você DEVE:
+  - ⛔ TODO material (incluindo catálogos, catálogo lite/premium, tabelas de preços e condições comerciais) SÓ pode ser enviado após coletar e salvar os dados obrigatórios do lead.
+- ANTES de enviar QUALQUER material, você DEVE:
   1. Solicitar os dados faltantes ao cliente
   2. Usar a função "atualizar_contato" para salvar os dados informados
   3. Só então enviar os materiais solicitados
@@ -520,6 +528,7 @@ IMPORTANTE:
       };
     }
   } catch (error) {
+    logger.warn(`[AI] Falha ao resolver prompt do AI Agent — caindo para prompt legado (ticketId=${ticket.id}, companyId=${ticket.companyId}):`, error);
     console.error("[AI] Error resolving AI agent, falling back to legacy prompt:", error);
   }
 
@@ -637,6 +646,78 @@ const processResponse = async (
   }
 };
 
+// Mensagem enviada ao cliente quando a IA falha ou não responde
+const TECHNICAL_FALLBACK_TEXT =
+  "Desculpe, estou com dificuldades técnicas para processar sua solicitação no momento. Por favor, tente novamente mais tarde.";
+
+// Envia a mensagem de fallback técnico (mesmo padrão do catch principal)
+const sendTechnicalFallback = async (
+  wbot: Session,
+  msg: proto.IWebMessageInfo,
+  ticket: Ticket,
+  contact: Contact
+): Promise<void> => {
+  const sentMessage = await wbot.sendMessage(msg.key.remoteJid!, {
+    text: TECHNICAL_FALLBACK_TEXT,
+  });
+  const isOfficial = (wbot as any)?.channelType === "official" || (wbot as any)?.isOfficial;
+  if (!isOfficial) {
+    await verifyMessage(sentMessage as any, ticket, contact);
+  }
+};
+
+// Funções essenciais que SEMPRE devem estar disponíveis para envio de arquivos
+const ESSENTIAL_FILE_FUNCTIONS = ["buscar_e_enviar_arquivo", "listar_arquivos_disponiveis"];
+
+// Filtra BOT_AVAILABLE_FUNCTIONS pelo enabledFunctions da etapa atual do
+// agente (sempre incluindo as funções essenciais de arquivo). Mesmo filtro
+// usado no caminho de texto — reutilizado também no caminho de áudio.
+const resolveEnabledBotFunctions = async (ticket: Ticket): Promise<any[]> => {
+  let availableFunctions = BOT_AVAILABLE_FUNCTIONS;
+
+  try {
+    const agentConfig = await ResolveAIAgentForTicketService({ ticket });
+
+    // Se enabledFunctions estiver definido E não for vazio, filtrar
+    // MAS sempre adicionar as funções essenciais de arquivos
+    if (agentConfig && agentConfig.enabledFunctions && Array.isArray(agentConfig.enabledFunctions) && agentConfig.enabledFunctions.length > 0) {
+      // Combinar funções habilitadas + funções essenciais
+      const allEnabledFunctions = [...new Set([...agentConfig.enabledFunctions, ...ESSENTIAL_FILE_FUNCTIONS])];
+
+      availableFunctions = BOT_AVAILABLE_FUNCTIONS.filter(fn =>
+        allEnabledFunctions.includes(fn.name)
+      );
+      console.log(`[AI][Functions] Funções habilitadas: ${agentConfig.enabledFunctions.join(", ")}`);
+      console.log(`[AI][Functions] + Funções essenciais adicionadas: ${ESSENTIAL_FILE_FUNCTIONS.join(", ")}`);
+      console.log(`[AI][Functions] Total: ${availableFunctions.length} de ${BOT_AVAILABLE_FUNCTIONS.length} funções disponíveis`);
+    } else {
+      console.log(`[AI][Functions] Sem filtro de funções - TODAS disponíveis (${BOT_AVAILABLE_FUNCTIONS.length})`);
+    }
+  } catch (err) {
+    console.error(`[AI][Functions] Erro ao filtrar funções:`, err);
+    // Continua com todas as funções em caso de erro
+  }
+
+  return availableFunctions;
+};
+
+// A mensagem inbound já é persistida pelo wbotMessageListener antes da IA
+// rodar e entra no histórico vindo do banco. Como o provider recebe a
+// mensagem atual separadamente (campo `user`), removemos a última entrada
+// do histórico quando ela é a própria mensagem do cliente — evita mandar
+// a mesma mensagem duplicada.
+const dedupeTrailingUserMessage = (
+  history: { role: "user" | "assistant"; content: string }[],
+  currentUserText?: string
+): { role: "user" | "assistant"; content: string }[] => {
+  if (!currentUserText || history.length === 0) return history;
+  const last = history[history.length - 1];
+  if (last.role === "user" && String(last.content || "").trim() === currentUserText.trim()) {
+    return history.slice(0, -1);
+  }
+  return history;
+};
+
 // Handles OpenAI request with Function Calling support
 const handleOpenAIRequest = async (
   openai: SessionOpenAi,
@@ -644,7 +725,8 @@ const handleOpenAIRequest = async (
   openAiSettings: IOpenAi,
   ticket?: Ticket,
   contact?: Contact,
-  wbot?: Session
+  wbot?: Session,
+  availableFunctions?: any[]
 ): Promise<string> => {
   try {
     const now = Date.now();
@@ -658,9 +740,10 @@ const handleOpenAIRequest = async (
       temperature: openAiSettings.temperature,
     };
 
-    // Adicionar functions se habilitado
+    // Adicionar functions se habilitado (respeitando o filtro da etapa
+    // quando fornecido pelo caller; default = todas)
     if (functionsEnabled) {
-      chatParams.functions = BOT_AVAILABLE_FUNCTIONS;
+      chatParams.functions = availableFunctions || BOT_AVAILABLE_FUNCTIONS;
       chatParams.function_call = "auto"; // Deixa IA decidir quando chamar
     }
 
@@ -842,8 +925,9 @@ export const handleOpenAi = async (
       maxTokens,
       temperature
     } as IOpenAi;
-  } catch {
-    // silencioso: manter openAiSettings como veio
+  } catch (err) {
+    // Mantém openAiSettings como veio, mas registra a falha de resolução
+    logger.warn(`[IA][wbot][resolve-config] Falha ao resolver integração de IA (companyId=${ticket.companyId}, ticketId=${ticket.id}) — usando openAiSettings original:`, err);
   }
 
   // INTEGRATE: Merge AI Settings from Agent or use Global
@@ -893,9 +977,16 @@ export const handleOpenAi = async (
   let openai: SessionOpenAi | null = null;
   let gemini: SessionGemini | null = null;
 
-  // Validate apiKey obrigatória
+  // Validate apiKey obrigatória — sem chave a IA não responde; em vez de
+  // retorno silencioso, avisamos o cliente com a mensagem de fallback.
   if (!openAiSettings.apiKey) {
+    logger.error(`[IA][wbot] Nenhuma API key configurada (companyId=${ticket.companyId}, ticketId=${ticket.id}). Configure em Integrações → Queue Integration.`);
     console.error("[IA][wbot] Nenhuma API key configurada. Configure em Integrações → Queue Integration.");
+    try {
+      await sendTechnicalFallback(wbot, msg, ticket, contact);
+    } catch (fbErr) {
+      logger.error(`[IA][wbot] Falha ao enviar mensagem de fallback por falta de apiKey (ticketId=${ticket.id}):`, fbErr);
+    }
     return;
   }
 
@@ -935,11 +1026,12 @@ export const handleOpenAi = async (
     }
   }
 
-  // Fetch past messages
+  // Fetch past messages — maxMessages pode vir undefined e, sem default,
+  // o findAll carregaria TODAS as mensagens do ticket
   const messages = await Message.findAll({
     where: { ticketId: ticket.id },
     order: [["createdAt", "ASC"]],
-    limit: openAiSettings.maxMessages,
+    limit: openAiSettings.maxMessages || 20,
   });
 
   // Debug: log total de mensagens encontradas
@@ -989,7 +1081,9 @@ export const handleOpenAi = async (
         } catch { }
       }
     }
-  } catch { }
+  } catch (err) {
+    logger.warn(`[IA][RAG] Falha na busca RAG (ticketId=${ticket.id}, companyId=${ticket.companyId}) — seguindo sem contexto RAG:`, err);
+  }
 
   // Debug: log do promptSystem gerado
   console.log("[IA][DEBUG] PromptSystem gerado:", {
@@ -1011,38 +1105,18 @@ export const handleOpenAi = async (
       // Usar IAClientFactory com suporte a Function Calling
       const client = IAClientFactory(provider as any, openAiSettings.apiKey);
 
-      const history = messagesAI
-        .filter(m => m.role !== "system")
-        .map(m => ({ role: m.role as "user" | "assistant", content: m.content }));
+      // Remove duplicata da mensagem atual (inbound persistido entra no
+      // histórico e também vai em `user` para o provider)
+      const history = dedupeTrailingUserMessage(
+        messagesAI
+          .filter(m => m.role !== "system")
+          .map(m => ({ role: m.role as "user" | "assistant", content: m.content })),
+        bodyMessage
+      );
 
-      // Filtrar funções baseado no agentConfig.enabledFunctions
-      let availableFunctions = BOT_AVAILABLE_FUNCTIONS;
-
-      // Funções essenciais que SEMPRE devem estar disponíveis para envio de arquivos
-      const ESSENTIAL_FILE_FUNCTIONS = ["buscar_e_enviar_arquivo", "listar_arquivos_disponiveis"];
-
-      try {
-        const agentConfig = await ResolveAIAgentForTicketService({ ticket });
-
-        // Se enabledFunctions estiver definido E não for vazio, filtrar
-        // MAS sempre adicionar as funções essenciais de arquivos
-        if (agentConfig && agentConfig.enabledFunctions && Array.isArray(agentConfig.enabledFunctions) && agentConfig.enabledFunctions.length > 0) {
-          // Combinar funções habilitadas + funções essenciais
-          const allEnabledFunctions = [...new Set([...agentConfig.enabledFunctions, ...ESSENTIAL_FILE_FUNCTIONS])];
-          
-          availableFunctions = BOT_AVAILABLE_FUNCTIONS.filter(fn =>
-            allEnabledFunctions.includes(fn.name)
-          );
-          console.log(`[AI][Functions] Funções habilitadas: ${agentConfig.enabledFunctions.join(", ")}`);
-          console.log(`[AI][Functions] + Funções essenciais adicionadas: ${ESSENTIAL_FILE_FUNCTIONS.join(", ")}`);
-          console.log(`[AI][Functions] Total: ${availableFunctions.length} de ${BOT_AVAILABLE_FUNCTIONS.length} funções disponíveis`);
-        } else {
-          console.log(`[AI][Functions] Sem filtro de funções - TODAS disponíveis (${BOT_AVAILABLE_FUNCTIONS.length})`);
-        }
-      } catch (err) {
-        console.error(`[AI][Functions] Erro ao filtrar funções:`, err);
-        // Continua com todas as funções em caso de erro
-      }
+      // Filtrar funções baseado no agentConfig.enabledFunctions (helper
+      // compartilhado com o caminho de áudio)
+      const availableFunctions = await resolveEnabledBotFunctions(ticket);
 
       // Usar chatWithFunctions se disponível, senão fallback para chatWithHistory
       if (client.chatWithFunctions) {
@@ -1078,7 +1152,14 @@ export const handleOpenAi = async (
 
 
       if (!responseText) {
+        // Resposta vazia do provider — cliente ficaria sem retorno; envia fallback
+        logger.error(`[IA][wbot] Resposta vazia do provider (ticketId=${ticket.id}, provider=${provider}, model=${openAiSettings.model})`);
         console.error("No response from AI provider");
+        try {
+          await sendTechnicalFallback(wbot, msg, ticket, contact);
+        } catch (fbErr) {
+          logger.error(`[IA][wbot] Falha ao enviar fallback por resposta vazia (ticketId=${ticket.id}):`, fbErr);
+        }
         return;
       }
 
@@ -1096,12 +1177,10 @@ export const handleOpenAi = async (
       await processResponse(responseText, wbot, msg, ticket, contact, openAiSettings, ticketTraking);
     } catch (error: any) {
       console.error("AI request failed:", error);
-      const sentMessage = await wbot.sendMessage(msg.key.remoteJid!, {
-        text: "Desculpe, estou com dificuldades técnicas para processar sua solicitação no momento. Por favor, tente novamente mais tarde.",
-      });
-      const isOfficial = (wbot as any)?.channelType === "official" || (wbot as any)?.isOfficial;
-      if (!isOfficial) {
-        await verifyMessage(sentMessage as any, ticket, contact);
+      try {
+        await sendTechnicalFallback(wbot, msg, ticket, contact);
+      } catch (fbErr) {
+        logger.error(`[IA][wbot] Falha ao enviar fallback técnico (ticketId=${ticket.id}):`, fbErr);
       }
     }
   }
@@ -1125,7 +1204,9 @@ export const handleOpenAi = async (
             return;
           }
         }
-      } catch { }
+      } catch (err) {
+        logger.warn(`[STT] Falha ao verificar sttEnabled da fila (ticketId=${ticket.id}, queueId=${ticket.queueId}):`, err);
+      }
 
       // Resolver caminho do arquivo de áudio no disco.
       // IMPORTANTE: mediaSent.mediaUrl (getter) pode virar URL absoluta.
@@ -1214,7 +1295,9 @@ export const handleOpenAi = async (
           if (transcription) {
             try { console.log("[IA][wbot][transcribe]", { provider: "openai", model: "whisper-1", latencyMs: latency, companyId: ticket.companyId, ticketId: ticket.id }); } catch { }
           }
-        } catch { }
+        } catch (err) {
+          logger.warn(`[STT] Transcrição via IAClientFactory falhou (ticketId=${ticket.id}, provider=openai) — tentando fallback legado:`, err);
+        }
 
         // Fallback para implementação antiga, se necessário
         if (!transcription && openai) {
@@ -1267,14 +1350,21 @@ export const handleOpenAi = async (
                 } catch { }
               }
             }
-          } catch { }
+          } catch (err) {
+            logger.warn(`[IA][RAG] Falha na busca RAG do fluxo de áudio (ticketId=${ticket.id}, companyId=${ticket.companyId}) — seguindo sem contexto RAG:`, err);
+          }
 
           // Responder ao usuário: tenta via Factory com histórico, fallback para método antigo
           try {
             const client = IAClientFactory("openai" as any, openAiSettings.apiKey);
-            const history = messagesAI
-              .filter(m => m.role !== "system")
-              .map(m => ({ role: m.role as "user" | "assistant", content: m.content }));
+            // A transcrição já foi empurrada para messagesAI — dedupe para
+            // não enviá-la 2x (provider recebe a msg atual em `user`)
+            const history = dedupeTrailingUserMessage(
+              messagesAI
+                .filter(m => m.role !== "system")
+                .map(m => ({ role: m.role as "user" | "assistant", content: m.content })),
+              transcription
+            );
             const t0resp = Date.now();
             const responseText = await client.chatWithHistory({
               model: openAiSettings.model,
@@ -1289,9 +1379,12 @@ export const handleOpenAi = async (
               try { console.log("[IA][wbot][audio-reply]", { provider: "openai", model: openAiSettings.model, latencyMs: latency, companyId: ticket.companyId, ticketId: ticket.id }); } catch { }
               await processResponse(responseText, wbot, msg, ticket, contact, openAiSettings, ticketTraking);
             }
-          } catch {
+          } catch (replyErr) {
+            logger.warn(`[IA][wbot][audio-reply] chatWithHistory falhou (ticketId=${ticket.id}) — tentando handleOpenAIRequest:`, replyErr);
             const t0resp = Date.now();
-            const responseText = await handleOpenAIRequest(openai as any, messagesAI, openAiSettings);
+            // Mesmo filtro de enabledFunctions do caminho de texto
+            const audioFunctions = await resolveEnabledBotFunctions(ticket);
+            const responseText = await handleOpenAIRequest(openai as any, messagesAI, openAiSettings, ticket, contact, wbot, audioFunctions);
             if (responseText) {
               const latency = Date.now() - t0resp;
               try { console.log("[IA][wbot][audio-reply]", { provider: "openai", model: openAiSettings.model, latencyMs: latency, companyId: ticket.companyId, ticketId: ticket.id }); } catch { }
@@ -1311,7 +1404,9 @@ export const handleOpenAi = async (
           if (transcription) {
             try { console.log("[IA][wbot][transcribe]", { provider: "gemini", model: openAiSettings.model, latencyMs: latency, companyId: ticket.companyId, ticketId: ticket.id }); } catch { }
           }
-        } catch { }
+        } catch (err) {
+          logger.warn(`[STT] Transcrição via IAClientFactory falhou (ticketId=${ticket.id}, provider=gemini) — tentando fallback legado:`, err);
+        }
 
         // Fallback para implementação antiga
         if (!transcription) {
@@ -1371,9 +1466,14 @@ export const handleOpenAi = async (
           // Responder ao usuário: tenta via Factory com histórico, fallback para método antigo
           try {
             const client = IAClientFactory("gemini" as any, openAiSettings.apiKey);
-            const history = messagesAI
-              .filter(m => m.role !== "system")
-              .map(m => ({ role: m.role as "user" | "assistant", content: m.content }));
+            // A transcrição já foi empurrada para messagesAI — dedupe para
+            // não enviá-la 2x (provider recebe a msg atual em `user`)
+            const history = dedupeTrailingUserMessage(
+              messagesAI
+                .filter(m => m.role !== "system")
+                .map(m => ({ role: m.role as "user" | "assistant", content: m.content })),
+              transcription
+            );
             const t0resp = Date.now();
             const responseText = await client.chatWithHistory({
               model: openAiSettings.model,
@@ -1388,7 +1488,8 @@ export const handleOpenAi = async (
               try { console.log("[IA][wbot][audio-reply]", { provider: "gemini", model: openAiSettings.model, latencyMs: latency, companyId: ticket.companyId, ticketId: ticket.id }); } catch { }
               await processResponse(responseText, wbot, msg, ticket, contact, openAiSettings, ticketTraking);
             }
-          } catch {
+          } catch (replyErr) {
+            logger.warn(`[IA][wbot][audio-reply] chatWithHistory falhou (ticketId=${ticket.id}, provider=gemini) — tentando handleGeminiRequest:`, replyErr);
             const t0resp = Date.now();
             const responseText = await handleGeminiRequest(gemini, messagesAI, openAiSettings, transcription, promptSystem);
             if (responseText) {

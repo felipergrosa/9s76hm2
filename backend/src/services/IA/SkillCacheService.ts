@@ -6,6 +6,7 @@
  */
 
 import NodeCache from "node-cache";
+import { Op } from "sequelize";
 import Skill from "../../models/Skill";
 import logger from "../../utils/logger";
 
@@ -76,14 +77,16 @@ class SkillCacheService {
    * Buscar do banco
    */
   private async fetchFromDatabase(companyId: number, agentId?: number): Promise<Skill[]> {
-    const where: any = { 
-      companyId, 
+    const where: any = {
+      companyId,
       enabled: true,
-      status: ["active", "draft"] 
+      status: ["active", "draft"]
     };
-    
+
     if (agentId) {
-      where.agentId = agentId;
+      // Inclui também skills globais da empresa (agentId NULL) — antes só
+      // vinham as do agente, e skills globais nunca chegavam ao prompt.
+      where.agentId = { [Op.or]: [agentId, null] };
     }
 
     return await Skill.findAll({
@@ -125,13 +128,14 @@ class SkillCacheService {
       return true; // Sem cache = precisa atualizar
     }
 
-    // Buscar skills atuais do banco (só hashes)
+    // Buscar skills atuais do banco (só hashes) — mesmo escopo de
+    // fetchFromDatabase: skills do agente + globais (agentId NULL)
     const currentSkills = await Skill.findAll({
-      where: { 
-        companyId, 
+      where: {
+        companyId,
         enabled: true,
         status: ["active", "draft"],
-        ...(agentId && { agentId })
+        ...(agentId && { agentId: { [Op.or]: [agentId, null] } })
       },
       attributes: ["id", "hash"],
       raw: true

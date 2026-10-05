@@ -7,9 +7,23 @@
 
 import { Request, Response } from "express";
 import Skill from "../models/Skill";
+import AIAgent from "../models/AIAgent";
 import { skillWebSocket } from "../services/IA/SkillWebSocketService";
 import { skillCache } from "../services/IA/SkillCacheService";
 import logger from "../utils/logger";
+
+// agentId (quando não null) precisa pertencer à empresa — senão a skill
+// "vaza" para um agente de outro tenant via skillCache.getSkills
+const agentBelongsToCompany = async (
+  agentId: unknown,
+  companyId: number
+): Promise<boolean> => {
+  if (agentId === undefined || agentId === null || agentId === "") return true;
+  const agent = await AIAgent.findOne({
+    where: { id: Number(agentId), companyId }
+  });
+  return !!agent;
+};
 
 interface CreateSkillRequest {
   name: string;
@@ -59,6 +73,13 @@ export const create = async (req: Request, res: Response): Promise<Response> => 
     if (!name || !description || !triggers || triggers.length === 0) {
       return res.status(400).json({
         error: "Nome, descrição e pelo menos um gatilho são obrigatórios"
+      });
+    }
+
+    // agentId (quando informado) deve ser da mesma empresa
+    if (!(await agentBelongsToCompany(agentId, companyId))) {
+      return res.status(400).json({
+        error: "agentId não pertence a esta empresa"
       });
     }
 
@@ -236,6 +257,13 @@ export const fork = async (req: Request, res: Response): Promise<Response> => {
       return res.status(404).json({ error: "Skill original não encontrada" });
     }
 
+    // agentId alvo do fork (quando informado) deve ser da mesma empresa
+    if (!(await agentBelongsToCompany(agentId, companyId))) {
+      return res.status(400).json({
+        error: "agentId não pertence a esta empresa"
+      });
+    }
+
     const forked = await Skill.create({
       companyId,
       agentId: agentId || original.agentId,
@@ -343,6 +371,20 @@ export const importSkills = async (req: Request, res: Response): Promise<Respons
   try {
     if (!Array.isArray(skills) || skills.length === 0) {
       return res.status(400).json({ error: "Array de skills é obrigatório" });
+    }
+
+    // Validar que todos os agentIds (body-level ou por skill) são da empresa
+    const candidateAgentIds = [
+      agentId,
+      ...skills.map((s: any) => s?.agentId)
+    ].filter(a => a !== undefined && a !== null && a !== "");
+
+    for (const candidate of candidateAgentIds) {
+      if (!(await agentBelongsToCompany(candidate, companyId))) {
+        return res.status(400).json({
+          error: `agentId ${candidate} não pertence a esta empresa`
+        });
+      }
     }
 
     const created = [];

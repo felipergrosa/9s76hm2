@@ -39,6 +39,9 @@ export default class OpenAIClient implements IAClient {
         messages.push({ role: m.role, content: m.content });
       });
     }
+    // Última mensagem do usuário a ser respondida (o histórico só traz
+    // turnos anteriores — sem este push a mensagem atual era descartada).
+    if (req.user) messages.push({ role: "user", content: req.user });
 
     const completion = await this.client.chat.completions.create({
       model: req.model,

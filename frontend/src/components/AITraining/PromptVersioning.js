@@ -13,9 +13,6 @@ import {
   Divider,
   IconButton,
   List,
-  ListItem,
-  ListItemSecondaryAction,
-  ListItemText,
   Paper,
   TextField,
   Tooltip,
@@ -35,6 +32,7 @@ import {
   rollbackToVersion,
   compareVersions
 } from "../../services/aiTraining";
+import usePermissions from "../../hooks/usePermissions";
 
 const useStyles = makeStyles((theme) => ({
   container: {
@@ -108,6 +106,8 @@ const useStyles = makeStyles((theme) => ({
 
 const PromptVersioning = ({ agentId, stageId, currentPrompt, onRestore }) => {
   const classes = useStyles();
+  const { hasPermission } = usePermissions();
+  const canEditSettings = hasPermission("ai-settings.edit");
   const [versions, setVersions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showSave, setShowSave] = useState(false);
@@ -123,6 +123,7 @@ const PromptVersioning = ({ agentId, stageId, currentPrompt, onRestore }) => {
     if (agentId && stageId) {
       loadVersions();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentId, stageId]);
 
   const loadVersions = async () => {
@@ -225,7 +226,7 @@ const PromptVersioning = ({ agentId, stageId, currentPrompt, onRestore }) => {
       case "auto":
         return "Automático";
       case "training":
-        return "Training";
+        return "Treinamento";
       default:
         return type;
     }
@@ -328,15 +329,17 @@ const PromptVersioning = ({ agentId, stageId, currentPrompt, onRestore }) => {
                         <VisibilityIcon />
                       </IconButton>
                     </Tooltip>
-                    <Tooltip title="Restaurar esta versão">
-                      <IconButton
-                        size="small"
-                        color="primary"
-                        onClick={() => handleRollback(version)}
-                        disabled={version.isActive || loading}
-                      >
-                        <RestoreIcon />
-                      </IconButton>
+                    <Tooltip title={canEditSettings ? "Restaurar esta versão" : "Requer permissão ai-settings.edit"}>
+                      <span>
+                        <IconButton
+                          size="small"
+                          color="primary"
+                          onClick={() => handleRollback(version)}
+                          disabled={!canEditSettings || version.isActive || loading}
+                        >
+                          <RestoreIcon />
+                        </IconButton>
+                      </span>
                     </Tooltip>
                   </Box>
                 </Box>
@@ -391,17 +394,21 @@ const PromptVersioning = ({ agentId, stageId, currentPrompt, onRestore }) => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setShowPreview(false)}>Fechar</Button>
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={() => {
-              handleRollback(selectedVersion);
-              setShowPreview(false);
-            }}
-            disabled={selectedVersion?.isActive}
-          >
-            Restaurar esta versão
-          </Button>
+          <Tooltip title={canEditSettings ? "" : "Requer permissão ai-settings.edit"}>
+            <span>
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={() => {
+                  handleRollback(selectedVersion);
+                  setShowPreview(false);
+                }}
+                disabled={!canEditSettings || selectedVersion?.isActive}
+              >
+                Restaurar esta versão
+              </Button>
+            </span>
+          </Tooltip>
         </DialogActions>
       </Dialog>
 
