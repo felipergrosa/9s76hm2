@@ -1,14 +1,8 @@
-import {
-  ArrowForwardIos,
-  ContentCopy,
-  Delete,
-  ConfirmationNumber,
-} from "@mui/icons-material";
+import { ContentCopy, Delete } from "@mui/icons-material";
 import React, { memo } from "react";
-import TextField from "@mui/material/TextField";
 import { useNodeStorage } from "../../../stores/useNodeStorage";
 import { Handle } from "react-flow-renderer";
-import { Typography, Box } from "@material-ui/core";
+import { Box } from "@material-ui/core";
 import typebotIcon from "../../../assets/typebot-ico.png";
 
 export default memo(({ data, isConnectable, id }) => {
@@ -17,44 +11,37 @@ export default memo(({ data, isConnectable, id }) => {
   return (
     <div
       style={{
-        backgroundColor: "#ffffff",
-        padding: "8px",
-        borderRadius: "8px",
-        boxShadow: "rgba(0, 0, 0, 0.05) 0px 3px 5px",
-        border: "1px solid rgba(33, 94, 151, 0.25)",
+        background: "#fff",
+        border: "1px solid #E4E7EC",
+        borderLeft: "3px solid #0872b9",
+        borderRadius: 12,
+        padding: "10px 12px",
+        boxShadow: "0 1px 3px rgba(16,24,40,0.08)",
+        minWidth: 170,
+        maxWidth: 220
       }}
     >
       <Handle
         type="target"
         position="left"
         style={{
-          background: "#0872b9",
-          width: "18px",
-          height: "18px",
+          background: "#fff",
+          border: "2px solid #D0D5DD",
+          width: "16px",
+          height: "16px",
           top: "20px",
           left: "-12px",
           cursor: "pointer",
         }}
         onConnect={(params) => console.log("handle onConnect", params)}
         isConnectable={isConnectable}
-      >
-        <ArrowForwardIos
-          sx={{
-            color: "#ffff",
-            width: "10px",
-            height: "10px",
-            marginLeft: "2.9px",
-            marginBottom: "1px",
-            pointerEvents: "none",
-          }}
-        />
-      </Handle>
+      />
       <div
         style={{
           display: "flex",
           position: "absolute",
-          right: 5,
-          top: 5,
+          right: 8,
+          top: 8,
           cursor: "pointer",
           gap: 6,
         }}
@@ -64,7 +51,7 @@ export default memo(({ data, isConnectable, id }) => {
             storageItems.setNodesStorage(id);
             storageItems.setAct("duplicate");
           }}
-          sx={{ width: "12px", height: "12px", color: "#F7953B" }}
+          sx={{ width: "14px", height: "14px", color: "#98A2B3" }}
         />
 
         <Delete
@@ -72,15 +59,15 @@ export default memo(({ data, isConnectable, id }) => {
             storageItems.setNodesStorage(id);
             storageItems.setAct("delete");
           }}
-          sx={{ width: "12px", height: "12px", color: "#F7953B" }}
+          sx={{ width: "14px", height: "14px", color: "#98A2B3" }}
         />
       </div>
       <div
         style={{
-          color: "#ededed",
-          fontSize: "16px",
           flexDirection: "row",
           display: "flex",
+          alignItems: "center",
+          marginBottom: 4,
         }}
       >
         <Box
@@ -88,21 +75,28 @@ export default memo(({ data, isConnectable, id }) => {
           sx={{
             width: 16,
             height: 16,
-            marginRight: 4,
-            marginTop: 4,
-            color: "#3aba38",
+            marginRight: "6px",
           }}
           src={typebotIcon}
           alt="icon"
         />
-        <div style={{ color: "#232323", fontSize: "16px" }}>TypeBot</div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: "#101828" }}>
+          TypeBot
+        </div>
       </div>
-      <div style={{ color: "#232323", fontSize: "12px", width: 180 }}>
+      <div
+        style={{
+          fontSize: 12,
+          color: "#475467",
+          width: 180,
+          wordBreak: "break-word"
+        }}
+      >
         <div
           style={{
-            backgroundColor: "#F6EEEE",
+            backgroundColor: "#F2F4F7",
             marginBottom: "3px",
-            borderRadius: "5px",
+            borderRadius: "6px",
           }}
         >
           <div style={{ gap: "5px", padding: "6px" }}>
@@ -115,26 +109,16 @@ export default memo(({ data, isConnectable, id }) => {
         position="right"
         id="a"
         style={{
-          background: "#0872b9",
-          width: "18px",
-          height: "18px",
+          background: "#fff",
+          border: "2px solid #D0D5DD",
+          width: "16px",
+          height: "16px",
           top: "70%",
           right: "-11px",
           cursor: "pointer",
         }}
         isConnectable={isConnectable}
-      >
-        <ArrowForwardIos
-          sx={{
-            color: "#ffff",
-            width: "10px",
-            height: "10px",
-            marginLeft: "2.9px",
-            marginBottom: "1px",
-            pointerEvents: "none",
-          }}
-        />
-      </Handle>
+      />
     </div>
   );
 });

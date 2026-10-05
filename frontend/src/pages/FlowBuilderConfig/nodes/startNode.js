@@ -1,4 +1,4 @@
-import { ArrowForwardIos, Message, RocketLaunch } from "@mui/icons-material";
+import { RocketLaunch } from "@mui/icons-material";
 import React, { memo } from "react";
 
 import { Handle } from "react-flow-renderer";
@@ -7,35 +7,43 @@ export default memo(({ data, isConnectable }) => {
   return (
     <div
       style={{
-        backgroundColor: "#F9FDF9",
-        padding: "8px",
-        borderRadius: "8px",
-        boxShadow: "rgba(0, 0, 0, 0.05) 0px 3px 5px",
-        border: '1px solid rgba(58, 186, 56, 0.25)'
+        background: "#fff",
+        border: "1px solid #E4E7EC",
+        borderLeft: "3px solid #3ABA38",
+        borderRadius: 12,
+        padding: "10px 12px",
+        boxShadow: "0 1px 3px rgba(16,24,40,0.08)",
+        minWidth: 170,
+        maxWidth: 220
       }}
     >
       <div
         style={{
-          color: "#ededed",
-          fontSize: "16px",
           flexDirection: "row",
-          display: "flex"
+          display: "flex",
+          alignItems: "center",
+          marginBottom: 4
         }}
       >
         <RocketLaunch
           sx={{
             width: "16px",
             height: "16px",
-            marginRight: "4px",
-            marginTop: "4px",
+            marginRight: "6px",
             color: "#3aba38"
           }}
         />
-        <div style={{ color: "#232323", fontSize: "16px" }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: "#101828" }}>
           Inicio do fluxo
         </div>
       </div>
-      <div style={{ color: "#727272", fontSize: "12px" }}>
+      <div
+        style={{
+          fontSize: 12,
+          color: "#475467",
+          wordBreak: "break-word"
+        }}
+      >
         Este bloco marca o inicio do seu fluxo!
       </div>
       <Handle
@@ -43,26 +51,16 @@ export default memo(({ data, isConnectable }) => {
         position="right"
         id="a"
         style={{
-          background: "#0000FF",
-          width: "18px",
-          height: "18px",
+          background: "#fff",
+          border: "2px solid #D0D5DD",
+          width: "16px",
+          height: "16px",
           top: "70%",
           right: "-11px",
           cursor: 'pointer'
         }}
         isConnectable={isConnectable}
-      >
-        <ArrowForwardIos
-          sx={{
-            color: "#ffff",
-            width: "10px",
-            height: "10px",
-            marginLeft: "2.9px",
-            marginBottom: "1px",
-            pointerEvents: 'none'
-          }}
-        />
-      </Handle>
+      />
     </div>
   );
 });

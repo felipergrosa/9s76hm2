@@ -1,13 +1,11 @@
 import React, {
   useState,
   useEffect,
-  useReducer,
   useContext,
   useCallback,
 } from "react";
 import { SiOpenai } from "react-icons/si";
 import typebotIcon from "../../assets/typebot-ico.png";
-import { HiOutlinePuzzle } from "react-icons/hi";
 
 import { toast } from "react-toastify";
 import { useHistory } from "react-router-dom";
@@ -17,6 +15,15 @@ import Paper from "@material-ui/core/Paper";
 import Button from "@material-ui/core/Button";
 
 import audioNode from "./nodes/audioNode";
+import conditionNode from "./nodes/conditionNode";
+import businessHoursNode from "./nodes/businessHoursNode";
+import assignUserNode from "./nodes/assignUserNode";
+import internalNoteNode from "./nodes/internalNoteNode";
+import updateContactNode from "./nodes/updateContactNode";
+import tagNode from "./nodes/tagNode";
+import webhookNode from "./nodes/webhookNode";
+import endNode from "./nodes/endNode";
+import gotoFlowNode from "./nodes/gotoFlowNode";
 import typebotNode from "./nodes/typebotNode";
 import openaiNode from "./nodes/openaiNode";
 import messageNode from "./nodes/messageNode.js";
@@ -37,16 +44,13 @@ import MainContainer from "../../components/MainContainer";
 import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import usePermissions from "../../hooks/usePermissions";
-import {
-  SpeedDial,
-  SpeedDialAction,
-  SpeedDialIcon,
-  Stack,
-  Typography,
-} from "@mui/material";
+import { Stack, Menu, MenuItem, Divider } from "@mui/material";
 import { useParams } from "react-router-dom/cjs/react-router-dom.min";
-import { Box, CircularProgress } from "@material-ui/core";
+import { Box, CircularProgress, Tooltip, IconButton } from "@material-ui/core";
 import BallotIcon from '@mui/icons-material/Ballot';
+import MoreVertIcon from "@mui/icons-material/MoreVert";
+import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
+import FlowBuilderGuide from "../../components/FlowBuilderGuide";
 
 import "reactflow/dist/style.css";
 import "./flowbuilder.css";
@@ -57,8 +61,6 @@ import ReactFlow, {
   useNodesState,
   useEdgesState,
   addEdge,
-  onElementsRemove,
-  useReactFlow,
 } from "react-flow-renderer";
 import FlowBuilderAddTextModal from "../../components/FlowBuilderAddTextModal";
 import FlowBuilderIntervalModal from "../../components/FlowBuilderIntervalModal";
@@ -66,15 +68,19 @@ import FlowBuilderConditionModal from "../../components/FlowBuilderConditionModa
 import FlowBuilderMenuModal from "../../components/FlowBuilderMenuModal";
 import {
   AccessTime,
+  AccountTree,
   CallSplit,
+  ContactPage,
   DynamicFeed,
-  Image,
+  Http,
   ImportExport,
   LibraryBooks,
-  Message,
-  MicNone,
+  LocalOffer,
+  PersonPin,
   RocketLaunch,
-  Videocam,
+  Schedule,
+  StickyNote2,
+  StopCircle,
 } from "@mui/icons-material";
 import RemoveEdge from "./nodes/removeEdge";
 import FlowBuilderAddImgModal from "../../components/FlowBuilderAddImgModal";
@@ -86,12 +92,20 @@ import FlowBuilderRandomizerModal from "../../components/FlowBuilderRandomizerMo
 import FlowBuilderAddVideoModal from "../../components/FlowBuilderAddVideoModal";
 import FlowBuilderSingleBlockModal from "../../components/FlowBuilderSingleBlockModal";
 import singleBlockNode from "./nodes/singleBlockNode";
-import { colorPrimary } from "../../styles/styles";
 import ticketNode from "./nodes/ticketNode";
 import { ConfirmationNumber } from "@material-ui/icons";
 import FlowBuilderTypebotModal from "../../components/FlowBuilderAddTypebotModal";
 import FlowBuilderOpenAIModal from "../../components/FlowBuilderAddOpenAIModal";
 import FlowBuilderAddQuestionModal from "../../components/FlowBuilderAddQuestionModal";
+import FlowBuilderTagModal from "../../components/FlowBuilderTagModal";
+import FlowBuilderWebhookModal from "../../components/FlowBuilderWebhookModal";
+import FlowBuilderEndModal from "../../components/FlowBuilderEndModal";
+import FlowBuilderGotoFlowModal from "../../components/FlowBuilderGotoFlowModal";
+import FlowBuilderBusinessHoursModal from "../../components/FlowBuilderBusinessHoursModal";
+import FlowBuilderAssignUserModal from "../../components/FlowBuilderAssignUserModal";
+import FlowBuilderInternalNoteModal from "../../components/FlowBuilderInternalNoteModal";
+import FlowBuilderUpdateContactModal from "../../components/FlowBuilderUpdateContactModal";
+import FlowValidationDialog from "../../components/FlowValidationDialog";
 import GetAppIcon from "@mui/icons-material/GetApp";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import { exportFlow } from "../../services/flowBuilder";
@@ -100,14 +114,100 @@ import FlowImportModal from "../../components/FlowImportModal";
 const useStyles = makeStyles((theme) => ({
   mainPaper: {
     flex: 1,
-    padding: theme.spacing(1),
+    padding: 0,
     position: "relative",
-    backgroundColor: "#F8F9FA",
-    overflowY: "scroll",
+    backgroundColor:
+      theme.palette.type === "dark" ? theme.palette.background.default : "#F8F9FA",
+    overflow: "hidden",
+    display: "flex",
+    flexDirection: "row",
+    borderRadius: 12,
+    border: `1px solid ${theme.palette.divider}`,
+  },
+  palette: {
+    width: 232,
+    flexShrink: 0,
+    borderRight: `1px solid ${theme.palette.divider}`,
+    backgroundColor: theme.palette.background.paper,
+    overflowY: "auto",
+    display: "flex",
+    flexDirection: "column",
     ...theme.scrollbarStyles,
   },
-  speeddial: {
-    backgroundColor: "red",
+  paletteHeader: {
+    padding: theme.spacing(1.5, 2, 1),
+    fontSize: "0.72rem",
+    fontWeight: 700,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+    color: theme.palette.text.secondary,
+  },
+  paletteCategory: {
+    padding: theme.spacing(1, 2, 0.5),
+    fontSize: "0.68rem",
+    fontWeight: 700,
+    letterSpacing: "0.06em",
+    textTransform: "uppercase",
+    color: theme.palette.text.disabled,
+  },
+  paletteItem: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1.25),
+    margin: theme.spacing(0, 1, 0.5),
+    padding: theme.spacing(1, 1.25),
+    borderRadius: 10,
+    border: `1px solid ${theme.palette.divider}`,
+    backgroundColor: theme.palette.background.paper,
+    cursor: "grab",
+    transition: "box-shadow 120ms ease, border-color 120ms ease",
+    "&:hover": {
+      borderColor: theme.palette.primary.main,
+      boxShadow: "0 2px 6px rgba(16,24,40,0.08)",
+    },
+    "&:active": {
+      cursor: "grabbing",
+    },
+  },
+  paletteItemIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  paletteItemTitle: {
+    fontSize: "0.8rem",
+    fontWeight: 600,
+    color: theme.palette.text.primary,
+    lineHeight: 1.2,
+  },
+  paletteItemDesc: {
+    fontSize: "0.68rem",
+    color: theme.palette.text.secondary,
+    lineHeight: 1.25,
+  },
+  canvasHint: {
+    position: "absolute",
+    top: "50%",
+    left: "50%",
+    transform: "translate(-40%, -50%)",
+    zIndex: 5,
+    pointerEvents: "none",
+    textAlign: "center",
+    color: theme.palette.text.secondary,
+    fontSize: "0.9rem",
+    maxWidth: 340,
+    lineHeight: 1.5,
+    padding: theme.spacing(2, 3),
+    borderRadius: 12,
+    backgroundColor:
+      theme.palette.type === "dark"
+        ? "rgba(0,0,0,0.35)"
+        : "rgba(255,255,255,0.85)",
+    border: `1px dashed ${theme.palette.divider}`,
   },
 }));
 
@@ -137,6 +237,15 @@ const nodeTypes = {
   typebot: typebotNode,
   openai: openaiNode,
   question: questionNode,
+  condition: conditionNode,
+  businessHours: businessHoursNode,
+  assignUser: assignUserNode,
+  internalNote: internalNoteNode,
+  updateContact: updateContactNode,
+  tag: tagNode,
+  webhook: webhookNode,
+  end: endNode,
+  gotoFlow: gotoFlowNode,
 };
 
 const edgeTypes = {
@@ -167,9 +276,7 @@ export const FlowBuilderConfig = () => {
   const canEdit = hasPermission("flowbuilder.edit");
 
   const [loading, setLoading] = useState(false);
-  const [pageNumber, setPageNumber] = useState(1);
   const [dataNode, setDataNode] = useState(null);
-  const [hasMore, setHasMore] = useState(false);
   const [modalAddText, setModalAddText] = useState(null);
   const [modalAddInterval, setModalAddInterval] = useState(false);
   const [modalAddMenu, setModalAddMenu] = useState(null);
@@ -182,15 +289,40 @@ export const FlowBuilderConfig = () => {
   const [modalAddTypebot, setModalAddTypebot] = useState(null);
   const [modalAddOpenAI, setModalAddOpenAI] = useState(null);
   const [modalAddQuestion, setModalAddQuestion] = useState(null);
+  const [modalAddCondition, setModalAddCondition] = useState(null);
+  const [modalAddBusinessHours, setModalAddBusinessHours] = useState(null);
+  const [modalAddAssignUser, setModalAddAssignUser] = useState(null);
+  const [modalAddInternalNote, setModalAddInternalNote] = useState(null);
+  const [modalAddUpdateContact, setModalAddUpdateContact] = useState(null);
+  const [modalAddTag, setModalAddTag] = useState(null);
+  const [modalAddWebhook, setModalAddWebhook] = useState(null);
+  const [modalAddEnd, setModalAddEnd] = useState(null);
+  const [modalAddGotoFlow, setModalAddGotoFlow] = useState(null);
+  const [validationIssues, setValidationIssues] = useState(null);
   const [importModal, setImportModal] = useState(false);
   const [flowStatus, setFlowStatus] = useState("published"); // item 9 do plano: draft/published
-
-  const connectionLineStyle = { stroke: "#2b2b2b", strokeWidth: "6px" };
+  const [rfInstance, setRfInstance] = useState(null);
+  const [dropPosition, setDropPosition] = useState(null);
+  const [dirty, setDirty] = useState(false);
+  const [menuAnchor, setMenuAnchor] = useState(null);
+  const [guideOpen, setGuideOpen] = useState(() => {
+    try {
+      return !localStorage.getItem("flowbuilder_guide_seen");
+    } catch {
+      return false;
+    }
+  });
 
   const addNode = (type, data) => {
-    const posY = nodes[nodes.length - 1].position.y;
-    const posX =
-      nodes[nodes.length - 1].position.x + nodes[nodes.length - 1].width + 40;
+    // Se o bloco veio de drag-and-drop, usa a posição do drop; senão
+    // posiciona ao lado do último nó (comportamento legado).
+    const posY = dropPosition
+      ? dropPosition.y
+      : nodes[nodes.length - 1].position.y;
+    const posX = dropPosition
+      ? dropPosition.x
+      : nodes[nodes.length - 1].position.x + nodes[nodes.length - 1].width + 40;
+    setDirty(true);
     if (type === "start") {
       return setNodes((old) => {
         return [
@@ -384,58 +516,111 @@ export const FlowBuilderConfig = () => {
         ];
       });
     }
+
+    // Tipos novos (tag, webhook, end, gotoFlow) seguem o padrão genérico:
+    // data carrega o payload inteiro configurado no modal.
+    return setNodes((old) => {
+      return [
+        ...old,
+        {
+          id: geraStringAleatoria(30),
+          position: { x: posX, y: posY },
+          data: { ...data },
+          type,
+        },
+      ];
+    });
+  };
+
+  // Após criar o nó, limpa a posição pendente de drop para não afetar
+  // blocos adicionados depois por clique.
+  const addAndResetDrop = (type, data) => {
+    addNode(type, data);
+    setDropPosition(null);
   };
 
   const textAdd = (data) => {
-    addNode("text", data);
+    addAndResetDrop("text", data);
   };
 
   const intervalAdd = (data) => {
-    addNode("interval", data);
+    addAndResetDrop("interval", data);
   };
 
   const conditionAdd = (data) => {
-    addNode("condition", data);
+    addAndResetDrop("condition", data);
   };
 
   const menuAdd = (data) => {
-    addNode("menu", data);
+    addAndResetDrop("menu", data);
   };
 
   const imgAdd = (data) => {
-    addNode("img", data);
+    addAndResetDrop("img", data);
   };
 
   const audioAdd = (data) => {
-    addNode("audio", data);
+    addAndResetDrop("audio", data);
   };
 
   const randomizerAdd = (data) => {
-    addNode("randomizer", data);
+    addAndResetDrop("randomizer", data);
   };
 
   const videoAdd = (data) => {
-    addNode("video", data);
+    addAndResetDrop("video", data);
   };
 
   const singleBlockAdd = (data) => {
-    addNode("singleBlock", data);
+    addAndResetDrop("singleBlock", data);
   };
 
   const ticketAdd = (data) => {
-    addNode("ticket", data);
+    addAndResetDrop("ticket", data);
   };
 
   const typebotAdd = (data) => {
-    addNode("typebot", data);
+    addAndResetDrop("typebot", data);
   };
 
   const openaiAdd = (data) => {
-    addNode("openai", data);
+    addAndResetDrop("openai", data);
   };
 
   const questionAdd = (data) => {
-    addNode("question", data);
+    addAndResetDrop("question", data);
+  };
+
+  const businessHoursAdd = (data) => {
+    addAndResetDrop("businessHours", data);
+  };
+
+  const assignUserAdd = (data) => {
+    addAndResetDrop("assignUser", data);
+  };
+
+  const internalNoteAdd = (data) => {
+    addAndResetDrop("internalNote", data);
+  };
+
+  const updateContactAdd = (data) => {
+    addAndResetDrop("updateContact", data);
+  };
+
+  const tagAdd = (data) => {
+    addAndResetDrop("tag", data);
+  };
+
+  const webhookAdd = (data) => {
+    addAndResetDrop("webhook", data);
+  };
+
+  const endAdd = (data) => {
+    addAndResetDrop("end", data);
+  };
+
+  const gotoFlowAdd = (data) => {
+    addAndResetDrop("gotoFlow", data);
   };
 
   useEffect(() => {
@@ -499,25 +684,36 @@ export const FlowBuilderConfig = () => {
     }
   }, [storageItems.action]);
 
-  const loadMore = () => {
-    setPageNumber((prevState) => prevState + 1);
-  };
+  const [nodes, setNodes, onNodesChangeRaw] = useNodesState(initialNodes);
+  const [edges, setEdges, onEdgesChangeRaw] = useEdgesState(initialEdges);
 
-  const handleScroll = (e) => {
-    if (!hasMore || loading) return;
-    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
-    if (scrollHeight - (scrollTop + 100) < clientHeight) {
-      loadMore();
-    }
-  };
+  // Marca "não salvo" apenas para mudanças reais (posição/remover/adicionar),
+  // ignorando seleção/dimensão para não acender o indicador ao só clicar.
+  const onNodesChange = useCallback(
+    (changes) => {
+      if (changes.some((c) => !["select", "dimensions"].includes(c.type))) {
+        setDirty(true);
+      }
+      onNodesChangeRaw(changes);
+    },
+    [onNodesChangeRaw]
+  );
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const onEdgesChange = useCallback(
+    (changes) => {
+      if (changes.some((c) => !["select"].includes(c.type))) {
+        setDirty(true);
+      }
+      onEdgesChangeRaw(changes);
+    },
+    [onEdgesChangeRaw]
+  );
 
   const onConnect = useCallback(
     (params) =>
-      setEdges((eds) =>
-        addEdge(
+      setEdges((eds) => {
+        setDirty(true);
+        return addEdge(
           {
             ...params,
             type: "buttonedge", // garante que use RemoveEdge
@@ -530,9 +726,41 @@ export const FlowBuilderConfig = () => {
             }
           },
           eds
-        )
-      ),
+        );
+      }),
     [setEdges]
+  );
+
+  // Drag & drop da paleta: react-flow-renderer usa project() para converter
+  // coordenadas da tela em coordenadas do canvas.
+  const onDragStart = (event, nodeType) => {
+    event.dataTransfer.setData("application/reactflow", nodeType);
+    event.dataTransfer.effectAllowed = "move";
+  };
+
+  const onDragOver = useCallback((event) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+  }, []);
+
+  const onDrop = useCallback(
+    (event) => {
+      event.preventDefault();
+      const type = event.dataTransfer.getData("application/reactflow");
+      if (!type || !rfInstance) return;
+      const bounds = event.target
+        .closest(".react-flow")
+        .getBoundingClientRect();
+      const position = rfInstance.project({
+        x: event.clientX - bounds.left,
+        y: event.clientY - bounds.top,
+      });
+      setDropPosition(position);
+      clickActions(type);
+    },
+    // clickActions depende dos setters de modal — estáveis por referência.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rfInstance]
   );
 
 
@@ -548,6 +776,7 @@ export const FlowBuilderConfig = () => {
     await api
       .post("/flowbuilder/flow", payload)
       .then((res) => {
+        setDirty(false);
         if (status === "draft" || status === "published") {
           setFlowStatus(status);
           toast.success(
@@ -596,24 +825,37 @@ export const FlowBuilderConfig = () => {
     if (node.type === "question") {
       setModalAddQuestion("edit");
     }
+    if (node.type === "condition") {
+      setModalAddCondition("edit");
+    }
+    if (node.type === "businessHours") {
+      setModalAddBusinessHours("edit");
+    }
+    if (node.type === "assignUser") {
+      setModalAddAssignUser("edit");
+    }
+    if (node.type === "internalNote") {
+      setModalAddInternalNote("edit");
+    }
+    if (node.type === "updateContact") {
+      setModalAddUpdateContact("edit");
+    }
+    if (node.type === "tag") {
+      setModalAddTag("edit");
+    }
+    if (node.type === "webhook") {
+      setModalAddWebhook("edit");
+    }
+    if (node.type === "end") {
+      setModalAddEnd("edit");
+    }
+    if (node.type === "gotoFlow") {
+      setModalAddGotoFlow("edit");
+    }
   };
 
-  const clickNode = (event, node) => {
-    setNodes((old) =>
-      old.map((item) => {
-        if (item.id === node.id) {
-          return {
-            ...item,
-            style: { backgroundColor: "#0000FF", padding: 1, borderRadius: 8 },
-          };
-        }
-        return {
-          ...item,
-          style: { backgroundColor: "#13111C", padding: 0, borderRadius: 8 },
-        };
-      })
-    );
-  };
+  // Seleção de nó usa a classe .selected do react-flow (estilizada no CSS),
+  // sem sobrescrever o style do card — antes o clique pintava fundo azul.
   const clickEdge = (event, edge) => {
     setEdges((edges) =>
       edges.map((e) =>
@@ -648,112 +890,291 @@ export const FlowBuilderConfig = () => {
     setModalAddMenu(null);
     setModalAddOpenAI(null);
     setModalAddTypebot(null);
+    setModalAddCondition(null);
+    setModalAddBusinessHours(null);
+    setModalAddAssignUser(null);
+    setModalAddInternalNote(null);
+    setModalAddUpdateContact(null);
+    setModalAddTag(null);
+    setModalAddWebhook(null);
+    setModalAddEnd(null);
+    setModalAddGotoFlow(null);
   };
 
-  const actions = [
+  // Validação pré-publish no estilo ManyChat: blocos órfãos, início sem
+  // saída, opções de menu sem destino e condição sem os dois ramos.
+  const validateFlow = () => {
+    const issues = [];
+    const labelOf = (n) => {
+      const names = {
+        start: "Início",
+        message: "Mensagem",
+        singleBlock: "Conteúdo",
+        menu: "Menu",
+        question: "Pergunta",
+        condition: "Condição",
+        businessHours: "Horário comercial",
+        randomizer: "Randomizador",
+        interval: "Intervalo",
+        ticket: "Ticket",
+        assignUser: "Atribuir atendente",
+        tag: "Tag",
+        internalNote: "Nota interna",
+        updateContact: "Atualizar contato",
+        webhook: "Webhook",
+        end: "Fim do fluxo",
+        gotoFlow: "Ir para fluxo",
+        openai: "OpenAI",
+        typebot: "TypeBot",
+        img: "Imagem",
+        audio: "Áudio",
+        video: "Vídeo",
+      };
+      const base = names[n.type] || n.type;
+      const detail =
+        n.data?.label || n.data?.message || n.data?.key || "";
+      return detail ? `${base} (“${String(detail).slice(0, 30)}”)` : base;
+    };
+
+    const startNodes = nodes.filter((n) => n.type === "start");
+    if (startNodes.length === 0) {
+      issues.push("O fluxo não tem bloco de Início.");
+    } else {
+      startNodes.forEach((s) => {
+        if (!edges.some((e) => e.source === s.id)) {
+          issues.push("O bloco Início não está conectado a nenhum próximo passo.");
+        }
+      });
+    }
+
+    nodes.forEach((n) => {
+      if (n.type === "start") return;
+      if (!edges.some((e) => e.target === n.id)) {
+        issues.push(
+          `Bloco ${labelOf(n)} não tem conexão de entrada — nunca será executado.`
+        );
+      }
+    });
+
+    nodes
+      .filter((n) => n.type === "menu")
+      .forEach((n) => {
+        (n.data?.arrayOption || []).forEach((opt) => {
+          const handle = `a${opt.number}`;
+          if (
+            !edges.some(
+              (e) => e.source === n.id && e.sourceHandle === handle
+            )
+          ) {
+            issues.push(
+              `Menu “${String(n.data?.message || "").slice(0, 30)}”: a opção [${opt.number}] não tem destino.`
+            );
+          }
+        });
+      });
+
+    nodes
+      .filter((n) => n.type === "condition" || n.type === "businessHours")
+      .forEach((n) => {
+        const [aLabel, bLabel] =
+          n.type === "businessHours"
+            ? ["Dentro do horário", "Fora do horário"]
+            : ["Verdadeiro", "Falso"];
+        ["a", "b"].forEach((h) => {
+          if (!edges.some((e) => e.source === n.id && e.sourceHandle === h)) {
+            issues.push(
+              `${labelOf(n)}: falta conectar a saída ${
+                h === "a" ? aLabel : bLabel
+              }.`
+            );
+          }
+        });
+      });
+
+    nodes
+      .filter((n) => n.type === "randomizer")
+      .forEach((n) => {
+        ["a", "b"].forEach((h) => {
+          if (!edges.some((e) => e.source === n.id && e.sourceHandle === h)) {
+            issues.push(
+              `Randomizador: falta conectar a saída ${h === "a" ? "A" : "B"}.`
+            );
+          }
+        });
+      });
+
+    return issues;
+  };
+
+  const handlePublish = () => {
+    const issues = validateFlow();
+    if (issues.length > 0) {
+      setValidationIssues(issues);
+      return;
+    }
+    saveFlow("published");
+  };
+
+  // Paleta de blocos no estilo ManyChat: categorias + nome + descrição,
+  // suportando clique para adicionar e drag-and-drop para o canvas.
+  const paletteGroups = [
     {
-      icon: (
-        <RocketLaunch
-          sx={{
-            color: "#3ABA38",
-          }}
-        />
-      ),
-      name: "Inicio",
-      type: "start",
+      category: "Fluxo",
+      items: [
+        {
+          icon: <RocketLaunch sx={{ color: "#3ABA38" }} />,
+          color: "#3ABA38",
+          name: "Início",
+          desc: "Ponto de entrada do fluxo",
+          type: "start",
+        },
+        {
+          icon: <AccessTime sx={{ color: "#F7953B" }} />,
+          color: "#F7953B",
+          name: "Intervalo",
+          desc: "Aguarda antes do próximo passo",
+          type: "interval",
+        },
+        {
+          icon: <AccountTree sx={{ color: "#0EA5E9" }} />,
+          color: "#0EA5E9",
+          name: "Ir para fluxo",
+          desc: "Continua em outro fluxo publicado",
+          type: "gotoFlow",
+        },
+        {
+          icon: <StopCircle sx={{ color: "#B42318" }} />,
+          color: "#B42318",
+          name: "Fim do fluxo",
+          desc: "Encerra a automação (ou o ticket)",
+          type: "end",
+        },
+      ],
     },
     {
-      icon: (
-        <LibraryBooks
-          sx={{
-            color: "#EC5858",
-          }}
-        />
-      ),
-      name: "Conteúdo",
-      type: "content",
+      category: "Mensagens",
+      items: [
+        {
+          icon: <LibraryBooks sx={{ color: "#EC5858" }} />,
+          color: "#EC5858",
+          name: "Conteúdo",
+          desc: "Texto, imagem, áudio e vídeo em sequência",
+          type: "content",
+        },
+        {
+          icon: <DynamicFeed sx={{ color: "#683AC8" }} />,
+          color: "#683AC8",
+          name: "Menu",
+          desc: "Opções numeradas para o contato escolher",
+          type: "menu",
+        },
+        {
+          icon: <BallotIcon sx={{ color: "#0E9F8A" }} />,
+          color: "#0E9F8A",
+          name: "Pergunta",
+          desc: "Captura resposta em variável",
+          type: "question",
+        },
+      ],
     },
     {
-      icon: (
-        <DynamicFeed
-          sx={{
-            color: "#683AC8",
-          }}
-        />
-      ),
-      name: "Menu",
-      type: "menu",
+      category: "Lógica",
+      items: [
+        {
+          icon: <ImportExport sx={{ color: "#6366F1" }} />,
+          color: "#6366F1",
+          name: "Condição",
+          desc: "Desvia o fluxo conforme variável",
+          type: "condition",
+        },
+        {
+          icon: <Schedule sx={{ color: "#0891B2" }} />,
+          color: "#0891B2",
+          name: "Horário comercial",
+          desc: "Desvia conforme dia e horário",
+          type: "businessHours",
+        },
+        {
+          icon: <CallSplit sx={{ color: "#1FBADC" }} />,
+          color: "#1FBADC",
+          name: "Randomizador",
+          desc: "Divide o fluxo por porcentagem (A/B)",
+          type: "random",
+        },
+      ],
     },
     {
-      icon: (
-        <CallSplit
-          sx={{
-            color: "#1FBADC",
-          }}
-        />
-      ),
-      name: "Randomizador",
-      type: "random",
+      category: "Atendimento",
+      items: [
+        {
+          icon: <ConfirmationNumber sx={{ color: "#B42318" }} />,
+          color: "#B42318",
+          name: "Ticket",
+          desc: "Direciona para uma fila de atendimento",
+          type: "ticket",
+        },
+        {
+          icon: <PersonPin sx={{ color: "#16A34A" }} />,
+          color: "#16A34A",
+          name: "Atribuir atendente",
+          desc: "Passa o ticket para um usuário",
+          type: "assignUser",
+        },
+        {
+          icon: <LocalOffer sx={{ color: "#8B5CF6" }} />,
+          color: "#8B5CF6",
+          name: "Tag",
+          desc: "Adiciona ou remove tag do contato",
+          type: "tag",
+        },
+        {
+          icon: <StickyNote2 sx={{ color: "#D97706" }} />,
+          color: "#D97706",
+          name: "Nota interna",
+          desc: "Comentário visível só para a equipe",
+          type: "internalNote",
+        },
+        {
+          icon: <ContactPage sx={{ color: "#7C3AED" }} />,
+          color: "#7C3AED",
+          name: "Atualizar contato",
+          desc: "Grava campo no cadastro do contato",
+          type: "updateContact",
+        },
+      ],
     },
     {
-      icon: (
-        <AccessTime
-          sx={{
-            color: "#F7953B",
-          }}
-        />
-      ),
-      name: "Intervalo",
-      type: "interval",
-    },
-    {
-      icon: (
-        <ConfirmationNumber
-          sx={{
-            color: "#F7953B",
-          }}
-        />
-      ),
-      name: "Ticket",
-      type: "ticket",
-    },
-    {
-      icon: (
-        <Box
-          component="img"
-          sx={{
-            width: 24,
-            height: 24,
-            color: "#3aba38",
-          }}
-          src={typebotIcon}
-          alt="icon"
-        />
-      ),
-      name: "TypeBot",
-      type: "typebot",
-    },
-    {
-      icon: (
-        <SiOpenai
-          sx={{
-            color: "#F7953B",
-          }}
-        />
-      ),
-      name: "OpenAI",
-      type: "openai",
-    },
-    {
-      icon: (
-        <BallotIcon
-          sx={{
-            color: "#F7953B",
-          }}
-        />
-      ),
-      name: "Pergunta",
-      type: "question",
+      category: "Integrações",
+      items: [
+        {
+          icon: <SiOpenai style={{ color: "#101828" }} />,
+          color: "#101828",
+          name: "OpenAI",
+          desc: "Resposta gerada por IA",
+          type: "openai",
+        },
+        {
+          icon: <Http sx={{ color: "#F97316" }} />,
+          color: "#F97316",
+          name: "Webhook",
+          desc: "Chama API externa e guarda o retorno",
+          type: "webhook",
+        },
+        {
+          icon: (
+            <Box
+              component="img"
+              sx={{ width: 22, height: 22 }}
+              src={typebotIcon}
+              alt="Typebot"
+            />
+          ),
+          color: "#3B82F6",
+          name: "TypeBot",
+          desc: "Executa um bot do Typebot",
+          type: "typebot",
+        },
+      ],
     },
   ];
 
@@ -785,6 +1206,34 @@ export const FlowBuilderConfig = () => {
         break;
       case "question":
         setModalAddQuestion("create");
+        break;
+      case "condition":
+        setModalAddCondition("create");
+        break;
+      case "businessHours":
+        setModalAddBusinessHours("create");
+        break;
+      case "assignUser":
+        setModalAddAssignUser("create");
+        break;
+      case "internalNote":
+        setModalAddInternalNote("create");
+        break;
+      case "updateContact":
+        setModalAddUpdateContact("create");
+        break;
+      case "tag":
+        setModalAddTag("create");
+        break;
+      case "webhook":
+        setModalAddWebhook("create");
+        break;
+      case "end":
+        setModalAddEnd("create");
+        break;
+      case "gotoFlow":
+        setModalAddGotoFlow("create");
+        break;
       default:
     }
   };
@@ -878,11 +1327,106 @@ export const FlowBuilderConfig = () => {
         onUpdate={updateNode}
         close={setModalAddQuestion}
       />
+
+      <FlowBuilderConditionModal
+        open={modalAddCondition}
+        onSave={conditionAdd}
+        data={dataNode}
+        onUpdate={updateNode}
+        close={setModalAddCondition}
+      />
+
+      <FlowBuilderTagModal
+        open={modalAddTag}
+        onSave={tagAdd}
+        data={dataNode}
+        onUpdate={updateNode}
+        close={setModalAddTag}
+      />
+
+      <FlowBuilderWebhookModal
+        open={modalAddWebhook}
+        onSave={webhookAdd}
+        data={dataNode}
+        onUpdate={updateNode}
+        close={setModalAddWebhook}
+      />
+
+      <FlowBuilderEndModal
+        open={modalAddEnd}
+        onSave={endAdd}
+        data={dataNode}
+        onUpdate={updateNode}
+        close={setModalAddEnd}
+      />
+
+      <FlowBuilderGotoFlowModal
+        open={modalAddGotoFlow}
+        onSave={gotoFlowAdd}
+        data={dataNode}
+        onUpdate={updateNode}
+        close={setModalAddGotoFlow}
+        currentFlowId={id}
+      />
+
+      <FlowBuilderBusinessHoursModal
+        open={modalAddBusinessHours}
+        onSave={businessHoursAdd}
+        data={dataNode}
+        onUpdate={updateNode}
+        close={setModalAddBusinessHours}
+      />
+
+      <FlowBuilderAssignUserModal
+        open={modalAddAssignUser}
+        onSave={assignUserAdd}
+        data={dataNode}
+        onUpdate={updateNode}
+        close={setModalAddAssignUser}
+      />
+
+      <FlowBuilderInternalNoteModal
+        open={modalAddInternalNote}
+        onSave={internalNoteAdd}
+        data={dataNode}
+        onUpdate={updateNode}
+        close={setModalAddInternalNote}
+      />
+
+      <FlowBuilderUpdateContactModal
+        open={modalAddUpdateContact}
+        onSave={updateContactAdd}
+        data={dataNode}
+        onUpdate={updateNode}
+        close={setModalAddUpdateContact}
+      />
+
+      <FlowValidationDialog
+        issues={validationIssues}
+        onClose={() => setValidationIssues(null)}
+        onPublishAnyway={() => {
+          setValidationIssues(null);
+          saveFlow("published");
+        }}
+      />
+
       <FlowImportModal open={importModal} onClose={() => setImportModal(false)} />
+
+      <FlowBuilderGuide
+        open={guideOpen}
+        onClose={(dontShowAgain) => {
+          if (dontShowAgain) {
+            try {
+              localStorage.setItem("flowbuilder_guide_seen", "1");
+            } catch {}
+          }
+          setGuideOpen(false);
+        }}
+      />
 
       <MainHeader>
         <Box display="flex" alignItems="center" gap={1}>
-          <Title>Desenhe seu fluxo</Title>
+          <Title>Construtor de fluxo</Title>
           {id && (
             <Box
               component="span"
@@ -898,46 +1442,89 @@ export const FlowBuilderConfig = () => {
               {flowStatus === "draft" ? "Rascunho" : "Publicado"}
             </Box>
           )}
+          {dirty && (
+            <Box
+              component="span"
+              sx={{
+                fontSize: 12,
+                fontWeight: 600,
+                padding: "2px 8px",
+                borderRadius: 8,
+                backgroundColor: "#fdecea",
+                color: "#b3261e",
+              }}
+            >
+              Alterações não salvas
+            </Box>
+          )}
         </Box>
         <MainHeaderButtonsWrapper>
-          {canCreate && (
-            <Button
-              variant="contained"
-              color="primary"
-              sx={{ textTransform: "none", mr: 1 }}
-              startIcon={<UploadFileIcon />}
-              onClick={() => setImportModal(true)}
+          <Tooltip title="Ajuda: como montar um fluxo">
+            <IconButton
+              size="small"
+              onClick={() => setGuideOpen(true)}
+              aria-label="Ajuda do construtor de fluxo"
             >
-              Importar
-            </Button>
+              <HelpOutlineIcon />
+            </IconButton>
+          </Tooltip>
+          {(canCreate || canEdit) && (
+            <>
+              <Tooltip title="Mais ações">
+                <IconButton
+                  size="small"
+                  onClick={(e) => setMenuAnchor(e.currentTarget)}
+                  aria-label="Mais ações do fluxo"
+                >
+                  <MoreVertIcon />
+                </IconButton>
+              </Tooltip>
+              <Menu
+                anchorEl={menuAnchor}
+                open={Boolean(menuAnchor)}
+                onClose={() => setMenuAnchor(null)}
+              >
+                {canCreate && (
+                  <MenuItem
+                    onClick={() => {
+                      setMenuAnchor(null);
+                      setImportModal(true);
+                    }}
+                  >
+                    <UploadFileIcon fontSize="small" sx={{ mr: 1 }} />
+                    Importar fluxo
+                  </MenuItem>
+                )}
+                <MenuItem
+                  onClick={() => {
+                    setMenuAnchor(null);
+                    exportFlow(id);
+                  }}
+                >
+                  <GetAppIcon fontSize="small" sx={{ mr: 1 }} />
+                  Exportar fluxo
+                </MenuItem>
+                {canEdit && (
+                  <MenuItem
+                    onClick={() => {
+                      setMenuAnchor(null);
+                      saveFlow("draft");
+                    }}
+                  >
+                    Salvar como rascunho
+                  </MenuItem>
+                )}
+              </Menu>
+            </>
           )}
-          <Button
-            variant="contained"
-            color="primary"
-            sx={{ textTransform: "none", mr: 1 }}
-            startIcon={<GetAppIcon />}
-            onClick={() => exportFlow(id)}
-          >
-            Exportar
-          </Button>
           {canEdit && (
             <Button
               variant="outlined"
               color="primary"
               sx={{ textTransform: "none", mr: 1 }}
-              onClick={() => saveFlow("draft")}
+              onClick={() => saveFlow()}
             >
-              Salvar como rascunho
-            </Button>
-          )}
-          {canEdit && (
-            <Button
-              variant="contained"
-              color="primary"
-              sx={{ textTransform: "none", mr: 1 }}
-              onClick={() => saveFlow("published")}
-            >
-              Publicar
+              Salvar
             </Button>
           )}
           {canEdit && (
@@ -945,113 +1532,89 @@ export const FlowBuilderConfig = () => {
               variant="contained"
               color="primary"
               sx={{ textTransform: "none" }}
-              onClick={() => saveFlow()}
+              onClick={handlePublish}
             >
-              Salvar
+              Publicar
             </Button>
           )}
         </MainHeaderButtonsWrapper>
       </MainHeader>
       {!loading && (
-        <Paper
-          className={classes.mainPaper}
-          variant="outlined"
-          onScroll={handleScroll}
-        >
-          <Stack>
-            <SpeedDial
-              ariaLabel="SpeedDial basic example"
-              sx={{
-                position: "absolute",
-                top: 16,
-                left: 16,
-                ".MuiSpeedDial-fab": {
-                  backgroundColor: colorPrimary(),
-                  "&:hover": {
-                    backgroundColor: colorPrimary(),
-                  },
-                },
-              }}
-              icon={<SpeedDialIcon />}
-              direction={"down"}
-            >
-              {actions.map((action) => (
-                <SpeedDialAction
-                  key={action.name}
-                  icon={action.icon}
-                  tooltipTitle={action.name}
-                  tooltipOpen
-                  tooltipPlacement={"right"}
-                  onClick={() => {
-                    console.log(action.type);
-                    clickActions(action.type);
-                  }}
-                />
-              ))}
-            </SpeedDial>
-          </Stack>
-          <Stack
-            sx={{
-              position: "absolute",
-              justifyContent: "center",
-              flexDirection: "row",
-              width: "100%",
-            }}
-          >
-            <Typography
-              style={{ color: "#010101", textShadow: "#010101 1px 0 10px" }}
-            >
-              Não se esqueça de salvar seu fluxo!
-            </Typography>
-          </Stack>
+        <Paper className={classes.mainPaper} variant="outlined">
+          {/* Paleta lateral de blocos — estilo ManyChat */}
+          <div className={classes.palette}>
+            <div className={classes.paletteHeader}>Blocos</div>
+            {paletteGroups.map((group) => (
+              <div key={group.category}>
+                <div className={classes.paletteCategory}>{group.category}</div>
+                {group.items.map((item) => (
+                  <Tooltip
+                    key={item.type}
+                    title="Clique para adicionar ou arraste para o canvas"
+                    placement="right"
+                  >
+                    <div
+                      className={classes.paletteItem}
+                      draggable={canEdit}
+                      onDragStart={(e) => onDragStart(e, item.type)}
+                      onClick={() => canEdit && clickActions(item.type)}
+                    >
+                      <div
+                        className={classes.paletteItemIcon}
+                        style={{ backgroundColor: `${item.color}1a` }}
+                      >
+                        {item.icon}
+                      </div>
+                      <div>
+                        <div className={classes.paletteItemTitle}>
+                          {item.name}
+                        </div>
+                        <div className={classes.paletteItemDesc}>
+                          {item.desc}
+                        </div>
+                      </div>
+                    </div>
+                  </Tooltip>
+                ))}
+              </div>
+            ))}
+          </div>
 
-          <Stack
-            direction={"row"}
-            style={{
-              width: "100%",
-              height: "90%",
-              position: "relative",
-              display: "flex",
-            }}
-          >
-            <div className="flow-canvas-container">
-              <ReactFlow
-                nodes={nodes}
-                edges={edges}
-                deleteKeyCode={["Backspace", "Delete"]}
-                onNodesChange={onNodesChange}
-                onEdgesChange={onEdgesChange}
-                onNodeDoubleClick={doubleClick}
-                onNodeClick={clickNode}
-                onEdgeClick={clickEdge}
-                onConnect={onConnect}
-                nodeTypes={nodeTypes}
-                edgeTypes={edgeTypes}
-                fitView
-                className="react-flow"
-                defaultEdgeOptions={{
-                  animated: true,
-                  className: "edge-line"
-                }}
-              >
-                <Controls />
-                <MiniMap />
-                <Background variant="dots" gap={12} size={-1} />
-              </ReactFlow>
-            </div>
-
-            <Stack
-              style={{
-                backgroundColor: "#FAFAFA",
-                height: "20px",
-                width: "58px",
-                position: "absolute",
-                bottom: 0,
-                right: 0,
-                zIndex: 1111,
+          <div className="flow-canvas-container">
+            {nodes.length <= 1 && !loading && (
+              <div className={classes.canvasHint}>
+                Arraste um bloco da paleta ao lado ou clique nele para começar a
+                montar o fluxo. Conecte os blocos pelo ponto da lateral direita.
+              </div>
+            )}
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              deleteKeyCode={["Backspace", "Delete"]}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onNodeDoubleClick={doubleClick}
+              onEdgeClick={clickEdge}
+              onConnect={onConnect}
+              onInit={setRfInstance}
+              onDrop={onDrop}
+              onDragOver={onDragOver}
+              nodeTypes={nodeTypes}
+              edgeTypes={edgeTypes}
+              fitView
+              snapToGrid
+              snapGrid={[16, 16]}
+              className="react-flow"
+              defaultEdgeOptions={{
+                animated: true,
+                className: "edge-line"
               }}
-            />
-          </Stack>
+            >
+              <Controls />
+              <MiniMap pannable zoomable />
+              <Background variant="dots" gap={16} size={1.2} color="#D0D5DD" />
+            </ReactFlow>
+          </div>
         </Paper>
       )}
       {loading && (

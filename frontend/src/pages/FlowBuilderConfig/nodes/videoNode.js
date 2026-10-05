@@ -1,10 +1,4 @@
-import {
-  ContentCopy,
-  Delete,
-  Image,
-  Message,
-  Videocam
-} from "@mui/icons-material";
+import { ContentCopy, Delete, Videocam } from "@mui/icons-material";
 import React, { memo } from "react";
 
 import { Handle } from "react-flow-renderer";
@@ -20,12 +14,27 @@ export default memo(({ data, isConnectable, id }) => {
 
   return (
     <div
-      style={{ backgroundColor: "#555", padding: "8px", borderRadius: "8px" }}
+      style={{
+        background: "#fff",
+        border: "1px solid #E4E7EC",
+        borderLeft: "3px solid #475467",
+        borderRadius: 12,
+        padding: "10px 12px",
+        boxShadow: "0 1px 3px rgba(16,24,40,0.08)",
+        minWidth: 170,
+        maxWidth: 220
+      }}
     >
       <Handle
         type="target"
         position="left"
-        style={{ background: "#0000FF" }}
+        style={{
+          background: "#fff",
+          border: "2px solid #D0D5DD",
+          width: "16px",
+          height: "16px",
+          cursor: 'pointer'
+        }}
         onConnect={params => console.log("handle onConnect", params)}
         isConnectable={isConnectable}
       />
@@ -33,8 +42,8 @@ export default memo(({ data, isConnectable, id }) => {
         style={{
           display: "flex",
           position: "absolute",
-          right: 5,
-          top: 5,
+          right: 8,
+          top: 8,
           cursor: "pointer",
           gap: 6
         }}
@@ -44,7 +53,7 @@ export default memo(({ data, isConnectable, id }) => {
             storageItems.setNodesStorage(id);
             storageItems.setAct("duplicate");
           }}
-          sx={{ width: "12px", height: "12px", color: "#ffff" }}
+          sx={{ width: "14px", height: "14px", color: "#98A2B3" }}
         />
 
         <Delete
@@ -52,32 +61,38 @@ export default memo(({ data, isConnectable, id }) => {
             storageItems.setNodesStorage(id);
             storageItems.setAct("delete");
           }}
-          sx={{ width: "12px", height: "12px", color: "#ffff" }}
+          sx={{ width: "14px", height: "14px", color: "#98A2B3" }}
         />
       </div>
-      {/* <div style={{position: 'absolute', right: 5, top: 5, cursor: 'pointer'}}>
-        <Delete sx={{width: '12px', height: '12px', color: '#ffff'}}/>
-      </div> */}
       <div
         style={{
-          color: "#ededed",
-          fontSize: "16px",
           flexDirection: "row",
-          display: "flex"
+          display: "flex",
+          alignItems: "center",
+          marginBottom: 4
         }}
       >
         <Videocam
           sx={{
             width: "16px",
             height: "16px",
-            marginRight: "4px",
-            marginTop: "4px"
+            marginRight: "6px",
+            color: "#475467"
           }}
         />
-        <div style={{ color: "#ededed", fontSize: "16px" }}>Video</div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: "#101828" }}>
+          Video
+        </div>
       </div>
-      <div style={{ color: "#ededed", fontSize: "12px", width: 180 }}>
-        <video controls="controls" width="180px">
+      <div
+        style={{
+          fontSize: 12,
+          color: "#475467",
+          width: 180,
+          wordBreak: "break-word"
+        }}
+      >
+        <video controls="controls" width="180px" style={{ borderRadius: 6 }}>
           <source src={`${link}/public/${data.url}`} type="video/mp4" />
           seu navegador não suporta HTML5
         </video>
@@ -86,7 +101,13 @@ export default memo(({ data, isConnectable, id }) => {
         type="source"
         position="right"
         id="a"
-        style={{ background: "#0000FF" }}
+        style={{
+          background: "#fff",
+          border: "2px solid #D0D5DD",
+          width: "16px",
+          height: "16px",
+          cursor: 'pointer'
+        }}
         isConnectable={isConnectable}
       />
     </div>

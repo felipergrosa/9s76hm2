@@ -1,4 +1,4 @@
-import { ImportExport, Message } from "@mui/icons-material";
+import { ImportExport } from "@mui/icons-material";
 import React, { memo } from "react";
 
 import { Handle } from "react-flow-renderer";
@@ -22,35 +22,81 @@ export default memo(({ data, isConnectable }) => {
     }
   }
   return (
-    <div style={{backgroundColor: '#555', padding: '8px', borderRadius: '8px'}}>
+    <div
+      style={{
+        background: "#fff",
+        border: "1px solid #E4E7EC",
+        borderLeft: "3px solid #475467",
+        borderRadius: 12,
+        padding: "10px 12px",
+        boxShadow: "0 1px 3px rgba(16,24,40,0.08)",
+        minWidth: 170,
+        maxWidth: 220
+      }}
+    >
       <Handle
         type="target"
         position="left"
-        style={{ background: "#0000FF" }}
+        style={{
+          background: "#fff",
+          border: "2px solid #D0D5DD",
+          width: "16px",
+          height: "16px",
+          cursor: 'pointer'
+        }}
         onConnect={(params) => console.log("handle onConnect", params)}
         isConnectable={isConnectable}
       />
-      <div style={{color: '#ededed', fontSize: '16px', flexDirection: 'row', display: 'flex'}}>
-        <ImportExport sx={{width: '16px', height: '16px', marginRight: '4px', marginTop: '4px'}}/>
-        <div style={{color: '#ededed', fontSize: '16px'}}>
-        Condição
+      <div
+        style={{
+          flexDirection: "row",
+          display: "flex",
+          alignItems: "center",
+          marginBottom: 4
+        }}
+      >
+        <ImportExport
+          sx={{
+            width: "16px",
+            height: "16px",
+            marginRight: "6px",
+            color: "#475467"
+          }}
+        />
+        <div style={{ fontSize: 13, fontWeight: 600, color: "#101828" }}>
+          Condição
         </div>
       </div>
-      <div style={{color: '#ededed', fontSize: '12px'}}>{data.key}</div>
-      <div style={{color: '#ededed', fontSize: '12px'}}>{typeCondition(data.condition)}</div>
-      <div style={{color: '#ededed', fontSize: '12px'}}>{data.value}</div>
+      <div style={{ fontSize: 12, color: "#475467", wordBreak: "break-word" }}>
+        {data.key} {typeCondition(data.condition)} {data.value}
+      </div>
       <Handle
         type="source"
         position="right"
         id="a"
-        style={{ top: 10, background: "#0000FF" }}
+        style={{
+          top: 10,
+          background: "#fff",
+          border: "2px solid #D0D5DD",
+          width: "16px",
+          height: "16px",
+          cursor: 'pointer'
+        }}
         isConnectable={isConnectable}
       />
       <Handle
         type="source"
         position="right"
         id="b"
-        style={{ bottom: 10, top: "auto", background: "#0000FF" }}
+        style={{
+          bottom: 10,
+          top: "auto",
+          background: "#fff",
+          border: "2px solid #D0D5DD",
+          width: "16px",
+          height: "16px",
+          cursor: 'pointer'
+        }}
         isConnectable={isConnectable}
       />
     </div>

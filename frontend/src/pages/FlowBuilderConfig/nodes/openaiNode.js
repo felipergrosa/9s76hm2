@@ -1,14 +1,7 @@
-import {
-  ArrowForwardIos,
-  ContentCopy,
-  Delete,
-  ConfirmationNumber,
-} from "@mui/icons-material";
+import { ContentCopy, Delete } from "@mui/icons-material";
 import React, { memo } from "react";
-import TextField from "@mui/material/TextField";
 import { useNodeStorage } from "../../../stores/useNodeStorage";
 import { Handle } from "react-flow-renderer";
-import { Typography, Box } from "@material-ui/core";
 import { SiOpenai } from "react-icons/si";
 
 export default memo(({ data, isConnectable, id }) => {
@@ -26,44 +19,37 @@ export default memo(({ data, isConnectable, id }) => {
   return (
     <div
       style={{
-        backgroundColor: "#ffffff",
-        padding: "8px",
-        borderRadius: "8px",
-        boxShadow: "rgba(0, 0, 0, 0.05) 0px 3px 5px",
-        border: "1px solid rgba(33, 94, 151, 0.25)",
+        background: "#fff",
+        border: "1px solid #E4E7EC",
+        borderLeft: "3px solid #0872b9",
+        borderRadius: 12,
+        padding: "10px 12px",
+        boxShadow: "0 1px 3px rgba(16,24,40,0.08)",
+        minWidth: 170,
+        maxWidth: 220
       }}
     >
       <Handle
         type="target"
         position="left"
         style={{
-          background: "#0872b9",
-          width: "18px",
-          height: "18px",
+          background: "#fff",
+          border: "2px solid #D0D5DD",
+          width: "16px",
+          height: "16px",
           top: "20px",
           left: "-12px",
           cursor: "pointer",
         }}
         onConnect={(params) => console.log("handle onConnect", params)}
         isConnectable={isConnectable}
-      >
-        <ArrowForwardIos
-          sx={{
-            color: "#ffff",
-            width: "10px",
-            height: "10px",
-            marginLeft: "2.9px",
-            marginBottom: "1px",
-            pointerEvents: "none",
-          }}
-        />
-      </Handle>
+      />
       <div
         style={{
           display: "flex",
           position: "absolute",
-          right: 5,
-          top: 5,
+          right: 8,
+          top: 8,
           cursor: "pointer",
           gap: 6,
         }}
@@ -73,7 +59,7 @@ export default memo(({ data, isConnectable, id }) => {
             storageItems.setNodesStorage(id);
             storageItems.setAct("duplicate");
           }}
-          sx={{ width: "12px", height: "12px", color: "#F7953B" }}
+          sx={{ width: "14px", height: "14px", color: "#98A2B3" }}
         />
 
         <Delete
@@ -81,34 +67,52 @@ export default memo(({ data, isConnectable, id }) => {
             storageItems.setNodesStorage(id);
             storageItems.setAct("delete");
           }}
-          sx={{ width: "12px", height: "12px", color: "#F7953B" }}
+          sx={{ width: "14px", height: "14px", color: "#98A2B3" }}
         />
       </div>
       <div
         style={{
-          color: "#ededed",
-          fontSize: "16px",
           flexDirection: "row",
           display: "flex",
+          alignItems: "center",
+          marginBottom: 4,
         }}
       >
-       <SiOpenai
-          sx={{
+        <SiOpenai
+          style={{
             width: "16px",
             height: "16px",
-            marginRight: "4px",
-            marginTop: "4px",
-            color: "#3aba38"
+            marginRight: "6px",
+            color: "#0872b9",
+            flexShrink: 0
           }}
         />
-        <div style={{ color: "#232323", fontSize: "16px" }}>OpenAI/Gemini</div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: "#101828" }}>
+          OpenAI/Gemini
+        </div>
       </div>
-      <div style={{ color: "#232323", fontSize: "12px", width: 180 }}>
-        <div style={{ backgroundColor: "#F6EEEE", marginBottom: "6px", borderRadius: "5px", padding: "6px" }}>
-          <div style={{ textAlign: "center", fontWeight: 600 }}>OpenAI/Gemini</div>
+      <div
+        style={{
+          fontSize: 12,
+          color: "#475467",
+          width: 180,
+          wordBreak: "break-word"
+        }}
+      >
+        <div
+          style={{
+            backgroundColor: "#F2F4F7",
+            marginBottom: "6px",
+            borderRadius: "6px",
+            padding: "6px"
+          }}
+        >
+          <div style={{ textAlign: "center", fontWeight: 600, color: "#101828" }}>
+            OpenAI/Gemini
+          </div>
         </div>
 
-        <div style={{ lineHeight: 1.3 }}>
+        <div style={{ lineHeight: 1.4 }}>
           <div><strong>Ação:</strong> {tbi.name || "—"}</div>
           <div><strong>Integração:</strong> {tbi.integrationId ? `#${tbi.integrationId}` : "—"}</div>
           <div><strong>Fila:</strong> {tbi.queueId ? `#${tbi.queueId}` : "—"}</div>
@@ -123,26 +127,16 @@ export default memo(({ data, isConnectable, id }) => {
         position="right"
         id="a"
         style={{
-          background: "#0872b9",
-          width: "18px",
-          height: "18px",
+          background: "#fff",
+          border: "2px solid #D0D5DD",
+          width: "16px",
+          height: "16px",
           top: "70%",
           right: "-11px",
           cursor: "pointer",
         }}
         isConnectable={isConnectable}
-      >
-        <ArrowForwardIos
-          sx={{
-            color: "#ffff",
-            width: "10px",
-            height: "10px",
-            marginLeft: "2.9px",
-            marginBottom: "1px",
-            pointerEvents: "none",
-          }}
-        />
-      </Handle>
+      />
     </div>
   );
 });

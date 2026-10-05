@@ -1,20 +1,18 @@
-import {
-  ContentCopy,
-  Delete, ConfirmationNumber
-} from "@mui/icons-material";
+import { ContentCopy, Delete, Schedule } from "@mui/icons-material";
 import React, { memo } from "react";
-import { useNodeStorage } from "../../../stores/useNodeStorage";
+
 import { Handle } from "react-flow-renderer";
+import { useNodeStorage } from "../../../stores/useNodeStorage";
 
 export default memo(({ data, isConnectable, id }) => {
   const storageItems = useNodeStorage();
-  console.log(12, "ticketNode", data)
+
   return (
     <div
       style={{
         background: "#fff",
         border: "1px solid #E4E7EC",
-        borderLeft: "3px solid #3ABA38",
+        borderLeft: "3px solid #0891B2",
         borderRadius: 12,
         padding: "10px 12px",
         boxShadow: "0 1px 3px rgba(16,24,40,0.08)",
@@ -71,16 +69,16 @@ export default memo(({ data, isConnectable, id }) => {
           marginBottom: 4
         }}
       >
-        <ConfirmationNumber
+        <Schedule
           sx={{
             width: "16px",
             height: "16px",
             marginRight: "6px",
-            color: "#3aba38"
+            color: "#0891B2"
           }}
         />
         <div style={{ fontSize: 13, fontWeight: 600, color: "#101828" }}>
-          Ticket
+          Horário comercial
         </div>
       </div>
       <div
@@ -91,36 +89,37 @@ export default memo(({ data, isConnectable, id }) => {
           wordBreak: "break-word"
         }}
       >
-        <div
-          style={{
-            backgroundColor: "#F2F4F7",
-            marginBottom: "3px",
-            borderRadius: "6px"
-          }}
-        >
-          <div style={{ gap: "5px", padding: "6px" }}>
-            <div style={{ textAlign: "center" }}>
-              {Object.keys(data)[0] === "data" ? (
-                data.data.name
-              ) : (
-                data.name
-              )
-              }
-            </div>
-          </div>
-        </div>
+        {`${(data.days || []).join(", ") || "Todos os dias"} · ${data.start || "08:00"}–${data.end || "18:00"}`}
       </div>
+      {/* Saída "a": segue quando ESTÁ dentro do horário comercial */}
       <Handle
         type="source"
         position="right"
         id="a"
         style={{
+          top: 10,
+          right: "-11px",
           background: "#fff",
           border: "2px solid #D0D5DD",
           width: "16px",
           height: "16px",
-          top: "70%",
+          cursor: 'pointer'
+        }}
+        isConnectable={isConnectable}
+      />
+      {/* Saída "b": segue quando está FORA do horário comercial */}
+      <Handle
+        type="source"
+        position="right"
+        id="b"
+        style={{
+          bottom: 10,
+          top: "auto",
           right: "-11px",
+          background: "#fff",
+          border: "2px solid #D0D5DD",
+          width: "16px",
+          height: "16px",
           cursor: 'pointer'
         }}
         isConnectable={isConnectable}
