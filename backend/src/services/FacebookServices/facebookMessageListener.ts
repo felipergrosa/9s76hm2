@@ -90,6 +90,20 @@ export interface ReplyTo {
   mid: string;
 }
 
+// Validação da resposta capturada pelo nó "waitReply" do FlowBuilder
+// (data.validation): text sempre válido — inválida mantém aguardando.
+// Nota: este listener não tem resume de "question" (nó só existe no
+// executor WhatsApp) — se for portado, reutilizar este helper.
+const isFlowAnswerValid = (validation: string, answer: string): boolean => {
+  const v = String(validation || "");
+  const a = String(answer || "").trim();
+  if (v === "email") return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a);
+  if (v === "phone") return /^\+?\d{8,15}$/.test(a.replace(/[^\d+]/g, ""));
+  if (v === "number") return a !== "" && !isNaN(Number(a));
+  if (v === "cpf") return a.replace(/\D/g, "").length === 11;
+  return true; // "text" e tipos desconhecidos sempre válidos
+};
+
 // Persiste os dados que a Graph API devolve do perfil como campos
 // customizados do contato (visíveis no modal) e enriquece nome/handle.
 const upsertMetaProfileFields = async (
@@ -943,12 +957,101 @@ export const handleMessage = async (
       });
 
       let isMenu = false;
+      let isWaitReply = false;
+      let nodeWaitReply: any = null;
       if (flow) {
-        isMenu = flow.flow["nodes"].find((node: any) => node.id === ticket.lastFlowId)?.type === "menu";
+        const lastNode = flow.flow["nodes"].find((node: any) => node.id === ticket.lastFlowId);
+        isMenu = lastNode?.type === "menu";
+        isWaitReply = lastNode?.type === "waitReply";
+        if (isWaitReply) nodeWaitReply = lastNode;
       }
 
 
       console.log({ ticket })
+
+      // Nó "waitReply": a resposta do usuário retoma o fluxo pela saída "a"
+      // e limpa o resumeToken — invalida o job FlowResume do timeout ("b").
+      if (!fromMe && isWaitReply && nodeWaitReply) {
+        const bodyReply = message.text;
+        const nodesFb: INodes[] = flow.flow["nodes"];
+        const connectionsFb: IConnections[] = flow.flow["connections"];
+        const dataWr = nodeWaitReply.data || {};
+
+        // Validação opcional — mesmo esquema do question no WhatsApp
+        const validationWr =
+          dataWr.validation || dataWr?.typebotIntegration?.validation;
+        if (validationWr && bodyReply && !isFlowAnswerValid(validationWr, bodyReply)) {
+          const errValidation =
+            dataWr.validationError ||
+            dataWr?.typebotIntegration?.validationError ||
+            "Resposta inválida, tente novamente.";
+          try {
+            await sendText(
+              contact.number,
+              formatBody(errValidation, ticket),
+              getSession.facebookUserToken
+            );
+          } catch (eVal) {
+            logger.warn(
+              `[FlowBuilder][waitReply] Falha ao enviar validationError ticket=${ticket.id}: ${(eVal as any)?.message || eVal}`
+            );
+          }
+          return;
+        }
+
+        const edgeReply =
+          connectionsFb.find(
+            (c: any) => c.source === nodeWaitReply.id && c.sourceHandle === "a"
+          ) || connectionsFb.find((c: any) => c.source === nodeWaitReply.id);
+        const nodeIndex = nodesFb.findIndex(n => n.id === nodeWaitReply.id);
+        const resumeTarget = edgeReply?.target || nodesFb[nodeIndex + 1]?.id;
+
+        if (resumeTarget) {
+          const dwResume: any = { ...(ticket.dataWebhook || {}) };
+          dwResume.resumeToken = null;
+          dwResume.resumeNodeId = null;
+          dwResume.resumeTimeoutMessage = null;
+
+          const varKeyWr =
+            dataWr.variable ||
+            dataWr.answerKey ||
+            dataWr?.typebotIntegration?.answerKey;
+          if (varKeyWr && bodyReply) {
+            dwResume.variables = {
+              ...(dwResume.variables || {}),
+              [varKeyWr]: bodyReply
+            };
+          }
+
+          await ticket.update({
+            lastFlowId: resumeTarget,
+            dataWebhook: dwResume
+          });
+
+          const mountDataContact = {
+            number: contact.number,
+            name: contact.name,
+            email: contact.email
+          };
+
+          await ActionsWebhookFacebookService(
+            getSession,
+            parseInt(ticket.flowStopped),
+            ticket.companyId,
+            nodesFb,
+            connectionsFb,
+            resumeTarget,
+            dwResume,
+            "",
+            "",
+            "",
+            ticket.id,
+            mountDataContact
+          );
+        }
+
+        return;
+      }
 
       if (
         !ticket.fromMe &&

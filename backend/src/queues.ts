@@ -61,6 +61,7 @@ import CreateMessageService from "./services/MessageServices/CreateMessageServic
 import { buildOfficialPreviewData } from "./utils/officialMessagePreview";
 import { setupEmailCampaignProcessors, scheduleEmailCampaignVerification } from "./queues/EmailCampaignQueue";
 import { setupDripSequenceProcessors, scheduleDripSequenceVerification } from "./queues/DripSequenceQueue";
+import { setupFlowResumeProcessors } from "./queues/FlowResumeQueue";
 import { startOfficialWebhookQueue } from "./queues/OfficialWebhookQueue";
 import runMetaTokenHealthCheck from "./jobs/MetaTokenHealthCheckJob";
 
@@ -3723,4 +3724,7 @@ export async function startQueueProcess() {
   // Drip sequences (fila própria, não interfere nas filas acima)
   setupDripSequenceProcessors();
   await scheduleDripSequenceVerification();
+
+  // Retomada assíncrona de fluxos do FlowBuilder (smartDelay/waitReply)
+  setupFlowResumeProcessors();
 }

@@ -5110,6 +5110,19 @@ export const transferQueue = async (
   });
 };
 
+// Validação da resposta capturada pelos nós "question"/"waitReply" do
+// FlowBuilder (data.validation): text sempre válido; os demais formatos
+// usam regras simples — resposta inválida mantém o ticket aguardando.
+const isFlowAnswerValid = (validation: string, answer: string): boolean => {
+  const v = String(validation || "");
+  const a = String(answer || "").trim();
+  if (v === "email") return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a);
+  if (v === "phone") return /^\+?\d{8,15}$/.test(a.replace(/[^\d+]/g, ""));
+  if (v === "number") return a !== "" && !isNaN(Number(a));
+  if (v === "cpf") return a.replace(/\D/g, "").length === 11;
+  return true; // "text" e tipos desconhecidos sempre válidos
+};
+
 const flowbuilderIntegration = async (
   msg: proto.IWebMessageInfo,
   wbot: Session,
@@ -6291,6 +6304,7 @@ const handleMessage = async (
     let isMenu = false;
     let isOpenai = false;
     let isQuestion = false;
+    let isWaitReply = false;
 
     if (flow) {
       isMenu =
@@ -6302,6 +6316,9 @@ const handleMessage = async (
       isQuestion =
         flow.flow["nodes"].find((node: any) => node.id === ticket.lastFlowId)
           ?.type === "question";
+      isWaitReply =
+        flow.flow["nodes"].find((node: any) => node.id === ticket.lastFlowId)
+          ?.type === "waitReply";
     }
 
     if (!isNil(flow) && isQuestion && !msg.key.fromMe) {
@@ -6320,6 +6337,31 @@ const handleMessage = async (
 
         const { message, answerKey } = nodeSelected.data.typebotIntegration;
         const oldDataWebhook = ticket.dataWebhook;
+
+        // Validação configurável da resposta do question (data.validation):
+        // inválida → envia validationError e mantém o ticket aguardando no
+        // mesmo nó (lastFlowId não avança).
+        const validationQ =
+          nodeSelected.data?.validation ||
+          nodeSelected.data?.typebotIntegration?.validation;
+        if (validationQ && !isFlowAnswerValid(validationQ, body)) {
+          const errValidation =
+            nodeSelected.data?.validationError ||
+            nodeSelected.data?.typebotIntegration?.validationError ||
+            "Resposta inválida, tente novamente.";
+          try {
+            await SendWhatsAppMessage({
+              body: errValidation,
+              ticket,
+              quotedMsg: null
+            });
+          } catch (eVal) {
+            logger.warn(
+              `[FlowBuilder][question] Falha ao enviar validationError ticket=${ticket.id}: ${(eVal as any)?.message || eVal}`
+            );
+          }
+          return;
+        }
 
         const nodeIndex = nodes.findIndex(node => node.id === nodeSelected.id);
 
@@ -6356,6 +6398,103 @@ const handleMessage = async (
           mountDataContact,
           msg
         );
+      }
+
+      return;
+    }
+
+    // Nó "waitReply": a resposta do usuário retoma o fluxo pela saída "a" e
+    // limpa o resumeToken — isso invalida o job FlowResume do timeout
+    // agendado para a saída "b" (idempotência pelo dataWebhook).
+    if (!isNil(flow) && isWaitReply && !msg.key.fromMe) {
+      const body = getBodyMessage(msg);
+      const nodes: INodes[] = flow.flow["nodes"];
+      const connections: IConnections[] = flow.flow["connections"];
+      const nodeWaitReply = nodes.find(
+        (node: any) => node.id === ticket.lastFlowId
+      );
+
+      if (nodeWaitReply) {
+        const dataWr: any = nodeWaitReply.data || {};
+
+        // Validação opcional — mesmo esquema do question
+        const validationWr =
+          dataWr.validation || dataWr?.typebotIntegration?.validation;
+        if (validationWr && body && !isFlowAnswerValid(validationWr, body)) {
+          const errValidation =
+            dataWr.validationError ||
+            dataWr?.typebotIntegration?.validationError ||
+            "Resposta inválida, tente novamente.";
+          try {
+            await SendWhatsAppMessage({
+              body: errValidation,
+              ticket,
+              quotedMsg: null
+            });
+          } catch (eVal) {
+            logger.warn(
+              `[FlowBuilder][waitReply] Falha ao enviar validationError ticket=${ticket.id}: ${(eVal as any)?.message || eVal}`
+            );
+          }
+          return;
+        }
+
+        const edgeReply =
+          connections.find(
+            (c: any) =>
+              c.source === nodeWaitReply.id && c.sourceHandle === "a"
+          ) ||
+          connections.find((c: any) => c.source === nodeWaitReply.id);
+        const nodeIndex = nodes.findIndex(
+          node => node.id === nodeWaitReply.id
+        );
+        const resumeTarget = edgeReply?.target || nodes[nodeIndex + 1]?.id;
+
+        if (resumeTarget) {
+          const dwResume: any = { ...(ticket.dataWebhook || {}) };
+          dwResume.resumeToken = null;
+          dwResume.resumeNodeId = null;
+          dwResume.resumeTimeoutMessage = null;
+
+          // Espelha o question: guarda a resposta em variável do fluxo
+          const varKeyWr =
+            dataWr.variable ||
+            dataWr.answerKey ||
+            dataWr?.typebotIntegration?.answerKey;
+          if (varKeyWr && body) {
+            dwResume.variables = {
+              ...(dwResume.variables || {}),
+              [varKeyWr]: body
+            };
+          }
+
+          await ticket.update({
+            lastFlowId: resumeTarget,
+            dataWebhook: dwResume
+          });
+
+          const mountDataContact = {
+            number: contact.number,
+            name: contact.name,
+            email: contact.email
+          };
+
+          await ActionsWebhookService(
+            whatsapp.id,
+            parseInt(ticket.flowStopped),
+            ticket.companyId,
+            nodes,
+            connections,
+            resumeTarget,
+            dwResume,
+            "",
+            "",
+            "",
+            ticket.id,
+            mountDataContact,
+            msg
+          );
+        }
       }
 
       return;

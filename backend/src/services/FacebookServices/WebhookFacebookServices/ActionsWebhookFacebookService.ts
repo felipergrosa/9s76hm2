@@ -24,6 +24,15 @@ import ContactTag from "../../../models/ContactTag";
 import { FlowBuilderModel } from "../../../models/FlowBuilder";
 import User from "../../../models/User";
 import ContactCustomField from "../../../models/ContactCustomField";
+import { Op } from "sequelize";
+import { randomUUID } from "crypto";
+import DripSequence from "../../../models/DripSequence";
+import DripSequenceEnrollment from "../../../models/DripSequenceEnrollment";
+import AIAgent from "../../../models/AIAgent";
+import FunnelStage from "../../../models/FunnelStage";
+import TicketFunnelState from "../../../models/TicketFunnelState";
+import { emitToCompanyRoom } from "../../../libs/socketEmit";
+import { scheduleFlowResume } from "../../../queues/FlowResumeQueue";
 import CreateMessageService, {
     MessageData
 } from "../../MessageServices/CreateMessageService";
@@ -60,6 +69,28 @@ interface NumberPhrase {
     name: string,
     email: string
 }
+
+// Converte amount+unit ("minutes"|"hours"|"days") em ms. Retorna null se
+// inválido ou acima do teto (30 dias) — usado por smartDelay/waitReply.
+const flowDelayMs = (amount: any, unit: string): number | null => {
+    const n = Number(amount);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    const factor =
+        unit === "days" ? 86400000 : unit === "hours" ? 3600000 : unit === "minutes" ? 60000 : 0;
+    if (!factor) return null;
+    const ms = n * factor;
+    if (ms > 30 * 86400000) return null;
+    return ms;
+};
+
+// Resolve a URL de mídia para a Graph API: URL externa é usada direto;
+// nome de arquivo local vira URL pública em /public/company{id} (mesmo
+// padrão dos nós img/audio/video).
+const resolveFbMediaUrl = (urlRaw: string, companyId: number): string => {
+    const url = String(urlRaw || "").trim();
+    if (/^https?:\/\//i.test(url)) return url;
+    return `${process.env.BACKEND_URL}/public/company${companyId}/${url}`;
+};
 
 
 export const ActionsWebhookFacebookService = async (
@@ -139,6 +170,23 @@ export const ActionsWebhookFacebookService = async (
             /{{\s*([^{}\s]+)\s*}}/g,
             (match, key) => variables[key] || ""
         );
+    };
+
+    // Resolve o contato do ticket — mesma ordem dos nós tag/condition:
+    // associação carregada -> contactId -> número (PSID) do remetente.
+    const resolveFlowContact = async (): Promise<Contact | null> => {
+        let contactFlow: Contact = ticket?.contact;
+        if (!contactFlow && ticket?.contactId) {
+            contactFlow = await Contact.findOne({
+                where: { id: ticket.contactId, companyId }
+            });
+        }
+        if (!contactFlow && numberPhrase?.number) {
+            contactFlow = await Contact.findOne({
+                where: { number: numberPhrase.number, companyId }
+            });
+        }
+        return contactFlow;
     };
 
     // Loop usa nodes.length direto: gotoFlow anexa novos nós ao array
@@ -448,6 +496,51 @@ export const ActionsWebhookFacebookService = async (
                     );
                 }
 
+                // Elemento "file" do singleBlock: value = url ou nome de
+                // arquivo em public/company{id}; caption opcional vai como
+                // texto separado (Graph não suporta legenda em "file").
+                if (elementNowSelected.includes("file")) {
+                    try {
+                        const elFile = nodeSelected.data.elements.filter(
+                            item => item.number === elementNowSelected
+                        )[0];
+                        const urlEl = String(elFile?.value || "").trim();
+
+                        const contact = await Contact.findOne({
+                            where: { number: numberPhrase.number, companyId }
+                        });
+
+                        if (urlEl && contact) {
+                            const domainFile = resolveFbMediaUrl(urlEl, companyId);
+                            const fileNameEl = elFile?.fileName || path.basename(urlEl.split("?")[0]);
+
+                            if (elFile?.caption) {
+                                await sendText(
+                                    contact.number,
+                                    formatBody(`${elFile.caption}`, ticket),
+                                    getSession.facebookUserToken
+                                );
+                            }
+
+                            await sendAttachmentFromUrl(
+                                contact.number,
+                                domainFile,
+                                "file",
+                                getSession.facebookUserToken
+                            );
+
+                            const ticketDetails = await ShowTicketService(ticket.id, companyId);
+                            await ticketDetails.update({
+                                lastMessage: formatBody(`${fileNameEl}`, ticket.contact)
+                            });
+                        }
+                    } catch (errFileEl) {
+                        logger.warn(
+                            `[FlowBuilder][singleBlock][file] Falha: ${errFileEl?.message || errFileEl}`
+                        );
+                    }
+                }
+
             }
         }
 
@@ -593,6 +686,58 @@ export const ActionsWebhookFacebookService = async (
                 getSession.facebookUserToken,
                 "typing_off"
             );
+        }
+
+        // Nó "file": envia documento/arquivo via sendAttachmentFromUrl.
+        // data: {url, caption?, fileName?} — url externa é usada direto;
+        // nome de arquivo local vira URL pública em /public/company{id}.
+        // A Graph não suporta legenda em "file" — caption vai como texto.
+        if (nodeSelected.type === "file") {
+            try {
+                await ensureTicket();
+
+                const dataFile = nodeSelected.data || {};
+                const urlFile = String(dataFile.url || "").trim();
+                const contactFile = await resolveFlowContact();
+
+                if (!urlFile || !contactFile || !ticket) {
+                    logger.warn(
+                        `[FlowBuilder][file] node=${nodeSelected.id} sem url, contato ou ticket`
+                    );
+                } else {
+                    const domainFile = resolveFbMediaUrl(urlFile, companyId);
+                    const fileNameFile =
+                        dataFile.fileName || path.basename(urlFile.split("?")[0]);
+                    const varsFile: any = ticket?.dataWebhook?.variables || {};
+
+                    if (dataFile.caption) {
+                        await sendText(
+                            contactFile.number,
+                            formatBody(
+                                replaceFlowVars(varsFile, String(dataFile.caption)),
+                                ticket
+                            ),
+                            getSession.facebookUserToken
+                        );
+                    }
+
+                    await sendAttachmentFromUrl(
+                        contactFile.number,
+                        domainFile,
+                        "file",
+                        getSession.facebookUserToken
+                    );
+
+                    const ticketDetails = await ShowTicketService(ticket.id, companyId);
+                    await ticketDetails.update({
+                        lastMessage: formatBody(`${fileNameFile}`, ticket.contact)
+                    });
+                }
+            } catch (errFile) {
+                logger.warn(
+                    `[FlowBuilder][file] Falha no node ${nodeSelected.id}: ${errFile?.message || errFile}`
+                );
+            }
         }
         let isRandomizer: boolean;
         if (nodeSelected.type === "randomizer") {
@@ -1087,6 +1232,453 @@ export const ActionsWebhookFacebookService = async (
                     `[FlowBuilder][updateContact] Falha no node ${nodeSelected.id}: ${errUc?.message || errUc}`
                 );
             }
+        }
+
+        // Nó "subscribeDrip": inscreve/remove o contato de uma sequência de
+        // drip. Reativa inscrição completed/cancelled/failed. Sequência
+        // inválida/inativa só gera warn — não derruba o fluxo.
+        if (nodeSelected.type === "subscribeDrip") {
+            try {
+                await ensureTicket();
+
+                const dripIdNode = Number(nodeSelected.data?.dripSequenceId);
+                const actionDrip =
+                    nodeSelected.data?.action === "unsubscribe"
+                        ? "unsubscribe"
+                        : "subscribe";
+
+                const drip = dripIdNode
+                    ? await DripSequence.findOne({
+                        where: { id: dripIdNode, companyId, active: true }
+                    })
+                    : null;
+
+                const contactDrip = await resolveFlowContact();
+
+                if (!drip || !contactDrip) {
+                    logger.warn(
+                        `[FlowBuilder][subscribeDrip] node=${nodeSelected.id} sequência ${dripIdNode} inexistente/inativa ou sem contato`
+                    );
+                } else if (actionDrip === "subscribe") {
+                    const nowDrip = new Date();
+                    const [enrollment, created] =
+                        await DripSequenceEnrollment.findOrCreate({
+                            where: {
+                                dripSequenceId: drip.id,
+                                contactId: contactDrip.id
+                            },
+                            defaults: {
+                                dripSequenceId: drip.id,
+                                contactId: contactDrip.id,
+                                companyId,
+                                currentStepIndex: 0,
+                                status: "active",
+                                nextSendAt: nowDrip,
+                                enrolledAt: nowDrip
+                            } as any
+                        });
+                    if (
+                        !created &&
+                        ["completed", "cancelled", "failed"].includes(enrollment.status)
+                    ) {
+                        await enrollment.update({
+                            status: "active",
+                            currentStepIndex: 0,
+                            nextSendAt: nowDrip,
+                            attempts: 0,
+                            lastError: null
+                        });
+                    }
+                } else {
+                    await DripSequenceEnrollment.update(
+                        { status: "cancelled" },
+                        {
+                            where: {
+                                dripSequenceId: drip.id,
+                                contactId: contactDrip.id,
+                                companyId,
+                                status: "active"
+                            }
+                        }
+                    );
+                }
+            } catch (errDrip) {
+                logger.warn(
+                    `[FlowBuilder][subscribeDrip] Falha no node ${nodeSelected.id}: ${errDrip?.message || errDrip}`
+                );
+            }
+        }
+
+        // Nó "optOut": desliga o bot para o contato (disableBot) e aplica a
+        // tag DNC/OPT-OUT quando existir na empresa. Segue o fluxo.
+        if (nodeSelected.type === "optOut") {
+            try {
+                await ensureTicket();
+
+                const contactOo = await resolveFlowContact();
+                if (!contactOo) {
+                    logger.warn(
+                        `[FlowBuilder][optOut] node=${nodeSelected.id} sem contato`
+                    );
+                } else {
+                    await contactOo.update({ disableBot: true });
+
+                    const tagDnc = await Tag.findOne({
+                        where: {
+                            companyId,
+                            [Op.or]: [
+                                { name: { [Op.iLike]: "dnc" } },
+                                { name: { [Op.iLike]: "opt-out" } },
+                                { name: { [Op.iLike]: "optout" } }
+                            ]
+                        }
+                    });
+                    if (tagDnc) {
+                        await ContactTag.findOrCreate({
+                            where: {
+                                contactId: contactOo.id,
+                                tagId: tagDnc.id,
+                                companyId
+                            }
+                        });
+                    }
+                }
+            } catch (errOo) {
+                logger.warn(
+                    `[FlowBuilder][optOut] Falha no node ${nodeSelected.id}: ${errOo?.message || errOo}`
+                );
+            }
+        }
+
+        // Nó "notifyTeam": notificação em tempo real para a equipe via socket
+        // (sala "notification" do namespace da empresa). Aceita {{var}}.
+        if (nodeSelected.type === "notifyTeam") {
+            try {
+                await ensureTicket();
+
+                const varsNt: any = ticket?.dataWebhook?.variables || {};
+                const msgNt = replaceFlowVars(
+                    varsNt,
+                    String(nodeSelected.data?.message ?? "")
+                );
+
+                await emitToCompanyRoom(
+                    companyId,
+                    "notification",
+                    `company-${companyId}-notification`,
+                    {
+                        action: "flowNotify",
+                        ticketId: ticket?.id ?? idTicket ?? null,
+                        message: msgNt
+                    }
+                );
+            } catch (errNt) {
+                logger.warn(
+                    `[FlowBuilder][notifyTeam] Falha no node ${nodeSelected.id}: ${errNt?.message || errNt}`
+                );
+            }
+        }
+
+        // Nó "sendTemplate": canal Meta (Messenger/Instagram) não suporta
+        // templates WhatsApp — apenas loga e segue o fluxo.
+        if (nodeSelected.type === "sendTemplate") {
+            logger.warn(
+                `[FlowBuilder][sendTemplate] node=${nodeSelected.id} canal não suporta template — nó ignorado`
+            );
+        }
+
+        // Nó "csat": envia a pergunta de avaliação e suspende o fluxo com o
+        // ticket em status "nps" — a nota numérica é capturada pelo listener.
+        if (nodeSelected.type === "csat") {
+            try {
+                await ensureTicket();
+
+                const contactCsat = await resolveFlowContact();
+                if (!ticket || !contactCsat) {
+                    logger.warn(
+                        `[FlowBuilder][csat] node=${nodeSelected.id} sem ticket ou contato`
+                    );
+                } else {
+                    const varsCsat: any = ticket?.dataWebhook?.variables || {};
+                    const rawCsat =
+                        nodeSelected.data?.message ||
+                        getSession.ratingMessage ||
+                        "De 0 a 10, como você avalia nosso atendimento?";
+                    const bodyCsat = formatBody(
+                        replaceFlowVars(varsCsat, String(rawCsat)),
+                        ticket
+                    );
+
+                    await sendText(
+                        contactCsat.number,
+                        bodyCsat,
+                        getSession.facebookUserToken
+                    );
+
+                    const ticketDetails = await ShowTicketService(ticket.id, companyId);
+                    await ticketDetails.update({
+                        lastMessage: bodyCsat
+                    });
+
+                    await ticket.update({
+                        status: "nps",
+                        userId: null,
+                        companyId: companyId,
+                        lastFlowId: nodeSelected.id,
+                        hashFlowId: hashWebhookId,
+                        flowStopped: idFlowDb.toString()
+                    });
+                }
+            } catch (errCsat) {
+                logger.warn(
+                    `[FlowBuilder][csat] Falha no node ${nodeSelected.id}: ${errCsat?.message || errCsat}`
+                );
+            }
+            break;
+        }
+
+        // Nó "setStatus": altera o status do ticket. "closed" encerra o fluxo
+        // igual ao nó "end"; open/pending/bot seguem para o próximo nó.
+        let endedBySetStatus = false;
+        if (nodeSelected.type === "setStatus") {
+            try {
+                await ensureTicket();
+
+                const statusSet = String(nodeSelected.data?.status || "");
+                if (
+                    !ticket ||
+                    !["open", "pending", "bot", "closed", "nps"].includes(statusSet)
+                ) {
+                    logger.warn(
+                        `[FlowBuilder][setStatus] node=${nodeSelected.id} status inválido ou sem ticket`
+                    );
+                } else if (statusSet === "closed") {
+                    await ticket.update({
+                        status: "closed",
+                        flowWebhook: false,
+                        flowStopped: idFlowDb.toString(),
+                        hashFlowId: null,
+                        lastFlowId: nodeSelected.id
+                    });
+                    // UpdateTicketService emite os eventos de fechamento
+                    await UpdateTicketService({
+                        ticketData: { status: "closed" },
+                        ticketId: ticket.id,
+                        companyId
+                    });
+                    endedBySetStatus = true;
+                } else {
+                    await UpdateTicketService({
+                        ticketData: {
+                            status: statusSet,
+                            isBot: statusSet === "bot" ? true : ticket.isBot
+                        },
+                        ticketId: ticket.id,
+                        companyId
+                    });
+                    await ticket.reload();
+                }
+            } catch (errSet) {
+                logger.warn(
+                    `[FlowBuilder][setStatus] Falha no node ${nodeSelected.id}: ${errSet?.message || errSet}`
+                );
+            }
+        }
+        if (endedBySetStatus) {
+            break;
+        }
+
+        // Nó "aiAgent": transfere o ticket para um AIAgent. O vínculo usado
+        // pelo ResolveAIAgentForTicketService é ticket.queueId ∈ agent.queueIds
+        // — por isso o ticket vai para a primeira fila do agente com
+        // status="bot" e isBot=true, e a etapa inicial do funil é registrada.
+        // O fluxo é suspenso (a IA passa a responder pelo listener).
+        let suspendedByAgent = false;
+        if (nodeSelected.type === "aiAgent") {
+            try {
+                await ensureTicket();
+
+                const agentIdNode = Number(nodeSelected.data?.aiAgentId);
+                // Mesma resolução do ResolveAIAgentForTicketService: primeiro
+                // o aiAgentId explícito do nó; depois o agente ativo cujo
+                // queueIds contenha o ticket.queueId atual.
+                let agent = agentIdNode
+                    ? await AIAgent.findOne({
+                        where: { id: agentIdNode, companyId, status: "active" }
+                    })
+                    : null;
+                if (!agent && ticket?.queueId) {
+                    agent = await AIAgent.findOne({
+                        where: {
+                            companyId,
+                            status: "active",
+                            queueIds: { [Op.contains]: [ticket.queueId] }
+                        }
+                    });
+                }
+
+                if (!agent || !ticket) {
+                    logger.warn(
+                        `[FlowBuilder][aiAgent] node=${nodeSelected.id} agente ${agentIdNode || "por-fila"} inexistente/inativo ou sem ticket — seguindo fluxo`
+                    );
+                } else {
+                    const queueIdAgent =
+                        Array.isArray(agent.queueIds) && agent.queueIds.length
+                            ? Number(agent.queueIds[0])
+                            : ticket.queueId;
+
+                    await UpdateTicketService({
+                        ticketData: {
+                            queueId: queueIdAgent,
+                            status: "bot",
+                            isBot: true,
+                            userId: null
+                        },
+                        ticketId: ticket.id,
+                        companyId
+                    });
+
+                    // Etapa inicial do funil (menor order) — histórico é
+                    // append-only, a linha mais recente é a etapa atual.
+                    const firstStage = await FunnelStage.findOne({
+                        where: { agentId: agent.id },
+                        order: [["order", "ASC"]]
+                    });
+                    if (firstStage) {
+                        await TicketFunnelState.create({
+                            ticketId: ticket.id,
+                            funnelStageId: firstStage.id,
+                            agentId: agent.id,
+                            companyId,
+                            enteredAt: new Date()
+                        } as any);
+                    }
+
+                    await ticket.update({
+                        flowWebhook: false,
+                        flowStopped: idFlowDb.toString(),
+                        hashFlowId: null,
+                        lastFlowId: nodeSelected.id
+                    });
+                    suspendedByAgent = true;
+                }
+            } catch (errAgent) {
+                logger.warn(
+                    `[FlowBuilder][aiAgent] Falha no node ${nodeSelected.id}: ${errAgent?.message || errAgent}`
+                );
+            }
+        }
+        if (suspendedByAgent) {
+            break;
+        }
+
+        // Nó "smartDelay": suspende o fluxo e agenda a retomada no próximo nó
+        // (FlowResume com resumeToken). Amount inválido/sem saída → segue direto.
+        let suspendedByDelay = false;
+        if (nodeSelected.type === "smartDelay") {
+            try {
+                await ensureTicket();
+
+                const dataSd = nodeSelected.data || {};
+                const delayMsSd = flowDelayMs(dataSd.amount, dataSd.unit);
+                const edgeSd = connects.filter(
+                    c => c.source === nodeSelected.id
+                )[0];
+
+                if (!ticket || !delayMsSd || !edgeSd) {
+                    logger.warn(
+                        `[FlowBuilder][smartDelay] node=${nodeSelected.id} amount/unit inválido ou sem saída — seguindo fluxo`
+                    );
+                } else {
+                    const resumeTokenSd = randomUUID();
+                    const dwSd: any = {
+                        ...(ticket.dataWebhook || {}),
+                        resumeToken: resumeTokenSd,
+                        resumeNodeId: edgeSd.target
+                    };
+                    await ticket.update({
+                        // flowWebhook false: mensagem do usuário durante o
+                        // delay não dispara a retomada genérica — só o job.
+                        flowWebhook: false,
+                        lastFlowId: edgeSd.target,
+                        hashFlowId: hashWebhookId,
+                        flowStopped: idFlowDb.toString(),
+                        dataWebhook: dwSd
+                    });
+                    await scheduleFlowResume(
+                        { ticketId: ticket.id, companyId, resumeToken: resumeTokenSd },
+                        delayMsSd
+                    );
+                    suspendedByDelay = true;
+                }
+            } catch (errSd) {
+                logger.warn(
+                    `[FlowBuilder][smartDelay] Falha no node ${nodeSelected.id}: ${errSd?.message || errSd}`
+                );
+            }
+        }
+        if (suspendedByDelay) {
+            break;
+        }
+
+        // Nó "waitReply": suspende o fluxo aguardando resposta do usuário
+        // (lastFlowId aponta para este nó). Saída "a" = usuário respondeu
+        // (listener retoma); saída "b" = timeout (FlowResume agendado com
+        // resumeToken — invalidado se a resposta chegar antes).
+        if (nodeSelected.type === "waitReply") {
+            try {
+                await ensureTicket();
+
+                const dataWr = nodeSelected.data || {};
+                const edgeWrB = connects.filter(
+                    c => c.source === nodeSelected.id && c.sourceHandle === "b"
+                )[0];
+                const delayMsWr = flowDelayMs(dataWr.timeout, dataWr.unit);
+
+                if (!ticket) {
+                    logger.warn(
+                        `[FlowBuilder][waitReply] node=${nodeSelected.id} sem ticket vinculado`
+                    );
+                } else {
+                    const dwWr: any = { ...(ticket.dataWebhook || {}) };
+                    const varsWr: any = dwWr.variables || {};
+                    const canSchedule = Boolean(edgeWrB && delayMsWr);
+                    const resumeTokenWr = canSchedule ? randomUUID() : null;
+
+                    if (canSchedule) {
+                        dwWr.resumeToken = resumeTokenWr;
+                        dwWr.resumeNodeId = edgeWrB.target;
+                        if (dataWr.timeoutMessage) {
+                            dwWr.resumeTimeoutMessage = replaceFlowVars(
+                                varsWr,
+                                String(dataWr.timeoutMessage)
+                            );
+                        }
+                    }
+
+                    await ticket.update({
+                        userId: null,
+                        companyId: companyId,
+                        flowWebhook: true,
+                        lastFlowId: nodeSelected.id,
+                        hashFlowId: hashWebhookId,
+                        flowStopped: idFlowDb.toString(),
+                        dataWebhook: dwWr
+                    });
+
+                    if (canSchedule) {
+                        await scheduleFlowResume(
+                            { ticketId: ticket.id, companyId, resumeToken: resumeTokenWr },
+                            delayMsWr
+                        );
+                    }
+                }
+            } catch (errWr) {
+                logger.warn(
+                    `[FlowBuilder][waitReply] Falha no node ${nodeSelected.id}: ${errWr?.message || errWr}`
+                );
+            }
+            break;
         }
 
         let isMenu: boolean;

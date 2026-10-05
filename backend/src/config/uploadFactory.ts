@@ -26,6 +26,8 @@ export const DEFAULT_ALLOWED_MIMES: string[] = [
   // Documentos
   "application/pdf",
   "text/plain",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   // Planilhas e dados tabulares
   "application/vnd.ms-excel",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

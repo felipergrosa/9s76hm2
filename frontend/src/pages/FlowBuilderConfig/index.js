@@ -34,6 +34,16 @@ import imgNode from "./nodes/imgNode";
 import randomizerNode from "./nodes/randomizerNode";
 import videoNode from "./nodes/videoNode";
 import questionNode from "./nodes/questionNode";
+import fileNode from "./nodes/fileNode";
+import subscribeDripNode from "./nodes/subscribeDripNode";
+import optOutNode from "./nodes/optOutNode";
+import notifyTeamNode from "./nodes/notifyTeamNode";
+import sendTemplateNode from "./nodes/sendTemplateNode";
+import csatNode from "./nodes/csatNode";
+import setStatusNode from "./nodes/setStatusNode";
+import aiAgentNode from "./nodes/aiAgentNode";
+import smartDelayNode from "./nodes/smartDelayNode";
+import waitReplyNode from "./nodes/waitReplyNode";
 
 import api from "../../services/api";
 
@@ -81,6 +91,16 @@ import {
   Schedule,
   StickyNote2,
   StopCircle,
+  AttachFile,
+  Repeat,
+  PersonRemove,
+  Notifications,
+  Article,
+  Star,
+  Flag,
+  SmartToy,
+  HourglassTop,
+  QuestionAnswer,
 } from "@mui/icons-material";
 import RemoveEdge from "./nodes/removeEdge";
 import FlowBuilderAddImgModal from "../../components/FlowBuilderAddImgModal";
@@ -105,6 +125,16 @@ import FlowBuilderBusinessHoursModal from "../../components/FlowBuilderBusinessH
 import FlowBuilderAssignUserModal from "../../components/FlowBuilderAssignUserModal";
 import FlowBuilderInternalNoteModal from "../../components/FlowBuilderInternalNoteModal";
 import FlowBuilderUpdateContactModal from "../../components/FlowBuilderUpdateContactModal";
+import FlowBuilderFileModal from "../../components/FlowBuilderFileModal";
+import FlowBuilderSubscribeDripModal from "../../components/FlowBuilderSubscribeDripModal";
+import FlowBuilderOptOutModal from "../../components/FlowBuilderOptOutModal";
+import FlowBuilderNotifyTeamModal from "../../components/FlowBuilderNotifyTeamModal";
+import FlowBuilderSendTemplateModal from "../../components/FlowBuilderSendTemplateModal";
+import FlowBuilderCsatModal from "../../components/FlowBuilderCsatModal";
+import FlowBuilderSetStatusModal from "../../components/FlowBuilderSetStatusModal";
+import FlowBuilderAiAgentModal from "../../components/FlowBuilderAiAgentModal";
+import FlowBuilderSmartDelayModal from "../../components/FlowBuilderSmartDelayModal";
+import FlowBuilderWaitReplyModal from "../../components/FlowBuilderWaitReplyModal";
 import FlowValidationDialog from "../../components/FlowValidationDialog";
 import GetAppIcon from "@mui/icons-material/GetApp";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
@@ -246,6 +276,16 @@ const nodeTypes = {
   webhook: webhookNode,
   end: endNode,
   gotoFlow: gotoFlowNode,
+  file: fileNode,
+  subscribeDrip: subscribeDripNode,
+  optOut: optOutNode,
+  notifyTeam: notifyTeamNode,
+  sendTemplate: sendTemplateNode,
+  csat: csatNode,
+  setStatus: setStatusNode,
+  aiAgent: aiAgentNode,
+  smartDelay: smartDelayNode,
+  waitReply: waitReplyNode,
 };
 
 const edgeTypes = {
@@ -298,6 +338,16 @@ export const FlowBuilderConfig = () => {
   const [modalAddWebhook, setModalAddWebhook] = useState(null);
   const [modalAddEnd, setModalAddEnd] = useState(null);
   const [modalAddGotoFlow, setModalAddGotoFlow] = useState(null);
+  const [modalAddFile, setModalAddFile] = useState(null);
+  const [modalAddSubscribeDrip, setModalAddSubscribeDrip] = useState(null);
+  const [modalAddOptOut, setModalAddOptOut] = useState(null);
+  const [modalAddNotifyTeam, setModalAddNotifyTeam] = useState(null);
+  const [modalAddSendTemplate, setModalAddSendTemplate] = useState(null);
+  const [modalAddCsat, setModalAddCsat] = useState(null);
+  const [modalAddSetStatus, setModalAddSetStatus] = useState(null);
+  const [modalAddAiAgent, setModalAddAiAgent] = useState(null);
+  const [modalAddSmartDelay, setModalAddSmartDelay] = useState(null);
+  const [modalAddWaitReply, setModalAddWaitReply] = useState(null);
   const [validationIssues, setValidationIssues] = useState(null);
   const [importModal, setImportModal] = useState(false);
   const [flowStatus, setFlowStatus] = useState("published"); // item 9 do plano: draft/published
@@ -623,6 +673,46 @@ export const FlowBuilderConfig = () => {
     addAndResetDrop("gotoFlow", data);
   };
 
+  const fileAdd = (data) => {
+    addAndResetDrop("file", data);
+  };
+
+  const subscribeDripAdd = (data) => {
+    addAndResetDrop("subscribeDrip", data);
+  };
+
+  const optOutAdd = (data) => {
+    addAndResetDrop("optOut", data);
+  };
+
+  const notifyTeamAdd = (data) => {
+    addAndResetDrop("notifyTeam", data);
+  };
+
+  const sendTemplateAdd = (data) => {
+    addAndResetDrop("sendTemplate", data);
+  };
+
+  const csatAdd = (data) => {
+    addAndResetDrop("csat", data);
+  };
+
+  const setStatusAdd = (data) => {
+    addAndResetDrop("setStatus", data);
+  };
+
+  const aiAgentAdd = (data) => {
+    addAndResetDrop("aiAgent", data);
+  };
+
+  const smartDelayAdd = (data) => {
+    addAndResetDrop("smartDelay", data);
+  };
+
+  const waitReplyAdd = (data) => {
+    addAndResetDrop("waitReply", data);
+  };
+
   useEffect(() => {
     setLoading(true);
     const delayDebounceFn = setTimeout(() => {
@@ -852,6 +942,36 @@ export const FlowBuilderConfig = () => {
     if (node.type === "gotoFlow") {
       setModalAddGotoFlow("edit");
     }
+    if (node.type === "file") {
+      setModalAddFile("edit");
+    }
+    if (node.type === "subscribeDrip") {
+      setModalAddSubscribeDrip("edit");
+    }
+    if (node.type === "optOut") {
+      setModalAddOptOut("edit");
+    }
+    if (node.type === "notifyTeam") {
+      setModalAddNotifyTeam("edit");
+    }
+    if (node.type === "sendTemplate") {
+      setModalAddSendTemplate("edit");
+    }
+    if (node.type === "csat") {
+      setModalAddCsat("edit");
+    }
+    if (node.type === "setStatus") {
+      setModalAddSetStatus("edit");
+    }
+    if (node.type === "aiAgent") {
+      setModalAddAiAgent("edit");
+    }
+    if (node.type === "smartDelay") {
+      setModalAddSmartDelay("edit");
+    }
+    if (node.type === "waitReply") {
+      setModalAddWaitReply("edit");
+    }
   };
 
   // Seleção de nó usa a classe .selected do react-flow (estilizada no CSS),
@@ -929,6 +1049,16 @@ export const FlowBuilderConfig = () => {
         img: "Imagem",
         audio: "Áudio",
         video: "Vídeo",
+        file: "Arquivo",
+        subscribeDrip: "Sequência",
+        optOut: "Descadastrar",
+        notifyTeam: "Notificar equipe",
+        sendTemplate: "Template WhatsApp",
+        csat: "Pesquisa de satisfação",
+        setStatus: "Alterar status",
+        aiAgent: "Agente IA",
+        smartDelay: "Espera inteligente",
+        waitReply: "Aguardar resposta",
       };
       const base = names[n.type] || n.type;
       const detail =
@@ -1003,6 +1133,18 @@ export const FlowBuilderConfig = () => {
         });
       });
 
+    nodes
+      .filter((n) => n.type === "waitReply")
+      .forEach((n) => {
+        // Saída "b" (timeout) é opcional — sem ela o bloco espera
+        // indefinidamente como uma pergunta comum.
+        if (!edges.some((e) => e.source === n.id && e.sourceHandle === "a")) {
+          issues.push(
+            `${labelOf(n)}: falta conectar a saída Respondeu.`
+          );
+        }
+      });
+
     return issues;
   };
 
@@ -1043,6 +1185,20 @@ export const FlowBuilderConfig = () => {
           type: "gotoFlow",
         },
         {
+          icon: <HourglassTop sx={{ color: "#14B8A6" }} />,
+          color: "#14B8A6",
+          name: "Espera inteligente",
+          desc: "Pausa de minutos, horas ou dias",
+          type: "smartDelay",
+        },
+        {
+          icon: <QuestionAnswer sx={{ color: "#F43F5E" }} />,
+          color: "#F43F5E",
+          name: "Aguardar resposta",
+          desc: "Segue ao responder ou no timeout",
+          type: "waitReply",
+        },
+        {
           icon: <StopCircle sx={{ color: "#B42318" }} />,
           color: "#B42318",
           name: "Fim do fluxo",
@@ -1074,6 +1230,20 @@ export const FlowBuilderConfig = () => {
           name: "Pergunta",
           desc: "Captura resposta em variável",
           type: "question",
+        },
+        {
+          icon: <AttachFile sx={{ color: "#2563EB" }} />,
+          color: "#2563EB",
+          name: "Arquivo",
+          desc: "Envia PDF ou outro documento",
+          type: "file",
+        },
+        {
+          icon: <Article sx={{ color: "#128C7E" }} />,
+          color: "#128C7E",
+          name: "Template WhatsApp",
+          desc: "Modelo aprovado da API oficial",
+          type: "sendTemplate",
         },
       ],
     },
@@ -1141,6 +1311,41 @@ export const FlowBuilderConfig = () => {
           desc: "Grava campo no cadastro do contato",
           type: "updateContact",
         },
+        {
+          icon: <Flag sx={{ color: "#475467" }} />,
+          color: "#475467",
+          name: "Alterar status",
+          desc: "Muda o status do ticket",
+          type: "setStatus",
+        },
+        {
+          icon: <Star sx={{ color: "#EAB308" }} />,
+          color: "#EAB308",
+          name: "Pesquisa de satisfação",
+          desc: "Pede nota de 0 a 10 ao contato",
+          type: "csat",
+        },
+        {
+          icon: <Notifications sx={{ color: "#F59E0B" }} />,
+          color: "#F59E0B",
+          name: "Notificar equipe",
+          desc: "Alerta interno para os atendentes",
+          type: "notifyTeam",
+        },
+        {
+          icon: <Repeat sx={{ color: "#9333EA" }} />,
+          color: "#9333EA",
+          name: "Sequência",
+          desc: "Inscreve ou remove de uma cadência",
+          type: "subscribeDrip",
+        },
+        {
+          icon: <PersonRemove sx={{ color: "#DC2626" }} />,
+          color: "#DC2626",
+          name: "Descadastrar",
+          desc: "Remove o contato das automações",
+          type: "optOut",
+        },
       ],
     },
     {
@@ -1152,6 +1357,13 @@ export const FlowBuilderConfig = () => {
           name: "OpenAI",
           desc: "Resposta gerada por IA",
           type: "openai",
+        },
+        {
+          icon: <SmartToy sx={{ color: "#EC4899" }} />,
+          color: "#EC4899",
+          name: "Agente IA",
+          desc: "Transfere o ticket para um agente autônomo",
+          type: "aiAgent",
         },
         {
           icon: <Http sx={{ color: "#F97316" }} />,
@@ -1233,6 +1445,36 @@ export const FlowBuilderConfig = () => {
         break;
       case "gotoFlow":
         setModalAddGotoFlow("create");
+        break;
+      case "file":
+        setModalAddFile("create");
+        break;
+      case "subscribeDrip":
+        setModalAddSubscribeDrip("create");
+        break;
+      case "optOut":
+        setModalAddOptOut("create");
+        break;
+      case "notifyTeam":
+        setModalAddNotifyTeam("create");
+        break;
+      case "sendTemplate":
+        setModalAddSendTemplate("create");
+        break;
+      case "csat":
+        setModalAddCsat("create");
+        break;
+      case "setStatus":
+        setModalAddSetStatus("create");
+        break;
+      case "aiAgent":
+        setModalAddAiAgent("create");
+        break;
+      case "smartDelay":
+        setModalAddSmartDelay("create");
+        break;
+      case "waitReply":
+        setModalAddWaitReply("create");
         break;
       default:
     }
@@ -1399,6 +1641,86 @@ export const FlowBuilderConfig = () => {
         data={dataNode}
         onUpdate={updateNode}
         close={setModalAddUpdateContact}
+      />
+
+      <FlowBuilderFileModal
+        open={modalAddFile}
+        onSave={fileAdd}
+        data={dataNode}
+        onUpdate={updateNode}
+        close={setModalAddFile}
+      />
+
+      <FlowBuilderSubscribeDripModal
+        open={modalAddSubscribeDrip}
+        onSave={subscribeDripAdd}
+        data={dataNode}
+        onUpdate={updateNode}
+        close={setModalAddSubscribeDrip}
+      />
+
+      <FlowBuilderOptOutModal
+        open={modalAddOptOut}
+        onSave={optOutAdd}
+        data={dataNode}
+        onUpdate={updateNode}
+        close={setModalAddOptOut}
+      />
+
+      <FlowBuilderNotifyTeamModal
+        open={modalAddNotifyTeam}
+        onSave={notifyTeamAdd}
+        data={dataNode}
+        onUpdate={updateNode}
+        close={setModalAddNotifyTeam}
+      />
+
+      <FlowBuilderSendTemplateModal
+        open={modalAddSendTemplate}
+        onSave={sendTemplateAdd}
+        data={dataNode}
+        onUpdate={updateNode}
+        close={setModalAddSendTemplate}
+      />
+
+      <FlowBuilderCsatModal
+        open={modalAddCsat}
+        onSave={csatAdd}
+        data={dataNode}
+        onUpdate={updateNode}
+        close={setModalAddCsat}
+      />
+
+      <FlowBuilderSetStatusModal
+        open={modalAddSetStatus}
+        onSave={setStatusAdd}
+        data={dataNode}
+        onUpdate={updateNode}
+        close={setModalAddSetStatus}
+      />
+
+      <FlowBuilderAiAgentModal
+        open={modalAddAiAgent}
+        onSave={aiAgentAdd}
+        data={dataNode}
+        onUpdate={updateNode}
+        close={setModalAddAiAgent}
+      />
+
+      <FlowBuilderSmartDelayModal
+        open={modalAddSmartDelay}
+        onSave={smartDelayAdd}
+        data={dataNode}
+        onUpdate={updateNode}
+        close={setModalAddSmartDelay}
+      />
+
+      <FlowBuilderWaitReplyModal
+        open={modalAddWaitReply}
+        onSave={waitReplyAdd}
+        data={dataNode}
+        onUpdate={updateNode}
+        close={setModalAddWaitReply}
       />
 
       <FlowValidationDialog

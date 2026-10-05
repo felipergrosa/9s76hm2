@@ -33,6 +33,7 @@ import {
 import {
   AccessTime,
   AddCircle,
+  AttachFile,
   Delete,
   Image,
   KeyboardArrowDown,
@@ -120,6 +121,10 @@ const FlowBuilderSingleBlockModal = ({
 
   const [numberImgLast, setNumberImgLast] = useState(0);
 
+  const [numberFile, setNumberFile] = useState(0);
+
+  const [numberFileLast, setNumberFileLast] = useState(0);
+
   const [loading, setLoading] = useState(false);
 
   const [previewImg, setPreviewImg] = useState([]);
@@ -127,6 +132,8 @@ const FlowBuilderSingleBlockModal = ({
   const [previewAudios, setPreviewAudios] = useState([]);
 
   const [previewVideos, setPreviewVideos] = useState([]);
+
+  const [previewFiles, setPreviewFiles] = useState([]);
 
   const [arrayOption, setArrayOption] = useState([]);
 
@@ -149,6 +156,19 @@ const FlowBuilderSingleBlockModal = ({
     const newArrImg = elementsSeq.filter((item) => item.includes("img"));
     const newArrAudio = elementsSeq.filter((item) => item.includes("audio"));
     const newArrVideo = elementsSeq.filter((item) => item.includes("video"));
+    const newArrFile = elementsSeq.filter((item) => item.includes("file"));
+
+    // Nomes de mídia já cobertos pelos outros tipos — o resto é "arquivo"
+    const isMediaName = (name) =>
+      name.includes("png") ||
+      name.includes("jpg") ||
+      name.includes("jpeg") ||
+      name.includes("mp3") ||
+      name.includes("ogg") ||
+      name.includes("mpeg") ||
+      name.includes("opus") ||
+      name.includes("mp4") ||
+      name.includes("avi");
 
     //Todas as mensagens
     for (let i = 0; i < numberMessages; i++) {
@@ -319,6 +339,58 @@ const FlowBuilderSingleBlockModal = ({
       }
     }
 
+    //Todos os arquivos (documentos)
+    for (let i = 0; i < numberFile; i++) {
+      const onlyFile =
+        newNameFiles !== null &&
+        newNameFiles.filter((file) => !isMediaName(file));
+      const onlyFileNameOriginal = medias.filter(
+        (file) => !isMediaName(file.name)
+      );
+      // Campos de texto do card (nome exibido e legenda)
+      const num = newArrFile[i].replace("file", "");
+      const fileNameInput = document.querySelector(`.fileName${num}`);
+      const captionInput = document.querySelector(`.caption${num}`);
+      const fileNameValue = fileNameInput
+        ? fileNameInput.querySelector(".MuiInputBase-input").value
+        : "";
+      const captionValue = captionInput
+        ? captionInput.querySelector(".MuiInputBase-input").value
+        : "";
+      if (elementsSeqEdit.includes(newArrFile[i])) {
+        const itemSelectedEdit = elementsEdit.filter(
+          (item) => item.number === newArrFile[i]
+        )[0];
+        elementsSequence.push({
+          type: "file",
+          value: itemSelectedEdit.value,
+          url: itemSelectedEdit.value,
+          fileName: fileNameValue || itemSelectedEdit.fileName,
+          caption: captionValue,
+          number: itemSelectedEdit.number,
+        });
+      } else {
+        let indexElem = 0;
+        if (
+          elementsSeqEdit.filter((item) => item.includes("file")).length > 0
+        ) {
+          indexElem =
+            elementsSeqEdit.filter((item) => item.includes("file")).length - i;
+        } else {
+          indexElem = i;
+        }
+        elementsSequence.push({
+          type: "file",
+          value: onlyFile[indexElem],
+          url: onlyFile[indexElem],
+          fileName:
+            fileNameValue || onlyFileNameOriginal[indexElem].name,
+          caption: captionValue,
+          number: newArrFile[i],
+        });
+      }
+    }
+
     console.log(elementsSequence);
 
     return elementsSequence;
@@ -400,6 +472,26 @@ const FlowBuilderSingleBlockModal = ({
       setElementsSeq((old) => old.filter((item) => item !== `video${id}`));
       setElementsSeqEdit((old) => old.filter((item) => item !== `video${id}`));
       document.querySelector(`.stackVideo${id}`).remove();
+    }
+    if (type === "file") {
+      setNumberFile((old) => old - 1);
+      setPreviewFiles((old) => {
+        setMedias((oldMedia) => {
+          try {
+            return oldMedia.filter(
+              (mediaItem) =>
+                mediaItem.name !==
+                old.filter((item) => item.number === id)[0].name
+            );
+          } catch (e) {
+            return oldMedia;
+          }
+        });
+        return old.filter((item) => item.number !== id);
+      });
+      setElementsSeq((old) => old.filter((item) => item !== `file${id}`));
+      setElementsSeqEdit((old) => old.filter((item) => item !== `file${id}`));
+      document.querySelector(`.stackFile${id}`).remove();
     }
   };
 
@@ -556,6 +648,42 @@ const FlowBuilderSingleBlockModal = ({
 
     document.querySelector(`.video${number}`).appendChild(divConteudo);
     // document.querySelector(`.btnVideo${number}`).remove(); // Linha removida conforme solicitado
+  };
+
+  const handleChangeFiles = (e, number) => {
+    if (!e.target.files) {
+      return;
+    }
+
+    if (e.target.files[0].size > 20000000) {
+      toast.error("Arquivo é muito grande! 20MB máximo");
+      return;
+    }
+
+    setPreviewFiles((old) => [
+      ...old,
+      {
+        number: number,
+        name: e.target.files[0].name,
+      },
+    ]);
+    setElementsSeqEdit((old) => old.filter((item) => item !== `file${number}`));
+    const selectedMedias = Array.from(e.target.files);
+    setMedias((old) => [...old, selectedMedias[0]]);
+
+    document.querySelector(
+      `.file${number}`
+    ).innerHTML = `<span>${e.target.files[0].name}</span>`;
+
+    // Preenche o campo "nome do arquivo" se estiver vazio (TextField não controlado)
+    const nameInput = document.querySelector(`.fileName${number}`);
+    if (nameInput) {
+      const input = nameInput.querySelector(".MuiInputBase-input");
+      if (input && !input.value) {
+        input.value = e.target.files[0].name;
+      }
+    }
+    // document.querySelector(`.btnFile${number}`).remove(); // Linha removida conforme solicitado
   };
 
   const imgLayout = (number, valueDefault = "") => {
@@ -718,6 +846,71 @@ const FlowBuilderSingleBlockModal = ({
             onChange={(e) => handleChangeVideos(e, number)}
           />
         </Button>
+      </Stack>
+    );
+  };
+
+  const fileLayout = (
+    number,
+    valueDefault = "",
+    fileNameDefault = "",
+    captionDefault = ""
+  ) => {
+    return (
+      <Stack
+        sx={{
+          border: "1px solid #0000FF",
+          borderRadius: "7px",
+          padding: "6px",
+          position: "relative",
+        }}
+        className={`stackFile${number}`}
+        key={`stackFile${number}`}
+      >
+        <Stack sx={{ position: "absolute", right: 6 }}>
+          <Delete onClick={() => deleteElementsTypeOne(number, "file")} />
+        </Stack>
+        <Typography textAlign={"center"}>Arquivo</Typography>
+        <div
+          className={`file${number}`}
+          style={{
+            display: "flex",
+            justifyContent: "center",
+          }}
+        >
+          {valueDefault.length > 0 && (
+            <Typography>{fileNameDefault || valueDefault}</Typography>
+          )}
+        </div>
+        <Button
+          variant="contained"
+          component="label"
+          className={`btnFile${number}`}
+        >
+          Enviar arquivo
+          <input
+            type="file"
+            accept="application/*"
+            hidden
+            onChange={(e) => handleChangeFiles(e, number)}
+          />
+        </Button>
+        <TextField
+          label={"Nome do arquivo"}
+          className={`fileName${number}`}
+          defaultValue={fileNameDefault}
+          variant="outlined"
+          margin="dense"
+          style={{ width: "100%" }}
+        />
+        <TextField
+          label={"Legenda (opcional)"}
+          className={`caption${number}`}
+          defaultValue={captionDefault}
+          variant="outlined"
+          margin="dense"
+          style={{ width: "100%" }}
+        />
       </Stack>
     );
   };
@@ -890,6 +1083,26 @@ const FlowBuilderSingleBlockModal = ({
               return old + 1;
             });
           }
+          if (itemNode.type === "file") {
+            const numberLoc = parseInt(item.replace("file", ""));
+            setElements((elm) => [
+              ...elm,
+              fileLayout(
+                numberLoc,
+                itemNode.value,
+                itemNode.fileName || "",
+                itemNode.caption || ""
+              ),
+            ]);
+            setNumberFile((old) => {
+              const arsOnly = sequence.filter((item) => item.includes("file"));
+              const arrNumberMax = arsOnly.map((item) =>
+                parseInt(item.replace("file", ""))
+              );
+              setNumberFileLast(Math.max.apply(null, arrNumberMax) + 1);
+              return old + 1;
+            });
+          }
         });
       }
       setActiveModal(true);
@@ -919,6 +1132,7 @@ const FlowBuilderSingleBlockModal = ({
       setPreviewImg([]);
       setPreviewAudios([]);
       setPreviewVideos([]);
+      setPreviewFiles([]);
       setArrayOption([]);
       setElements([]);
       setElementsSeq([]);
@@ -934,6 +1148,8 @@ const FlowBuilderSingleBlockModal = ({
       setNumberVideoLast(0);
       setNumberImg(0);
       setNumberImgLast(0);
+      setNumberFile(0);
+      setNumberFileLast(0);
     }, 500);
   };
 
@@ -945,6 +1161,7 @@ const FlowBuilderSingleBlockModal = ({
     const newArrImg = elementsSeq.filter(item => item.includes("img"));
     const newArrAudio = elementsSeq.filter(item => item.includes("audio"));
     const newArrVideo = elementsSeq.filter(item => item.includes("video"));
+    const newArrFile = elementsSeq.filter(item => item.includes("file"));
 
     // Imagens
     for (let i = 0; i < numberImg; i++) {
@@ -971,6 +1188,15 @@ const FlowBuilderSingleBlockModal = ({
       const btnTag = document.querySelector(`.btn${capitalize(id)}`);
       if (btnTag && videoDiv && videoDiv.innerHTML.trim() === "") {
         return true; // card de video vazio
+      }
+    }
+    // Arquivos
+    for (let i = 0; i < numberFile; i++) {
+      const id = newArrFile[i];
+      const fileDiv = document.querySelector(`.file${id.replace('file', '')}`);
+      const btnTag = document.querySelector(`.btn${capitalize(id)}`);
+      if (btnTag && fileDiv && fileDiv.innerHTML.trim() === "") {
+        return true; // card de arquivo vazio
       }
     }
     return false; // nenhum card vazio
@@ -1010,7 +1236,10 @@ const FlowBuilderSingleBlockModal = ({
 
       setTimeout(async () => {
         if (
-          (numberAudio === 0 && numberVideo === 0 && numberImg === 0) ||
+          (numberAudio === 0 &&
+            numberVideo === 0 &&
+            numberImg === 0 &&
+            numberFile === 0) ||
           medias.length === 0
         ) {
           try {
@@ -1037,7 +1266,7 @@ const FlowBuilderSingleBlockModal = ({
         const verify = verifyButtonsUpload();
         if (verify) {
           setLoading(false);
-          return toast.error("Delete os cards vazios(Imagem, Audio e Video)");
+          return toast.error("Delete os cards vazios(Imagem, Audio, Video e Arquivo)");
         }
         await api
           .post("/flowbuilder/content", formData)
@@ -1089,7 +1318,12 @@ const FlowBuilderSingleBlockModal = ({
       });
 
       setTimeout(async () => {
-        if (numberAudio === 0 && numberVideo === 0 && numberImg === 0) {
+        if (
+          numberAudio === 0 &&
+          numberVideo === 0 &&
+          numberImg === 0 &&
+          numberFile === 0
+        ) {
           try {
             const mountData = {
               seq: elementsSeq,
@@ -1110,7 +1344,7 @@ const FlowBuilderSingleBlockModal = ({
         const verify = verifyButtonsUpload();
         if (verify) {
           setLoading(false);
-          return toast.error("Delete os cards vazios(Imagem, Audio e Video)");
+          return toast.error("Delete os cards vazios(Imagem, Audio, Video e Arquivo)");
         }
         await api
           .post("/flowbuilder/content", formData)
@@ -1305,6 +1539,33 @@ const FlowBuilderSingleBlockModal = ({
                   }}
                 />
                 Video
+              </Button>
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={() => {
+                  setElements((old) => [...old, fileLayout(numberFileLast)]);
+                  setNumberFile((old) => {
+                    setElementsSeq((oldEleme) => [
+                      ...oldEleme,
+                      `file${numberFileLast}`,
+                    ]);
+                    return old + 1;
+                  });
+                  setNumberFileLast((old) => old + 1);
+                  setTimeout(() => {
+                    scrollToBottom(".body-card");
+                  }, 100);
+                }}
+              >
+                <AttachFile
+                  sx={{
+                    width: "16px",
+                    height: "16px",
+                    marginRight: "4px",
+                  }}
+                />
+                Arquivo
               </Button>
             </Stack>
             <Divider />

@@ -58,6 +58,8 @@ const FlowBuilderAddQuestionModal = ({
   const initialState = {
     message: "",
     answerKey: "",
+    validation: "text",
+    validationError: "",
   };
 
   const [message, setMessage] = useState();
@@ -100,7 +102,14 @@ const FlowBuilderAddQuestionModal = ({
   };
 
   const handleSavePrompt = (values) => {
-   
+    // validationError só faz sentido quando a validação não é texto livre
+    const submitValues = { ...values };
+    if (!submitValues.validation) {
+      submitValues.validation = "text";
+    }
+    if (submitValues.validation === "text") {
+      delete submitValues.validationError;
+    }
 
     if (open === "edit") {
 
@@ -115,12 +124,12 @@ const FlowBuilderAddQuestionModal = ({
       }
   
       oldVariable = oldVariable.filter(item => item !== oldNameKey)
-      localStorage.setItem('variables', JSON.stringify([...oldVariable, values.answerKey]))    
+      localStorage.setItem('variables', JSON.stringify([...oldVariable, submitValues.answerKey]))
 
       handleClose();
       onUpdate({
         ...data,
-        data: { typebotIntegration: { ...values, message } },
+        data: { typebotIntegration: { ...submitValues, message } },
       });
     } else if (open === "create") {
       
@@ -132,13 +141,13 @@ const FlowBuilderAddQuestionModal = ({
         oldVariable = []
       }
   
-      oldVariable = oldVariable.filter(item => item !== values.answerKey)
-      localStorage.setItem('variables', JSON.stringify([...oldVariable, values.answerKey]))    
+      oldVariable = oldVariable.filter(item => item !== submitValues.answerKey)
+      localStorage.setItem('variables', JSON.stringify([...oldVariable, submitValues.answerKey]))
 
       handleClose();
       onSave({
         typebotIntegration: {
-          ...values,
+          ...submitValues,
           message
         },
       });
@@ -167,7 +176,7 @@ const FlowBuilderAddQuestionModal = ({
             }, 400);
           }}
         >
-          {({ touched, errors, isSubmitting, values }) => (
+          {({ touched, errors, isSubmitting, values, setFieldValue }) => (
             <Form style={{ width: "100%" }}>
               <DialogContent dividers>
                 <TextField
@@ -195,6 +204,48 @@ const FlowBuilderAddQuestionModal = ({
                   fullWidth
                   required
                 />
+                <FormControl
+                  variant="outlined"
+                  margin="dense"
+                  fullWidth
+                >
+                  <InputLabel id="question-validation-select-label">
+                    Validação da resposta
+                  </InputLabel>
+                  <Select
+                    labelId="question-validation-select-label"
+                    id="question-validation-select"
+                    name="validation"
+                    value={values.validation || "text"}
+                    label="Validação da resposta"
+                    onChange={(e) =>
+                      setFieldValue("validation", e.target.value)
+                    }
+                  >
+                    <MenuItem value="text">Texto livre</MenuItem>
+                    <MenuItem value="email">E-mail</MenuItem>
+                    <MenuItem value="phone">Telefone</MenuItem>
+                    <MenuItem value="number">Número</MenuItem>
+                    <MenuItem value="cpf">CPF</MenuItem>
+                  </Select>
+                </FormControl>
+                {values.validation && values.validation !== "text" && (
+                  <Field
+                    as={TextField}
+                    label="Mensagem de erro da validação"
+                    name="validationError"
+                    placeholder="Resposta inválida, tente novamente."
+                    error={
+                      touched.validationError && Boolean(errors.validationError)
+                    }
+                    helperText={
+                      touched.validationError && errors.validationError
+                    }
+                    variant="outlined"
+                    margin="dense"
+                    fullWidth
+                  />
+                )}
               </DialogContent>
               <DialogActions>
                 <Button
