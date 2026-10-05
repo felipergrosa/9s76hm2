@@ -28,8 +28,10 @@ const GetIntegrationByTypeService = async ({ companyId, type }: Request): Promis
   if (integration.jsonContent) {
     try {
       parsed = JSON.parse(integration.jsonContent);
-      // Decrypt OpenAI apiKey for internal use only
-      if (integration.type === "openai" && parsed?.apiKey && typeof parsed.apiKey === "string") {
+      // Decripta apiKey criptografada ("ENC::...") para QUALQUER provider —
+      // antes era só "openai", então chaves gemini/deepseek/grok gravadas
+      // criptografadas saíam mascaradas e falhavam como "API key not valid".
+      if (parsed?.apiKey && typeof parsed.apiKey === "string") {
         const val: string = parsed.apiKey;
         if (val.startsWith("ENC::")) {
           try {

@@ -3,7 +3,18 @@ import OpenAI from "openai";
 import AppError from "../errors/AppError";
 import Setting from "../models/Setting";
 import QueueIntegrations from "../models/QueueIntegrations";
+import { decryptString } from "../utils/crypto";
 import fetch from "node-fetch";
+
+// jsonContent pode vir com apiKey criptografada ("ENC::...") — este
+// controller faz JSON.parse direto (não passa por GetIntegrationByTypeService),
+// então precisa decriptar por conta própria.
+const maybeDecryptApiKey = (val: any): any => {
+    if (typeof val === "string" && val.startsWith("ENC::")) {
+        try { return decryptString(val); } catch { return val; }
+    }
+    return val;
+};
 
 interface AIModel {
     id: string;
@@ -33,7 +44,7 @@ export const listModels = async (req: Request, res: Response): Promise<Response>
                 if (integration && integration.jsonContent) {
                     try {
                         const json = JSON.parse(integration.jsonContent);
-                        apiKeyValue = json.apiKey;
+                        apiKeyValue = maybeDecryptApiKey(json.apiKey);
                     } catch (e) {
                         console.error("Error parsing integration jsonContent", e);
                     }
@@ -118,7 +129,7 @@ export const listModels = async (req: Request, res: Response): Promise<Response>
                 if (integration && integration.jsonContent) {
                     try {
                         const json = JSON.parse(integration.jsonContent);
-                        apiKeyValue = json.apiKey;
+                        apiKeyValue = maybeDecryptApiKey(json.apiKey);
                     } catch (e) {
                         console.error("Error parsing integration jsonContent", e);
                     }

@@ -5,8 +5,9 @@ import { ChatRequest, IAClient, ChatWithHistoryRequest, TranscribeRequest, Funct
 export default class OpenAIClient implements IAClient {
   private client: OpenAI;
 
-  constructor(private apiKey: string) {
-    this.client = new OpenAI({ apiKey: this.apiKey });
+  // baseURL opcional — usado por providers OpenAI-compatible (DeepSeek, Grok)
+  constructor(private apiKey: string, baseURL?: string) {
+    this.client = new OpenAI({ apiKey: this.apiKey, ...(baseURL ? { baseURL } : {}) });
   }
 
   async chat(req: ChatRequest): Promise<string> {

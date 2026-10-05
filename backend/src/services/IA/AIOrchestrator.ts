@@ -19,6 +19,13 @@ export interface AIRequest {
   queueId?: number | string | null;
   whatsappId?: number | string | null;
   preferProvider?: Provider | null;
+  // strictProvider: testa/executa SOMENTE o preferProvider — sem fallback
+  // para outros providers (usado pelo "Testar Conexão" das configurações).
+  strictProvider?: boolean;
+  // forcedConfig: config já resolvida pelo chamador (ex.: testar a apiKey
+  // digitada no formulário antes de salvar a integração). Tem prioridade
+  // sobre qualquer resolução — exige preferProvider junto.
+  forcedConfig?: Record<string, any>;
   
   // Conteúdo da requisição
   text: string;
@@ -194,6 +201,13 @@ export default class AIOrchestrator {
       }
     }
 
+    // Modo estrito (teste de conexão): nunca cai para outro provider —
+    // senão o teste de "openai" podia executar Gemini e reportar erro
+    // do Gemini rotulado como erro do OpenAI.
+    if (request.strictProvider) {
+      throw lastError || new Error(`Provider ${request.preferProvider} falhou ou não está configurado`);
+    }
+
     // Fallback para outros provedores
     for (const fallbackProvider of config.fallbackProviders) {
       if (fallbackProvider === primaryProvider?.provider) continue;
@@ -231,7 +245,7 @@ export default class AIOrchestrator {
     integration: { provider: Provider; config: any },
     requestId: string
   ): Promise<AIResponse> {
-    const client = IAClientFactory(integration.provider, integration.config.apiKey);
+    const client = IAClientFactory(integration.provider, integration.config.apiKey, integration.config.baseURL);
     const startTime = Date.now();
 
     // Prepara parâmetros baseado no modo e configurações do preset
@@ -363,6 +377,15 @@ export default class AIOrchestrator {
    * Resolve provedor baseado na hierarquia existente (com suporte a presets)
    */
   private static async resolveProvider(request: AIRequest) {
+    // Config forçada pelo chamador (teste de conexão com a apiKey digitada
+    // no formulário, antes de salvar) — bypassa toda a resolução.
+    if (request.forcedConfig?.apiKey && request.preferProvider) {
+      return {
+        provider: request.preferProvider,
+        config: request.forcedConfig
+      };
+    }
+
     // Primeiro tenta usar ResolvePresetConfigService para suporte a presets
     try {
       const ResolvePresetConfigService = (await import("./ResolvePresetConfigService")).default;
@@ -375,7 +398,8 @@ export default class AIOrchestrator {
       const resolved = await ResolvePresetConfigService({
         companyId: request.companyId,
         module: presetModule,
-        preferProvider: request.preferProvider
+        preferProvider: request.preferProvider,
+        strictProvider: request.strictProvider
       });
       
       if (resolved && resolved.config?.apiKey) {
@@ -394,7 +418,8 @@ export default class AIOrchestrator {
       companyId: request.companyId,
       queueId: request.queueId,
       whatsappId: request.whatsappId,
-      preferProvider: request.preferProvider
+      preferProvider: request.preferProvider,
+      strictProvider: request.strictProvider
     });
   }
 
@@ -446,7 +471,9 @@ export default class AIOrchestrator {
   private static getDefaultModel(provider: Provider): string {
     const defaults = {
       openai: "gpt-3.5-turbo",
-      gemini: "gemini-pro"
+      gemini: "gemini-pro",
+      deepseek: "deepseek-chat",
+      grok: "grok-2-latest"
     };
     return defaults[provider] || "gpt-3.5-turbo";
   }

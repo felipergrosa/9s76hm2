@@ -5,13 +5,18 @@ import GetIntegrationByTypeService from "../QueueIntegrationServices/GetIntegrat
 import { decryptString } from "../../utils/crypto";
 import logger from "../../utils/logger";
 
-export type Provider = "openai" | "gemini";
+export type Provider = "openai" | "gemini" | "deepseek" | "grok";
 
 export interface ResolveParams {
   companyId: number;
   queueId?: number | string | null;
   whatsappId?: number | string | null;
   preferProvider?: Provider | null; // dica do front, não obrigatório
+  // strictProvider: quando preferProvider está definido, NÃO cai nos
+  // fallbacks openai→gemini — usado pelo teste de conexão, que precisa
+  // medir exatamente o provider pedido (antes o teste de "openai" podia
+  // executar Gemini e reportar o erro dele como erro do OpenAI).
+  strictProvider?: boolean;
 }
 
 export interface ResolvedIntegration {
@@ -52,7 +57,7 @@ const fetchIntegrationById = async (id: number | string | null | undefined, comp
   return { provider: integ.type as Provider, config: cfg } as ResolvedIntegration;
 };
 
-const ResolveAIIntegrationService = async ({ companyId, queueId, whatsappId, preferProvider }: ResolveParams): Promise<ResolvedIntegration | null> => {
+const ResolveAIIntegrationService = async ({ companyId, queueId, whatsappId, preferProvider, strictProvider }: ResolveParams): Promise<ResolvedIntegration | null> => {
   // 1) Se vier queueId, usar integrationId da fila
   try {
     if (queueId) {
@@ -98,7 +103,12 @@ const ResolveAIIntegrationService = async ({ companyId, queueId, whatsappId, pre
     }
   } catch {}
 
-  // 4) Fallback: tenta openai, depois gemini no escopo da empresa
+  // 4) Fallback: tenta openai, depois gemini no escopo da empresa.
+  // Em modo estrito (teste de conexão) isso é desligado — senão o teste
+  // de um provider acaba executando outro e o erro sai rotulado errado.
+  if (strictProvider && preferProvider) {
+    return null;
+  }
   try {
     const open = await GetIntegrationByTypeService({ companyId, type: "openai" });
     if (open?.jsonContent?.apiKey) {

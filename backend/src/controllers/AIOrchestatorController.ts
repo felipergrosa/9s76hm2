@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import AIOrchestrator, { AIRequest, ModuleContext, AIMode } from "../services/IA/AIOrchestrator";
 import { getAIAnalytics } from "../services/IA/AIAnalyticsService";
+import GetIntegrationByTypeService from "../services/QueueIntegrationServices/GetIntegrationByTypeService";
+import sanitizeProviderBaseURL, { AI_PROVIDER_DEFAULT_BASE_URL } from "../utils/aiProviderBaseUrl";
 
 /**
  * Controller para o AIOrchestrator - endpoint unificado para IA
@@ -159,21 +161,57 @@ export const transformText = async (req: Request, res: Response) => {
 export const testProviders = async (req: Request, res: Response) => {
   try {
     const { companyId } = req.user;
-    const { providers } = req.body; // ["openai", "gemini"] ou vazio para todos
+    // providers: ["openai","gemini","deepseek","grok"] ou vazio para todos.
+    // configs[provider] (opcional): { apiKey, model, baseURL } digitados no
+    // formulário — permite testar a chave ANTES de salvar a integração.
+    const { providers, configs } = req.body;
 
-    const testProviders = providers || ["openai", "gemini"];
+    const SUPPORTED = ["openai", "gemini", "deepseek", "grok"];
+    const testProviders = (Array.isArray(providers) && providers.length ? providers : ["openai", "gemini"])
+      .filter((p: string) => SUPPORTED.includes(p));
     const results: any = {};
 
     for (const provider of testProviders) {
       try {
         console.log(`[AIController] Testing provider: ${provider}`);
-        
+
+        // Config salva + overrides do formulário. apiKey mascarada
+        // ("****" / vazia) não sobrescreve a persistida.
+        const saved = await GetIntegrationByTypeService({ companyId, type: provider });
+        const savedCfg = saved?.jsonContent || {};
+        const overrides = configs?.[provider] || {};
+        const overrideKey =
+          typeof overrides.apiKey === "string" && overrides.apiKey.trim() && !overrides.apiKey.includes("*")
+            ? overrides.apiKey.trim()
+            : undefined;
+
+        const forcedConfig = {
+          ...savedCfg,
+          apiKey: overrideKey || savedCfg.apiKey,
+          model: overrides.model || savedCfg.model,
+          baseURL: sanitizeProviderBaseURL(
+            overrides.baseURL || savedCfg.baseURL,
+            AI_PROVIDER_DEFAULT_BASE_URL[provider] || savedCfg.baseURL
+          )
+        };
+
+        if (!forcedConfig.apiKey) {
+          results[provider] = {
+            success: false,
+            error: "Integração não configurada — informe e salve uma API key para este provedor."
+          };
+          continue;
+        }
+
         const testResponse = await AIOrchestrator.processRequest({
           module: "general",
           mode: "chat",
           companyId,
-          text: "Teste de conectividade",
+          text: "Teste de conectividade. Responda apenas: OK",
           preferProvider: provider,
+          strictProvider: true,
+          forcedConfig,
+          model: forcedConfig.model,
           maxTokens: 10,
           metadata: { test: true }
         });
@@ -181,6 +219,7 @@ export const testProviders = async (req: Request, res: Response) => {
         results[provider] = {
           success: testResponse.success,
           model: testResponse.model,
+          provider: testResponse.provider,
           processingTime: testResponse.processingTime,
           error: testResponse.error
         };

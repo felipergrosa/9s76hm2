@@ -7,27 +7,9 @@ import IAClientFactory from "../services/IA/IAClientFactory";
 import ChatAssistantService from "../services/IA/usecases/ChatAssistantService";
 import PresetService from "../services/IA/PresetService";
 
-// Hosts oficiais permitidos para consulta de modelos — impede SSRF/
-// exfiltração de apiKey via baseURL arbitrário salvo na integração.
-const ALLOWED_MODELS_HOSTS = new Set([
-  "api.openai.com",
-  "api.deepseek.com",
-  "api.x.ai",
-  "generativelanguage.googleapis.com"
-]);
+import { sanitizeProviderBaseURL } from "../utils/aiProviderBaseUrl";
 
-const sanitizeModelsBaseURL = (raw: any, fallback: string): string => {
-  try {
-    if (!raw || typeof raw !== "string") return fallback;
-    const u = new URL(raw);
-    if (u.protocol !== "https:" || !ALLOWED_MODELS_HOSTS.has(u.hostname)) {
-      return fallback;
-    }
-    return raw;
-  } catch {
-    return fallback;
-  }
-};
+const sanitizeModelsBaseURL = sanitizeProviderBaseURL;
 
 const extractVariables = (text: string): string[] => {
   if (!text) return [];

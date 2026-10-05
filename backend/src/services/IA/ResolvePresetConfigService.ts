@@ -2,7 +2,7 @@ import GetIntegrationByTypeService from "../QueueIntegrationServices/GetIntegrat
 import { decryptString } from "../../utils/crypto";
 
 export type ModuleType = "general" | "campaign" | "ticket" | "prompt";
-export type Provider = "openai" | "gemini";
+export type Provider = "openai" | "gemini" | "deepseek" | "grok";
 
 export interface PresetConfig {
   name: string;
@@ -34,14 +34,34 @@ export interface ResolvedConfig {
 const ResolvePresetConfigService = async ({
   companyId,
   module,
-  preferProvider
+  preferProvider,
+  strictProvider
 }: {
   companyId: number;
   module: ModuleType;
   preferProvider?: Provider;
+  // strictProvider: resolve SOMENTE o provider pedido — sem preset, sem
+  // fallback openai→gemini (usado no teste de conexão por provider).
+  strictProvider?: boolean;
 }): Promise<ResolvedConfig | null> => {
-  
+
   console.log(`[ResolvePresetConfig] Resolvendo para módulo: ${module}, companyId: ${companyId}`);
+
+  // Modo estrito: ignora preset e fallbacks — testa exatamente o
+  // provider solicitado, ou falha com "não configurado".
+  if (strictProvider && preferProvider) {
+    try {
+      const integration = await GetIntegrationByTypeService({ companyId, type: preferProvider });
+      if (integration?.jsonContent?.apiKey) {
+        return {
+          provider: preferProvider,
+          config: integration.jsonContent,
+          source: "global"
+        };
+      }
+    } catch {}
+    return null;
+  }
 
   // 1. Primeiro tenta buscar preset específico do módulo
   try {

@@ -718,19 +718,30 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
     try {
       setTesting(prev => ({ ...prev, [provider]: true }));
 
+      // Envia a config digitada no formulário — testa a chave antes de
+      // salvar (backend ignora apiKey mascarada/vazia e usa a persistida).
+      const cfg = providers[provider] || {};
       const { data } = await api.post("/ai/orchestrator/test-providers", {
-        providers: [provider]
+        providers: [provider],
+        configs: {
+          [provider]: {
+            apiKey: cfg.apiKey,
+            model: cfg.model,
+            baseURL: cfg.baseURL
+          }
+        }
       });
 
       const result = data.results[provider];
       if (result.success) {
-        toast.success(`${provider.toUpperCase()} conectado com sucesso!`);
+        toast.success(`${provider.toUpperCase()} conectado com sucesso${result.model ? ` (${result.model})` : ""}!`);
       } else {
         toast.error(`Erro no ${provider.toUpperCase()}: ${result.error}`);
       }
 
     } catch (error) {
-      toast.error(`Falha ao testar ${provider.toUpperCase()}`);
+      const msg = error?.response?.data?.error || `Falha ao testar ${provider.toUpperCase()}`;
+      toast.error(msg);
     } finally {
       setTesting(prev => ({ ...prev, [provider]: false }));
     }

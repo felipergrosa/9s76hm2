@@ -80,7 +80,11 @@ const UpdateQueueIntegrationService = async ({
       if (isMasked(incomingVal)) {
         // Mantém o valor já persistido (mascarado/ausente nunca sobrescreve)
         incoming[field] = current?.[field];
-      } else if (effectiveType === "openai" && !String(incomingVal).startsWith("ENC::")) {
+      } else if (
+        // Criptografa apiKey de providers de IA (antes só "openai")
+        ["openai", "gemini", "deepseek", "grok"].includes(effectiveType) &&
+        !String(incomingVal).startsWith("ENC::")
+      ) {
         incoming[field] = encryptString(incomingVal);
       }
     }

@@ -99,9 +99,12 @@ const CreateQueueIntegrationService = async ({
     throw new AppError(err.message);
   }
 
-  // Encrypt OpenAI apiKey if present
+  // Encrypt apiKey de providers de IA (antes só "openai" — gemini/
+  // deepseek/grok ficavam em plaintext ou, pior, criptografadas sem
+  // decrypt na leitura). Os demais tipos (typebot, n8n...) ficam intocados.
+  const AI_PROVIDER_TYPES = ["openai", "gemini", "deepseek", "grok"];
   let jsonToPersist: string = jsonContent;
-  if (type === "openai" && jsonContent) {
+  if (AI_PROVIDER_TYPES.includes(type) && jsonContent) {
     try {
       const parsed = JSON.parse(jsonContent);
       if (parsed?.apiKey && typeof parsed.apiKey === "string" && !String(parsed.apiKey).startsWith("ENC::")) {
