@@ -13,12 +13,16 @@ import { AuthContext } from "../../context/Auth/AuthContext";
 import WarningIcon from '@material-ui/icons/Warning';
 import SendIcon from '@material-ui/icons/Send';
 import MainContainer from "../../components/MainContainer";
+import { motion, useReducedMotion } from "framer-motion";
+import { bentoContainer, bentoItem, bentoItemReduced } from "../../components/bento/motionPresets";
+import "../../components/bento/bento.css";
 
 const useStyles = makeStyles((theme) => ({
   mainPaper: {
     flex: 1,
     padding: theme.spacing(3),
-    backgroundColor: '#f5f5f5',
+    // Segue a superfície do tema (bento-panel) — antes era #f5f5f5 fixo
+    backgroundColor: theme.palette.background.paper,
     borderRadius: theme.shape.borderRadius * 2,
   },
   title: {
@@ -31,7 +35,8 @@ const useStyles = makeStyles((theme) => ({
   },
   tabPanel: {
     padding: theme.spacing(3),
-    backgroundColor: '#fff',
+    // Superfície elevada do tema (suporte a dark mode no bento)
+    backgroundColor: theme.palette.background.default,
     borderRadius: theme.shape.borderRadius,
     boxShadow: '0px 2px 4px rgba(0,0,0,0.1)',
   },
@@ -94,6 +99,9 @@ const MessagesAPI = () => {
 
   const [tab, setTab] = useState(0);
   const [file, setFile] = useState(null);
+
+  const reducedMotion = useReducedMotion();
+  const itemVariant = reducedMotion ? bentoItemReduced : bentoItem;
 
   useEffect(() => {
     async function fetchData() {
@@ -193,7 +201,15 @@ const MessagesAPI = () => {
 
   return (
     <MainContainer useWindowScroll>
-    <Paper className={classes.mainPaper} variant="elevation" elevation={0}>
+    {/* Página de documentação/testes — sem lista: só painel bento + entrada spring */}
+    <motion.div
+      variants={bentoContainer}
+      initial="hidden"
+      animate="show"
+      style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, gap: 12 }}
+    >
+    <motion.div variants={itemVariant} style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+    <Paper className={`${classes.mainPaper} bento-panel`} variant="elevation" elevation={0}>
       <Typography variant="h4" className={classes.title}>
         Envio de Mensagens
       </Typography>
@@ -214,6 +230,7 @@ const MessagesAPI = () => {
       </AppBar>
 
       <TabPanel value={tab} index={0} classes={classes}>
+        <motion.div variants={itemVariant}>
         <Grid container spacing={4}>
           <Grid item xs={12} md={6}>
             <Typography variant="h6">Exemplo de Requisição</Typography>
@@ -261,9 +278,11 @@ Content-Type: application/json
             </Formik>
           </Grid>
         </Grid>
+        </motion.div>
       </TabPanel>
 
       <TabPanel value={tab} index={1} classes={classes}>
+        <motion.div variants={itemVariant}>
         <Grid container spacing={4}>
           <Grid item xs={12} md={6}>
             <Typography variant="h6">Exemplo de Requisição</Typography>
@@ -302,9 +321,11 @@ Content-Type: multipart/form-data
             </Formik>
           </Grid>
         </Grid>
+        </motion.div>
       </TabPanel>
 
       <TabPanel value={tab} index={2} classes={classes}>
+        <motion.div variants={itemVariant}>
         <Grid container spacing={4}>
           <Grid item xs={12} md={6}>
             <Typography variant="h6">Exemplo de Requisição</Typography>
@@ -403,8 +424,11 @@ Content-Type: application/json
             </Formik>
           </Grid>
         </Grid>
+        </motion.div>
       </TabPanel>
     </Paper>
+    </motion.div>
+    </motion.div>
     </MainContainer>
   );
 };

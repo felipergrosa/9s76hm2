@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useReducer, useContext } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 
-import { toast } from "react-toastify";
 import { useHistory } from "react-router-dom";
 
 import { makeStyles } from "@material-ui/core/styles";
@@ -20,10 +19,8 @@ import TableRowSkeleton from "../../components/TableRowSkeleton";
 import { i18n } from "../../translate/i18n";
 import MainHeader from "../../components/MainHeader";
 import Title from "../../components/Title";
-import MainHeaderButtonsWrapper from "../../components/MainHeaderButtonsWrapper";
 import MainContainer from "../../components/MainContainer";
 import toastError from "../../errors/toastError";
-import { AuthContext } from "../../context/Auth/AuthContext";
 
 import { CircularProgress, FormControl, FormControlLabel, Grid, IconButton, InputLabel, MenuItem, Select, Switch, TextField, Tooltip, Typography } from "@material-ui/core";
 import { UsersFilter } from "../../components/UsersFilter";
@@ -36,8 +33,18 @@ import moment from "moment";
 import ShowTicketLogModal from "../../components/ShowTicketLogModal";
 
 import { blue, green } from "@material-ui/core/colors";
-import { Facebook, Forward, History, Instagram, SaveAlt, Visibility, WhatsApp } from "@material-ui/icons";
+import { Facebook, Forward, History, Instagram, SaveAlt, WhatsApp } from "@material-ui/icons";
 import Autocomplete, { createFilterOptions } from "@material-ui/lab/Autocomplete";
+import {
+  Ticket as TicketIcon,
+  Clock as OpenIcon,
+  CheckCircle2 as DoneIcon,
+  Star as NpsIcon,
+} from "lucide-react";
+import { motion, useReducedMotion } from "framer-motion";
+import StatCard from "../../components/bento/StatCard";
+import { bentoContainer, bentoItem, bentoItemReduced } from "../../components/bento/motionPresets";
+import "../../components/bento/bento.css";
 
 const useStyles = makeStyles((theme) => ({
   mainContainer: {
@@ -100,8 +107,6 @@ const Reports = () => {
   const history = useHistory();
   const { getReport } = useDashboard();
 
-  const { user } = useContext(AuthContext);
-
   const [loading, setLoading] = useState(false);
   const [pageNumber, setPageNumber] = useState(1);
   const [pageSize, setPageSize] = useState(10); // Defina o tamanho da página
@@ -110,7 +115,7 @@ const Reports = () => {
   const [selectedContactId, setSelectedContactId] = useState(null);
   const [selectedWhatsapp, setSelectedWhatsapp] = useState([]);
   const [selectedStatus, setSelectedStatus] = useState([]);
-  const [selectedContact, setSelectedContact] = useState(null);
+
 
   // const [tagIds, setTagIds] = useState([]);
   const [queueIds, setQueueIds] = useState([]);
@@ -124,7 +129,19 @@ const Reports = () => {
 
   const [openTicketMessageDialog, setOpenTicketMessageDialog] = useState(false);
   const [ticketOpen, setTicketOpen] = useState(null);
-  const [hasMore, setHasMore] = useState(false);
+
+
+  // KPIs do strip bento — o total vem do count da API (resultado filtrado);
+  // os demais refletem os tickets da página carregada
+  const reportStats = useMemo(() => ({
+    total: totalTickets,
+    open: tickets.filter(t => t.status === "open").length,
+    closed: tickets.filter(t => t.status === "closed").length,
+    rated: tickets.filter(t => t.NPS !== null && t.NPS !== undefined && t.NPS !== "").length,
+  }), [tickets, totalTickets]);
+
+  const reducedMotion = useReducedMotion();
+  const itemVariant = reducedMotion ? bentoItemReduced : bentoItem;
 
   useEffect(() => {
     setLoading(true);
@@ -245,9 +262,6 @@ const Reports = () => {
       });
 
       setTotalTickets(data.totalTickets.total);
-
-      // Verifica se há mais resultados para definir hasMore
-      setHasMore(data.tickets.length === pageSize);
 
       setTickets(data.tickets); // Se for a primeira página, substitua os tickets
 
@@ -377,10 +391,27 @@ const Reports = () => {
           ticketId={ticketOpen.id}
         />
       )}
-      <Title>{i18n.t("reports.title")}</Title>
+      <motion.div
+        variants={bentoContainer}
+        initial="hidden"
+        animate="show"
+        style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, gap: 12 }}
+      >
+      <motion.div variants={itemVariant}>
+        <Title>{i18n.t("reports.title")}</Title>
+      </motion.div>
 
+      {/* Strip de KPIs bento — espelha o resultado do filtro aplicado */}
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+        <StatCard label="Tickets" value={reportStats.total} icon={<TicketIcon size={20} />} accent="var(--primary-color)" loading={loading} />
+        <StatCard label="Abertos" value={reportStats.open} icon={<OpenIcon size={20} />} accent="#f39c12" loading={loading} />
+        <StatCard label="Fechados" value={reportStats.closed} icon={<DoneIcon size={20} />} accent="#26c281" loading={loading} />
+        <StatCard label="Com avaliação NPS" value={reportStats.rated} icon={<NpsIcon size={20} />} accent="#8e44ad" loading={loading} />
+      </div>
+
+      <motion.div variants={itemVariant}>
       <MainHeader className={classes.mainHeaderFilter} style={{ display: 'flex' }}>
-        <Paper className={classes.mainPaperFilter}>
+        <Paper className={`${classes.mainPaperFilter} bento-panel`}>
           <div style={{ paddingTop: '15px' }} />
           <Grid container spacing={1}>
             <Grid item xs={12} md={3} xl={3}>
@@ -461,8 +492,10 @@ const Reports = () => {
         </Paper>
 
       </MainHeader>
+      </motion.div>
+      <motion.div variants={itemVariant} style={{ display: "flex", flexDirection: "column" }}>
       <Paper
-        className={classes.mainPaperTable}
+        className={`${classes.mainPaperTable} bento-panel`}
         variant="outlined"
       >
         <div className={classes.tableWrapper}>
@@ -551,8 +584,9 @@ const Reports = () => {
         </div>
 
       </Paper>
+      </motion.div>
 
-      <div>
+      <motion.div variants={itemVariant}>
         <Grid container>
           <Grid item xs={12} sm={10} md={10}>
 
@@ -602,7 +636,8 @@ const Reports = () => {
             </FormControl>
           </Grid>
         </Grid>
-      </div>
+      </motion.div>
+      </motion.div>
     </MainContainer >
   );
 };

@@ -1,6 +1,6 @@
 /* eslint-disable no-unused-vars */
 
-import React, { useState, useEffect, useReducer, useContext } from "react";
+import React, { useState, useEffect, useReducer, useContext, useMemo } from "react";
 import { toast } from "react-toastify";
 
 import { useHistory } from "react-router-dom";
@@ -27,6 +27,8 @@ import {
   Copy as FileCopyOutlinedIcon,
   Plus as AddIcon,
   Megaphone as CampaignsIcon,
+  CalendarClock as ScheduledIcon,
+  CheckCircle2 as DoneIcon,
 } from "lucide-react";
 import TextField from "@material-ui/core/TextField";
 import InputAdornment from "@material-ui/core/InputAdornment";
@@ -48,6 +50,10 @@ import ForbiddenPage from "../../components/ForbiddenPage";
 import usePlans from "../../hooks/usePlans";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import usePermissions from "../../hooks/usePermissions";
+import { motion, useReducedMotion } from "framer-motion";
+import StatCard from "../../components/bento/StatCard";
+import { bentoContainer, bentoItem, bentoItemReduced } from "../../components/bento/motionPresets";
+import "../../components/bento/bento.css";
 
 const reducer = (state, action) => {
   if (action.type === "SET_CAMPAIGNS") {
@@ -371,7 +377,7 @@ const Campaigns = () => {
     return () => {
       socket.off(`company-${companyId}-campaign`, onCompanyCampaign);
     };
-  }, [user]);
+  }, [user, socket]);
 
   const fetchCampaigns = async () => {
     try {
@@ -566,6 +572,18 @@ const Campaigns = () => {
     ? campaigns.filter((c) => c.status === statusFilter)
     : campaigns;
 
+  // KPIs do strip bento — o total vem do count da API; os contadores por
+  // status refletem a página carregada (socket atualiza em tempo real)
+  const campaignStats = useMemo(() => ({
+    total: totalCampaigns,
+    running: campaigns.filter((c) => c.status === "EM_ANDAMENTO").length,
+    scheduled: campaigns.filter((c) => c.status === "PROGRAMADA").length,
+    finished: campaigns.filter((c) => c.status === "FINALIZADA").length,
+  }), [campaigns, totalCampaigns]);
+
+  const reducedMotion = useReducedMotion();
+  const itemVariant = reducedMotion ? bentoItemReduced : bentoItem;
+
   return (
     <MainContainer useWindowScroll>
       <ConfirmationModal
@@ -580,7 +598,22 @@ const Campaigns = () => {
         {i18n.t("campaigns.confirmationModal.deleteMessage")}
       </ConfirmationModal>
       {hasPermission("campaigns.view") ? (
-        <Paper className={classes.paper} variant="outlined">
+        <motion.div
+          variants={bentoContainer}
+          initial="hidden"
+          animate="show"
+          style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, gap: 12 }}
+        >
+          {/* Strip de KPIs bento — espelha os status da lista em tempo real */}
+          <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+            <StatCard label="Campanhas" value={campaignStats.total} icon={<CampaignsIcon size={20} />} accent="var(--primary-color)" loading={loading} />
+            <StatCard label="Em andamento" value={campaignStats.running} icon={<PlayCircleOutlineIcon size={20} />} accent="#26c281" loading={loading} />
+            <StatCard label="Programadas" value={campaignStats.scheduled} icon={<ScheduledIcon size={20} />} accent="#3598dc" loading={loading} />
+            <StatCard label="Finalizadas" value={campaignStats.finished} icon={<DoneIcon size={20} />} accent="#8e44ad" loading={loading} />
+          </div>
+
+        <motion.div variants={itemVariant} style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+        <Paper className={`${classes.paper} bento-panel`} variant="outlined">
           {/* Header — padrão do gerenciador de Templates Meta */}
           <Box className={classes.header}>
             <div className={classes.headerText}>
@@ -823,6 +856,8 @@ const Campaigns = () => {
             </ul>
           </nav>
         </Paper>
+        </motion.div>
+        </motion.div>
       ) : (
         <ForbiddenPage />
       )}

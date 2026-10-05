@@ -38,6 +38,8 @@ import {
   User as UserIcon,
   Users as UsersIcon,
   Globe as RegionIcon,
+  TrendingUp as TrendingIcon,
+  UserX as NoContactsIcon,
 } from "lucide-react";
 
 import MainContainer from "../../components/MainContainer";
@@ -53,6 +55,10 @@ import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import ContactTagListModal from "../../components/ContactTagListModal";
 import usePermissions from "../../hooks/usePermissions";
+import { motion, useReducedMotion } from "framer-motion";
+import StatCard from "../../components/bento/StatCard";
+import { bentoContainer, bentoItem, bentoItemReduced } from "../../components/bento/motionPresets";
+import "../../components/bento/bento.css";
 
 const reducer = (state, action) => {
   switch (action.type) {
@@ -420,6 +426,32 @@ const Tags = () => {
     [visibleCategories, categorized]
   );
 
+  const reducedMotion = useReducedMotion();
+  const itemVariant = reducedMotion ? bentoItemReduced : bentoItem;
+
+  // KPIs do strip bento — derivados da lista de tags já carregada
+  const tagStats = useMemo(() => {
+    const list = Array.isArray(tags) ? tags : [];
+    const withContacts = list.filter((t) => (t?.contactCount || 0) > 0).length;
+    const top = list.reduce(
+      (acc, t) => ((t?.contactCount || 0) > (acc?.contactCount || 0) ? t : acc),
+      null
+    );
+    // Nome da tag mais usada, truncado para não estourar o valor do card
+    const topName =
+      top && (top.contactCount || 0) > 0
+        ? (top.name || "").length > 14
+          ? `${top.name.slice(0, 14)}…`
+          : top.name
+        : "—";
+    return {
+      total: list.length,
+      withContacts,
+      withoutContacts: list.length - withContacts,
+      topName,
+    };
+  }, [tags]);
+
   const handleOpenTagModal = () => {
     setSelectedTag(null);
     setTagModalOpen(true);
@@ -559,7 +591,24 @@ const Tags = () => {
       {!hasPermission("tags.view") ? (
         <ForbiddenPage />
       ) : (
-        <Paper className={classes.paper} variant="outlined">
+        <motion.div
+          variants={bentoContainer}
+          initial="hidden"
+          animate="show"
+          style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, gap: 12 }}
+        >
+          {/* Strip de KPIs bento — derivado da lista de tags já carregada */}
+          <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+            <StatCard label="Tags" value={tagStats.total} icon={<TagIcon size={20} />} accent="var(--primary-color)" loading={loading} />
+            <StatCard label="Com contatos" value={tagStats.withContacts} icon={<UsersIcon size={20} />} accent="#26c281" loading={loading} />
+            <StatCard label="Sem contatos" value={tagStats.withoutContacts} icon={<NoContactsIcon size={20} />} accent="#f39c12" loading={loading} />
+            <StatCard label="Mais usada" value={tagStats.topName} icon={<TrendingIcon size={20} />} accent="#8e44ad" loading={loading} />
+          </div>
+          <motion.div
+            variants={itemVariant}
+            style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}
+          >
+            <Paper className={`${classes.paper} bento-panel`} variant="outlined">
           {/* Cabeçalho no padrão: título + subtítulo + ações */}
           <div className={classes.header}>
             <div className={classes.headerText}>
@@ -828,7 +877,9 @@ const Tags = () => {
             })
           )}
           </div>
-        </Paper>
+            </Paper>
+          </motion.div>
+        </motion.div>
       )}
     </MainContainer>
   );

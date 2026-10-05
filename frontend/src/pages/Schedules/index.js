@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useReducer, useCallback, useContext } from "react";
+import React, { useState, useEffect, useMemo, useReducer, useCallback, useContext } from "react";
 import { toast } from "react-toastify";
 import { useHistory } from "react-router-dom";
-import { format } from "date-fns";
+import { format, isToday } from "date-fns";
 import moment from "moment";
 import { Calendar, momentLocalizer } from "react-big-calendar";
 import "moment/locale/pt-br";
@@ -31,6 +31,9 @@ import {
   CalendarClock as ScheduleIcon,
   Calendar as CalendarViewIcon,
   List as ListViewIcon,
+  CalendarDays as TodayIcon,
+  Clock as PendingIcon,
+  Send as SentIcon,
 } from "lucide-react";
 
 import MainContainer from "../../components/MainContainer";
@@ -45,6 +48,10 @@ import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import usePlans from "../../hooks/usePlans";
 import usePermissions from "../../hooks/usePermissions";
+import { motion, useReducedMotion } from "framer-motion";
+import StatCard from "../../components/bento/StatCard";
+import { bentoContainer, bentoItem, bentoItemReduced } from "../../components/bento/motionPresets";
+import "../../components/bento/bento.css";
 
 // Lê um query param da URL (ex.: ?contactId=123 abre o modal de agendamento)
 function getUrlParam(paramName) {
@@ -421,6 +428,19 @@ const Schedules = () => {
   const canEdit = hasPermission("schedules.edit");
   const canDelete = hasPermission("schedules.delete");
 
+  // KPIs do strip bento — derivados dos agendamentos já carregados
+  // (a listagem é paginada por scroll infinito; os contadores refletem
+  // as páginas carregadas e atualizam em tempo real via socket).
+  const scheduleStats = useMemo(() => ({
+    total: schedules.length,
+    today: schedules.filter((s) => s.sendAt && isToday(new Date(s.sendAt))).length,
+    pending: schedules.filter((s) => (s.status || "").toUpperCase() === "PENDENTE").length,
+    sent: schedules.filter((s) => (s.status || "").toUpperCase() === "ENVIADA").length,
+  }), [schedules]);
+
+  const reducedMotion = useReducedMotion();
+  const itemVariant = reducedMotion ? bentoItemReduced : bentoItem;
+
   useEffect(() => {
     async function fetchData() {
       const companyId = user.companyId;
@@ -597,7 +617,22 @@ const Schedules = () => {
       {!hasPermission("schedules.view") ? (
         <ForbiddenPage />
       ) : (
-        <Paper className={classes.paper} variant="outlined">
+        <motion.div
+          variants={bentoContainer}
+          initial="hidden"
+          animate="show"
+          style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, gap: 12 }}
+        >
+          {/* Strip de KPIs bento — status derivados dos agendamentos carregados */}
+          <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+            <StatCard label="Agendamentos" value={scheduleStats.total} icon={<ScheduleIcon size={20} />} accent="var(--primary-color)" loading={loading} />
+            <StatCard label="Hoje" value={scheduleStats.today} icon={<TodayIcon size={20} />} accent="#3598dc" loading={loading} />
+            <StatCard label="Pendentes" value={scheduleStats.pending} icon={<PendingIcon size={20} />} accent="#f39c12" loading={loading} />
+            <StatCard label="Enviadas" value={scheduleStats.sent} icon={<SentIcon size={20} />} accent="#26c281" loading={loading} />
+          </div>
+
+        <motion.div variants={itemVariant} style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+        <Paper className={`${classes.paper} bento-panel`} variant="outlined">
           {/* Cabeçalho: título + subtítulo + ação primária */}
           <div className={classes.header}>
             <div className={classes.headerText}>
@@ -889,6 +924,8 @@ const Schedules = () => {
             )}
           </div>
         </Paper>
+        </motion.div>
+        </motion.div>
       )}
     </MainContainer>
   );

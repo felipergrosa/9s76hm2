@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useReducer, useContext, useCallback, useRef } from "react";
+import React, { useState, useEffect, useMemo, useReducer, useContext, useCallback, useRef } from "react";
 
 import { toast } from "react-toastify";
 import { makeStyles } from "@material-ui/core/styles";
@@ -22,7 +22,12 @@ import Tab from "@material-ui/core/Tab";
 import Box from "@material-ui/core/Box";
 import Typography from "@material-ui/core/Typography";
 import Tooltip from "@material-ui/core/Tooltip";
-import { ShieldCheck, Users as UsersIcon } from "lucide-react";
+import {
+  ShieldCheck,
+  Users as UsersIcon,
+  Wifi as OnlineIcon,
+  Headphones as AttendantsIcon,
+} from "lucide-react";
 
 import MainContainer from "../../components/MainContainer";
 import Title from "../../components/Title";
@@ -39,6 +44,10 @@ import ForbiddenPage from "../../components/ForbiddenPage";
 import usePermissions from "../../hooks/usePermissions";
 import AvatarFallback from "../../components/AvatarFallback";
 import RolesTab from "./RolesTab";
+import { motion, useReducedMotion } from "framer-motion";
+import StatCard from "../../components/bento/StatCard";
+import { bentoContainer, bentoItem, bentoItemReduced } from "../../components/bento/motionPresets";
+import "../../components/bento/bento.css";
 
 const backendUrl = getBackendUrl();
 
@@ -299,6 +308,19 @@ const Users = () => {
   const canDeleteUser = hasPermission("users.delete");
   const canViewPage = canViewUsers || canViewRoles;
 
+  // KPIs do strip bento — derivados dos dados já carregados.
+  // A listagem é paginada (20 por página): "total" usa o count do backend;
+  // online/admins/atendentes refletem os usuários da página carregada.
+  const userStats = useMemo(() => ({
+    total: totalUsers || users.length,
+    online: users.filter((u) => u.online === true).length,
+    admins: users.filter((u) => u.profile === "admin" || u.super === true).length,
+    attendants: users.filter((u) => u.profile === "user").length,
+  }), [users, totalUsers]);
+
+  const reducedMotion = useReducedMotion();
+  const itemVariant = reducedMotion ? bentoItemReduced : bentoItem;
+
   // Usuários é a primeira aba (o uso do dia a dia); quem só tem
   // roles.view cai direto na aba de perfis.
   const [tab, setTab] = useState(canViewUsers ? "users" : "roles");
@@ -503,7 +525,25 @@ const Users = () => {
         key={i18n.language}
       />
       {canViewPage ? (
-        <Paper className={classes.mainPaper} variant="outlined">
+        <motion.div
+          variants={bentoContainer}
+          initial="hidden"
+          animate="show"
+          style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, gap: 12 }}
+        >
+          {/* Strip de KPIs bento — só aparece para quem tem users.view;
+              espelha os dados já carregados (total = count do backend) */}
+          {canViewUsers && (
+            <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+              <StatCard label="Usuários" value={userStats.total} icon={<UsersIcon size={20} />} accent="var(--primary-color)" loading={loading} />
+              <StatCard label="Online agora" value={userStats.online} icon={<OnlineIcon size={20} />} accent="#26c281" loading={loading} />
+              <StatCard label="Admins" value={userStats.admins} icon={<ShieldCheck size={20} />} accent="#8e44ad" loading={loading} />
+              <StatCard label="Atendentes" value={userStats.attendants} icon={<AttendantsIcon size={20} />} accent="#3598dc" loading={loading} />
+            </div>
+          )}
+
+          <motion.div variants={itemVariant} style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+        <Paper className={`${classes.mainPaper} bento-panel`} variant="outlined">
           {/* Header interno (padrão novo) */}
           <Box className={classes.pageHeader}>
             <Box>
@@ -810,6 +850,8 @@ const Users = () => {
             <RolesTab />
           </TabPanel>
         </Paper>
+          </motion.div>
+        </motion.div>
       ) : <ForbiddenPage />}
     </MainContainer>
   );

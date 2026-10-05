@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useReducer, useContext } from "react";
+import React, { useState, useEffect, useMemo, useReducer, useContext } from "react";
 import { toast } from "react-toastify";
 import { useHistory } from "react-router-dom";
 
@@ -21,6 +21,9 @@ import {
   Trash2 as DeleteIcon,
   Plus as AddIcon,
   Megaphone as AnnouncementIcon,
+  CheckCircle2 as ActiveIcon,
+  Flag as PriorityIcon,
+  Paperclip as MediaIcon,
 } from "lucide-react";
 
 import MainContainer from "../../components/MainContainer";
@@ -36,6 +39,10 @@ import { isArray } from "lodash";
 
 import { AuthContext } from "../../context/Auth/AuthContext";
 import usePermissions from "../../hooks/usePermissions";
+import { motion, useReducedMotion } from "framer-motion";
+import StatCard from "../../components/bento/StatCard";
+import { bentoContainer, bentoItem, bentoItemReduced } from "../../components/bento/motionPresets";
+import "../../components/bento/bento.css";
 
 const reducer = (state, action) => {
   if (action.type === "LOAD_ANNOUNCEMENTS") {
@@ -330,6 +337,18 @@ const Announcements = () => {
   const canEdit = hasPermission("announcements.edit");
   const canDelete = hasPermission("announcements.delete");
 
+  // KPIs do strip bento — derivados dos informativos já carregados
+  // (a listagem usa scroll infinito; os contadores refletem as páginas carregadas).
+  const announcementStats = useMemo(() => ({
+    total: announcements.length,
+    active: announcements.filter((a) => a.status === true).length,
+    highPriority: announcements.filter((a) => a.priority === 1).length,
+    withMedia: announcements.filter((a) => !!a.mediaName).length,
+  }), [announcements]);
+
+  const reducedMotion = useReducedMotion();
+  const itemVariant = reducedMotion ? bentoItemReduced : bentoItem;
+
   // trava para nao acessar pagina que não pode
   useEffect(() => {
     async function fetchData() {
@@ -494,8 +513,23 @@ const Announcements = () => {
         aria-labelledby="form-dialog-title"
         announcementId={selectedAnnouncement && selectedAnnouncement.id}
       />
+      <motion.div
+        variants={bentoContainer}
+        initial="hidden"
+        animate="show"
+        style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, gap: 12 }}
+      >
+        {/* Strip de KPIs bento — derivados dos informativos carregados */}
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+          <StatCard label="Informativos" value={announcementStats.total} icon={<AnnouncementIcon size={20} />} accent="var(--primary-color)" loading={loading} />
+          <StatCard label="Ativos" value={announcementStats.active} icon={<ActiveIcon size={20} />} accent="#26c281" loading={loading} />
+          <StatCard label="Alta prioridade" value={announcementStats.highPriority} icon={<PriorityIcon size={20} />} accent="#e7505a" loading={loading} />
+          <StatCard label="Com anexo" value={announcementStats.withMedia} icon={<MediaIcon size={20} />} accent="#f39c12" loading={loading} />
+        </div>
+
+      <motion.div variants={itemVariant} style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
       <Paper
-        className={classes.paper}
+        className={`${classes.paper} bento-panel`}
         variant="outlined"
         onScroll={handleScroll}
       >
@@ -655,6 +689,8 @@ const Announcements = () => {
           </>
         )}
       </Paper>
+      </motion.div>
+      </motion.div>
     </MainContainer>
   );
 };

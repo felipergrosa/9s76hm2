@@ -34,6 +34,9 @@ import {
     CheckCircle,
     Ban,
     GitMerge,
+    Users,
+    Tag,
+    SquareCheck,
 } from "lucide-react";
 import { Facebook, Instagram, WhatsApp, ImportExport, Backup, ContactPhone } from "@material-ui/icons";
 import { Tooltip, Menu, MenuItem } from "@material-ui/core";
@@ -67,6 +70,10 @@ import DuplicateContactsModal from "../../components/DuplicateContactsModal";
 import usePermissions from "../../hooks/usePermissions";
 import useAvatarPrefetch from "../../hooks/useAvatarPrefetch";
 import avatarCache from "../../utils/avatarCache";
+import { motion, useReducedMotion } from "framer-motion";
+import StatCard from "../../components/bento/StatCard";
+import { bentoContainer, bentoItem, bentoItemReduced } from "../../components/bento/motionPresets";
+import "../../components/bento/bento.css";
 
 const CustomTooltipProps = {
     arrow: true,
@@ -630,6 +637,24 @@ const Contacts = () => {
 
     useAvatarPrefetch(sortedContacts);
 
+    const reducedMotion = useReducedMotion();
+    const itemVariant = reducedMotion ? bentoItemReduced : bentoItem;
+
+    // KPIs do strip bento — total vem do backend; demais derivam da página atual
+    // (a listagem é paginada no servidor)
+    const contactStats = useMemo(() => {
+        const valid = sortedContacts.filter((c) => !!c?.isWhatsappValid).length;
+        const withTags = sortedContacts.filter(
+            (c) => Array.isArray(c?.tags) && c.tags.length > 0
+        ).length;
+        return {
+            total: totalContacts,
+            valid,
+            withTags,
+            selected: selectedContactIds.length,
+        };
+    }, [sortedContacts, totalContacts, selectedContactIds]);
+
     // Agora usando o handleEditContact do hook useContactHandlers
 
     // Agora usando o handleDeleteContact do hook useContactHandlers
@@ -928,6 +953,11 @@ const Contacts = () => {
                         }}
                     />
 
+                    <motion.div
+                        variants={bentoContainer}
+                        initial="hidden"
+                        animate="show"
+                    >
                     {/* Cabeçalho */}
                     <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
                         <h1 className="text-2xl md:text-3xl font-bold text-gray-800 dark:text-white">
@@ -937,6 +967,14 @@ const Contacts = () => {
                             </span>
                         </h1>
                     </header>
+
+                    {/* Strip de KPIs bento — total do backend; demais espelham a página atual */}
+                    <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-6">
+                        <StatCard label="Contatos" value={contactStats.total} icon={<Users size={20} />} accent="var(--primary-color)" loading={loading} />
+                        <StatCard label="WhatsApp válidos" value={contactStats.valid} icon={<CheckCircle size={20} />} accent="#26c281" loading={loading} />
+                        <StatCard label="Com tags" value={contactStats.withTags} icon={<Tag size={20} />} accent="#3598dc" loading={loading} />
+                        <StatCard label="Selecionados" value={contactStats.selected} icon={<SquareCheck size={20} />} accent="#8e44ad" loading={loading} />
+                    </div>
 
                     {/* Barra de Ações e Filtros - Mobile (2 linhas) */}
                     <div className="min-[1200px]:hidden flex flex-col gap-2 w-full max-w-[375px] mx-auto mb-4">
@@ -1186,8 +1224,9 @@ const Contacts = () => {
                         </div>
                     </div>
 
-                    {/* Tabela de Contatos (Desktop) */}
-                    <div className="hidden min-[1200px]:block bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
+                    {/* Tabela de Contatos (Desktop) — painel bento */}
+                    <motion.div variants={itemVariant}>
+                    <div className="hidden min-[1200px]:block bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden bento-panel">
                         <div className="overflow-x-auto">
                             <table className="w-full table-fixed text-sm text-left text-gray-500 dark:text-gray-400">
                                 <thead className="uppercase text-xs text-gray-500 bg-gray-100 dark:bg-gray-700 dark:text-gray-400 tracking-wider">
@@ -1347,6 +1386,7 @@ const Contacts = () => {
                             </ul>
                         </nav>
                     </div>
+                    </motion.div>
 
                     {/* Barra de Controle de Seleção (Mobile) */}
                     {isSelectionMode && (
@@ -1508,6 +1548,7 @@ const Contacts = () => {
                             </ul>
                         </div>
                     </nav>
+                    </motion.div>
                 </div>
             </MainContainer>
         </div>

@@ -34,8 +34,12 @@ import usePermissions from "../../hooks/usePermissions";
 import { Chip, Typography, Tooltip, Popover, Button } from "@material-ui/core";
 import IconButton from "@material-ui/core/IconButton";
 import LazyContactAvatar from "../../components/LazyContactAvatar";
-import { Search, List as ListIcon, Upload as UploadIcon, Filter as FilterIcon, Plus as PlusIcon, Edit, Trash2, CheckCircle, Ban, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Eraser as EraserIcon } from "lucide-react";
+import { Search, List as ListIcon, Upload as UploadIcon, Filter as FilterIcon, Plus as PlusIcon, Edit, Trash2, CheckCircle, Ban, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Eraser as EraserIcon, Unlink as UnlinkIcon } from "lucide-react";
 import LoadingOverlay from "../../components/LoadingOverlay";
+import { motion, useReducedMotion } from "framer-motion";
+import StatCard from "../../components/bento/StatCard";
+import { bentoContainer, bentoItem, bentoItemReduced } from "../../components/bento/motionPresets";
+import "../../components/bento/bento.css";
 
 import planilhaExemplo from "../../assets/planilha.xlsx";
 import ForbiddenPage from "../../components/ForbiddenPage";
@@ -463,6 +467,23 @@ const ContactListItems = () => {
 
   useAvatarPrefetch(sortedContacts);
 
+  const reducedMotion = useReducedMotion();
+  const itemVariant = reducedMotion ? bentoItemReduced : bentoItem;
+
+  // KPIs do strip bento — total vem do backend; válidos/inválidos/sem vínculo
+  // derivam dos itens da página atual (a listagem é paginada no servidor)
+  const itemStats = useMemo(() => {
+    const list = Array.isArray(sortedContacts) ? sortedContacts : [];
+    const valid = list.filter((c) => !!c?.isWhatsappValid).length;
+    const unlinked = list.filter((c) => !c?.contact?.id).length;
+    return {
+      total: totalContacts,
+      valid,
+      invalid: list.length - valid,
+      unlinked,
+    };
+  }, [sortedContacts, totalContacts]);
+
   // Paginação fixa (sem infinite scroll), espelhando /contatos
   // Quando "todos" está selecionado, não há paginação
   const handlePageChange = (page) => {
@@ -855,13 +876,25 @@ const ContactListItems = () => {
             !hasPermission("contact-lists.view") ?
               <ForbiddenPage />
               :
-              <>
+              <motion.div
+                variants={bentoContainer}
+                initial="hidden"
+                animate="show"
+              >
                 {/* Cabeçalho */}
                 <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-4">
                   <h1 className="text-2xl lg:text-3xl font-bold text-gray-800 dark:text-white">
                     Lista de Contatos {"›"} {contactList.name}
                   </h1>
                 </header>
+
+                {/* Strip de KPIs bento — total do backend; demais espelham a página atual */}
+                <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-4">
+                  <StatCard label="Itens na lista" value={itemStats.total} icon={<ListIcon size={20} />} accent="var(--primary-color)" loading={loading} />
+                  <StatCard label="WhatsApp válidos" value={itemStats.valid} icon={<CheckCircle size={20} />} accent="#26c281" loading={loading} />
+                  <StatCard label="WhatsApp inválidos" value={itemStats.invalid} icon={<Ban size={20} />} accent="#e7505a" loading={loading} />
+                  <StatCard label="Sem vínculo" value={itemStats.unlinked} icon={<UnlinkIcon size={20} />} accent="#f39c12" loading={loading} />
+                </div>
 
                 {/* Filtro salvo (acima da busca) */}
                 <FilterSummary />
@@ -913,8 +946,9 @@ const ContactListItems = () => {
                   ref={fileUploadRef}
                 />
 
-                {/* Tabela (Desktop) */}
-                <div id="desktop-table" className="hidden lg:block bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
+                {/* Tabela (Desktop) — painel bento */}
+                <motion.div variants={itemVariant}>
+                <div id="desktop-table" className="hidden lg:block bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden bento-panel">
                   <div className="overflow-x-hidden">
                     <table className="w-full table-auto text-sm text-left text-gray-500 dark:text-gray-400">
                       <thead className="text-xs text-gray-700 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-300 sticky top-0 z-10">
@@ -1096,6 +1130,7 @@ const ContactListItems = () => {
                     </table>
                   </div>
                 </div>
+                </motion.div>
 
                 {/* Paginação (Desktop) */}
                 <div className="hidden lg:flex justify-between items-center mt-4">
@@ -1285,7 +1320,7 @@ const ContactListItems = () => {
                     </ul>
                   </nav>
                 </div>
-              </>
+              </motion.div>
           }
         </div>
       </MainContainer>

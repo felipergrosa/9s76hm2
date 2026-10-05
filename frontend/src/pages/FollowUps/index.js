@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useReducer } from "react";
+import React, { useState, useEffect, useReducer, useMemo } from "react";
 import { useHistory } from "react-router-dom";
 import { toast } from "react-toastify";
 
@@ -27,6 +27,12 @@ import DeleteOutlineIcon from "@material-ui/icons/DeleteOutline";
 import EditIcon from "@material-ui/icons/Edit";
 import PeopleIcon from "@material-ui/icons/People";
 import RepeatIcon from "@material-ui/icons/Repeat";
+import {
+  Repeat as RepeatLucideIcon,
+  PlayCircle as ActiveIcon,
+  PauseCircle as PausedIcon,
+  KanbanSquare as LaneIcon,
+} from "lucide-react";
 
 import MainContainer from "../../components/MainContainer";
 import Title from "../../components/Title";
@@ -36,6 +42,10 @@ import TableRowSkeleton from "../../components/TableRowSkeleton";
 import ConfirmationModal from "../../components/ConfirmationModal";
 import toastError from "../../errors/toastError";
 import usePermissions from "../../hooks/usePermissions";
+import { motion, useReducedMotion } from "framer-motion";
+import StatCard from "../../components/bento/StatCard";
+import { bentoContainer, bentoItem, bentoItemReduced } from "../../components/bento/motionPresets";
+import "../../components/bento/bento.css";
 
 const reducer = (state, action) => {
   switch (action.type) {
@@ -303,6 +313,19 @@ const FollowUps = () => {
     return true;
   });
 
+  // KPIs do strip bento — derivados da lista já carregada.
+  // A listagem não traz contagem de inscritos (enrollments são buscados por
+  // sequência sob demanda), então o 4º KPI usa o tipo de gatilho.
+  const followUpStats = useMemo(() => ({
+    total: records.length,
+    active: records.filter(r => r.active).length,
+    inactive: records.filter(r => !r.active).length,
+    laneTrigger: records.filter(r => Number(r.tag?.kanban) === 1).length,
+  }), [records]);
+
+  const reducedMotion = useReducedMotion();
+  const itemVariant = reducedMotion ? bentoItemReduced : bentoItem;
+
   const handleDelete = async id => {
     try {
       await api.delete(`/drip-sequences/${id}`);
@@ -340,7 +363,22 @@ const FollowUps = () => {
         Etapas e inscrições associadas também serão removidas. Essa ação não pode ser desfeita.
       </ConfirmationModal>
 
-      <Paper className={classes.mainPaper} variant="outlined">
+      <motion.div
+        variants={bentoContainer}
+        initial="hidden"
+        animate="show"
+        style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, gap: 12 }}
+      >
+        {/* Strip de KPIs bento — derivado da lista carregada */}
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+          <StatCard label="Sequências" value={followUpStats.total} icon={<RepeatLucideIcon size={20} />} accent="var(--primary-color)" loading={loading} />
+          <StatCard label="Ativas" value={followUpStats.active} icon={<ActiveIcon size={20} />} accent="#26c281" loading={loading} />
+          <StatCard label="Inativas" value={followUpStats.inactive} icon={<PausedIcon size={20} />} accent="#f39c12" loading={loading} />
+          <StatCard label="Gatilho em lane" value={followUpStats.laneTrigger} icon={<LaneIcon size={20} />} accent="#8e44ad" loading={loading} />
+        </div>
+
+      <motion.div variants={itemVariant} style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+      <Paper className={`${classes.mainPaper} bento-panel`} variant="outlined">
         {/* Header — padrão do gerenciador de Templates Meta */}
         <Box className={classes.header}>
           <div className={classes.headerText}>
@@ -588,6 +626,8 @@ const FollowUps = () => {
           </>
         )}
       </Paper>
+      </motion.div>
+      </motion.div>
     </MainContainer>
   );
 };

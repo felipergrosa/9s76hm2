@@ -48,6 +48,11 @@ import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import { WhatsAppsContext } from "../../context/WhatsApp/WhatsAppsContext";
 import usePermissions from "../../hooks/usePermissions";
+import { motion, useReducedMotion } from "framer-motion";
+import { FileText, CheckCircle2, Clock, XCircle } from "lucide-react";
+import StatCard from "../../components/bento/StatCard";
+import { bentoContainer, bentoItem, bentoItemReduced } from "../../components/bento/motionPresets";
+import "../../components/bento/bento.css";
 
 const reducer = (state, action) => {
   switch (action.type) {
@@ -418,6 +423,22 @@ const MetaTemplates = () => {
   const canEdit = hasPermission("meta-templates.edit");
   const canDelete = hasPermission("meta-templates.delete");
 
+  const reducedMotion = useReducedMotion();
+  const itemVariant = reducedMotion ? bentoItemReduced : bentoItem;
+
+  // KPIs do strip bento — derivados da lista já carregada da conexão selecionada
+  // (status reais da Meta: APPROVED / PENDING / IN_REVIEW / REJECTED / PAUSED…)
+  const tplStats = useMemo(() => {
+    const list = templates || [];
+    const norm = (s) => (s || "").toUpperCase();
+    return {
+      total: list.length,
+      approved: list.filter((t) => norm(t.status) === "APPROVED").length,
+      pending: list.filter((t) => ["PENDING", "IN_REVIEW"].includes(norm(t.status))).length,
+      rejected: list.filter((t) => norm(t.status) === "REJECTED").length,
+    };
+  }, [templates]);
+
   // Apenas conexões oficiais (Meta WhatsApp Business API)
   const officialWhatsApps = useMemo(
     () =>
@@ -620,7 +641,22 @@ const MetaTemplates = () => {
         template={selectedTemplate}
         onSaved={fetchTemplates}
       />
-      <Paper className={classes.mainPaper} variant="outlined">
+      <motion.div
+        variants={bentoContainer}
+        initial="hidden"
+        animate="show"
+        style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, gap: 12 }}
+      >
+        {/* Strip de KPIs bento — espelha os status da lista carregada */}
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+          <StatCard label="Templates" value={tplStats.total} icon={<FileText size={20} />} accent="var(--primary-color)" loading={loading} />
+          <StatCard label="Aprovados" value={tplStats.approved} icon={<CheckCircle2 size={20} />} accent="#26c281" loading={loading} />
+          <StatCard label="Pendentes / Em análise" value={tplStats.pending} icon={<Clock size={20} />} accent="#f39c12" loading={loading} />
+          <StatCard label="Rejeitados" value={tplStats.rejected} icon={<XCircle size={20} />} accent="#e7505a" loading={loading} />
+        </div>
+
+      <motion.div variants={itemVariant} style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+      <Paper className={`${classes.mainPaper} bento-panel`} variant="outlined">
         {/* Cabeçalho no padrão novo: título + total + subtítulo + ações */}
         <div className={classes.header}>
           <div className={classes.headerText}>
@@ -819,7 +855,7 @@ const MetaTemplates = () => {
         {!loading && hasOfficialConnection && filteredTemplates.length > 0 && (
           <div className={classes.mobileList}>
             {filteredTemplates.map((template) => (
-              <div key={template.id} className={classes.card}>
+              <motion.div key={template.id} className={classes.card} variants={itemVariant}>
                 <div className={classes.cardHeader}>
                   <div className={classes.cardTitle}>
                     {canDelete && (
@@ -898,7 +934,7 @@ const MetaTemplates = () => {
                     </IconButton>
                   )}
                 </div>
-              </div>
+              </motion.div>
             ))}
           </div>
         )}
@@ -1049,6 +1085,8 @@ const MetaTemplates = () => {
           </Box>
         )}
       </Paper>
+      </motion.div>
+      </motion.div>
     </MainContainer>
   );
 };

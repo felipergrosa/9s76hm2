@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useReducer, useContext } from "react";
+import React, { useState, useEffect, useReducer, useContext, useMemo } from "react";
 import { toast } from "react-toastify";
 
 import { makeStyles } from "@material-ui/core/styles";
@@ -25,6 +25,8 @@ import {
   BarChart3 as AssessmentIcon,
   Plus as AddIcon,
   Mail as MailIcon,
+  CalendarClock as ScheduledIcon,
+  CheckCircle2 as DoneIcon,
 } from "lucide-react";
 
 import MainContainer from "../../components/MainContainer";
@@ -37,6 +39,10 @@ import ConfirmationModal from "../../components/ConfirmationModal";
 import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import usePermissions from "../../hooks/usePermissions";
+import { motion, useReducedMotion } from "framer-motion";
+import StatCard from "../../components/bento/StatCard";
+import { bentoContainer, bentoItem, bentoItemReduced } from "../../components/bento/motionPresets";
+import "../../components/bento/bento.css";
 
 const reducer = (state, action) => {
   switch (action.type) {
@@ -340,6 +346,18 @@ const EmailCampaigns = () => {
     }
   };
 
+  // KPIs do strip bento — derivados da lista já carregada
+  // (socket company-<id>-email-campaign atualiza em tempo real)
+  const emailStats = useMemo(() => ({
+    total: records.length,
+    running: records.filter(r => r.status === "EM_ANDAMENTO").length,
+    scheduled: records.filter(r => r.status === "PROGRAMADA").length,
+    finished: records.filter(r => r.status === "FINALIZADA").length,
+  }), [records]);
+
+  const reducedMotion = useReducedMotion();
+  const itemVariant = reducedMotion ? bentoItemReduced : bentoItem;
+
   const handleShowReport = async id => {
     try {
       const { data } = await api.get(`/email-campaigns/${id}/report`);
@@ -367,7 +385,22 @@ const EmailCampaigns = () => {
         onClose={() => setModalOpen(false)}
         emailCampaignId={selectedId}
       />
-      <Paper className={classes.paper} variant="outlined">
+      <motion.div
+        variants={bentoContainer}
+        initial="hidden"
+        animate="show"
+        style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, gap: 12 }}
+      >
+        {/* Strip de KPIs bento — espelha os status da lista em tempo real */}
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+          <StatCard label="Campanhas" value={emailStats.total} icon={<MailIcon size={20} />} accent="var(--primary-color)" loading={loading} />
+          <StatCard label="Em andamento" value={emailStats.running} icon={<SendIcon size={20} />} accent="#26c281" loading={loading} />
+          <StatCard label="Programadas" value={emailStats.scheduled} icon={<ScheduledIcon size={20} />} accent="#3598dc" loading={loading} />
+          <StatCard label="Finalizadas" value={emailStats.finished} icon={<DoneIcon size={20} />} accent="#8e44ad" loading={loading} />
+        </div>
+
+      <motion.div variants={itemVariant} style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+      <Paper className={`${classes.paper} bento-panel`} variant="outlined">
         {/* Header — padrão do gerenciador de Templates Meta */}
         <Box className={classes.header}>
           <div className={classes.headerText}>
@@ -602,6 +635,8 @@ const EmailCampaigns = () => {
           </>
         )}
       </Paper>
+      </motion.div>
+      </motion.div>
     </MainContainer>
   );
 };

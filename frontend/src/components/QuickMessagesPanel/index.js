@@ -7,7 +7,6 @@ import {
   Typography,
   Collapse,
   Button,
-  Chip,
   Tooltip,
   Menu,
   MenuItem,
@@ -22,7 +21,6 @@ import EditIcon from "@material-ui/icons/Edit";
 import FileCopyIcon from "@material-ui/icons/FileCopy";
 import SendIcon from "@material-ui/icons/Send";
 import VisibilityIcon from "@material-ui/icons/Visibility";
-import FlashOnIcon from "@material-ui/icons/FlashOn";
 import ControlPointDuplicateIcon from "@material-ui/icons/ControlPointDuplicate";
 import DeleteOutlineIcon from "@material-ui/icons/DeleteOutline";
 import AttachFileIcon from "@material-ui/icons/AttachFile";
@@ -343,9 +341,7 @@ const MessageItem = ({
   );
 };
 
-const ITEMS_PER_PAGE = 200;
-
-const QuickMessagesPanel = ({ onSendMessage, onEditMessage, showHeader = false, contact, ticket }) => {
+const QuickMessagesPanel = ({ onSendMessage, onEditMessage, showHeader = false, contact, ticket, onStatsChange }) => {
   const classes = useStyles({ showHeader });
   const theme = useTheme();
   const [messages, setMessages] = useState([]);
@@ -415,6 +411,29 @@ const QuickMessagesPanel = ({ onSendMessage, onEditMessage, showHeader = false, 
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParam, activeFilter]);
+
+  // Reporta os KPIs da lista carregada à página (strip bento) — opcional e
+  // puramente derivado de `messages`, sem fetch adicional nem mudança de filtro.
+  useEffect(() => {
+    if (typeof onStatsChange !== "function") return;
+
+    // Mesmo critério de "com mídia" usado no ícone do item (mediaPath ou flow com media)
+    const hasMedia = (m) =>
+      !!(m.mediaPath || (m.flow && m.flow.includes('"type":"media"')));
+
+    const groupCount = {};
+    messages.forEach((m) => {
+      if (m.groupName) groupCount[m.groupName] = (groupCount[m.groupName] || 0) + 1;
+    });
+    const top = Object.entries(groupCount).sort((a, b) => b[1] - a[1])[0];
+
+    onStatsChange({
+      total: messages.length,
+      withMedia: messages.filter(hasMedia).length,
+      topGroup: top ? `${top[0]} (${top[1]})` : "—",
+      gerais: messages.filter((m) => m.geral).length,
+    });
+  }, [messages, onStatsChange]);
 
   const toggleGroup = (groupName) => {
     setExpandedGroups(prev => ({

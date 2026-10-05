@@ -21,6 +21,9 @@ import {
   Plus as AddIcon,
   Search as SearchIcon,
   Trash2 as DeleteIcon,
+  Plug as IntegrationIcon,
+  Route as RouterIcon,
+  Brain as KnowledgeIcon,
 } from "lucide-react";
 
 import MainContainer from "../../components/MainContainer";
@@ -35,6 +38,10 @@ import ConfirmationModal from "../../components/ConfirmationModal";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import ForbiddenPage from "../../components/ForbiddenPage";
 import usePermissions from "../../hooks/usePermissions";
+import { motion, useReducedMotion } from "framer-motion";
+import StatCard from "../../components/bento/StatCard";
+import { bentoContainer, bentoItem, bentoItemReduced } from "../../components/bento/motionPresets";
+import "../../components/bento/bento.css";
 
 // ===== Estilos no padrão de listagem (referência: /connections) =====
 const useStyles = makeStyles((theme) => ({
@@ -301,6 +308,20 @@ const Queues = () => {
     );
   }, [queues, searchParam]);
 
+  // KPIs do strip bento — a listagem de filas vem completa do backend
+  // (sem paginação), então os contadores refletem o total real.
+  const queueStats = useMemo(() => ({
+    total: queues.length,
+    withIntegration: queues.filter((q) => q.integrationId != null).length,
+    routerActive: queues.filter((q) => q.ativarRoteador === true).length,
+    withKnowledge: queues.filter(
+      (q) => (q.ragCollection && String(q.ragCollection).trim()) || q.fileListId != null
+    ).length,
+  }), [queues]);
+
+  const reducedMotion = useReducedMotion();
+  const itemVariant = reducedMotion ? bentoItemReduced : bentoItem;
+
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -400,7 +421,22 @@ const Queues = () => {
         }}
       />
       {!hasPermission("queues.view") ? <ForbiddenPage /> : (
-        <Paper className={classes.paper} variant="outlined">
+        <motion.div
+          variants={bentoContainer}
+          initial="hidden"
+          animate="show"
+          style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, gap: 12 }}
+        >
+          {/* Strip de KPIs bento — derivados da lista completa de filas */}
+          <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+            <StatCard label="Filas" value={queueStats.total} icon={<QueuesIcon size={20} />} accent="var(--primary-color)" loading={loading} />
+            <StatCard label="Com integração" value={queueStats.withIntegration} icon={<IntegrationIcon size={20} />} accent="#32c5d2" loading={loading} />
+            <StatCard label="Roteador ativo" value={queueStats.routerActive} icon={<RouterIcon size={20} />} accent="#f39c12" loading={loading} />
+            <StatCard label="Base de conhecimento" value={queueStats.withKnowledge} icon={<KnowledgeIcon size={20} />} accent="#8e44ad" loading={loading} />
+          </div>
+
+        <motion.div variants={itemVariant} style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+        <Paper className={`${classes.paper} bento-panel`} variant="outlined">
           {/* 1. Cabeçalho: título + subtítulo + ações primárias */}
           <div className={classes.header}>
             <div className={classes.headerText}>
@@ -602,6 +638,8 @@ const Queues = () => {
             </>
           )}
         </Paper>
+        </motion.div>
+        </motion.div>
       )}
     </MainContainer>
   );
