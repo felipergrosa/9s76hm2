@@ -1,5 +1,4 @@
 import React from "react";
-import { motion } from "framer-motion";
 import BentoCard from "./BentoCard";
 import useCountUp from "./useCountUp";
 import { i18n } from "../../../translate/i18n";
@@ -18,7 +17,7 @@ const HeroCard = ({ className = "", label, value, icon, accent, attendants = [],
           <div>
             <span className="bento-label">{label}</span>
             <div className="bento-value bento-value--hero" style={{ marginTop: 8 }}>
-              {loading ? <span className="bento-shimmer" /> : <motion.span>{counted}</motion.span>}
+              {loading ? <span className="bento-shimmer" /> : counted}
             </div>
           </div>
           <div className="bento-icon" style={{ background: accent, width: 52, height: 52 }}>

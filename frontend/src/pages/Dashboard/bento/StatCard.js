@@ -1,5 +1,4 @@
 import React from "react";
-import { motion } from "framer-motion";
 import BentoCard from "./BentoCard";
 import useCountUp from "./useCountUp";
 
@@ -17,7 +16,7 @@ const StatCard = ({ className = "", label, value, icon, accent, loading }) => {
             {loading ? (
               <span className="bento-shimmer" />
             ) : isNumeric ? (
-              <motion.span>{counted}</motion.span>
+              counted
             ) : (
               value
             )}

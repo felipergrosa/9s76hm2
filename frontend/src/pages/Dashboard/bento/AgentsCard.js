@@ -1,5 +1,4 @@
 import React from "react";
-import { motion } from "framer-motion";
 import { Headset } from "lucide-react";
 import BentoCard from "./BentoCard";
 import useCountUp from "./useCountUp";
@@ -20,7 +19,7 @@ const AgentsCard = ({ className = "", online, total, loading }) => {
               <span className="bento-shimmer" />
             ) : (
               <>
-                <motion.span>{counted}</motion.span>
+                {counted}
                 <span className="bento-muted" style={{ fontSize: "1.1rem", fontWeight: 600 }}>
                   /{total}
                 </span>
