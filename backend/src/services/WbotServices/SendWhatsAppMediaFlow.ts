@@ -122,19 +122,21 @@ const SendWhatsAppMediaFlow = async ({
           ptt: false
         };
       }
-    } else if (typeMessage === "document" || typeMessage === "text") {
+    } else if (typeMessage === "document" || typeMessage === "text" || typeMessage === "application") {
+      // Preview nativo do WhatsApp: thumbnail da 1ª página para PDFs
+      let jpegThumbnail: Buffer | null = null;
+      if (mimetype === "application/pdf") {
+        try {
+          const { getPdfJpegThumbnail } = await import("../../helpers/PdfThumbnailGenerator");
+          jpegThumbnail = await getPdfJpegThumbnail(pathMedia);
+        } catch { /* thumbnail é opcional — nunca bloqueia o envio */ }
+      }
       options = {
         document: fs.readFileSync(pathMedia),
         caption: body,
         fileName: mediaName,
-        mimetype: mimetype
-      };
-    } else if (typeMessage === "application") {
-      options = {
-        document: fs.readFileSync(pathMedia),
-        caption: body,
-        fileName: mediaName,
-        mimetype: mimetype
+        mimetype: mimetype,
+        ...(jpegThumbnail && { jpegThumbnail })
       };
     } else {
       options = {

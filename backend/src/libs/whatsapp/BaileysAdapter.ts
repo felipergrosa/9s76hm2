@@ -505,9 +505,28 @@ export class BaileysAdapter implements IWhatsAppAdapter {
           case "ptt":
             content = { audio: mediaData, mimetype: options.mimetype || "audio/mp4", ptt: mediaType === "ptt" };
             break;
-          case "document":
-            content = { document: mediaData, mimetype: options.mimetype || "application/octet-stream", fileName: options.filename || "documento", caption: caption || "" };
+          case "document": {
+            // Preview nativo do WhatsApp: envia thumbnail da 1ª página do PDF
+            let jpegThumbnail: any;
+            if (
+              mediaPath &&
+              (options.mimetype === "application/pdf" ||
+                /\.pdf$/i.test(options.filename || mediaPath))
+            ) {
+              try {
+                const { getPdfJpegThumbnail } = await import("../../helpers/PdfThumbnailGenerator");
+                jpegThumbnail = await getPdfJpegThumbnail(mediaPath);
+              } catch { /* thumbnail é opcional — nunca bloqueia o envio */ }
+            }
+            content = {
+              document: mediaData,
+              mimetype: options.mimetype || "application/octet-stream",
+              fileName: options.filename || "documento",
+              caption: caption || "",
+              ...(jpegThumbnail && { jpegThumbnail })
+            };
             break;
+          }
           default:
             throw new WhatsAppAdapterError(`Tipo de mídia não suportado: ${mediaType}`, "UNSUPPORTED_MEDIA_TYPE");
         }

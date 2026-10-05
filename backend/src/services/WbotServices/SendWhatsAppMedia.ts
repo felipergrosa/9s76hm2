@@ -17,6 +17,7 @@ import { getWbotOrRecover } from "../../libs/wbot";
 import CreateMessageService from "../MessageServices/CreateMessageService";
 import formatBody from "../../helpers/Mustache";
 import ResolveSendJid from "../../helpers/ResolveSendJid";
+import { getPdfJpegThumbnail } from "../../helpers/PdfThumbnailGenerator";
 import logger from "../../utils/logger";
 interface Request {
   media: Express.Multer.File;
@@ -166,19 +167,20 @@ export const getMessageOptions = async (
         mimetype: "audio/ogg; codecs=opus",
         ptt: true
       };
-    } else if (typeMessage === "document") {
+    } else if (typeMessage === "document" || typeMessage === "application") {
+      // Preview nativo do WhatsApp: thumbnail da 1ª página para PDFs
+      let jpegThumbnail: Buffer | null = null;
+      if (mimeType === "application/pdf") {
+        try {
+          jpegThumbnail = await getPdfJpegThumbnail(pathMedia);
+        } catch { /* thumbnail é opcional — nunca bloqueia o envio */ }
+      }
       options = {
         document: fs.readFileSync(pathMedia),
         caption: body ? body : null,
         fileName: fileName,
-        mimetype: mimeType
-      };
-    } else if (typeMessage === "application") {
-      options = {
-        document: fs.readFileSync(pathMedia),
-        caption: body ? body : null,
-        fileName: fileName,
-        mimetype: mimeType
+        mimetype: mimeType,
+        ...(jpegThumbnail && { jpegThumbnail })
       };
     } else {
       // imagem
@@ -281,24 +283,23 @@ const SendWhatsAppMedia = async ({
       };
       unlinkSync(convert);
       bodyTicket = "🎵 Arquivo de áudio"
-    } else if (typeMessage === "document" || typeMessage === "text") {
+    } else if (typeMessage === "document" || typeMessage === "text" || typeMessage === "application") {
+      // Preview nativo do WhatsApp: thumbnail da 1ª página para PDFs
+      let jpegThumbnail: Buffer | null = null;
+      if (media.mimetype === "application/pdf") {
+        try {
+          jpegThumbnail = await getPdfJpegThumbnail(pathMedia);
+        } catch { /* thumbnail é opcional — nunca bloqueia o envio */ }
+      }
       options = {
         document: fs.readFileSync(pathMedia),
         caption: bodyMedia,
         fileName: media.originalname.replace('/', '-'),
         mimetype: media.mimetype,
         contextInfo,
+        ...(jpegThumbnail && { jpegThumbnail })
       };
-      bodyTicket = "📂 Documento"
-    } else if (typeMessage === "application") {
-      options = {
-        document: fs.readFileSync(pathMedia),
-        caption: bodyMedia,
-        fileName: media.originalname.replace('/', '-'),
-        mimetype: media.mimetype,
-        contextInfo,
-      };
-      bodyTicket = "📎 Outros anexos"
+      bodyTicket = typeMessage === "application" ? "📎 Outros anexos" : "📂 Documento"
     } else {
       if (media.mimetype.includes("gif")) {
         options = {

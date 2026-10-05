@@ -474,11 +474,25 @@ export class BaileysAdapter implements ITurboEngine {
         mimetype: options?.mimetype || "audio/mp4",
       });
     } else {
+      // Preview nativo do WhatsApp: thumbnail da 1ª página para PDFs
+      // (só é possível quando a mídia é um caminho local)
+      let jpegThumbnail: any;
+      const isLocalPath = typeof media === "string" && !media.startsWith("http");
+      if (
+        isLocalPath &&
+        (options?.mimetype === "application/pdf" || /\.pdf$/i.test(options?.filename || media))
+      ) {
+        try {
+          const { getPdfJpegThumbnail } = await import("../../helpers/PdfThumbnailGenerator");
+          jpegThumbnail = await getPdfJpegThumbnail(media as string);
+        } catch { /* thumbnail é opcional — nunca bloqueia o envio */ }
+      }
       waMessage = await this.socket.sendMessage(to, {
         document: content,
         fileName: options?.filename || "document",
         mimetype: options?.mimetype,
         caption: options?.caption,
+        ...(jpegThumbnail && { jpegThumbnail }),
       });
     }
 

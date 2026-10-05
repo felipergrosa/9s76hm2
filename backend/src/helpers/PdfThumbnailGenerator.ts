@@ -2,9 +2,78 @@ import * as fs from "fs";
 import * as path from "path";
 import logger from "../utils/logger";
 
+// NOTA: não misturar o pacote `canvas` com o pdfjs — os Path2D/DOMMatrix
+// internos do pdfjs vêm de @napi-rs/canvas. O canvas de saída deve ser
+// criado via `doc.canvasFactory` (NodeCanvasFactory do pdfjs).
+
 /**
- * Gera thumbnail da primeira página do PDF usando pdfjs-dist (modo SVG) + sharp.
- * Não requer canvas nativo (binários pesados), apenas pdfjs-dist puro.
+ * Renderiza a primeira página do PDF em um canvas (pdfjs-dist + node-canvas)
+ * e retorna o buffer PNG junto com as dimensões. Retorna null em falha.
+ */
+async function renderPdfFirstPage(
+  pdfPath: string,
+  maxWidth = 300,
+  maxHeight = 420
+): Promise<{ buffer: Buffer; width: number; height: number } | null> {
+  // pdfjs-dist v5 é ESM puro — usar dynamic import
+  const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs" as any);
+
+  // Em Node, o pdfjs precisa dos dados de fontes/cmaps/wasm empacotados
+  // para rasterizar texto e conteúdo — sem eles a página sai em branco.
+  const pdfjsDir = path
+    .dirname(require.resolve("pdfjs-dist/package.json"))
+    .replace(/\\/g, "/");
+
+  const pdfBuffer = fs.readFileSync(pdfPath);
+  const pdfDoc = await pdfjsLib.getDocument({
+    data: new Uint8Array(pdfBuffer),
+    isEvalSupported: false,
+    disableFontFace: true,
+    standardFontDataUrl: `${pdfjsDir}/standard_fonts/`,
+    cMapUrl: `${pdfjsDir}/cmaps/`,
+    cMapPacked: true,
+    wasmUrl: `${pdfjsDir}/wasm/`,
+    verbosity: 0,
+  }).promise;
+
+  try {
+    const page = await pdfDoc.getPage(1);
+    const viewport = page.getViewport({ scale: 1.0 });
+    const scale = Math.min(maxWidth / viewport.width, maxHeight / viewport.height);
+    const scaledViewport = page.getViewport({ scale });
+
+    const pair = (pdfDoc as any).canvasFactory.create(
+      scaledViewport.width,
+      scaledViewport.height
+    );
+
+    await page.render({
+      canvasContext: pair.context,
+      viewport: scaledViewport,
+      canvasFactory: (pdfDoc as any).canvasFactory,
+      background: "#ffffff",
+    }).promise;
+
+    // @napi-rs/canvas expõe encode() (async); node-canvas, toBuffer()
+    const buffer: Buffer = pair.canvas.encode
+      ? await pair.canvas.encode("png")
+      : pair.canvas.toBuffer("image/png");
+    return {
+      buffer,
+      width: Math.ceil(scaledViewport.width),
+      height: Math.ceil(scaledViewport.height),
+    };
+  } finally {
+    try {
+      await pdfDoc.destroy();
+    } catch { }
+  }
+}
+
+/**
+ * Gera thumbnail da primeira página do PDF e salva em disco como
+ * `<nome>-thumb.png` (convenção consumida pelo frontend em MessagesList).
+ * Retorna o caminho do arquivo ou null em falha.
  */
 export async function generatePdfThumbnail(pdfPath: string): Promise<string | null> {
   const dir = path.dirname(pdfPath);
@@ -15,81 +84,23 @@ export async function generatePdfThumbnail(pdfPath: string): Promise<string | nu
     return thumbPath;
   }
 
-  logger.info(`[PdfThumbnail] Gerando thumbnail para: ${path.basename(pdfPath)}`);
-
-  // Tentativa 1: pdfjs-dist + svg + sharp (leve, sem canvas nativo)
   try {
-    logger.info(`[PdfThumbnail] Iniciando modo SVG...`);
-    
-    // pdfjs-dist v5 é ESM puro — usar dynamic import
-    const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs" as any);
-    logger.info(`[PdfThumbnail] pdfjs-lib carregado, versão: ${pdfjsLib?.version || 'unknown'}`);
-
-    const pdfBuffer = fs.readFileSync(pdfPath);
-    const pdfData = new Uint8Array(pdfBuffer);
-    logger.info(`[PdfThumbnail] PDF carregado: ${pdfBuffer.length} bytes`);
-
-    const loadingTask = pdfjsLib.getDocument({
-      data: pdfData,
-      useSystemFonts: true,
-      disableFontFace: true,
-      verbosity: 0,
-    });
-    const pdfDoc = await loadingTask.promise;
-    logger.info(`[PdfThumbnail] Documento PDF pronto, páginas: ${pdfDoc.numPages}`);
-    
-    const page = await pdfDoc.getPage(1);
-    logger.info(`[PdfThumbnail] Página 1 obtida`);
-
-    const viewport = page.getViewport({ scale: 1.0 });
-    // Escala para caber em 300x420 mantendo proporção
-    const scale = Math.min(300 / viewport.width, 420 / viewport.height);
-    const scaledViewport = page.getViewport({ scale });
-
-    const width = Math.floor(scaledViewport.width);
-    const height = Math.floor(scaledViewport.height);
-    logger.info(`[PdfThumbnail] Viewport: ${width}x${height} (scale: ${scale.toFixed(2)})`);
-
-    // Renderizar como SVG (não precisa de canvas nativo!)
-    logger.info(`[PdfThumbnail] Obtendo operator list...`);
-    const svgBuilder = await page.getOperatorList();
-    logger.info(`[PdfThumbnail] SVGGraphics disponível: ${!!pdfjsLib.SVGGraphics}`);
-    
-    const svgGfx = new pdfjsLib.SVGGraphics(page.commonObjs, page.objs);
-    logger.info(`[PdfThumbnail] Renderizando SVG...`);
-    
-    const svgElement = await svgGfx.getSVG(svgBuilder, scaledViewport);
-    logger.info(`[PdfThumbnail] SVG gerado, elemento: ${!!svgElement}`);
-
-    // Converter SVG element para string
-    const svgString = new XMLSerializer().serializeToString(svgElement);
-    logger.info(`[PdfThumbnail] SVG string length: ${svgString.length}`);
-    logger.info(`[PdfThumbnail] SVG string: ${svgString.substring(0, 100)}...`);
-
-    // Usar sharp para converter SVG em PNG
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const sharp = require("sharp");
-    await sharp(Buffer.from(svgString), {
-      density: 150, // DPI para renderização nítida
-    })
-      .resize(width, height, { fit: "inside" })
-      .png()
-      .toFile(thumbPath);
-
-    logger.info(`[PdfThumbnail] Thumbnail real gerado (SVG mode): ${thumbPath}`);
-    return thumbPath;
+    const rendered = await renderPdfFirstPage(pdfPath);
+    if (rendered) {
+      fs.writeFileSync(thumbPath, rendered.buffer);
+      logger.info(`[PdfThumbnail] Thumbnail gerado: ${thumbPath}`);
+      return thumbPath;
+    }
   } catch (err: any) {
-    logger.warn(`[PdfThumbnail] pdfjs-dist SVG falhou: ${err?.message}`);
-    logger.warn(`[PdfThumbnail] Stack: ${err?.stack}`);
-    logger.warn(`[PdfThumbnail] SVG error details: ${err?.toString()}`);
+    logger.warn(`[PdfThumbnail] Render pdfjs/canvas falhou: ${err?.message}`);
   }
 
-  // Fallback: placeholder SVG via sharp
+  // Fallback: placeholder SVG via sharp (nunca bloqueia o envio)
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const sharp = require("sharp");
     const fileName = path.basename(pdfPath, ".pdf");
-    const displayName = fileName.length > 24 ? fileName.substring(0, 21) + "..." : fileName;
+    const displayName = fileName.length > 24 ? `${fileName.substring(0, 21)}...` : fileName;
 
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="280">
   <rect width="200" height="280" fill="#f5f5f5" rx="4"/>
@@ -107,6 +118,43 @@ export async function generatePdfThumbnail(pdfPath: string): Promise<string | nu
     return thumbPath;
   } catch (err: any) {
     logger.warn(`[PdfThumbnail] Fallback sharp também falhou: ${err?.message}`);
+    return null;
+  }
+}
+
+/**
+ * Retorna a thumbnail da primeira página do PDF como Buffer JPEG,
+ * no formato esperado pelo campo `jpegThumbnail` do Baileys
+ * (preview exibido no balão de documento do WhatsApp).
+ */
+export async function getPdfJpegThumbnail(pdfPath: string): Promise<Buffer | null> {
+  try {
+    // Reaproveita o arquivo em disco quando já renderizado
+    const dir = path.dirname(pdfPath);
+    const baseName = path.basename(pdfPath, path.extname(pdfPath));
+    const cachedPng = path.join(dir, `${baseName}-thumb.png`);
+
+    let png: Buffer | null = null;
+    if (fs.existsSync(cachedPng)) {
+      png = fs.readFileSync(cachedPng);
+    } else {
+      const rendered = await renderPdfFirstPage(pdfPath);
+      if (!rendered) return null;
+      png = rendered.buffer;
+      try {
+        fs.writeFileSync(cachedPng, png);
+      } catch { }
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const sharp = require("sharp");
+    // jpegThumbnail do WhatsApp: pequeno (~96px de largura é suficiente)
+    return await sharp(png)
+      .resize({ width: 96, withoutEnlargement: true })
+      .jpeg({ quality: 70 })
+      .toBuffer();
+  } catch (err: any) {
+    logger.warn(`[PdfThumbnail] getPdfJpegThumbnail falhou: ${err?.message}`);
     return null;
   }
 }
