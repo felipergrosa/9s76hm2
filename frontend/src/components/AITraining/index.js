@@ -7,3 +7,4 @@ export { default as PromptFlowVisualization } from "./PromptFlowVisualization";
 export { default as ToolCallsHistory } from "./ToolCallsHistory";
 export { default as OnboardingTour } from "./OnboardingTour";
 export { default as AgentCapabilities } from "./AgentCapabilities";
+export { default as MobileChatPreview } from "./MobileChatPreview";

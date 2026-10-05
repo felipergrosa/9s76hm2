@@ -28,6 +28,14 @@ aiAgentRoutes.put(
   AIAgentFunnelStageController.updateStageSystemPrompt
 );
 
+// Atualizar funções habilitadas de uma etapa (array vazio = todas)
+aiAgentRoutes.put(
+  "/ai-agents/:agentId/funnel-stages/:stageId/enabled-functions",
+  isAuth,
+  checkPermission("ai-agents.edit"),
+  AIAgentFunnelStageController.updateStageEnabledFunctions
+);
+
 // Criar novo agente
 aiAgentRoutes.post("/ai-agents", isAuth, checkPermission("ai-agents.create"), AIAgentController.store);
 

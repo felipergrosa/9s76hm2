@@ -39,7 +39,6 @@ import { Eraser as ClearIcon } from "lucide-react";
 import MainContainer from "../../components/MainContainer";
 import Title from "../../components/Title";
 import ForbiddenPage from "../../components/ForbiddenPage";
-import WhatsAppPreview from "../../components/CampaignModal/WhatsAppPreview";
 
 import {
   PromptAssistant,
@@ -50,7 +49,8 @@ import {
   PromptFlowVisualization,
   ToolCallsHistory,
   OnboardingTour,
-  AgentCapabilities
+  AgentCapabilities,
+  MobileChatPreview
 } from "../../components/AITraining";
 
 import api from "../../services/api";
@@ -439,7 +439,7 @@ const AITraining = () => {
     return String(newId);
   };
 
-  const handleSendLocal = async () => {
+  const handleSendLocal = async (overrideText) => {
     if (!selectedAgentId) return toast.error("Selecione um agente");
     if (!selectedStageId) return toast.error("Selecione uma etapa");
     if (!simulate && !selectedWhatsappId) return toast.error("Selecione uma conexão");
@@ -451,12 +451,13 @@ const AITraining = () => {
     if (!simulate && !isOfficial && !selectedGroupId) {
       return toast.error("Selecione um grupo de destino");
     }
-    if (!messageText.trim()) return;
+    const raw = typeof overrideText === "string" ? overrideText : messageText;
+    if (!raw.trim()) return;
 
     if (sending) return;
 
 
-    const text = messageText.trim();
+    const text = raw.trim();
     const customerMsgId = `m-${Date.now()}-${Math.random()}`;
 
     setMessages((prev) => [...prev, { id: customerMsgId, from: "customer", text }]);
@@ -473,16 +474,19 @@ const AITraining = () => {
 
       const meta = data?.metadata || {};
       const assistantText = data?.message?.text;
-      if (assistantText) {
+      // Anexa os toolCalls à mensagem — o preview mobile usa para
+      // renderizar anexos enviados e banner de transferência
+      const msgToolCalls = Array.isArray(meta.toolCalls) ? meta.toolCalls : [];
+      if (assistantText || msgToolCalls.length > 0) {
         // messageCount conta as mensagens reais da sessão (multi-turno no backend);
         // a resposta do assistente é a última, então o índice é messageCount - 1
         const realIndex = typeof meta.messageCount === "number" ? meta.messageCount - 1 : undefined;
-        setMessages((prev) => [...prev, { id: `m-${Date.now()}-${Math.random()}`, from: "assistant", text: assistantText, messageIndex: realIndex }]);
+        setMessages((prev) => [...prev, { id: `m-${Date.now()}-${Math.random()}`, from: "assistant", text: assistantText || "", messageIndex: realIndex, toolCalls: msgToolCalls }]);
       }
       appendLog(`[ai] provider=${meta.provider || "?"} model=${meta.model || "?"} time=${meta.processingTime || "?"}ms`);
 
-      if (meta.toolCalls && Array.isArray(meta.toolCalls)) {
-        const newToolCalls = meta.toolCalls.map((tc, idx) => ({
+      if (msgToolCalls.length > 0) {
+        const newToolCalls = msgToolCalls.map((tc, idx) => ({
           id: `tc-${Date.now()}-${idx}`,
           name: tc.name,
           parameters: tc.parameters,
@@ -868,8 +872,13 @@ const AITraining = () => {
             <Grid item xs={12} md={6}>
               <Paper className={classes.leftPane} variant="outlined">
                 <Box display="flex" flexDirection="column" alignItems="center" height="100%">
-                  <WhatsAppPreview
+                  <MobileChatPreview
                     messages={messages}
+                    sending={sending}
+                    inputValue={messageText}
+                    onInputChange={setMessageText}
+                    onSend={handleSendLocal}
+                    onQuickReply={(opt) => handleSendLocal(opt)}
                     onRateMessage={onRateMessage}
                     messageRatings={messageRatings}
                     contactName={
@@ -877,33 +886,8 @@ const AITraining = () => {
                         ? (groups.find((g) => String(g.id) === String(selectedGroupId))?.subject || "Cliente")
                         : "Cliente"
                     }
-                    companyName={selectedWhatsapp ? selectedWhatsapp.name : "Empresa"}
+                    agentName={selectedWhatsapp ? selectedWhatsapp.name : "Atendente Virtual"}
                   />
-                  <Box mt={2} width="100%">
-                    <Grid container spacing={1} alignItems="center">
-                      <Grid item xs>
-                        <TextField
-                          fullWidth
-                          variant="outlined"
-                          size="small"
-                          placeholder="Mensagem do cliente..."
-                          value={messageText}
-                          onChange={(e) => setMessageText(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" && !e.shiftKey) {
-                              e.preventDefault();
-                              handleSendLocal();
-                            }
-                          }}
-                        />
-                      </Grid>
-                      <Grid item>
-                        <Button color="primary" variant="contained" onClick={handleSendLocal} disabled={sending}>
-                          {sending ? <CircularProgress size={20} /> : "Enviar"}
-                        </Button>
-                      </Grid>
-                    </Grid>
-                  </Box>
                 </Box>
               </Paper>
             </Grid>

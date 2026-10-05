@@ -4,6 +4,7 @@ import AIAgent from "../models/AIAgent";
 import FunnelStage from "../models/FunnelStage";
 import { BOT_AVAILABLE_FUNCTIONS } from "../services/IA/BotFunctions";
 import { DEFAULT_SKILLS } from "../services/IA/AISkill";
+import { SKILL_CATALOG, SKILL_CATEGORY_LABELS } from "../services/IA/SkillCatalog";
 
 /**
  * Mapa de capacidades do software para IA: funções executáveis pelo bot,
@@ -27,7 +28,19 @@ export const getCapabilities = async (req: Request, res: Response): Promise<Resp
     functions: skill.functions
   }));
 
-  const response: any = { functions, defaultSkills };
+  // Catálogo completo de skills ativáveis — o frontend usa para
+  // agrupar por categoria e ativar sob demanda por agente.
+  const skillCatalog = SKILL_CATALOG.map(s => ({
+    key: s.key,
+    name: s.name,
+    category: s.category,
+    categoryLabel: SKILL_CATEGORY_LABELS[s.category] || s.category,
+    description: s.description,
+    functions: s.functions,
+    priority: s.priority
+  }));
+
+  const response: any = { functions, defaultSkills, skillCatalog, skillCategories: SKILL_CATEGORY_LABELS };
 
   if (agentId || stageId) {
     if (!agentId || !stageId) {
