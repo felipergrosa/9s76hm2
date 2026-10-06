@@ -51,7 +51,13 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
     name: 'Sincroniza Whaticket para Nobre',
     active: true,
     isArchived: false,
-    settings: { executionOrder: 'v1' },
+    settings: {
+        executionOrder: 'v1',
+        binaryMode: 'separate',
+        timeSavedMode: 'fixed',
+        callerPolicy: 'workflowsFromSameOwner',
+        availableInMCP: false,
+    },
 })
 export class SincronizaWhaticketParaNobreWorkflow {
     // =====================================================================

@@ -1,13 +1,13 @@
 {
   "workflows": {
     "8VjNDtjUtwgeE6qA": {
-      "lastSyncedHash": "3ff0ada838ca3310033f5becebb552dd297cf8ea278456aa6fb9c0da41935eba",
-      "lastSyncedAt": "2026-10-02T18:16:56.900Z",
+      "lastSyncedHash": "1a19a6f96186294ed1de5cf1eb3ee3064322dfa52a326664622fde91954be40a",
+      "lastSyncedAt": "2026-10-06T17:03:41.716Z",
       "filename": "Atualiza Cadastro Nobre_whaticket.workflow.ts"
     },
     "XoCApUU4UOnmjYi4": {
-      "lastSyncedHash": "33bbacae0a54fd9ade720918f1769d824ffc7be78388540cf6dac58e4fd7cbf7",
-      "lastSyncedAt": "2026-10-01T15:02:43.420Z",
+      "lastSyncedHash": "aeb8e0252abfb67825e05321a063265cec5bf1b076e948344f118e9d8ed03226",
+      "lastSyncedAt": "2026-10-06T14:54:48.286Z",
       "filename": "Sincroniza Whaticket para Nobre.workflow.ts"
     },
     "190oc7uwtrLMiQxN": {

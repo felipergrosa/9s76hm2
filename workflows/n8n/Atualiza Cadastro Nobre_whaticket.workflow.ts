@@ -2,7 +2,7 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 
 // <workflow-map>
 // Workflow : Atualiza Cadastro Nobre/whaticket
-// Nodes   : 15  |  Connections: 14
+// Nodes   : 16  |  Connections: 15
 //
 // NODE INDEX
 // ──────────────────────────────────────────────────────────────────
@@ -19,6 +19,7 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 // PreparaCache                       code
 // UpsertCache                        dataTable
 // AtualizaDataSincronizacao          code
+// GravaCursor                        dataTable
 // AtualizaGlobal                     code
 // Log                                code
 // StickyNote                         stickyNote
@@ -26,19 +27,20 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 // ROUTING MAP
 // ──────────────────────────────────────────────────────────────────
 // ScheduleTrigger
-//    → CalculaCutoff
-//      → BuscaClientesSql
-//        → Log
-//          → MapeiaCampos
-//            → Code
-//              → FiltraMudanca
-//                → LimitaLote
-//                  → SincronizarContatoWhaticket
-//                    → PreparaCache
-//                      → UpsertCache
-//                        → AtualizaDataSincronizacao
-//               .out(1) → AtualizaDataSincronizacao (↩ loop)
 //    → LeCache
+//      → CalculaCutoff
+//        → BuscaClientesSql
+//          → Log
+//            → MapeiaCampos
+//              → Code
+//                → FiltraMudanca
+//                  → LimitaLote
+//                    → SincronizarContatoWhaticket
+//                      → PreparaCache
+//                        → UpsertCache
+//                          → AtualizaDataSincronizacao
+//                            → GravaCursor
+//                 .out(1) → AtualizaDataSincronizacao (↩ loop)
 //      → Code (↩ loop)
 // </workflow-map>
 
@@ -221,33 +223,38 @@ export class AtualizaCadastroNobreWhaticketWorkflow {
         position: [-5616, -3056],
     })
     CalculaCutoff = {
-        jsCode: `const sd = $getWorkflowStaticData('global');
-
-const MARGEM_MS = 30_000;
-const OFFSET_HORAS = -3;
-// DRENAGEM TEMPORÁRIA: percorre a base inteira em ASC usando drainCursor
-// (persistido pelo runtime entre runs). Ausente -> começa em 2020.
-// Ao alcançar o presente converge sozinho p/ o comportamento incremental normal.
+        jsCode: `// Cursor de sincronização mora na Data Table (linha cnpj='__CURSOR__'):
+// dtSync = DtAlteracao, content = chave numerica de CDCLIENTE. Paginacao
+// keyset (DtAlteracao, CDCLIENTE) com ">" estrito — SEM margem e SEM offset:
+// a chave resolve empates de timestamp e impede congelamento em clusters
+// densos (o antigo ">= cursor-30s-3h" re-lia uma janela de ~3h que travava
+// quando ela continha mais de 400 linhas).
+// $getWorkflowStaticData NAO e confiavel neste deploy (queue mode).
+// A wiring Le Cache -> CALCULA CUTOFF garante que o cache ja foi lido.
 const DRAIN_INICIO = '2020-01-01T00:00:00.000Z';
 
-let cutoffSql = '';
-
-{
-  const base = sd.drainCursor
-    ? new Date(sd.drainCursor).getTime() - MARGEM_MS
-    : Date.parse(DRAIN_INICIO);
-  const t = new Date(base + (OFFSET_HORAS * 60 * 60 * 1000));
-
-  const pad2 = n => String(n).padStart(2, '0');
-  const pad3 = n => String(n).padStart(3, '0');
-
-  cutoffSql =
-    \`\${t.getUTCFullYear()}-\${pad2(t.getUTCMonth()+1)}-\${pad2(t.getUTCDate())} \` +
-    \`\${pad2(t.getUTCHours())}:\${pad2(t.getUTCMinutes())}:\${pad2(t.getUTCSeconds())}.\` +
-    \`\${pad3(t.getUTCMilliseconds())}\`;
+let cursorIso = null;
+let cursorKey = -1;
+for (const it of $input.all()) {
+  const j = it.json ?? {};
+  if (String(j.cnpj) === '__CURSOR__' && j.dtSync) {
+    cursorIso = j.dtSync;
+    const k = Number(j.content);
+    if (Number.isFinite(k)) cursorKey = k;
+    break;
+  }
 }
 
-return [{ json: { cutoffSql } }];`,
+// DtAlteracao chega naive-serializado-como-UTC; manter a MESMA moldura.
+const t = new Date(cursorIso || DRAIN_INICIO);
+const pad2 = n => String(n).padStart(2, '0');
+const pad3 = n => String(n).padStart(3, '0');
+const cutoffDt =
+  \`\${t.getUTCFullYear()}-\${pad2(t.getUTCMonth()+1)}-\${pad2(t.getUTCDate())} \` +
+  \`\${pad2(t.getUTCHours())}:\${pad2(t.getUTCMinutes())}:\${pad2(t.getUTCSeconds())}.\` +
+  \`\${pad3(t.getUTCMilliseconds())}\`;
+
+return [{ json: { cutoffDt, cutoffKey: String(cursorKey) } }];`,
     };
 
     @node({
@@ -423,11 +430,21 @@ WHERE
   AND C.CdSegmento IN (17, 19, 27, 28, 61, 68, 72, 74, 77, 54, 67, 60)
   -- filtro de telefone removido do WHERE (não-sargável: REPLACE por linha estourava o timeout);
   -- quem não tem WhatsApp válido é descartado no node "Code" antes de chamar a API
+-- Paginacao keyset: (DtAlteracao, CDCLIENTE) estritamente maior que o cursor.
+-- ">" puro nao re-le a borda: empates de timestamp avancam pela chave e
+-- clusters densos nao congelam o TOP 400. ISNULL/TRY_CAST: CDCLIENTE nao
+-- numerico ordena como -1 (sempre no inicio do bloco do mesmo DtAlteracao).
 AND (
-  '{{$json.cutoffSql}}' = ''
-  OR C.DtAlteracao >= CAST('{{$json.cutoffSql}}' AS DATETIME)
+  '{{$json.cutoffDt}}' = ''
+  OR C.DtAlteracao > CAST(NULLIF('{{$json.cutoffDt}}', '') AS DATETIME)
+  OR (
+    C.DtAlteracao = CAST(NULLIF('{{$json.cutoffDt}}', '') AS DATETIME)
+    AND ISNULL(TRY_CAST(C.CDCLIENTE AS BIGINT), -1) > CAST('{{$json.cutoffKey}}' AS BIGINT)
+  )
 )
-ORDER BY C.DtAlteracao ASC`,
+ORDER BY
+  C.DtAlteracao ASC,
+  ISNULL(TRY_CAST(C.CDCLIENTE AS BIGINT), -1) ASC`,
     };
 
     @node({
@@ -500,14 +517,23 @@ function moneyToNumber(v) {
   return undefined;
 }
 
-// 🔁 Separa linhas do cache (vêm do node "Le Cache" no mesmo input) dos clientes
+// 🔁 Cache lido direto do node "Le Cache": este Code executa uma vez por branch
+// de entrada, então as linhas de cache NÃO chegam junto com os clientes em
+// items — ler pelo $() garante o dedup em qualquer cenário.
 const cache = new Map();
+if ($('Le Cache').isExecuted) {
+  for (const it of $('Le Cache').all()) {
+    const j = it.json ?? {};
+    if (j.cnpj !== undefined && j.content !== undefined) {
+      cache.set(String(j.cnpj), String(j.content));
+    }
+  }
+}
 const clientes = [];
 for (const it of items) {
   const j = it.json ?? {};
-  if (j.cnpj !== undefined && j.content !== undefined && j.Cnpj_Cnpf === undefined) {
-    cache.set(String(j.cnpj), String(j.content));
-  } else {
+  // linha de cache (quando inputs vierem fundidos) vs cliente do SQL
+  if (!(j.cnpj !== undefined && j.content !== undefined && j.Cnpj_Cnpf === undefined)) {
     clientes.push(it);
   }
 }
@@ -623,7 +649,11 @@ const tags = tagsArray.length ? tagsArray.join(',') : undefined;
     const key = String(body.cpfCnpj || body.clientCode || body.number || '');
     const content = JSON.stringify(body);
     const enviar = !!body.number && !!key && cache.get(key) !== content;
-    return { json: { ...body, __key: key, __content: content, __enviar: enviar, __dtAlteracao: j.DtAlteracao ?? null } };
+    // chave numerica do CDCLIENTE p/ paginacao keyset — mesma regra do SQL
+    // (TRY_CAST AS BIGINT; nao-numerico = -1 e ordena primeiro no bloco do dt)
+    const cdRaw = String(j.CDCLIENTE ?? '').trim();
+    const cdNum = /^\\d{1,18}$/.test(cdRaw) ? Number(cdRaw) : -1;
+    return { json: { ...body, __key: key, __content: content, __enviar: enviar, __dtAlteracao: j.DtAlteracao ?? null, __cdNum: cdNum } };
   });`,
     };
 
@@ -682,25 +712,28 @@ return $input.all().slice(0, LOTE_MAX);`,
     })
     PreparaCache = {
         jsCode: `// Run Once for All Items — emite {cnpj, content, dtSync} só dos enviados OK
-const porCnpj = new Map();
-const porNumero = new Map();
-for (const it of $('Code').all()) {
-  const j = it.json ?? {};
-  if (j.__content === undefined) continue;
-  if (j.cpfCnpj) porCnpj.set(String(j.cpfCnpj), j.__content);
-  if (j.number) porNumero.set(String(j.number), j.__content);
-}
+// Chave = __key do item ORIGINAL via pairedItem: a resposta do backend pode trazer
+// campos de outro contato quando dois clientes ERP dividem o mesmo número
+// (match por number) — chavear pela resposta corrompia o dedup e travava o cursor.
+const enviados = $('Limita Lote').all();
+
+const idxDe = item => {
+  const pi = item.pairedItem;
+  if (pi == null) return null;
+  if (Array.isArray(pi)) return pi[0] != null ? pi[0].item ?? pi[0] : null;
+  return typeof pi === 'object' ? (pi.item ?? null) : pi;
+};
 
 const agora = new Date().toISOString();
 const out = [];
 for (const item of $input.all()) {
   const r = item.json ?? {};
   if (r.error) continue; // falha no HTTP → não marca → retenta depois
-  const cnpj = r.cpfCnpj != null ? String(r.cpfCnpj) : '';
-  const numero = r.number != null ? String(r.number) : '';
-  const content = (cnpj && porCnpj.get(cnpj)) || (numero && porNumero.get(numero));
-  const key = (cnpj && porCnpj.get(cnpj)) ? cnpj : numero;
-  if (content && key) out.push({ json: { cnpj: key, content, dtSync: agora } });
+  const idx = idxDe(item);
+  const src = idx != null ? enviados[idx]?.json : null;
+  const key = src?.__key;
+  const content = src?.__content;
+  if (key && content) out.push({ json: { cnpj: String(key), content, dtSync: agora } });
 }
 return out;`,
     };
@@ -780,64 +813,161 @@ return out;`,
         position: [-4224, -3056],
     })
     AtualizaDataSincronizacao = {
-        jsCode: `// Cursor anda pelo PROGRESSO real, não pelo relógio:
-// lastSyncDate = max(DtAlteracao) dos itens concluídos nesta run
-// (enviados com sucesso via Upsert Cache OU descartados pelo filtro).
-// ANTI-SKIP: se existir item marcado p/ envio que não concluiu (cortado pelo
-// "Limita Lote" ou falha HTTP), o cursor para no DtAlteracao mais antigo deles —
-// senão um item inalterado mais novo pularia o cursor além deles e sumiriam para sempre.
-const sd = $getWorkflowStaticData('global');
+        jsCode: `// Emite linhas de controle p/ a Data Table (upsert no "Grava Cursor"):
+//  - cnpj='__CURSOR__'  -> dtSync = DtAlteracao, content = chave CDCLIENTE
+//  - cnpj='__FAIL__<chave>' -> content = nº de falhas consecutivas
+// Cursor = PAR keyset (DtAlteracao, CDCLIENTE): posição exata da última
+// linha processável. Travado no par mais antigo de item marcado p/ envio
+// que não concluiu (corte do Limita Lote ou falha HTTP).
+// Estado lido via $() — determinístico mesmo com execução por branch;
+// staticData não persiste entre runs neste deploy (queue mode).
+const MAX_TENTATIVAS = 5;
 
-// dtAlteracao por chave dos itens avaliados no Code (__key, cpfCnpj e number
-// cobrem os formatos que chegam via Upsert Cache)
-const dtPorChave = new Map();
-for (const it of $('Code').all()) {
-  const j = it.json ?? {};
-  if (!j.__dtAlteracao) continue;
-  for (const k of [j.__key, j.cpfCnpj, j.number]) {
-    if (k) dtPorChave.set(String(k), j.__dtAlteracao);
+const tudo = $('Code').all();
+const enviadosOk = new Set(
+  ($('Upsert Cache').isExecuted ? $('Upsert Cache').all() : [])
+    .map(it => String(it.json?.cnpj ?? ''))
+);
+const tentados = $('Limita Lote').isExecuted
+  ? new Set($('Limita Lote').all().map(it => String(it.json?.__key ?? '')))
+  : new Set();
+
+// contadores de falha gravados em runs anteriores
+const falhasAtuais = {};
+if ($('Le Cache').isExecuted) {
+  for (const it of $('Le Cache').all()) {
+    const j = it.json ?? {};
+    const k = String(j.cnpj ?? '');
+    if (k.startsWith('__FAIL__')) falhasAtuais[k.slice(8)] = Number(j.content) || 0;
   }
 }
 
-let maxDt = null;
-const considera = v => {
-  const d = new Date(v);
-  if (!isNaN(d.getTime()) && (!maxDt || d > maxDt)) maxDt = d;
+let maxDt = null, maxKey = -1;
+let primeiroPendente = null, pendenteKey = -1;
+const falhasNovas = {};
+const cdNum = j => {
+  const n = Number(j.__cdNum);
+  return Number.isFinite(n) ? n : -1;
+};
+const considera = (d, k) => {
+  if (!maxDt || d > maxDt || (d.getTime() === maxDt.getTime() && k > maxKey)) {
+    maxDt = d; maxKey = k;
+  }
+};
+const segura = (d, k) => {
+  if (!primeiroPendente || d < primeiroPendente || (d.getTime() === primeiroPendente.getTime() && k < pendenteKey)) {
+    primeiroPendente = d; pendenteKey = k;
+  }
 };
 
-const enviadosOk = new Set();
-for (const item of $input.all()) {
-  const j = item.json ?? {};
-  if (j.__dtAlteracao) {
-    considera(j.__dtAlteracao); // branch "não mudou" / sem número
-  } else if (j.cnpj) {
-    enviadosOk.add(String(j.cnpj)); // enviados (chegam via Upsert Cache)
-    if (dtPorChave.has(String(j.cnpj))) considera(dtPorChave.get(String(j.cnpj)));
-  }
-}
-
-// Menor DtAlteracao entre itens marcados p/ envio que não chegaram ao cache
-let primeiroPendente = null;
-for (const it of $('Code').all()) {
+for (const it of tudo) {
   const j = it.json ?? {};
-  if (!j.__enviar || !j.__dtAlteracao) continue;
-  const ok =
-    (j.cpfCnpj && enviadosOk.has(String(j.cpfCnpj))) ||
-    (j.number && enviadosOk.has(String(j.number)));
-  if (!ok) {
-    const d = new Date(j.__dtAlteracao);
-    if (!isNaN(d.getTime()) && (!primeiroPendente || d < primeiroPendente)) primeiroPendente = d;
+  const d = j.__dtAlteracao ? new Date(j.__dtAlteracao) : null;
+  const valido = d && !isNaN(d.getTime());
+  if (!valido) continue;
+  const key = String(j.__key ?? '');
+  const ck = cdNum(j);
+  if (!j.__enviar || (key && enviadosOk.has(key))) {
+    considera(d, ck); // inalterado ou enviado com sucesso
+    continue;
+  }
+  if (!tentados.has(key)) {
+    // cortado pelo lote — sempre segura o cursor
+    segura(d, ck);
+    continue;
+  }
+  const falhas = (falhasAtuais[key] || 0) + 1;
+  falhasNovas[key] = falhas;
+  if (falhas > MAX_TENTATIVAS) {
+    considera(d, ck); // desiste: registro envenenado não pode paralisar o sync
+    continue;
+  }
+  segura(d, ck);
+}
+
+const agora = new Date().toISOString();
+const out = [];
+if (primeiroPendente || maxDt) {
+  const cDt = primeiroPendente || maxDt;
+  const cKey = primeiroPendente ? pendenteKey : maxKey;
+  out.push({ json: { cnpj: '__CURSOR__', content: String(cKey), dtSync: cDt.toISOString() } });
+}
+// Só a execução pós-cache conhece o resultado real dos envios:
+// zera contadores dos tentados que concluíram e grava as falhas vivas
+// (sucesso/desistido -> 0; falhou -> nº consecutivo).
+if ($('Upsert Cache').isExecuted) {
+  for (const k of tentados) {
+    out.push({ json: { cnpj: '__FAIL__' + k, content: String(falhasNovas[k] ?? 0), dtSync: agora } });
   }
 }
+return out;`,
+    };
 
-const novoCursor = primeiroPendente || maxDt;
-if (novoCursor) {
-  sd.lastSyncDate = novoCursor.toISOString();
-  sd.drainCursor = novoCursor.toISOString(); // drenagem temporária (ver CALCULA CUTOFF)
-}
-
-return $input.all();
-`,
+    @node({
+        id: 'a1b2c3d4-7777-4888-9999-eeff00112233',
+        name: 'Grava Cursor',
+        type: 'n8n-nodes-base.dataTable',
+        version: 1.1,
+        position: [-3920, -3056],
+    })
+    GravaCursor = {
+        resource: 'row',
+        operation: 'upsert',
+        dataTableId: {
+            __rl: true,
+            value: 'cPceOKKsUXnZuvIC',
+            mode: 'id',
+        },
+        matchType: 'allConditions',
+        filters: {
+            conditions: [
+                {
+                    keyName: 'cnpj',
+                    condition: 'eq',
+                    keyValue: '={{ $json.cnpj }}',
+                },
+            ],
+        },
+        columns: {
+            mappingMode: 'defineBelow',
+            value: {
+                cnpj: '={{ $json.cnpj }}',
+                content: '={{ $json.content }}',
+                dtSync: '={{ $json.dtSync }}',
+            },
+            matchingColumns: ['cnpj'],
+            schema: [
+                {
+                    id: 'cnpj',
+                    displayName: 'cnpj',
+                    required: false,
+                    defaultMatch: true,
+                    display: true,
+                    type: 'string',
+                    canBeUsedToMatch: true,
+                },
+                {
+                    id: 'content',
+                    displayName: 'content',
+                    required: false,
+                    defaultMatch: false,
+                    display: true,
+                    type: 'string',
+                    canBeUsedToMatch: true,
+                },
+                {
+                    id: 'dtSync',
+                    displayName: 'dtSync',
+                    required: false,
+                    defaultMatch: false,
+                    display: true,
+                    type: 'date',
+                    canBeUsedToMatch: true,
+                },
+            ],
+            attemptToConvertTypes: false,
+            convertFieldsToString: false,
+        },
     };
 
     @node({
@@ -848,14 +978,15 @@ return $input.all();
         position: [-5344, -3280],
     })
     AtualizaGlobal = {
-        jsCode: `// RESET SYNC - Zera lastSyncDate E força cutoffSql vazio
-const sd = $getWorkflowStaticData('global');
-sd.lastSyncDate = null;
+        jsCode: `// RESET SYNC - forca drenagem total (keyset desde o inicio)
+// OBS: cursor persistente mora na Data Table (linha __CURSOR__); para um
+// reset REAL e preciso tambem apagar essa linha — staticData nao persiste
+// neste deploy (queue mode). Este no esta desconectado do fluxo.
 
 console.log('Reset realizado - carga total liberada');
 
-// Passa cutoffSql vazio direto, pulando o CALCULA CUTOFF
-return [{ json: { cutoffSql: '' } }];
+// Passa cutoff keyset inicial direto, pulando o CALCULA CUTOFF
+return [{ json: { cutoffDt: '2020-01-01 00:00:00.000', cutoffKey: '-1' } }];
 
 
 
@@ -914,13 +1045,13 @@ PARA ATUALIZAR TUDO: node "Atualiza Global" (leia comentarios internos) + limpar
 
     @links()
     defineRouting() {
-        this.ScheduleTrigger.out(0).to(this.CalculaCutoff.in(0));
         this.ScheduleTrigger.out(0).to(this.LeCache.in(0));
+        this.LeCache.out(0).to(this.CalculaCutoff.in(0));
+        this.LeCache.out(0).to(this.Code.in(0));
         this.CalculaCutoff.out(0).to(this.BuscaClientesSql.in(0));
         this.BuscaClientesSql.out(0).to(this.Log.in(0));
         this.Log.out(0).to(this.MapeiaCampos.in(0));
         this.MapeiaCampos.out(0).to(this.Code.in(0));
-        this.LeCache.out(0).to(this.Code.in(0));
         this.Code.out(0).to(this.FiltraMudanca.in(0));
         this.FiltraMudanca.out(0).to(this.LimitaLote.in(0));
         this.FiltraMudanca.out(1).to(this.AtualizaDataSincronizacao.in(0));
@@ -928,5 +1059,6 @@ PARA ATUALIZAR TUDO: node "Atualiza Global" (leia comentarios internos) + limpar
         this.SincronizarContatoWhaticket.out(0).to(this.PreparaCache.in(0));
         this.PreparaCache.out(0).to(this.UpsertCache.in(0));
         this.UpsertCache.out(0).to(this.AtualizaDataSincronizacao.in(0));
+        this.AtualizaDataSincronizacao.out(0).to(this.GravaCursor.in(0));
     }
 }
