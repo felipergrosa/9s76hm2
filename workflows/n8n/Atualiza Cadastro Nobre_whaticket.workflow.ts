@@ -247,79 +247,7 @@ let cutoffSql = '';
     \`\${pad3(t.getUTCMilliseconds())}\`;
 }
 
-const whereIncremental = cutoffSql
-  ? \`AND C.DtAlteracao >= CAST('\${cutoffSql}' AS DATETIME)\`
-  : '';
-
-const query = \`
-SELECT
-  C.Cnpj_Cnpf,
-  C.FsCliente,
-  C.RzCliente,
-  C.FlTipo,
-  C.Ie_Rg,
-  C.CDCLIENTE AS CDCLIENTE,
-  C.Contato1 AS Contato1,
-
-  COALESCE(
-    NULLIF(LOWER(C.Email1), ''),
-    NULLIF(LOWER(C.Email2), ''),
-    NULLIF(LOWER(C.Email3), ''),
-    NULLIF(LOWER(C.F_Email1), ''),
-    NULLIF(LOWER(C.C_Email1), ''),
-    NULLIF(LOWER(C.E_Email1), '')
-  ) AS EmailValido,
-
-  COALESCE(
-    NULLIF(REPLACE(REPLACE(REPLACE(REPLACE(C.F_WhatsApp1, '(', ''), ')', ''), '-', ''), ' ', ''), ''),
-    NULLIF(REPLACE(REPLACE(REPLACE(REPLACE(CONCAT(C.F_Ddd1, C.F_Telefone1), '(', ''), ')', ''), '-', ''), ' ', ''), ''),
-    NULLIF(REPLACE(REPLACE(REPLACE(REPLACE(CONCAT(C.C_Ddd1, C.C_Telefone1), '(', ''), ')', ''), '-', ''), ' ', ''), ''),
-    NULLIF(REPLACE(REPLACE(REPLACE(REPLACE(CONCAT(C.E_Ddd1, C.E_Telefone1), '(', ''), ')', ''), '-', ''), ' ', ''), '')
-  ) AS WhatsAppValido,
-
-  REPLACE(REPLACE(REPLACE(REPLACE(CONCAT(C.F_Ddd1, C.F_Telefone1), '(', ''), ')', ''), '-', ''), ' ', '') AS Telefone1,
-  REPLACE(REPLACE(REPLACE(REPLACE(CONCAT(C.C_Ddd1, C.C_Telefone1), '(', ''), ')', ''), '-', ''), ' ', '') AS Telefone2,
-  REPLACE(REPLACE(REPLACE(REPLACE(CONCAT(C.E_Ddd1, C.E_Telefone1), '(', ''), ')', ''), '-', ''), ' ', '') AS Telefone3,
-
-  UPPER(LTRIM(RTRIM(REPLACE(COALESCE(NULLIF(C.F_Endereco, ''), NULLIF(C.C_Endereco, ''), NULLIF(C.E_Endereco, '')), '  ', ' ')))) AS EnderecoValido,
-  UPPER(LTRIM(RTRIM(REPLACE(COALESCE(NULLIF(C.F_Bairro, ''), NULLIF(C.C_Bairro, ''), NULLIF(C.E_Bairro, '')), '  ', ' ')))) AS BairroValido,
-  UPPER(LTRIM(RTRIM(REPLACE(COALESCE(NULLIF(C.F_Cidade, ''), NULLIF(C.C_Cidade, ''), NULLIF(C.E_Cidade, '')), '  ', ' ')))) AS CidadeValido,
-  UPPER(LTRIM(RTRIM(COALESCE(NULLIF(C.F_Estado, ''), NULLIF(C.C_Estado, ''), NULLIF(C.E_Estado, ''))))) AS EstadoValido,
-  UPPER(LTRIM(RTRIM(COALESCE(NULLIF(C.F_Estado, ''), NULLIF(C.C_Estado, ''), NULLIF(C.E_Estado, ''))))) AS UFValido,
-
-  C.Ativo_Inativo_ExCliente,
-  C.CdRepresentante,
-  CAST(C.CdRepresentante AS VARCHAR(50)) AS CdRepresentante_Nome,
-  C.CdSegmento,
-  CAST(C.CdSegmento AS VARCHAR(50)) AS DsSegmento,
-  CAST('' AS VARCHAR(100)) AS FsEmpresa,
-  CAST('' AS VARCHAR(100)) AS DsRegiao,
-  C.DtFundacao,
-  C.DtAlteracao,
-  ISNULL(LC.LimiteCredito, 0) AS CreditLimit,
-  LC.DtUltCompra AS DtUltCompra_LC,
-  LC.VlUltCompra AS VlUltCompra_LC
-
-FROM BusinessCadCliente AS C
-LEFT JOIN BusinessCadClienteLC AS LC
-  ON LC.Cnpj_Cnpf = C.Cnpj_Cnpf
-
-WHERE
-      LC.CdEmpresa = 97
-  AND C.Cnpj_Cnpf IS NOT NULL
-  AND C.Cnpj_Cnpf <> ''
-  AND C.Ativo_Inativo_ExCliente IN ('Ativo','Inativo','Excluido','Ex-Cliente','Baixado','Futuro','Excluído')
-  AND C.CdSegmento IN (17, 19, 27, 28, 61, 68, 72, 74, 77, 54, 67, 60)
-  AND (
-    NULLIF(REPLACE(REPLACE(REPLACE(REPLACE(C.F_WhatsApp1, '(', ''), ')', ''), '-', ''), ' ', ''), '') IS NOT NULL
-    OR NULLIF(REPLACE(REPLACE(REPLACE(REPLACE(CONCAT(C.F_Ddd1, C.F_Telefone1), '(', ''), ')', ''), '-', ''), ' ', ''), '') IS NOT NULL
-    OR NULLIF(REPLACE(REPLACE(REPLACE(REPLACE(CONCAT(C.C_Ddd1, C.C_Telefone1), '(', ''), ')', ''), '-', ''), ' ', ''), '') IS NOT NULL
-    OR NULLIF(REPLACE(REPLACE(REPLACE(REPLACE(CONCAT(C.E_Ddd1, C.E_Telefone1), '(', ''), ')', ''), '-', ''), ' ', ''), '') IS NOT NULL
-  )
-  \${whereIncremental}
-\`;
-
-return [{ json: { cutoffSql, query } }];`,
+return [{ json: { cutoffSql } }];`,
     };
 
     @node({
@@ -441,16 +369,26 @@ SELECT TOP 400
   REPLACE(COALESCE(NULLIF(C.F_Cep, ''), NULLIF(C.C_Cep, ''), NULLIF(C.E_Cep, '')), ' ', '') AS CepValido,
   REPLACE(COALESCE(NULLIF(C.F_CdMunicipio, ''), NULLIF(C.C_CdMunicipio, ''), NULLIF(C.E_CdMunicipio, '')), ' ', '') AS CodMunicipioValido,
 
-  -- Segmento
+  -- Segmento: "codigo - descricao" quando a descricao existe; "codigo" puro
+  -- quando o segmento nao tem linha em BusinessCadSegMercado (evita "19 - ").
   C.CdSegmento,
-  CONCAT(RTRIM(C.CdSegmento), ' - ', LTRIM(RTRIM(SM.DsSegmento))) AS DsSegmento,
+  CASE
+    WHEN NULLIF(LTRIM(RTRIM(SM.DsSegmento)), '') IS NOT NULL
+      THEN CONCAT(RTRIM(CAST(C.CdSegmento AS VARCHAR(20))), ' - ', LTRIM(RTRIM(SM.DsSegmento)))
+    ELSE RTRIM(CAST(C.CdSegmento AS VARCHAR(20)))
+  END AS DsSegmento,
 
   -- Região
   LTRIM(RTRIM(RG.DsRegiao)) AS DsRegiao,
 
-  -- Representante
+  -- Representante: "codigo - fantasia" quando o rep existe no cadastro;
+  -- "codigo" puro quando nao ha linha/nome (evita "0001 - ").
   C.CdRepresentante,
-  CONCAT(RTRIM(C.CdRepresentante), ' - ', COALESCE(RTRIM(R.Fsrepresentante), '')) AS CdRepresentante_Nome,
+  CASE
+    WHEN NULLIF(RTRIM(R.Fsrepresentante), '') IS NOT NULL
+      THEN CONCAT(RTRIM(CAST(C.CdRepresentante AS VARCHAR(20))), ' - ', RTRIM(R.Fsrepresentante))
+    ELSE RTRIM(CAST(C.CdRepresentante AS VARCHAR(20)))
+  END AS CdRepresentante_Nome,
 
   -- Status / datas
   C.Ativo_Inativo_ExCliente,

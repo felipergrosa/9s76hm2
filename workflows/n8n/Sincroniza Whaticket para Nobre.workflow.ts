@@ -149,7 +149,11 @@ for (const item of $input.all()) {
   const contato = esc(c.contactName || c.name);
   const razao = esc(c.name);
   const fantasia = esc(c.fantasyName || c.name);
-  const rep = esc(c.representativeCode).replace(/\\D/g, '').replace(/^0+(?=\\d)/, '');
+  // Rep: só dígitos, PRESERVANDO zeros à esquerda ('0001' continua '0001') —
+  // remover padding gerava '1' e divergia do código gravado no ERP.
+  // Tudo-zero ('0000') é tratado como vazio.
+  const repDigits = esc(c.representativeCode).replace(/\\D/g, '');
+  const rep = /^0+$/.test(repDigits) ? '' : repDigits;
   const segmentoCod = (esc(c.segment).match(/^\\d+/) || [''])[0];
   const empresa = esc(c.bzEmpresa).replace(/\\D/g, '') || '97';
   const { cidade, uf: ufCity } = extraiCidadeUf(c.city);
@@ -293,7 +297,13 @@ return out;`,
 SET
   F_WhatsApp1 = CASE WHEN '{{$json.whatsapp}}' <> '' THEN '{{$json.whatsapp}}' ELSE F_WhatsApp1 END,
   Email1      = CASE WHEN '{{$json.email}}'    <> '' THEN '{{$json.email}}'    ELSE Email1      END,
-  Contato1    = CASE WHEN '{{$json.contato}}'  <> '' THEN '{{$json.contato}}'  ELSE Contato1    END
+  Contato1    = CASE WHEN '{{$json.contato}}'  <> '' THEN '{{$json.contato}}'  ELSE Contato1    END,
+  -- Representante/Segmento também voltam ao ERP quando alterados no Whaticket.
+  -- O código é gravado como dígito puro ('1016'); a descrição vem das tabelas
+  -- de domínio (BusinessCadRepresentante/SegMercado) no sync reverso.
+  CdRepresentante = CASE WHEN '{{$json.rep}}'         <> '' THEN '{{$json.rep}}'         ELSE CdRepresentante END,
+  CdSegmento      = CASE WHEN '{{$json.segmentoCod}}' <> '' THEN '{{$json.segmentoCod}}' ELSE CdSegmento      END,
+  DtAlteracao = GETDATE()
 WHERE
   (
     ('{{$json.cnpj}}' <> ''
@@ -307,6 +317,13 @@ WHERE
     ('{{$json.whatsapp}}' <> '' AND ISNULL(REPLACE(REPLACE(REPLACE(REPLACE(F_WhatsApp1, '(', ''), ')', ''), '-', ''), ' ', ''), '') <> '{{$json.whatsapp}}')
     OR ('{{$json.email}}'    <> '' AND ISNULL(LOWER(LTRIM(RTRIM(Email1))), '')    <> '{{$json.email}}')
     OR ('{{$json.contato}}'  <> '' AND ISNULL(LTRIM(RTRIM(Contato1)), '')         <> '{{$json.contato}}')
+    -- Comparação por TRY_CAST cobre coluna char ('0001') e int (1) sem falso positivo
+    OR ('{{$json.rep}}' <> ''
+        AND COALESCE(TRY_CAST(REPLACE(LTRIM(RTRIM(CAST(CdRepresentante AS VARCHAR(20)))), ' ', '') AS BIGINT), -1)
+            <> COALESCE(TRY_CAST('{{$json.rep}}' AS BIGINT), -2))
+    OR ('{{$json.segmentoCod}}' <> ''
+        AND COALESCE(TRY_CAST(REPLACE(LTRIM(RTRIM(CAST(CdSegmento AS VARCHAR(20)))), ' ', '') AS BIGINT), -1)
+            <> COALESCE(TRY_CAST('{{$json.segmentoCod}}' AS BIGINT), -2))
   )`,
     };
 

@@ -90,15 +90,15 @@ const CreateOrUpdateContactServiceForImport = async ({
     return String(v);
   };
 
-  // helper: normalize segment to null when empty/whitespace; undefined when not provided
-  const normalizeSegment = (v: any): string | null | undefined => {
+  // helper: normaliza campos "código - nome" vindos do ERP (segment, rep,
+  // empresa). Remove espaços extras e o sufixo " - " órfão que nasce quando
+  // o JOIN não encontra a descrição (ex.: "0001 - " → "0001").
+  // null → null (limpa o campo); undefined → não altera.
+  const normalizeCodeName = (v: any): string | null | undefined => {
     if (typeof v === 'undefined') return undefined;
     if (v === null) return null;
-    if (typeof v === 'string') {
-      const s = v.trim();
-      return s === '' ? null : s;
-    }
-    return undefined;
+    const s = String(v).trim().replace(/\s*-\s*$/, '').trim();
+    return s === '' ? null : s;
   };
 
   // helper: normalize region to null when empty/whitespace; undefined quando não enviado
@@ -108,17 +108,6 @@ const CreateOrUpdateContactServiceForImport = async ({
     if (typeof v === 'string') {
       const r = v.trim();
       return r === '' ? null : r;
-    }
-    return undefined;
-  };
-
-  // helper: normalize bzEmpresa to null when empty/whitespace; undefined when not provided
-  const normalizeBzEmpresa = (v: any): string | null | undefined => {
-    if (typeof v === 'undefined') return undefined;
-    if (v === null) return null;
-    if (typeof v === 'string') {
-      const e = v.trim();
-      return e === '' ? null : e;
     }
     return undefined;
   };
@@ -154,7 +143,7 @@ const CreateOrUpdateContactServiceForImport = async ({
     companyId,
     creditLimit: normalizeCreditLimit(creditLimit),
     cpfCnpj: cpfCnpj ? String(cpfCnpj) : undefined,
-    representativeCode: representativeCode ? String(representativeCode) : undefined,
+    representativeCode: normalizeCodeName(representativeCode),
     city,
     region: normalizeRegion(region),
     instagram,
@@ -162,8 +151,8 @@ const CreateOrUpdateContactServiceForImport = async ({
     situation: situation || 'Ativo',
     fantasyName,
     foundationDate: finalFoundationDate,
-    segment: normalizeSegment(segment),
-    bzEmpresa: normalizeBzEmpresa(bzEmpresa),
+    segment: normalizeCodeName(segment),
+    bzEmpresa: normalizeCodeName(bzEmpresa),
     clientCode: clientCode || undefined,
     contactName: contactName || undefined, // ✅ Adicionado campo ao contactData
     dtUltCompra: parseDate(dtUltCompra),
