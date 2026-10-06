@@ -225,17 +225,17 @@ export class AtualizaCadastroNobreWhaticketWorkflow {
 
 const MARGEM_MS = 30_000;
 const OFFSET_HORAS = -3;
-// Sem lastSyncDate (primeira run ou staticData perdido) NÃO faz carga total:
-// janela de fallback de 6h evita varrer 14k+ linhas e estourar o timeout do worker.
-// Carga total só via node "Atualiza Global" (manual).
-const FALLBACK_MS = 6 * 60 * 60 * 1000;
+// DRENAGEM TEMPORÁRIA: percorre a base inteira em ASC usando drainCursor
+// (persistido pelo runtime entre runs). Ausente -> começa em 2020.
+// Ao alcançar o presente converge sozinho p/ o comportamento incremental normal.
+const DRAIN_INICIO = '2020-01-01T00:00:00.000Z';
 
 let cutoffSql = '';
 
 {
-  const base = sd.lastSyncDate
-    ? new Date(sd.lastSyncDate).getTime() - MARGEM_MS
-    : Date.now() - FALLBACK_MS;
+  const base = sd.drainCursor
+    ? new Date(sd.drainCursor).getTime() - MARGEM_MS
+    : Date.parse(DRAIN_INICIO);
   const t = new Date(base + (OFFSET_HORAS * 60 * 60 * 1000));
 
   const pad2 = n => String(n).padStart(2, '0');
@@ -783,14 +783,20 @@ return out;`,
         jsCode: `// Cursor anda pelo PROGRESSO real, não pelo relógio:
 // lastSyncDate = max(DtAlteracao) dos itens concluídos nesta run
 // (enviados com sucesso via Upsert Cache OU descartados pelo filtro).
-// Itens cortados pelo "Limita Lote" não avançam o cursor → voltam na próxima run.
+// ANTI-SKIP: se existir item marcado p/ envio que não concluiu (cortado pelo
+// "Limita Lote" ou falha HTTP), o cursor para no DtAlteracao mais antigo deles —
+// senão um item inalterado mais novo pularia o cursor além deles e sumiriam para sempre.
 const sd = $getWorkflowStaticData('global');
 
-// dtAlteracao por chave dos itens avaliados no Code
+// dtAlteracao por chave dos itens avaliados no Code (__key, cpfCnpj e number
+// cobrem os formatos que chegam via Upsert Cache)
 const dtPorChave = new Map();
 for (const it of $('Code').all()) {
   const j = it.json ?? {};
-  if (j.__dtAlteracao && j.__key) dtPorChave.set(String(j.__key), j.__dtAlteracao);
+  if (!j.__dtAlteracao) continue;
+  for (const k of [j.__key, j.cpfCnpj, j.number]) {
+    if (k) dtPorChave.set(String(k), j.__dtAlteracao);
+  }
 }
 
 let maxDt = null;
@@ -799,16 +805,36 @@ const considera = v => {
   if (!isNaN(d.getTime()) && (!maxDt || d > maxDt)) maxDt = d;
 };
 
+const enviadosOk = new Set();
 for (const item of $input.all()) {
   const j = item.json ?? {};
   if (j.__dtAlteracao) {
     considera(j.__dtAlteracao); // branch "não mudou" / sem número
-  } else if (j.cnpj && dtPorChave.has(String(j.cnpj))) {
-    considera(dtPorChave.get(String(j.cnpj))); // enviados (chegam via Upsert Cache)
+  } else if (j.cnpj) {
+    enviadosOk.add(String(j.cnpj)); // enviados (chegam via Upsert Cache)
+    if (dtPorChave.has(String(j.cnpj))) considera(dtPorChave.get(String(j.cnpj)));
   }
 }
 
-if (maxDt) sd.lastSyncDate = maxDt.toISOString();
+// Menor DtAlteracao entre itens marcados p/ envio que não chegaram ao cache
+let primeiroPendente = null;
+for (const it of $('Code').all()) {
+  const j = it.json ?? {};
+  if (!j.__enviar || !j.__dtAlteracao) continue;
+  const ok =
+    (j.cpfCnpj && enviadosOk.has(String(j.cpfCnpj))) ||
+    (j.number && enviadosOk.has(String(j.number)));
+  if (!ok) {
+    const d = new Date(j.__dtAlteracao);
+    if (!isNaN(d.getTime()) && (!primeiroPendente || d < primeiroPendente)) primeiroPendente = d;
+  }
+}
+
+const novoCursor = primeiroPendente || maxDt;
+if (novoCursor) {
+  sd.lastSyncDate = novoCursor.toISOString();
+  sd.drainCursor = novoCursor.toISOString(); // drenagem temporária (ver CALCULA CUTOFF)
+}
 
 return $input.all();
 `,
