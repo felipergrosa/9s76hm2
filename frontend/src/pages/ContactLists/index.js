@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useReducer, useContext } from "react";
+import React, { useState, useEffect, useReducer, useContext, useMemo } from "react";
 import { toast } from "react-toastify";
 
 import { useHistory } from "react-router-dom";
@@ -24,6 +24,9 @@ import {
   Download as DownloadIcon,
   Plus as PlusIcon,
   Filter as FilterIcon,
+  ListChecks as ListsIcon,
+  UserCheck as WithContactsIcon,
+  Trophy as TopListIcon,
 } from "lucide-react";
 
 import MainContainer from "../../components/MainContainer";
@@ -41,6 +44,10 @@ import toastError from "../../errors/toastError";
 import planilhaExemplo from "../../assets/planilha.xlsx";
 // import { SocketContext } from "../../context/Socket/SocketContext";
 import { AuthContext } from "../../context/Auth/AuthContext";
+import { motion, useReducedMotion } from "framer-motion";
+import StatCard from "../../components/bento/StatCard";
+import { bentoContainer, bentoItem, bentoItemReduced } from "../../components/bento/motionPresets";
+import "../../components/bento/bento.css";
 
 const reducer = (state, action) => {
   if (action.type === "SET_CONTACTLISTS") {
@@ -282,6 +289,27 @@ const ContactLists = () => {
   //   const socketManager = useContext(SocketContext);
   const { user, socket } = useContext(AuthContext);
   const { hasPermission } = usePermissions();
+
+  const reducedMotion = useReducedMotion();
+  const itemVariant = reducedMotion ? bentoItemReduced : bentoItem;
+
+  // KPIs do strip bento — "Listas" usa o count do backend; os demais
+  // refletem apenas a página carregada (paginação é server-side)
+  const listStats = useMemo(() => {
+    const lists = contactLists || [];
+    const count = (l) => Number(l.contactsCount) || 0;
+    const biggest = lists.reduce(
+      (acc, l) => (acc === null || count(l) > count(acc) ? l : acc),
+      null
+    );
+    const biggestName = biggest?.name || "—";
+    return {
+      total: totalContactLists,
+      withContacts: lists.filter((l) => count(l) > 0).length,
+      totalContacts: lists.reduce((acc, l) => acc + count(l), 0),
+      biggestName: biggestName.length > 18 ? `${biggestName.slice(0, 17)}…` : biggestName,
+    };
+  }, [contactLists, totalContactLists]);
 
   // Popover de detalhes do filtro salvo
   const [detailsAnchorEl, setDetailsAnchorEl] = useState(null);
@@ -531,8 +559,21 @@ const ContactLists = () => {
       {!hasPermission("contact-lists.view") ? (
         <ForbiddenPage />
       ) : (
-        <>
-          <Paper className={classes.paper} variant="outlined">
+        <motion.div
+          variants={bentoContainer}
+          initial="hidden"
+          animate="show"
+        >
+          {/* Strip de KPIs bento — derivados dos dados já carregados (sem fetch extra) */}
+          <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-4">
+            <StatCard label="Listas" value={listStats.total} icon={<ListsIcon size={20} />} accent="var(--primary-color)" loading={loading} />
+            <StatCard label="Com contatos" value={listStats.withContacts} icon={<WithContactsIcon size={20} />} accent="#26c281" loading={loading} />
+            <StatCard label="Contatos nas listas" value={listStats.totalContacts} icon={<ContactsIcon size={20} />} accent="#3598dc" loading={loading} />
+            <StatCard label="Maior lista" value={listStats.biggestName} icon={<TopListIcon size={20} />} accent="#8e44ad" loading={loading} />
+          </div>
+
+          <motion.div variants={itemVariant}>
+          <Paper className={`${classes.paper} bento-panel`} variant="outlined">
             {/* 1. Cabeçalho: título + total + subtítulo + ações */}
             <div className={classes.header}>
               <div className={classes.headerText}>
@@ -779,7 +820,8 @@ const ContactLists = () => {
               </ul>
             </nav>
           </Paper>
-        </>
+          </motion.div>
+        </motion.div>
       )}
       {/* Popover de detalhes do filtro salvo */}
       <Popover

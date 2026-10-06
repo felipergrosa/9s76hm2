@@ -141,6 +141,11 @@ import UploadFileIcon from "@mui/icons-material/UploadFile";
 import { exportFlow } from "../../services/flowBuilder";
 import FlowImportModal from "../../components/FlowImportModal";
 
+// Bento design system — moldura do painel + entrada spring (canvas intacto)
+import { motion, useReducedMotion } from "framer-motion";
+import { bentoItem, bentoItemReduced } from "../../components/bento/motionPresets";
+import "../../components/bento/bento.css";
+
 const useStyles = makeStyles((theme) => ({
   mainPaper: {
     flex: 1,
@@ -307,6 +312,10 @@ export const FlowBuilderConfig = () => {
   const classes = useStyles();
   const history = useHistory();
   const { id } = useParams();
+
+  // Respeita prefers-reduced-motion: fade simples no lugar do spring
+  const reducedMotion = useReducedMotion();
+  const itemVariant = reducedMotion ? bentoItemReduced : bentoItem;
 
   const storageItems = useNodeStorage();
 
@@ -1862,7 +1871,13 @@ export const FlowBuilderConfig = () => {
         </MainHeaderButtonsWrapper>
       </MainHeader>
       {!loading && (
-        <Paper className={classes.mainPaper} variant="outlined">
+        <motion.div
+          variants={itemVariant}
+          initial="hidden"
+          animate="show"
+          style={{ flex: 1, display: "flex", minHeight: 0 }}
+        >
+        <Paper className={`${classes.mainPaper} bento-panel`} variant="outlined">
           {/* Paleta lateral de blocos — estilo ManyChat */}
           <div className={classes.palette}>
             <div className={classes.paletteHeader}>Blocos</div>
@@ -1938,6 +1953,7 @@ export const FlowBuilderConfig = () => {
             </ReactFlow>
           </div>
         </Paper>
+        </motion.div>
       )}
       {loading && (
         <Stack justifyContent={"center"} alignItems={"center"} height={"70vh"}>

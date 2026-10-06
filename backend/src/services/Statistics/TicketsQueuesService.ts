@@ -131,6 +131,12 @@ const TicketsQueuesService = async ({
   // Aplica restrição de carteiras (wallet) - mesmo padrão de ListTicketsService
   // walletResult já foi buscado em paralelo no início
 
+  // Supervisor em modo "exclude": vê TODOS os tickets exceto os dos usuários
+  // excluídos — mesmo comportamento de showAll para a regra de userId.
+  const isExcludeSupervisor =
+    walletResult.supervisorViewMode === "exclude" &&
+    (walletResult.excludedUserIds?.length ?? 0) > 0;
+
   // Modo EXCLUDE: admin vê tudo EXCETO tickets dos usuários excluídos
   if (walletResult.excludedUserIds && walletResult.excludedUserIds.length > 0) {
     whereCondition = {
@@ -166,7 +172,7 @@ const TicketsQueuesService = async ({
         }
       ]
     } as any;
-  } else if (showAll !== "true") {
+  } else if (showAll !== "true" && !isExcludeSupervisor) {
     // FALLBACK: Se não tem restrição de carteira e NÃO é admin (showAll!=true),
     // aplica restrição padrão de usuário: ver apenas os seus ou os sem dono (pendentes)
     whereCondition = {
@@ -184,8 +190,9 @@ const TicketsQueuesService = async ({
 
   // REGRA PRINCIPAL: Ticket em atendimento (open/group com userId) só pode ser visto pelo atendente
   // OU por supervisores que gerenciam esse atendente (modo "include"), OU por admin/superadmin (showAll)
-  // Se showAll=true (admin/superadmin), não aplica restrição de userId na regra principal
-  if (showAll !== "true") {
+  // Se showAll=true (admin/superadmin) ou supervisor em modo exclude,
+  // não aplica restrição de userId na regra principal
+  if (showAll !== "true" && !isExcludeSupervisor) {
     // Usar walletResult que já tem a lógica correta de supervisorViewMode
     const supervisorViewMode = walletResult.supervisorViewMode || "include";
     const managedUserIds = walletResult.managedUserIds || [];

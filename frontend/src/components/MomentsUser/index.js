@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useMemo, useRef } from "react";
+import React, { useState, useEffect, useContext, useMemo, useRef, useCallback } from "react";
 import { makeStyles } from "@material-ui/core/styles";
 import {
   Paper,
@@ -42,8 +42,142 @@ import {
   canAssumeTicketConversation,
   canViewTicketConversation,
 } from "../../utils/ticketPreviewPermissions";
+import { motion, useReducedMotion } from "framer-motion";
+import { bentoContainer, bentoItem, bentoItemReduced } from "../bento/motionPresets";
+import "../bento/bento.css";
 
 const backendUrl = getBackendUrl();
+
+// Card de ticket memoizado: a cada evento de socket o painel refaz o fetch
+// inteiro; sem memo, centenas de cards re-renderizam junto e travam a tela.
+const TicketCard = React.memo(({ ticket, classes, canAccess, onTicketClick, onPeek }) => (
+  <Card className={classes.ticketCard}>
+    <CardActionArea onClick={() => onTicketClick(ticket)}>
+      <CardContent className={classes.ticketContent}>
+        <div className={classes.ticketHeader}>
+          <div style={{ display: "flex", alignItems: "center" }}>
+            <div className={classes.avatarContainer}>
+              <ContactAvatar
+                contact={ticket.contact}
+                style={{ width: 40, height: 40 }}
+              />
+              <div
+                className={classes.statusIndicator}
+                style={{
+                  backgroundColor: "#25D366",
+                }}
+              >
+                <WhatsApp style={{ fontSize: 10, color: "#fff" }} />
+              </div>
+            </div>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <Typography className={classes.ticketName}>
+                  {ticket.contact?.name}
+                </Typography>
+                <Typography style={{ fontSize: "0.75rem", color: grey[600] }}>
+                  #{ticket.id}
+                </Typography>
+              </div>
+
+              {/* Última Mensagem (subida para logo abaixo do ID) */}
+              <Typography className={classes.ticketMessage}>
+                {ticket.lastMessage || "Sem mensagens"}
+              </Typography>
+            </div>
+          </div>
+          {canAccess && (
+            <Tooltip title="Espiar Conversa">
+              <IconButton
+                size="small"
+                onClick={(e) => onPeek(e, ticket)}
+                // Touch target mínimo de 44px no mobile
+                style={{ padding: 4, color: blue[700], minWidth: 44, minHeight: 44 }}
+              >
+                <VisibilityIcon size={20} />
+              </IconButton>
+            </Tooltip>
+          )}
+        </div>
+
+        {/* Tags de Conexão, Fila e Usuário no rodapé */}
+        <div className={classes.tagContainer}>
+          {ticket.whatsapp && (
+            <Tooltip title={`Conexão: ${ticket.whatsapp.name}`}>
+              <div
+                className={`${classes.badge}`}
+                style={{
+                  backgroundColor: ticket.whatsapp.color || "#25D366",
+                  color: "#fff",
+                  textTransform: "uppercase"
+                }}
+              >
+                {ticket.whatsapp.name}
+              </div>
+            </Tooltip>
+          )}
+
+          <Tooltip title={`Fila: ${ticket.queue?.name || "Sem Fila"}`}>
+            <div
+              className={`${classes.badge}`}
+              style={{
+                backgroundColor: ticket.queue?.color || "#e0e0e0",
+                color: ticket.queue?.color ? "#fff" : "inherit",
+                textTransform: "uppercase"
+              }}
+            >
+              {ticket.queue?.name || "Sem Fila"}
+            </div>
+          </Tooltip>
+
+          {ticket.user?.name && (
+            <Tooltip title={`Atendente: ${ticket.user.name}`}>
+              <div
+                className={`${classes.badge}`}
+                style={{
+                  backgroundColor: ticket.user.color || '#000',
+                  color: '#fff',
+                  textTransform: "uppercase"
+                }}
+              >
+                {ticket.user.name}
+              </div>
+            </Tooltip>
+          )}
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4 }}>
+            {Number(ticket.unreadMessages) > 0 && (
+              <div className={classes.unreadBadge} style={{ transform: 'scale(0.8)' }}>
+                {ticket.unreadMessages}
+              </div>
+            )}
+            <Typography className={classes.time}>
+              {(() => {
+                try {
+                  if (!ticket.updatedAt) return "";
+                  return format(parseISO(ticket.updatedAt), "HH:mm");
+                } catch {
+                  return "";
+                }
+              })()}
+            </Typography>
+          </div>
+        </div>
+      </CardContent>
+    </CardActionArea>
+  </Card>
+), (a, b) =>
+  // Campos realmente exibidos no card — refetch com mesmo conteúdo não re-renderiza
+  a.ticket.id === b.ticket.id &&
+  a.ticket.updatedAt === b.ticket.updatedAt &&
+  a.ticket.unreadMessages === b.ticket.unreadMessages &&
+  a.ticket.lastMessage === b.ticket.lastMessage &&
+  a.ticket.user?.id === b.ticket.user?.id &&
+  a.ticket.queue?.id === b.ticket.queue?.id &&
+  a.ticket.whatsapp?.id === b.ticket.whatsapp?.id &&
+  a.ticket.contact?.name === b.ticket.contact?.name &&
+  a.ticket.contact?.profilePicUrl === b.ticket.contact?.profilePicUrl &&
+  a.canAccess === b.canAccess
+);
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -77,9 +211,12 @@ const useStyles = makeStyles((theme) => ({
     height: "100%",
     minHeight: 0,
     maxHeight: "100%",
-    backgroundColor: "#f5f5f5",
-    borderRadius: theme.shape.borderRadius,
-    border: "1px solid rgba(0,0,0,0.12)",
+    // Superfície bento: usa as vars do tema moderno (dark-aware),
+    // com fallback sólido para o tema clássico
+    backgroundColor: "var(--card, #f5f5f5)",
+    borderRadius: 20,
+    border: "1px solid var(--border, rgba(0,0,0,0.12))",
+    boxShadow: "var(--shadow, 0 1px 3px rgba(0,0,0,0.08))",
     overflow: "hidden",
     cursor: "grab",
     "&:active": {
@@ -91,8 +228,8 @@ const useStyles = makeStyles((theme) => ({
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    borderBottom: "1px solid rgba(0,0,0,0.08)",
-    backgroundColor: "#fff",
+    borderBottom: "1px solid var(--border, rgba(0,0,0,0.08))",
+    backgroundColor: "transparent",
     flex: "0 0 auto",
     cursor: "grab",
   },
@@ -120,11 +257,16 @@ const useStyles = makeStyles((theme) => ({
   },
   ticketCard: {
     boxShadow: "0 1px 3px rgba(0,0,0,0.12)",
-    borderRadius: 8,
-    border: "1px solid transparent",
+    borderRadius: 12,
+    border: "1px solid var(--border, transparent)",
+    backgroundColor: "var(--card-elevated, var(--card, #fff))",
     transition: "all 0.2s",
     flexShrink: 0,
     marginBottom: theme.spacing(1),
+    // Pinta só o que está visível: em lanes com muitos tickets, o custo
+    // de layout/paint dos cards fora da tela some quase por completo
+    contentVisibility: "auto",
+    containIntrinsicSize: "auto 110px",
     "&:hover": {
       borderColor: theme.palette.primary.main,
       transform: "translateY(-2px)",
@@ -308,6 +450,8 @@ const MomentsUser = ({ onPanStart }) => {
   const classes = useStyles();
   const history = useHistory();
   const { user, socket } = useContext(AuthContext);
+  const shouldReduceMotion = useReducedMotion();
+  const itemVariant = shouldReduceMotion ? bentoItemReduced : bentoItem;
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const isMounted = useRef(true);
@@ -332,9 +476,11 @@ const MomentsUser = ({ onPanStart }) => {
   const fetchTickets = async () => {
     try {
       const { data } = await api.get("/usersMoments");
+      if (!isMounted.current) return;
       setTickets(data);
       setLoading(false);
     } catch (err) {
+      if (!isMounted.current) return;
       setLoading(false);
       toastError(err);
     }
@@ -426,9 +572,9 @@ const MomentsUser = ({ onPanStart }) => {
     };
   }, [tickets]);
 
-  const canAccessTicket = (ticket) => {
+  const canAccessTicket = useCallback((ticket) => {
     return canViewTicketConversation({ ticket, user });
-  };
+  }, [user]);
 
   const shouldShowConfirmModal = (ticket) => {
     const ticketUserId = ticket?.userId;
@@ -443,14 +589,15 @@ const MomentsUser = ({ onPanStart }) => {
   };
 
   // Handler para clique no ticket
-  const handleTicketClick = (ticket) => {
+  const handleTicketClick = useCallback((ticket) => {
     if (shouldShowConfirmModal(ticket)) {
       setSelectedTicket(ticket);
       setConfirmModalOpen(true);
     } else if (canAccessTicket(ticket)) {
       history.push(`/tickets/${ticket.uuid}`);
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, history, canAccessTicket]);
 
   // Confirmar transferência do ticket
   const handleConfirmTransfer = async () => {
@@ -482,137 +629,31 @@ const MomentsUser = ({ onPanStart }) => {
     setSelectedTicket(null);
   };
 
-  const handleOpenMessageDialog = (e, ticket) => {
+  const handleOpenMessageDialog = useCallback((e, ticket) => {
     e.stopPropagation();
     if (!canAccessTicket(ticket)) return;
     setSelectedTicketForView(ticket);
     setOpenTicketMessageDialog(true);
-  };
+  }, [canAccessTicket]);
 
-  // Função de render (não componente): antes era um React.memo criado dentro do
-  // componente → nova identidade a cada render → todos os cards REMONTAVAM
-  // (perdiam estado/DOM) a cada refetch, travando a tela com muitos tickets.
-  const renderTicketCard = (ticket) => (
-    <Card key={ticket.id} className={classes.ticketCard}>
-      <CardActionArea
-        onClick={() => handleTicketClick(ticket)}
-      >
-        <CardContent className={classes.ticketContent}>
-          <div className={classes.ticketHeader}>
-            <div style={{ display: "flex", alignItems: "center" }}>
-              <div className={classes.avatarContainer}>
-                <ContactAvatar
-                  contact={ticket.contact}
-                  style={{ width: 40, height: 40 }}
-                />
-                <div 
-                  className={classes.statusIndicator} 
-                  style={{ 
-                    backgroundColor: "#25D366",
-                  }}
-                >
-                  <WhatsApp style={{ fontSize: 10, color: "#fff" }} />
-                </div>
-              </div>
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <Typography className={classes.ticketName}>
-                    {ticket.contact?.name}
-                  </Typography>
-                  <Typography style={{ fontSize: "0.75rem", color: grey[600] }}>
-                    #{ticket.id}
-                  </Typography>
-                </div>
-                
-                {/* Última Mensagem (subida para logo abaixo do ID) */}
-                <Typography className={classes.ticketMessage}>
-                  {ticket.lastMessage || "Sem mensagens"}
-                </Typography>
-              </div>
-            </div>
-            {canAccessTicket(ticket) && (
-              <Tooltip title="Espiar Conversa">
-                <IconButton
-                  size="small"
-                  onClick={(e) => handleOpenMessageDialog(e, ticket)}
-                  // Touch target mínimo de 44px no mobile
-                  style={{ padding: 4, color: blue[700], minWidth: 44, minHeight: 44 }}
-                >
-                  <VisibilityIcon size={20} />
-                </IconButton>
-              </Tooltip>
-            )}
-          </div>
-
-          {/* Tags de Conexão, Fila e Usuário no rodapé */}
-          <div className={classes.tagContainer}>
-            {ticket.whatsapp && (
-              <Tooltip title={`Conexão: ${ticket.whatsapp.name}`}>
-                <div
-                  className={`${classes.badge}`}
-                  style={{
-                    backgroundColor: ticket.whatsapp.color || "#25D366",
-                    color: "#fff",
-                    textTransform: "uppercase"
-                  }}
-                >
-                  {ticket.whatsapp.name}
-                </div>
-              </Tooltip>
-            )}
-
-            <Tooltip title={`Fila: ${ticket.queue?.name || "Sem Fila"}`}>
-              <div
-                className={`${classes.badge}`}
-                style={{
-                  backgroundColor: ticket.queue?.color || "#e0e0e0",
-                  color: ticket.queue?.color ? "#fff" : "inherit",
-                  textTransform: "uppercase"
-                }}
-              >
-                {ticket.queue?.name || "Sem Fila"}
-              </div>
-            </Tooltip>
-
-            {ticket.user?.name && (
-              <Tooltip title={`Atendente: ${ticket.user.name}`}>
-                <div
-                  className={`${classes.badge}`}
-                  style={{
-                    backgroundColor: ticket.user.color || '#000',
-                    color: '#fff',
-                    textTransform: "uppercase"
-                  }}
-                >
-                  {ticket.user.name}
-                </div>
-              </Tooltip>
-            )}
-            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4 }}>
-              {Number(ticket.unreadMessages) > 0 && (
-                <div className={classes.unreadBadge} style={{ transform: 'scale(0.8)' }}>
-                  {ticket.unreadMessages}
-                </div>
-              )}
-              <Typography className={classes.time}>
-                {(() => {
-                  try {
-                    if (!ticket.updatedAt) return "";
-                    return format(parseISO(ticket.updatedAt), "HH:mm");
-                  } catch {
-                    return "";
-                  }
-                })()}
-              </Typography>
-            </div>
-          </div>
-        </CardContent>
-      </CardActionArea>
-    </Card>
+  const renderTicket = (ticket) => (
+    <TicketCard
+      key={ticket.id}
+      ticket={ticket}
+      classes={classes}
+      canAccess={canAccessTicket(ticket)}
+      onTicketClick={handleTicketClick}
+      onPeek={handleOpenMessageDialog}
+    />
   );
 
   const renderColumn = (title, icon, items, color) => (
-    <Paper className={classes.column} elevation={0}>
+    <Paper
+      component={motion.div}
+      variants={itemVariant}
+      className={classes.column}
+      elevation={0}
+    >
       <div
         className={classes.columnHeader}
         style={{ borderTop: `4px solid ${color}` }}
@@ -628,7 +669,7 @@ const MomentsUser = ({ onPanStart }) => {
       </div>
       <div className={classes.ticketsList}>
         {items.length > 0 ? (
-          items.map(ticket => renderTicketCard(ticket))
+          items.map(renderTicket)
         ) : (
           <div onPointerDown={onPanStart} style={{ padding: 20, textAlign: "center", color: "#bdbdbd", cursor: "grab" }}>
             <Typography variant="body2">Nenhum atendimento</Typography>
@@ -638,8 +679,33 @@ const MomentsUser = ({ onPanStart }) => {
     </Paper>
   );
 
+  // Skeleton de entrada: shimmer nas colunas enquanto o fetch inicial não volta
+  if (loading) {
+    return (
+      <div className={classes.root}>
+        {[0, 1, 2].map((i) => (
+          <Paper key={i} className={classes.column} elevation={0}>
+            <div className={classes.columnHeader}>
+              <div className="bento-shimmer" style={{ width: "60%", height: 24, borderRadius: 8 }} />
+            </div>
+            <div className={classes.ticketsList} style={{ padding: 8 }}>
+              {[0, 1, 2].map((j) => (
+                <div key={j} className="bento-shimmer" style={{ height: 96, borderRadius: 12, marginBottom: 8 }} />
+              ))}
+            </div>
+          </Paper>
+        ))}
+      </div>
+    );
+  }
+
   return (
-    <div className={classes.root}>
+    <motion.div
+      variants={bentoContainer}
+      initial="hidden"
+      animate="show"
+      className={classes.root}
+    >
       {/* Coluna Bot - só exibe se tiver tickets */}
       {botTickets.length > 0 && renderColumn(
         "Bot / Automático",
@@ -666,7 +732,13 @@ const MomentsUser = ({ onPanStart }) => {
 
       {/* Colunas de Usuários - só exibe usuários com tickets */}
       {userTickets.filter(group => group.tickets.length > 0).map((group) => (
-        <Paper key={group.user.id} className={classes.column} elevation={0}>
+        <Paper
+          component={motion.div}
+          variants={itemVariant}
+          key={group.user.id}
+          className={classes.column}
+          elevation={0}
+        >
           <div
             className={classes.columnHeader}
             style={{ borderTop: `4px solid ${green[600]}` }}
@@ -689,7 +761,7 @@ const MomentsUser = ({ onPanStart }) => {
             </Badge>
           </div>
           <div className={classes.ticketsList}>
-            {group.tickets.map(ticket => renderTicketCard(ticket))}
+            {group.tickets.map(renderTicket)}
           </div>
         </Paper>
       ))}
@@ -724,7 +796,7 @@ const MomentsUser = ({ onPanStart }) => {
         onClose={() => setOpenTicketMessageDialog(false)}
         ticket={selectedTicketForView}
       />
-    </div>
+    </motion.div>
   );
 };
 

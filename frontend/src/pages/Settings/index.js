@@ -14,6 +14,9 @@ import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import ForbiddenPage from "../../components/ForbiddenPage/index.js";
 import usePermissions from "../../hooks/usePermissions";
+import { motion, useReducedMotion } from "framer-motion";
+import { bentoContainer, bentoItem, bentoItemReduced } from "../../components/bento/motionPresets";
+import "../../components/bento/bento.css";
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -44,6 +47,10 @@ const Settings = () => {
   const { hasPermission } = usePermissions();
 
   const [settings, setSettings] = useState([]);
+
+  // Respeita prefers-reduced-motion: troca o spring por um fade simples
+  const reducedMotion = useReducedMotion();
+  const itemVariant = reducedMotion ? bentoItemReduced : bentoItem;
 
   useEffect(() => {
     const fetchSession = async () => {
@@ -80,7 +87,7 @@ const Settings = () => {
     return () => {
       socket.off(`company-${companyId}-settings`, onSettingsEvent);
     };
-  }, [socket]);
+  }, [socket, user.companyId]);
 
   const handleChangeSetting = async (e) => {
     const selectedValue = e.target.value;
@@ -112,33 +119,45 @@ const Settings = () => {
         :
         <>
           <Container className={classes.container} maxWidth="sm">
-            <Typography variant="body2" gutterBottom>
-              {i18n.t("settings.title")}
-            </Typography>
-            <Paper className={classes.paper}>
-              <Typography variant="body1">
-                {i18n.t("settings.settings.userCreation.name")}
-              </Typography>
-              <Select
-                margin="dense"
-                variant="outlined"
-                native
-                id="userCreation-setting"
-                name="userCreation"
-                value={
-                  settings && settings.length > 0 && getSettingValue("userCreation")
-                }
-                className={classes.settingOption}
-                onChange={handleChangeSetting}
-              >
-                <option value="enabled">
-                  {i18n.t("settings.settings.userCreation.options.enabled")}
-                </option>
-                <option value="disabled">
-                  {i18n.t("settings.settings.userCreation.options.disabled")}
-                </option>
-              </Select>
-            </Paper>
+            {/* Entrada bento: container com stagger; cada bloco entra com spring */}
+            <motion.div
+              variants={bentoContainer}
+              initial="hidden"
+              animate="show"
+              style={{ display: "flex", flexDirection: "column", gap: 12 }}
+            >
+              <motion.div variants={itemVariant}>
+                <Typography variant="body2" gutterBottom>
+                  {i18n.t("settings.title")}
+                </Typography>
+              </motion.div>
+              <motion.div variants={itemVariant}>
+                <Paper className={`${classes.paper} bento-panel`}>
+                  <Typography variant="body1">
+                    {i18n.t("settings.settings.userCreation.name")}
+                  </Typography>
+                  <Select
+                    margin="dense"
+                    variant="outlined"
+                    native
+                    id="userCreation-setting"
+                    name="userCreation"
+                    value={
+                      settings && settings.length > 0 && getSettingValue("userCreation")
+                    }
+                    className={classes.settingOption}
+                    onChange={handleChangeSetting}
+                  >
+                    <option value="enabled">
+                      {i18n.t("settings.settings.userCreation.options.enabled")}
+                    </option>
+                    <option value="disabled">
+                      {i18n.t("settings.settings.userCreation.options.disabled")}
+                    </option>
+                  </Select>
+                </Paper>
+              </motion.div>
+            </motion.div>
           </Container>
         </>}
     </div>

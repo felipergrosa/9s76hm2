@@ -26,7 +26,7 @@ const GetUserPersonalTagContactIds = async (
 ): Promise<WalletResult> => {
   // Buscar usuário com suas tags permitidas
   const user = await User.findByPk(userId, {
-    attributes: ["id", "profile", "super", "allowedContactTags", "managedUserIds"]
+    attributes: ["id", "profile", "super", "allowedContactTags", "managedUserIds", "supervisorViewMode"]
   });
 
   if (!user) {
@@ -38,8 +38,35 @@ const GetUserPersonalTagContactIds = async (
     };
   }
 
-  // Admin e Super veem tudo
-  if (user.profile === "admin" || user.super) {
+  // Super (dono da conta) sempre vê tudo — configuração de supervisão
+  // nunca restringe o próprio super admin.
+  if (user.super) {
+    return {
+      hasWalletRestriction: false,
+      contactIds: [],
+      managedUserIds: [],
+      excludedUserIds: []
+    };
+  }
+
+  const managedUserIds = (user.managedUserIds || []).map(Number);
+  const supervisorViewMode = user.supervisorViewMode === "exclude" ? "exclude" : "include";
+
+  // Modo "exclude" (Não - ver todos exceto os selecionados): os IDs em
+  // managedUserIds são usuários que ele NÃO pode ver. Aplica-se também a
+  // admin comum — antes este modo era ignorado e o usuário via todas as lanes.
+  if (supervisorViewMode === "exclude" && managedUserIds.length > 0) {
+    return {
+      hasWalletRestriction: false,
+      contactIds: [],
+      managedUserIds: [],
+      excludedUserIds: managedUserIds,
+      supervisorViewMode: "exclude"
+    };
+  }
+
+  // Admin comum (include ou exclude sem seleção) vê tudo
+  if (user.profile === "admin") {
     return {
       hasWalletRestriction: false,
       contactIds: [],
@@ -49,7 +76,6 @@ const GetUserPersonalTagContactIds = async (
   }
 
   const userAllowedContactTags = user.allowedContactTags || [];
-  const managedUserIds = (user.managedUserIds || []).map(Number);
 
   // Se usuário não tem tags pessoais configuradas, não tem restrição de carteira
   // (verá apenas tickets atribuídos a ele)

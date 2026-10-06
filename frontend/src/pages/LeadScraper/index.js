@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import Autocomplete from "@material-ui/lab/Autocomplete";
 import Skeleton from "@material-ui/lab/Skeleton";
 import CNAES from "../../data/cnaeList";
@@ -35,6 +35,8 @@ import {
   CircleStop as StopIcon,
   Globe as GlobalIcon,
   Settings as SettingsIcon,
+  Activity as ActivityIcon,
+  CheckCircle2 as CheckIcon,
 } from "lucide-react";
 import { toast } from "react-toastify";
 import api from "../../services/api";
@@ -45,6 +47,10 @@ import ApifyTokenModal from "../../components/ApifyTokenModal";
 import LeadMapPicker from "../../components/LeadMapPicker";
 import useUsersList from "../../hooks/useUsersList";
 import usePermissions from "../../hooks/usePermissions";
+import { motion, useReducedMotion } from "framer-motion";
+import StatCard from "../../components/bento/StatCard";
+import { bentoContainer, bentoItem, bentoItemReduced } from "../../components/bento/motionPresets";
+import "../../components/bento/bento.css";
 
 const STATUS = {
   done:    { label: "Concluído",  bg: "#e8f5e9", color: "#2e7d32" },
@@ -524,6 +530,10 @@ export default function LeadScraper() {
   const canImport = hasPermission("contacts.import");
   const pollRef = useRef(null);
 
+  // Respeita prefers-reduced-motion: troca o spring por um fade simples
+  const reducedMotion = useReducedMotion();
+  const itemVariant = reducedMotion ? bentoItemReduced : bentoItem;
+
   const [keyword, setKeyword] = useState("");
   const [city, setCity] = useState([]); // string[] — multi-cidade
   const [state, setState] = useState(["SP"]); // string[] — multi-UF
@@ -934,6 +944,17 @@ export default function LeadScraper() {
       return sortConfig.dir === "asc" ? cmp : -cmp;
     });
 
+  // KPIs do strip bento — derivados do histórico de buscas já carregado
+  const jobStats = useMemo(() => {
+    const list = jobs || [];
+    return {
+      total: list.length,
+      running: list.filter(j => j.status === "running" || j.status === "pending").length,
+      done: list.filter(j => j.status === "done").length,
+      leads: list.reduce((acc, j) => acc + (j.totalFound || 0), 0),
+    };
+  }, [jobs]);
+
   return (
     <MainContainer useWindowScroll>
       {/* ── Modais ── */}
@@ -961,7 +982,22 @@ export default function LeadScraper() {
             : "Excluir esta busca do histórico? Leads já importados não serão afetados."}
       </ConfirmationModal>
 
-      <Paper className={classes.mainPaper} variant="outlined">
+      <motion.div
+        variants={bentoContainer}
+        initial="hidden"
+        animate="show"
+        style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, gap: 12 }}
+      >
+        {/* Strip de KPIs bento — espelha o histórico de buscas */}
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+          <StatCard label="Buscas" value={jobStats.total} icon={<SearchIcon size={20} />} accent="var(--primary-color)" loading={!jobsLoaded} />
+          <StatCard label="Em execução" value={jobStats.running} icon={<ActivityIcon size={20} />} accent="#f39c12" loading={!jobsLoaded} />
+          <StatCard label="Concluídas" value={jobStats.done} icon={<CheckIcon size={20} />} accent="#26c281" loading={!jobsLoaded} />
+          <StatCard label="Leads coletados" value={jobStats.leads} icon={<LeadIcon size={20} />} accent="#8e44ad" loading={!jobsLoaded} />
+        </div>
+
+      <motion.div variants={itemVariant} style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+      <Paper className={`${classes.mainPaper} bento-panel`} variant="outlined">
         {/* ── Cabeçalho padrão: título + subtítulo + ações ── */}
         <div className={classes.header}>
           <div className={classes.headerText}>
@@ -1012,11 +1048,12 @@ export default function LeadScraper() {
           </div>
         )}
 
-        <div className={classes.pageContent}>
+        <motion.div variants={itemVariant} className={classes.pageContent}>
       <Grid container spacing={2}>
         {/* ── Left: form ── */}
         <Grid item xs={12} md={7}>
-          <Paper className={classes.paper} elevation={0} variant="outlined">
+          <motion.div variants={itemVariant}>
+          <Paper className={`${classes.paper} bento-panel`} elevation={0} variant="outlined">
             {/* variant="scrollable": 5 abas com rótulo longo não cabem em 375px sem scroll */}
             <Tabs
               value={tab}
@@ -1806,12 +1843,14 @@ export default function LeadScraper() {
               </Collapse>
             </TabPanel>
           </Paper>
+          </motion.div>
         </Grid>
 
         {/* ── Right: jobs history ── */}
         <Grid item xs={12} md={5} style={{ display: "flex" }}>
+          <motion.div variants={itemVariant} style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
           <Paper
-            className={classes.paper}
+            className={`${classes.paper} bento-panel`}
             elevation={0}
             variant="outlined"
             style={{ minHeight: 200, maxHeight: 560, display: "flex", flexDirection: "column", flex: 1 }}
@@ -1920,12 +1959,14 @@ export default function LeadScraper() {
             )}
             </Box>
           </Paper>
+          </motion.div>
         </Grid>
       </Grid>
 
       {/* ── Active job results ── */}
       {activeJob && (
-        <Paper className={classes.paper} elevation={0} variant="outlined">
+        <motion.div variants={itemVariant}>
+        <Paper className={`${classes.paper} bento-panel`} elevation={0} variant="outlined">
           <Box className={classes.resultsHeader}>
             <Box display="flex" alignItems="center" style={{ gap: 12 }}>
               <Typography variant="h6" style={{ fontWeight: 700 }}>Resultados</Typography>
@@ -2459,9 +2500,12 @@ export default function LeadScraper() {
             </>
           ) : null}
         </Paper>
+        </motion.div>
       )}
-        </div>
+        </motion.div>
       </Paper>
+      </motion.div>
+      </motion.div>
     </MainContainer>
   );
 }

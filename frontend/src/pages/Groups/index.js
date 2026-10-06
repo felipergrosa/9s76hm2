@@ -19,6 +19,10 @@ import useDebounce from "../../hooks/useDebounce";
 import ContactAvatar from "../../components/ContactAvatar";
 import { socketConnection } from "../../services/socket";
 import usePermissions from "../../hooks/usePermissions";
+import { motion, useReducedMotion } from "framer-motion";
+import StatCard from "../../components/bento/StatCard";
+import { bentoContainer, bentoItem, bentoItemReduced } from "../../components/bento/motionPresets";
+import "../../components/bento/bento.css";
 
 // Cores para os headers das lanes (cicla entre elas)
 const LANE_COLORS = [
@@ -31,6 +35,10 @@ const LANE_COLORS = [
     { bg: "#8e44ad", text: "#fff" },    // violeta
     { bg: "#d35400", text: "#fff" },    // dark orange
 ];
+
+// Conexão considerada ativa — usada no header da lane e nos KPIs do strip
+const isConnected = (status) =>
+    status === "CONNECTED" || status === "qrcode" || status === "OPENING";
 
 const Groups = () => {
     const history = useHistory();
@@ -264,13 +272,31 @@ const Groups = () => {
     const { hasPermission: checkPerm } = usePermissions();
     const canViewGroups = checkPerm("tickets.view-groups");
 
-    const isConnected = (status) =>
-        status === "CONNECTED" || status === "qrcode" || status === "OPENING";
+    const reducedMotion = useReducedMotion();
+    const itemVariant = reducedMotion ? bentoItemReduced : bentoItem;
+
+    // KPIs do strip bento — derivados dos grupos e lanes já carregados.
+    // O registro de grupo (Contact) não possui status open/pending/closed,
+    // então usamos "com não lidas" + saúde das conexões como recorte.
+    const groupStats = useMemo(() => {
+        const unread = groups.filter((g) => parseInt(g.unreadCount) > 0).length;
+        const activeLanes = lanes.filter((l) => isConnected(l.whatsappStatus)).length;
+        return {
+            total: totalGroups,
+            unread,
+            activeLanes,
+            offlineLanes: lanes.length - activeLanes,
+        };
+    }, [groups, lanes, totalGroups]);
 
     return (
         <MainContainer>
             {canViewGroups ? (
-                <div style={{
+                <motion.div
+                    variants={bentoContainer}
+                    initial="hidden"
+                    animate="show"
+                    style={{
                     display: "flex",
                     flexDirection: "column",
                     height: "100%",
@@ -381,8 +407,18 @@ const Groups = () => {
                         </div>
                     </div>
 
+                    {/* Strip de KPIs bento — derivados dos dados já carregados (sem fetch extra) */}
+                    <div className="grid grid-cols-2 xl:grid-cols-4 gap-3" style={{ padding: "12px 16px 0" }}>
+                        <StatCard label="Grupos" value={groupStats.total} icon={<Users size={20} />} accent="var(--primary-color)" loading={loading} />
+                        <StatCard label="Com não lidas" value={groupStats.unread} icon={<MessageSquare size={20} />} accent="#f39c12" loading={loading} />
+                        <StatCard label="Conexões ativas" value={groupStats.activeLanes} icon={<Wifi size={20} />} accent="#26c281" loading={loading} />
+                        <StatCard label="Conexões offline" value={groupStats.offlineLanes} icon={<WifiOff size={20} />} accent="#e7505a" loading={loading} />
+                    </div>
+
                     {/* Kanban Lanes */}
-                    <div style={{
+                    <motion.div
+                        variants={itemVariant}
+                        style={{
                         flex: 1,
                         overflowX: "auto",
                         overflowY: "hidden",
@@ -390,6 +426,7 @@ const Groups = () => {
                         display: "flex",
                         gap: 16,
                         alignItems: "flex-start",
+                        minHeight: 0,
                     }}>
                         {loading ? (
                             // Skeleton de lanes
@@ -443,7 +480,10 @@ const Groups = () => {
                             lanes.map((lane, laneIdx) => {
                                 const color = LANE_COLORS[laneIdx % LANE_COLORS.length];
                                 return (
-                                    <div key={lane.whatsappId} style={{
+                                    <motion.div
+                                        key={lane.whatsappId}
+                                        variants={itemVariant}
+                                        style={{
                                         // Lane nunca excede a viewport: em telas <368px
                                         // ocupa a largura disponível em vez de estourar
                                         minWidth: "min(320px, calc(100vw - 48px))",
@@ -601,12 +641,12 @@ const Groups = () => {
                                                 </div>
                                             ))}
                                         </div>
-                                    </div>
+                                    </motion.div>
                                 );
                             })
                         )}
-                    </div>
-                </div>
+                    </motion.div>
+                </motion.div>
             ) : (
                 <div style={{
                     display: "flex",

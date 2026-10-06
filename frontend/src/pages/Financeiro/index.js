@@ -24,7 +24,13 @@ import PersonIcon from "@material-ui/icons/Person";
 import DevicesIcon from "@material-ui/icons/Devices";
 import QueueIcon from "@material-ui/icons/Queue";
 import DateRangeIcon from "@material-ui/icons/DateRange";
-import { Search as SearchIcon } from "lucide-react";
+import {
+  Search as SearchIcon,
+  FileText as FileTextIcon,
+  CheckCircle2 as CheckCircle2Icon,
+  Clock as ClockIcon,
+  AlertTriangle as AlertTriangleIcon,
+} from "lucide-react";
 
 import MainContainer from "../../components/MainContainer";
 import Title from "../../components/Title";
@@ -33,6 +39,10 @@ import api from "../../services/api";
 import TableRowSkeleton from "../../components/TableRowSkeleton";
 import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
+import { motion, useReducedMotion } from "framer-motion";
+import StatCard from "../../components/bento/StatCard";
+import { bentoContainer, bentoItem, bentoItemReduced } from "../../components/bento/motionPresets";
+import "../../components/bento/bento.css";
 
 import moment from "moment";
 
@@ -468,12 +478,27 @@ const Invoices = () => {
     });
   }, [invoices, searchParam, statusFilter]);
 
+  // KPIs do strip bento — derivados das faturas já carregadas (mesma fonte da listagem)
+  const invoiceStats = useMemo(() => {
+    const list = invoices || [];
+    return {
+      total: list.length,
+      paid: list.filter((inv) => getInvoiceStatus(inv).key === "paid").length,
+      open: list.filter((inv) => getInvoiceStatus(inv).key === "open").length,
+      overdue: list.filter((inv) => getInvoiceStatus(inv).key === "overdue").length,
+    };
+  }, [invoices]);
+
+  // Respeita prefers-reduced-motion: troca o spring por um fade simples
+  const reducedMotion = useReducedMotion();
+  const itemVariant = reducedMotion ? bentoItemReduced : bentoItem;
+
   const isLoadingFallback = !user || !user.companyId || !companyPlan;
 
   if (isLoadingFallback) {
     return (
       <MainContainer>
-        <Paper className={classes.paper} variant="outlined">
+        <Paper className={`${classes.paper} bento-panel`} variant="outlined">
           <div className={classes.header}>
             <div className={classes.headerText}>
               <Title>Faturas</Title>
@@ -545,8 +570,23 @@ const Invoices = () => {
         contactId={selectedContactId}
       />
 
+      <motion.div
+        variants={bentoContainer}
+        initial="hidden"
+        animate="show"
+        style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, gap: 12 }}
+      >
+        {/* Strip de KPIs bento — espelha o status das faturas carregadas */}
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+          <StatCard label="Faturas" value={invoiceStats.total} icon={<FileTextIcon size={20} />} accent="var(--primary-color)" loading={loading && invoices.length === 0} />
+          <StatCard label="Pagas" value={invoiceStats.paid} icon={<CheckCircle2Icon size={20} />} accent="#26c281" loading={loading && invoices.length === 0} />
+          <StatCard label="Em aberto" value={invoiceStats.open} icon={<ClockIcon size={20} />} accent="#f39c12" loading={loading && invoices.length === 0} />
+          <StatCard label="Vencidas" value={invoiceStats.overdue} icon={<AlertTriangleIcon size={20} />} accent="#e7505a" loading={loading && invoices.length === 0} />
+        </div>
+
+      <motion.div variants={itemVariant} style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
       <Paper
-        className={classes.paper}
+        className={`${classes.paper} bento-panel`}
         variant="outlined"
         onScroll={handleScroll}
       >
@@ -720,6 +760,8 @@ const Invoices = () => {
           </>
         )}
       </Paper>
+      </motion.div>
+      </motion.div>
     </MainContainer>
   );
 };

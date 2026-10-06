@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useRef, useState } from "react";
+import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 
 import { useParams, useHistory } from "react-router-dom";
 
@@ -19,6 +19,8 @@ import { useTheme } from "@material-ui/core/styles";
 import {
   MessageSquare as ChatIcon,
   Plus as AddIcon,
+  Bell as BellIcon,
+  Users as UsersIcon,
 } from "lucide-react";
 
 import ChatList from "./ChatList";
@@ -34,6 +36,10 @@ import { has, isObject } from "lodash";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import withWidth, { isWidthUp } from "@material-ui/core/withWidth";
 import { i18n } from "../../translate/i18n";
+import { motion, useReducedMotion } from "framer-motion";
+import StatCard from "../../components/bento/StatCard";
+import { bentoContainer, bentoItem, bentoItemReduced } from "../../components/bento/motionPresets";
+import "../../components/bento/bento.css";
 
 const isDirectChatSelection = (users, type) => type === "new" && Array.isArray(users) && users.length === 1;
 
@@ -246,6 +252,20 @@ function Chat(props) {
   const isMounted = useRef(true);
   const scrollToBottomRef = useRef();
   const { id } = useParams();
+
+  const reducedMotion = useReducedMotion();
+  const itemVariant = reducedMotion ? bentoItemReduced : bentoItem;
+
+  // KPIs do strip bento — espelham a lista de conversas já carregada
+  const chatStats = useMemo(() => {
+    const unreadsOf = (chat) =>
+      chat.users?.find((u) => u.userId === user.id)?.unreads || 0;
+    return {
+      total: chats.length,
+      unread: chats.filter((c) => unreadsOf(c) > 0).length,
+      groups: chats.filter((c) => c.type !== "direct").length,
+    };
+  }, [chats, user.id]);
 
   useEffect(() => {
     return () => {
@@ -568,7 +588,21 @@ function Chat(props) {
         }}
         handleClose={() => setShowDialog(false)}
       />
-      <Paper className={classes.paper} variant="outlined">
+      <motion.div
+        variants={bentoContainer}
+        initial="hidden"
+        animate="show"
+        style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, gap: 12 }}
+      >
+        {/* Strip de KPIs bento — leve: espelha a lista de conversas carregada */}
+        <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
+          <StatCard label="Conversas" value={chatStats.total} icon={<ChatIcon size={20} />} accent="var(--primary-color)" />
+          <StatCard label="Não lidas" value={chatStats.unread} icon={<BellIcon size={20} />} accent="#f39c12" />
+          <StatCard label="Grupos" value={chatStats.groups} icon={<UsersIcon size={20} />} accent="#26c281" />
+        </div>
+
+        <motion.div variants={itemVariant} style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+          <Paper className={`${classes.paper} bento-panel`} variant="outlined">
         {/* Cabeçalho no padrão de listagens: título + subtítulo + ação primária */}
         <div className={classes.header}>
           <div className={classes.headerText}>
@@ -601,6 +635,8 @@ function Chat(props) {
           {isWidthUp("md", props.width) ? renderGrid() : renderTab()}
         </div>
       </Paper>
+        </motion.div>
+      </motion.div>
     </MainContainer>
   );
 }

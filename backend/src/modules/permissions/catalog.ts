@@ -399,7 +399,7 @@ export const formatPermissionLabel = (key: string): string => {
     "tickets.bulk-edit-notes": "Massa: Adicionar Notas Internas",
     "dashboard.view": "Ver Dashboard",
     "reports.view": "Ver Relatórios",
-    "realtime.view": "Ver Tempo Real",
+    "realtime.view": "Painel em Tempo Real (/moments)",
     "campaigns.view": "Ver Campanhas",
     "campaigns.create": "Criar Campanhas",
     "campaigns.edit": "Editar Campanhas",

@@ -32,6 +32,10 @@ import {
   Trash2 as DeleteIcon,
   Plus as AddIcon,
   Plug as EmptyIcon,
+  Plug as IntegrationsIcon,
+  Webhook as WebhookIcon,
+  Bot as BotIcon,
+  Workflow as FlowsIcon,
 } from "lucide-react";
 
 import MainContainer from "../../components/MainContainer";
@@ -48,6 +52,12 @@ import usePlans from "../../hooks/usePlans";
 import { useHistory } from "react-router-dom/cjs/react-router-dom.min";
 import ForbiddenPage from "../../components/ForbiddenPage";
 import usePermissions from "../../hooks/usePermissions";
+
+// Bento design system — moldura + strip de KPIs + entrada spring
+import { motion, useReducedMotion } from "framer-motion";
+import StatCard from "../../components/bento/StatCard";
+import { bentoContainer, bentoItem, bentoItemReduced } from "../../components/bento/motionPresets";
+import "../../components/bento/bento.css";
 
 const reducer = (state, action) => {
   if (action.type === "LOAD_INTEGRATIONS") {
@@ -394,6 +404,25 @@ const QueueIntegration = () => {
     });
   }, [queueIntegration, typeFilter]);
 
+  // KPIs do strip bento — derivados da lista carregada (tipos de IA excluídos)
+  const integrationStats = useMemo(() => {
+    const list = (queueIntegration || []).filter(
+      (i) => !HIDDEN_TYPES.includes(String(i.type || "").toLowerCase())
+    );
+    const count = (types) =>
+      list.filter((i) => types.includes(String(i.type || "").toLowerCase())).length;
+    return {
+      total: list.length,
+      automations: count(["webhook", "n8n"]),
+      bots: count(["typebot", "dialogflow"]),
+      flows: count(["flowbuilder"]),
+    };
+  }, [queueIntegration]);
+
+  // Respeita prefers-reduced-motion: troca o spring de entrada por fade simples
+  const reducedMotion = useReducedMotion();
+  const itemVariant = reducedMotion ? bentoItemReduced : bentoItem;
+
   const handleOpenUserModal = () => {
     setSelectedIntegration(null);
     setUserModalOpen(true);
@@ -464,7 +493,21 @@ const QueueIntegration = () => {
       {!hasPermission("integrations.view") ? (
         <ForbiddenPage />
       ) : (
-        <Paper className={classes.paper} variant="outlined">
+        <motion.div
+          variants={bentoContainer}
+          initial="hidden"
+          animate="show"
+          style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, gap: 12 }}
+        >
+          {/* Strip de KPIs bento — resume as integrações sem fetch extra */}
+          <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+            <StatCard label="Integrações" value={integrationStats.total} icon={<IntegrationsIcon size={20} />} accent="var(--primary-color)" loading={loading && queueIntegration.length === 0} />
+            <StatCard label="Webhook + n8n" value={integrationStats.automations} icon={<WebhookIcon size={20} />} accent="#f39c12" loading={loading && queueIntegration.length === 0} />
+            <StatCard label="Typebot + Dialogflow" value={integrationStats.bots} icon={<BotIcon size={20} />} accent="#8e44ad" loading={loading && queueIntegration.length === 0} />
+            <StatCard label="FlowBuilder" value={integrationStats.flows} icon={<FlowsIcon size={20} />} accent="#3598dc" loading={loading && queueIntegration.length === 0} />
+          </div>
+        <motion.div variants={itemVariant} style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+        <Paper className={`${classes.paper} bento-panel`} variant="outlined">
           {/* Cabeçalho: título + contador + subtítulo + ação primária */}
           <div className={classes.header}>
             <div className={classes.headerText}>
@@ -652,6 +695,8 @@ const QueueIntegration = () => {
             )}
           </div>
         </Paper>
+        </motion.div>
+        </motion.div>
       )}
     </MainContainer>
   );

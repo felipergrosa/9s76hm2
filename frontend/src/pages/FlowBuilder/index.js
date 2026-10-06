@@ -29,6 +29,8 @@ import {
   Workflow as FlowIcon,
   Copy as DuplicateIcon,
   Trash2 as DeleteIcon,
+  CheckCircle2 as ActiveIcon,
+  CircleOff as InactiveIcon,
 } from "lucide-react";
 
 import api from "../../services/api";
@@ -44,6 +46,12 @@ import usePermissions from "../../hooks/usePermissions";
 import NewTicketModal from "../../components/NewTicketModal";
 import FlowBuilderModal from "../../components/FlowBuilderModal";
 import ForbiddenPage from "../../components/ForbiddenPage";
+
+// Bento design system — moldura + strip de KPIs + entrada spring
+import { motion, useReducedMotion } from "framer-motion";
+import StatCard from "../../components/bento/StatCard";
+import { bentoContainer, bentoItem, bentoItemReduced } from "../../components/bento/motionPresets";
+import "../../components/bento/bento.css";
 
 const reducer = (state, action) => {
   if (action.type === "LOAD_CONTACTS") {
@@ -383,6 +391,17 @@ const FlowBuilder = () => {
     });
   }, [webhooks, searchParam, statusFilter]);
 
+  // KPIs do strip bento — derivados da lista já carregada (sem fetch extra)
+  const flowStats = useMemo(() => ({
+    total: (webhooks || []).length,
+    active: (webhooks || []).filter((f) => f.active).length,
+    inactive: (webhooks || []).filter((f) => !f.active).length,
+  }), [webhooks]);
+
+  // Respeita prefers-reduced-motion: troca o spring de entrada por fade simples
+  const reducedMotion = useReducedMotion();
+  const itemVariant = reducedMotion ? bentoItemReduced : bentoItem;
+
   const handleSearch = event => {
     setSearchParam(event.target.value.toLowerCase());
   };
@@ -573,8 +592,21 @@ const FlowBuilder = () => {
       {!hasPermission("flowbuilder.view") ? (
         <ForbiddenPage />
       ) : (
+        <motion.div
+          variants={bentoContainer}
+          initial="hidden"
+          animate="show"
+          style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, gap: 12 }}
+        >
+          {/* Strip de KPIs bento — resume os fluxos sem fetch extra */}
+          <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
+            <StatCard label="Fluxos" value={flowStats.total} icon={<FlowIcon size={20} />} accent="var(--primary-color)" loading={loading && webhooks.length === 0} />
+            <StatCard label="Ativos" value={flowStats.active} icon={<ActiveIcon size={20} />} accent="#26c281" loading={loading && webhooks.length === 0} />
+            <StatCard label="Desativados" value={flowStats.inactive} icon={<InactiveIcon size={20} />} accent="#e7505a" loading={loading && webhooks.length === 0} />
+          </div>
+        <motion.div variants={itemVariant} style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
         <Paper
-          className={classes.paper}
+          className={`${classes.paper} bento-panel`}
           variant="outlined"
           onScroll={handleScroll}
         >
@@ -756,6 +788,8 @@ const FlowBuilder = () => {
             </>
           )}
         </Paper>
+        </motion.div>
+        </motion.div>
       )}
     </MainContainer>
   );

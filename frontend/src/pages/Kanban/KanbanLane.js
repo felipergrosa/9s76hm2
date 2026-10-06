@@ -67,11 +67,20 @@ export default function KanbanLane({ lane, onCardClick, allTags, onMoveRequest, 
 
     return (
         <div
-            className={classes.lane}
+            className={`${classes.lane} bento-panel`}
             ref={innerRef}
             {...draggableProps}
-            style={{ ...draggableProps?.style, borderTop: `4px solid ${lane.laneColor || "#5C5C5C"}` }}
+            style={{ ...draggableProps?.style }}
         >
+            {/* Acento de cor da fase — div fina no topo (o border do .bento-panel
+                é !important e sobrescreveria um borderTop inline) */}
+            <div
+                style={{
+                    height: 4,
+                    flexShrink: 0,
+                    background: lane.laneColor || "#5C5C5C",
+                }}
+            />
             <KanbanLaneHeader
                 id={lane.id}
                 title={lane.title}

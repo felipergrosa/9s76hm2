@@ -48,6 +48,9 @@ const useStyles = makeStyles((theme) => ({
     display: "flex",
     flexDirection: "column",
     height: "100%",
+    // Mesma margem externa do MainContainer (padrão das páginas bento)
+    padding: theme.spacing(2),
+    boxSizing: "border-box",
   },
   mainPaper: {
     flex: 1,

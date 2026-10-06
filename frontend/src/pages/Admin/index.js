@@ -22,6 +22,9 @@ import {
 import MainContainer from "../../components/MainContainer";
 import ForbiddenPage from "../../components/ForbiddenPage";
 import { AuthContext } from "../../context/Auth/AuthContext";
+import { motion, useReducedMotion } from "framer-motion";
+import { bentoContainer, bentoItem, bentoItemReduced } from "../../components/bento/motionPresets";
+import "../../components/bento/bento.css";
 
 const EmpresasTab = lazy(() => import("./tabs/EmpresasTab"));
 const ConexoesTab = lazy(() => import("./tabs/ConexoesTab"));
@@ -110,6 +113,10 @@ const Admin = () => {
   const currentTab = params.get("tab") || "empresas";
   const validTab = TABS.some(t => t.value === currentTab) ? currentTab : "empresas";
 
+  // Respeita prefers-reduced-motion: troca o spring por um fade simples
+  const reducedMotion = useReducedMotion();
+  const itemVariant = reducedMotion ? bentoItemReduced : bentoItem;
+
   const handleTabChange = (_, value) => {
     history.replace(`/admin?tab=${value}`);
   };
@@ -119,7 +126,15 @@ const Admin = () => {
   return (
     <MainContainer useWindowScroll>
       <Box className={classes.root}>
-        <Paper className={classes.paper} elevation={0} variant="outlined">
+        {/* Entrada bento: container com stagger + painel com spring */}
+        <motion.div
+          variants={bentoContainer}
+          initial="hidden"
+          animate="show"
+          style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, gap: 12 }}
+        >
+        <motion.div variants={itemVariant}>
+        <Paper className={`${classes.paper} bento-panel`} elevation={0} variant="outlined">
           <Box className={classes.header}>
             <AdminIcon className={classes.headerIcon} />
             <Box>
@@ -165,6 +180,8 @@ const Admin = () => {
             </Suspense>
           </Box>
         </Paper>
+        </motion.div>
+        </motion.div>
       </Box>
     </MainContainer>
   );
