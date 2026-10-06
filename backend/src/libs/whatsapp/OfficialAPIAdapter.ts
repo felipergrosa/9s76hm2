@@ -317,13 +317,27 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
             };
             break;
 
-          case "document":
+          case "document": {
+            // Upload pela Media API (id:) — com link: a Meta não gera o
+            // preview da 1ª página e o doc chega como arquivo genérico.
+            // Fallback para link se o upload falhar.
+            let documentMedia: any;
+            try {
+              const mediaId = await this.uploadMedia(accessibleUrl, "document");
+              documentMedia = { id: mediaId };
+            } catch (e: any) {
+              logger.warn(`[OfficialAPI] Upload de documento falhou, usando link: ${e?.message}`);
+              documentMedia = { link: accessibleUrl };
+            }
             payload.type = "document";
             payload.document = {
-              link: accessibleUrl,
-              filename: caption || "documento.pdf"
+              ...documentMedia,
+              // Nome real do anexo — antes recebia o caption por engano
+              filename: options.filename || "documento",
+              ...(caption && { caption: caption.substring(0, 1024) })
             };
             break;
+          }
 
           default:
             throw new WhatsAppAdapterError(
