@@ -1,22 +1,44 @@
-import React, { useContext, useRef, useEffect } from "react";
+import React, { useRef, useEffect } from "react";
 import { makeStyles } from "@material-ui/core/styles";
 
 import MomentsUser from "../../components/MomentsUser";
 // import MomentsQueues from "../../components/MomentsQueues";
 
-import MainHeader from "../../components/MainHeader";
-import { Grid, Paper, Typography } from "@material-ui/core";
+import { Paper, Typography } from "@material-ui/core";
+import MainContainer from "../../components/MainContainer";
 import Title from "../../components/Title";
 import ForbiddenPage from "../../components/ForbiddenPage";
-import { AuthContext } from "../../context/Auth/AuthContext";
 import usePermissions from "../../hooks/usePermissions";
 
+// Bento — molde de página padrão (painel + entrada spring)
+import { motion, useReducedMotion } from "framer-motion";
+import { bentoContainer, bentoItem, bentoItemReduced } from "../../components/bento/motionPresets";
+import "../../components/bento/bento.css";
+
 const useStyles = makeStyles((theme) => ({
-  container: {
-    paddingTop: theme.spacing(1),
-    paddingBottom: theme.spacing(1),
-    paddingLeft: "5px",
-    maxWidth: "100%"
+  // Painel externo no padrão canônico — cabeçalho vive dentro do Paper
+  paper: {
+    flex: 1,
+    padding: 0,
+    overflow: "hidden",
+    borderRadius: 12,
+    border: `1px solid ${theme.palette.divider}`,
+    backgroundColor: theme.palette.background.paper,
+    display: "flex",
+    flexDirection: "column",
+  },
+  header: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing(2),
+    flexWrap: "wrap",
+    padding: theme.spacing(2, 2.5),
+  },
+  headerText: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
   },
   mainPaper: {
     display: "flex",
@@ -29,7 +51,7 @@ const useStyles = makeStyles((theme) => ({
     scrollbarWidth: "thin",
     alignItems: "stretch",
     minHeight: 0,
-    // Altura 100% do Grid pai (que já limita em calc(100vh - 160px)):
+    // Altura 100% do wrapper pai (que já limita em calc(100vh - 180px)):
     // evita clipe do rodapé e do scroll horizontal no mobile
     height: "100%",
     backgroundColor: "transparent",
@@ -43,26 +65,10 @@ const useStyles = makeStyles((theme) => ({
     // Forçar scroll horizontal
     position: "relative",
   },
-  fixedHeightPaper: {
-    padding: theme.spacing(2),
-    display: "flex",
-    flexDirection: "column",
-    height: 100,
-  },
-  chatPapper: {
-    display: "flex",
-    height: "100%",
-  },
-  contactsHeader: {
-    display: "flex",
-    flexWrap: "wrap",
-    padding: "0px 6px 6px 6px",
-  }
 }));
 
 const ChatMoments = () => {
   const classes = useStyles();
-  const { user } = useContext(AuthContext)
   const { hasPermission } = usePermissions();
 
   const momentsScrollRef = useRef(null);
@@ -106,35 +112,44 @@ const ChatMoments = () => {
     };
   }, []);
 
+  // Respeita prefers-reduced-motion: fade simples no lugar do spring
+  const reducedMotion = useReducedMotion();
+  const itemVariant = reducedMotion ? bentoItemReduced : bentoItem;
+
   return (
 
     !hasPermission("realtime.view") ?
       <ForbiddenPage />
       :
-      <MainHeader>
-        <Grid container className="moments-wrapper" style={{ width: "100%", padding: "0 10px" }} direction="column">
-          <Grid item style={{ textAlign: "left" }}>
-            <Title>Painel de Atendimentos</Title>
-            <Typography
-              variant="body1"
-              color="textSecondary"
-              style={{ marginBottom: 16, marginTop: -10, fontStyle: "italic", textAlign: "left" }}
-            >
-              Visão geral em tempo real dos atendimentos organizados por categorias (Bot, Campanhas, Pendentes) e filas de usuários.
-            </Typography>
-          </Grid>
-          <Grid item style={{ width: "100%", height: "calc(100vh - 160px)", overflow: "hidden" }}>
-            <Paper
-              className={classes.mainPaper}
-              variant="outlined"
-              ref={momentsScrollRef}
-              onPointerDown={handlePanStart}
-            >
-              <MomentsUser onPanStart={handlePanStart} />
+      <MainContainer useWindowScroll>
+        <motion.div variants={bentoContainer} initial="hidden" animate="show">
+          <motion.div variants={itemVariant}>
+            <Paper className={`${classes.paper} bento-panel`} variant="outlined">
+              {/* Cabeçalho dentro do Paper — padrão canônico (sem MainHeader) */}
+              <div className={classes.header}>
+                <div className={classes.headerText}>
+                  <Title>Painel de Atendimentos</Title>
+                  <Typography variant="body2" color="textSecondary">
+                    Visão geral em tempo real dos atendimentos organizados por categorias (Bot, Campanhas, Pendentes) e filas de usuários.
+                  </Typography>
+                </div>
+              </div>
+              {/* Feed de momentos — scroll horizontal com pan por pointer events.
+                  Altura: viewport menos appbar (48px) + padding do container (32px) + cabeçalho do painel (~100px) */}
+              <div style={{ width: "100%", height: "calc(100vh - 180px)", overflow: "hidden" }}>
+                <Paper
+                  className={classes.mainPaper}
+                  variant="outlined"
+                  ref={momentsScrollRef}
+                  onPointerDown={handlePanStart}
+                >
+                  <MomentsUser onPanStart={handlePanStart} />
+                </Paper>
+              </div>
             </Paper>
-          </Grid>
-        </Grid>
-      </MainHeader>
+          </motion.div>
+        </motion.div>
+      </MainContainer>
   );
 };
 

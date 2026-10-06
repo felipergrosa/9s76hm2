@@ -33,8 +33,7 @@ import {
   Chat as WebChatIcon,
 } from "@material-ui/icons";
 
-import MainHeader from "../../components/MainHeader";
-import MainHeaderButtonsWrapper from "../../components/MainHeaderButtonsWrapper";
+import MainContainer from "../../components/MainContainer";
 import useHelps from "../../hooks/useHelps";
 import { Link } from "react-router-dom";
 import { motion, useReducedMotion } from "framer-motion";
@@ -44,14 +43,6 @@ import { bentoContainer, bentoItem, bentoItemReduced } from "../../components/be
 import "../../components/bento/bento.css";
 
 const useStyles = makeStyles((theme) => ({
-  root: {
-    display: "flex",
-    flexDirection: "column",
-    height: "100%",
-    // Mesma margem externa do MainContainer (padrão das páginas bento)
-    padding: theme.spacing(2),
-    boxSizing: "border-box",
-  },
   mainPaper: {
     flex: 1,
     padding: theme.spacing(3),
@@ -248,11 +239,7 @@ const Helps = () => {
   };
 
   return (
-    <div className={classes.root}>
-      <MainHeader>
-        <MainHeaderButtonsWrapper />
-      </MainHeader>
-
+    <MainContainer useWindowScroll>
       <motion.div
         variants={bentoContainer}
         initial="hidden"
@@ -343,7 +330,7 @@ const Helps = () => {
       </motion.div>
 
       {renderVideoModal()}
-    </div>
+    </MainContainer>
   );
 };
 

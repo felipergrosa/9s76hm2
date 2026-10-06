@@ -50,7 +50,6 @@ import AccordionSummary from "@material-ui/core/AccordionSummary";
 import AccordionDetails from "@material-ui/core/AccordionDetails";
 
 import MainContainer from "../../components/MainContainer";
-import MainHeader from "../../components/MainHeader";
 import Title from "../../components/Title";
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
@@ -58,7 +57,44 @@ import { useDate } from "../../hooks/useDate";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import TableRowSkeleton from "../../components/TableRowSkeleton";
 
+// Bento design system — moldura com entrada spring
+import { motion, useReducedMotion } from "framer-motion";
+import { bentoContainer, bentoItem, bentoItemReduced } from "../../components/bento/motionPresets";
+import "../../components/bento/bento.css";
+
 const useStyles = makeStyles((theme) => ({
+  // Painel no padrão SPEC-LAYOUT-PADRAO (referência: pages/QueueIntegration)
+  paper: {
+    flex: 1,
+    padding: 0,
+    overflow: "hidden",
+    borderRadius: 12,
+    border: `1px solid ${theme.palette.divider}`,
+    backgroundColor: theme.palette.background.paper,
+  },
+  header: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing(2),
+    flexWrap: "wrap",
+    padding: theme.spacing(2, 2.5),
+  },
+  headerText: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+  },
+  headerActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1),
+    flexWrap: "wrap",
+  },
+  panelContent: {
+    padding: theme.spacing(2.5),
+    paddingTop: theme.spacing(2),
+  },
   mainPaper: {
     flex: 1,
     width: "100%",
@@ -214,6 +250,10 @@ const CampaignDetailedReport = () => {
   const [statusFilter, setStatusFilter] = useState("");
   const [pageNumber, setPageNumber] = useState(1);
 
+  // Respeita prefers-reduced-motion: troca o spring de entrada por fade simples
+  const reducedMotion = useReducedMotion();
+  const itemVariant = reducedMotion ? bentoItemReduced : bentoItem;
+
   useEffect(() => {
     fetchReport();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -317,10 +357,20 @@ const CampaignDetailedReport = () => {
 
   if (!report) {
     return (
-      <MainContainer>
-        <MainHeader>
-          <Title>Carregando relatório...</Title>
-        </MainHeader>
+      <MainContainer useWindowScroll>
+        <motion.div variants={bentoContainer} initial="hidden" animate="show">
+          <motion.div variants={itemVariant}>
+            <Paper className={`${classes.paper} bento-panel`} variant="outlined">
+              {/* Cabeçalho do painel (estado de carregamento) */}
+              <div className={classes.header}>
+                <div className={classes.headerText}>
+                  <Title>Carregando relatório...</Title>
+                </div>
+              </div>
+              <LinearProgress />
+            </Paper>
+          </motion.div>
+        </motion.div>
       </MainContainer>
     );
   }
@@ -500,21 +550,14 @@ const CampaignDetailedReport = () => {
   };
 
   return (
-    <MainContainer>
-      <MainHeader>
-        <Grid style={{ width: "99.6%" }} container>
-          <Grid xs={12} item>
-            <Title>
-              Relatório Detalhado - {campaign.name}
-              <IconButton size="small" onClick={fetchReport} style={{ marginLeft: 8, minWidth: 36, minHeight: 36 }}>
-                <RefreshIcon />
-              </IconButton>
-            </Title>
-          </Grid>
-        </Grid>
-      </MainHeader>
-
-      {/* Dashboard de Métricas */}
+    <MainContainer useWindowScroll>
+      <motion.div
+        variants={bentoContainer}
+        initial="hidden"
+        animate="show"
+      >
+      {/* Strip de KPIs — cards de métricas da campanha */}
+      <motion.div variants={itemVariant}>
       <Grid container spacing={2}>
         {/* Card: Total de Contatos */}
         <Grid item xs={12} sm={6} md={3}>
@@ -600,9 +643,33 @@ const CampaignDetailedReport = () => {
           </Card>
         </Grid>
       </Grid>
+      </motion.div>
 
-      {/* Progresso de Entrega */}
-      <Paper style={{ padding: 20, marginTop: 16 }}>
+      {/* Painel principal: cabeçalho + progresso de entrega */}
+      <motion.div variants={itemVariant}>
+      <Paper className={`${classes.paper} bento-panel`} variant="outlined">
+        {/* Cabeçalho do painel: título + resumo + ação de atualizar */}
+        <div className={classes.header}>
+          <div className={classes.headerText}>
+            <Title>Relatório Detalhado - {campaign.name}</Title>
+            <Typography variant="body2" color="textSecondary">
+              {summary.delivered} de {summary.total} mensagens entregues
+            </Typography>
+          </div>
+          <div className={classes.headerActions}>
+            <Tooltip title="Atualizar relatório">
+              <IconButton
+                size="small"
+                onClick={fetchReport}
+                style={{ minWidth: 44, minHeight: 44 }}
+              >
+                <RefreshIcon />
+              </IconButton>
+            </Tooltip>
+          </div>
+        </div>
+
+        <div className={classes.panelContent}>
         <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
           <Typography variant="h6">
             Progresso de Entrega
@@ -703,9 +770,12 @@ const CampaignDetailedReport = () => {
           className={classes.progressBar}
           style={{ backgroundColor: "#e0e0e0" }}
         />
+        </div>
       </Paper>
+      </motion.div>
 
       {/* Resumo Visual por Status */}
+      <motion.div variants={itemVariant}>
       <Grid container spacing={2} style={{ marginTop: 8 }}>
         <Grid item xs={12}>
           <Card className={classes.dashboardCard}>
@@ -734,8 +804,10 @@ const CampaignDetailedReport = () => {
           </Card>
         </Grid>
       </Grid>
+      </motion.div>
 
       {/* Informações da Campanha */}
+      <motion.div variants={itemVariant}>
       <Grid container spacing={2} style={{ marginTop: 8 }}>
         {whatsappUsage.length > 0 && (
           <Grid item xs={12}>
@@ -841,9 +913,11 @@ const CampaignDetailedReport = () => {
           </Card>
         </Grid>
       </Grid>
+      </motion.div>
 
       {/* Mensagens Configuradas */}
-      <Paper style={{ padding: 16, marginTop: 16 }}>
+      <motion.div variants={itemVariant}>
+      <Paper className="bento-panel" variant="outlined" style={{ padding: 16, marginTop: 16 }}>
         <Box display="flex" alignItems="center" mb={2}>
           <MessageIcon style={{ marginRight: 8, color: "#9c27b0" }} />
           <Typography variant="h6">
@@ -903,10 +977,12 @@ const CampaignDetailedReport = () => {
           </Accordion>
         )}
       </Paper>
+      </motion.div>
 
       {/* Chips de Status Adicional */}
       {campaign.confirmation && (
-        <Paper style={{ padding: 16, marginTop: 16 }}>
+        <motion.div variants={itemVariant}>
+        <Paper className="bento-panel" variant="outlined" style={{ padding: 16, marginTop: 16 }}>
           <Typography variant="h6" gutterBottom>
             Confirmações
           </Typography>
@@ -925,14 +1001,16 @@ const CampaignDetailedReport = () => {
             />
           </Box>
         </Paper>
+        </motion.div>
       )}
 
       {/* Seção de Detalhes */}
+      <motion.div variants={itemVariant}>
       <Typography variant="h5" className={classes.sectionTitle}>
         Detalhes dos Envios
       </Typography>
 
-      <Paper className={classes.mainPaper} variant="outlined">
+      <Paper className={`${classes.mainPaper} bento-panel`} variant="outlined">
         <Grid container spacing={2} style={{ marginBottom: 16 }} alignItems="flex-end">
           <Grid item xs={12} sm={6}>
             <TextField
@@ -1075,6 +1153,8 @@ const CampaignDetailedReport = () => {
           </Button>
         </div>
       </Paper>
+      </motion.div>
+      </motion.div>
     </MainContainer>
   );
 };

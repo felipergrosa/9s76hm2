@@ -39,6 +39,13 @@ import toastError from "../../errors/toastError";
 import useWhatsApps from "../../hooks/useWhatsApps";
 import usePermissions from "../../hooks/usePermissions";
 import MetaTemplateModal from "../../components/MetaTemplateModal";
+import MainContainer from "../../components/MainContainer";
+import Title from "../../components/Title";
+
+// Bento — molde de página padrão (painel + entrada spring)
+import { motion, useReducedMotion } from "framer-motion";
+import { bentoContainer, bentoItem, bentoItemReduced } from "../../components/bento/motionPresets";
+import "../../components/bento/bento.css";
 
 const ChatAssistantPanel = lazy(() => import("../../components/ChatAssistantPanel"));
 const WhatsAppPopover = lazy(() => import("../../components/WhatsAppPopover"));
@@ -46,22 +53,47 @@ const WhatsAppPopover = lazy(() => import("../../components/WhatsAppPopover"));
 const STEP_LABELS = ["Configuração", "Etapas", "Ação final"];
 
 const useStyles = makeStyles(theme => ({
-  root: {
+  // Painel externo no padrão canônico — cabeçalho vive dentro do Paper
+  paper: {
     flex: 1,
-    padding: theme.spacing(2),
-    overflowY: "auto",
-    backgroundColor: theme.palette.background.default,
+    padding: 0,
+    overflow: "hidden",
+    borderRadius: 12,
+    border: `1px solid ${theme.palette.divider}`,
+    backgroundColor: theme.palette.background.paper,
+    display: "flex",
+    flexDirection: "column",
   },
-  headerRow: {
+  header: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing(2),
+    flexWrap: "wrap",
+    padding: theme.spacing(2, 2.5),
+  },
+  headerText: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+  },
+  headerActions: {
     display: "flex",
     alignItems: "center",
     gap: theme.spacing(1),
-    marginBottom: theme.spacing(2),
+    flexWrap: "wrap",
   },
-  title: {
-    fontSize: "1.4rem",
-    fontWeight: 600,
-    color: "#7f1d1d",
+  // Touch target >= 44px no botão de voltar do cabeçalho
+  headerActionBtn: {
+    minWidth: 44,
+    minHeight: 44,
+  },
+  // Área interna do painel — stepper + grade de cards (o bento-panel não tem padding)
+  content: {
+    padding: theme.spacing(0, 2.5, 2.5),
+    [theme.breakpoints.down("sm")]: {
+      padding: theme.spacing(0, 2, 2),
+    },
   },
   stepperBar: {
     backgroundColor: "transparent",
@@ -449,25 +481,48 @@ const FollowUpForm = () => {
 
   const triggerTag = tags.find(t => t.id === Number(form.tagId));
 
+  // Respeita prefers-reduced-motion: fade simples no lugar do spring
+  const reducedMotion = useReducedMotion();
+  const itemVariant = reducedMotion ? bentoItemReduced : bentoItem;
+
   if (loading) {
     return (
-      <div className={classes.root} style={{ display: "flex", justifyContent: "center", paddingTop: 80 }}>
-        <CircularProgress />
-      </div>
+      <MainContainer useWindowScroll>
+        <div style={{ display: "flex", justifyContent: "center", paddingTop: 80 }}>
+          <CircularProgress />
+        </div>
+      </MainContainer>
     );
   }
 
   return (
-    <div className={classes.root}>
-      <div className={classes.headerRow}>
-        <IconButton size="small" className={classes.actionBtn} onClick={() => history.push("/follow-ups")}>
-          <ArrowBackIcon />
-        </IconButton>
-        <Typography className={classes.title}>
-          {followUpId ? "Editar Follow-up" : "Novo Follow-up"}
-        </Typography>
-      </div>
+    <MainContainer useWindowScroll>
+      <motion.div variants={bentoContainer} initial="hidden" animate="show">
+        <motion.div variants={itemVariant}>
+          <Paper className={`${classes.paper} bento-panel`} variant="outlined">
+            {/* Cabeçalho padrão dentro do Paper — título + ação de voltar */}
+            <div className={classes.header}>
+              <div className={classes.headerText}>
+                <Title>{followUpId ? "Editar Follow-up" : "Novo Follow-up"}</Title>
+                <Typography variant="body2" color="textSecondary">
+                  Sequência automática de mensagens disparada por tag ou lane do Kanban.
+                </Typography>
+              </div>
+              <div className={classes.headerActions}>
+                <Tooltip title="Voltar para a lista">
+                  <IconButton
+                    size="small"
+                    className={classes.headerActionBtn}
+                    onClick={() => history.push("/follow-ups")}
+                  >
+                    <ArrowBackIcon />
+                  </IconButton>
+                </Tooltip>
+              </div>
+            </div>
 
+            {/* Conteúdo do formulário — stepper + grade de cards */}
+            <div className={classes.content}>
       <Stepper activeStep={activeStep} alternativeLabel className={classes.stepperBar}>
         {STEP_LABELS.map((label, i) => (
           <Step key={label} completed={activeStep > i}>
@@ -994,6 +1049,9 @@ const FollowUpForm = () => {
           )}
         </Paper>
       </div>
+            </div>
+          </Paper>
+        </motion.div>
 
       {/* Modal de criação de template Meta — reutiliza o componente existente */}
       {isOfficial && (
@@ -1029,7 +1087,8 @@ const FollowUpForm = () => {
           );
         }}
       />
-    </div>
+      </motion.div>
+    </MainContainer>
   );
 };
 

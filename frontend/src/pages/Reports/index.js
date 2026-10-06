@@ -17,7 +17,6 @@ import TableRowSkeleton from "../../components/TableRowSkeleton";
 
 
 import { i18n } from "../../translate/i18n";
-import MainHeader from "../../components/MainHeader";
 import Title from "../../components/Title";
 import MainContainer from "../../components/MainContainer";
 import toastError from "../../errors/toastError";
@@ -46,25 +45,36 @@ import StatCard from "../../components/bento/StatCard";
 import { bentoContainer, bentoItem, bentoItemReduced } from "../../components/bento/motionPresets";
 import "../../components/bento/bento.css";
 
+// ===== Estilos no padrão SPEC-LAYOUT-PADRAO (referência: pages/ContactLists) =====
 const useStyles = makeStyles((theme) => ({
-  mainContainer: {
-    background: theme.palette.fancyBackground,
-    // Usar apenas o scroll da janela via MainContainer useWindowScroll
-
-  },
-  formControl: {
-    display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  mainPaper: {
+  paper: {
     flex: 1,
-    marginTop: 40,
-    borderRadius: 20,
-    border: '0px !important',
-    marginBottom: 40,
-    overflow: 'hidden'
+    padding: 0,
+    overflow: "hidden",
+    borderRadius: 12,
+    border: `1px solid ${theme.palette.divider}`,
+    backgroundColor: theme.palette.background.paper,
+    display: "flex",
+    flexDirection: "column",
+  },
+  header: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing(2),
+    flexWrap: "wrap",
+    padding: theme.spacing(2, 2.5),
+  },
+  headerText: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+  },
+  headerActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1),
+    flexWrap: "wrap",
   },
   mainPaperTable: {
     flex: 1,
@@ -77,27 +87,16 @@ const useStyles = makeStyles((theme) => ({
     maxWidth: '100%',
     WebkitOverflowScrolling: 'touch',
   },
+  // Área rolável dos filtros — altura fixa mantém o painel compacto no desktop
   mainPaperFilter: {
-    flex: 1,
     overflow: 'auto',
     height: '20vh',
+    padding: theme.spacing(0, 2.5, 2),
     ...theme.scrollbarStylesSoftBig,
     // Em mobile os filtros empilham (xs=12): deixar o Paper crescer naturalmente
     [theme.breakpoints.down('sm')]: {
       height: 'auto',
       maxHeight: 'none',
-    },
-  },
-  mainHeaderBlock: {
-    [theme.breakpoints.down('md')]: {
-      display: 'flex',
-      flexWrap: 'wrap'
-    },
-  },
-  filterItem: {
-    width: 200,
-    [theme.breakpoints.down('md')]: {
-      width: '45%'
     },
   },
 }));
@@ -383,7 +382,7 @@ const Reports = () => {
   }
 
   return (
-    <MainContainer className={classes.mainContainer} useWindowScroll>
+    <MainContainer useWindowScroll>
       {openTicketMessageDialog && (
         <ShowTicketLogModal
           isOpen={openTicketMessageDialog}
@@ -397,10 +396,6 @@ const Reports = () => {
         animate="show"
         style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, gap: 12 }}
       >
-      <motion.div variants={itemVariant}>
-        <Title>{i18n.t("reports.title")}</Title>
-      </motion.div>
-
       {/* Strip de KPIs bento — espelha o resultado do filtro aplicado */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
         <StatCard label="Tickets" value={reportStats.total} icon={<TicketIcon size={20} />} accent="var(--primary-color)" loading={loading} />
@@ -410,8 +405,41 @@ const Reports = () => {
       </div>
 
       <motion.div variants={itemVariant}>
-      <MainHeader className={classes.mainHeaderFilter} style={{ display: 'flex' }}>
-        <Paper className={`${classes.mainPaperFilter} bento-panel`}>
+      <Paper className={`${classes.paper} bento-panel`} variant="outlined">
+        {/* Cabeçalho do painel: título + contador + ações (filtrar/exportar) */}
+        <div className={classes.header}>
+          <div className={classes.headerText}>
+            <Title>{i18n.t("reports.title")}</Title>
+            <Typography variant="body2" color="textSecondary">
+              {totalTickets > 0
+                ? `${totalTickets} atendimentos encontrados`
+                : "Selecione os filtros e gere o relatório de atendimentos"}
+            </Typography>
+          </div>
+          <div className={classes.headerActions}>
+            <Tooltip title="Exportar para Excel">
+              <IconButton
+                onClick={exportarGridParaExcel}
+                aria-label="Exportar para Excel"
+                style={{ minWidth: 44, minHeight: 44 }}
+              >
+                <SaveAlt />
+              </IconButton>
+            </Tooltip>
+            <Button
+              variant="contained"
+              color="primary"
+              size="small"
+              onClick={() => handleFilter(pageNumber)}
+              style={{ minHeight: 44 }}
+            >
+              {i18n.t("reports.buttons.filter")}
+            </Button>
+          </div>
+        </div>
+
+        {/* Filtros — rolam dentro do painel, nunca na página */}
+        <div className={classes.mainPaperFilter}>
           <div style={{ paddingTop: '15px' }} />
           <Grid container spacing={1}>
             <Grid item xs={12} md={3} xl={3}>
@@ -476,22 +504,11 @@ const Reports = () => {
 
                 label={i18n.t("reports.buttons.onlyRated")}
               />
-              <IconButton onClick={exportarGridParaExcel} aria-label="Exportar para Excel">
-
-                <SaveAlt />
-              </IconButton>
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={() => handleFilter(pageNumber)}
-                size="small"
-              >{i18n.t("reports.buttons.filter")}</Button>
             </Grid>
           </Grid>
+        </div>
 
-        </Paper>
-
-      </MainHeader>
+      </Paper>
       </motion.div>
       <motion.div variants={itemVariant} style={{ display: "flex", flexDirection: "column" }}>
       <Paper
