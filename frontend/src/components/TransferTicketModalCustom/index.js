@@ -48,7 +48,7 @@ const filterOptions = createFilterOptions({
   trim: true,
 });
 
-const TransferTicketModalCustom = ({ modalOpen, onClose, ticketid, ticket, mode }) => {
+const TransferTicketModalCustom = ({ modalOpen, onClose, ticketid, ticket, mode, redirectOnClose = true, onTransferred }) => {
   const history = useHistory();
   const { user, socket } = useContext(AuthContext);
   const [options, setOptions] = useState([]);
@@ -170,8 +170,15 @@ const TransferTicketModalCustom = ({ modalOpen, onClose, ticketid, ticket, mode 
       }
 
       setLoading(false);
-      history.push(`/tickets/`);
+      // Contextos onde o usuário deve permanecer na tela (ex.: modal de espiar
+      // conversa no /moments) passam redirectOnClose=false + onTransferred.
+      if (redirectOnClose) {
+        history.push(`/tickets/`);
+      }
       handleClose();
+      if (typeof onTransferred === "function") {
+        onTransferred();
+      }
     } catch (err) {
       setLoading(false);
       toastError(err);

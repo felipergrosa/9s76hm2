@@ -15,12 +15,16 @@ import api from "../../services/api";
 import toastError from "../../errors/toastError";
 import ContactAvatar from "../ContactAvatar";
 import MessagesList from "../MessagesList";
+import TransferTicketModalCustom from "../TransferTicketModalCustom";
 import { ReplyMessageProvider } from "../../context/ReplyingMessage/ReplyingMessageContext";
 import { ForwardMessageProvider } from "../../context/ForwarMessage/ForwardMessageContext";
 import { OptimisticMessageProvider } from "../../context/OptimisticMessage/OptimisticMessageContext";
 import { QueueSelectedProvider } from "../../context/QueuesSelected/QueuesSelectedContext";
 import { AuthContext } from "../../context/Auth/AuthContext";
-import { canAssumeTicketConversation } from "../../utils/ticketPreviewPermissions";
+import {
+  canAssumeTicketConversation,
+  canViewTicketConversation,
+} from "../../utils/ticketPreviewPermissions";
 
 const useStyles = makeStyles(theme => ({
   dialogPaper: {
@@ -92,9 +96,23 @@ const ConversationPeekModal = ({
   const history = useHistory();
   const { user } = useContext(AuthContext);
   const [assuming, setAssuming] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
 
   const canAssume = useMemo(() => {
     return canAssumeTicketConversation({ ticket, user });
+  }, [ticket, user]);
+
+  // Transferir vale para admin/super e gestores do atendente atual —
+  // mesma regra do "Assumir", mas também permite ticket sem dono (admin).
+  const canTransfer = useMemo(() => {
+    if (!ticket || !user || ticket.isGroup) return false;
+    if (!canViewTicketConversation({ ticket, user })) return false;
+    if (user.profile === "admin" || user.super === true) return true;
+    const ticketUserId = Number(ticket.userId || ticket.user?.id || 0);
+    const managedIds = Array.isArray(user.managedUserIds)
+      ? user.managedUserIds.map(Number)
+      : [];
+    return ticketUserId ? managedIds.includes(ticketUserId) : false;
   }, [ticket, user]);
 
   const containerId = useMemo(() => {
@@ -155,17 +173,29 @@ const ConversationPeekModal = ({
             </div>
           </div>
 
-          {canAssume && (
+          {(canAssume || canTransfer) && (
             <div className={classes.headerActions}>
-              <Button
-                variant="contained"
-                color="primary"
-                size="small"
-                onClick={handleAssumeConversation}
-                disabled={assuming}
-              >
-                {assuming ? "Assumindo..." : "Assumir conversa"}
-              </Button>
+              {canTransfer && (
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  size="small"
+                  onClick={() => setTransferOpen(true)}
+                >
+                  Transferir
+                </Button>
+              )}
+              {canAssume && (
+                <Button
+                  variant="contained"
+                  color="primary"
+                  size="small"
+                  onClick={handleAssumeConversation}
+                  disabled={assuming}
+                >
+                  {assuming ? "Assumindo..." : "Assumir conversa"}
+                </Button>
+              )}
             </div>
           )}
         </div>
@@ -193,6 +223,17 @@ const ConversationPeekModal = ({
           )}
         </div>
       </DialogContent>
+
+      {/* Modal de transferência renderizado por cima do peek — sem redirect
+          para /tickets/ para não tirar o supervisor do painel */}
+      <TransferTicketModalCustom
+        modalOpen={transferOpen}
+        onClose={() => setTransferOpen(false)}
+        ticketid={ticket?.id}
+        ticket={ticket}
+        redirectOnClose={false}
+        onTransferred={onClose}
+      />
     </Dialog>
   );
 };

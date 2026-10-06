@@ -315,11 +315,24 @@ const useStyles = makeStyles((theme) => ({
   badge: {
     fontSize: "0.7rem",
     height: 20,
+    lineHeight: "20px",
     padding: "0 6px",
     borderRadius: 4,
     fontWeight: 600,
-    display: "flex",
-    alignItems: "center",
+    display: "block",
+    textAlign: "center",
+    // Nomes longos (fila/conexão/atendente) truncam com ellipsis em vez de
+    // quebrar linha — a altura fixa de 20px clipava a segunda linha e o
+    // texto "sumia". Tooltip no wrapper já mostra o nome completo.
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    maxWidth: 110,
+    minWidth: 0,
+    flex: "0 1 auto",
+    [theme.breakpoints.down("sm")]: {
+      maxWidth: 88,
+    },
   },
   queueTag: {
     backgroundColor: theme.palette.grey[300],
@@ -360,6 +373,9 @@ const useStyles = makeStyles((theme) => ({
   },
   tagContainer: {
     display: "flex",
+    alignItems: "center",
+    flexWrap: "nowrap",
+    overflow: "hidden",
     gap: 4,
     width: "100%",
     justifyContent: "center",
