@@ -20,7 +20,6 @@ import ContactAvatar from "../../components/ContactAvatar";
 import { socketConnection } from "../../services/socket";
 import usePermissions from "../../hooks/usePermissions";
 import { motion, useReducedMotion } from "framer-motion";
-import StatCard from "../../components/bento/StatCard";
 import { bentoContainer, bentoItem, bentoItemReduced } from "../../components/bento/motionPresets";
 import "../../components/bento/bento.css";
 
@@ -275,20 +274,6 @@ const Groups = () => {
     const reducedMotion = useReducedMotion();
     const itemVariant = reducedMotion ? bentoItemReduced : bentoItem;
 
-    // KPIs do strip bento — derivados dos grupos e lanes já carregados.
-    // O registro de grupo (Contact) não possui status open/pending/closed,
-    // então usamos "com não lidas" + saúde das conexões como recorte.
-    const groupStats = useMemo(() => {
-        const unread = groups.filter((g) => parseInt(g.unreadCount) > 0).length;
-        const activeLanes = lanes.filter((l) => isConnected(l.whatsappStatus)).length;
-        return {
-            total: totalGroups,
-            unread,
-            activeLanes,
-            offlineLanes: lanes.length - activeLanes,
-        };
-    }, [groups, lanes, totalGroups]);
-
     return (
         <MainContainer>
             {canViewGroups ? (
@@ -405,14 +390,6 @@ const Groups = () => {
                                 {syncing ? "Sincronizando..." : "Sincronizar"}
                             </button>
                         </div>
-                    </div>
-
-                    {/* Strip de KPIs bento — derivados dos dados já carregados (sem fetch extra) */}
-                    <div className="grid grid-cols-2 xl:grid-cols-4 gap-3" style={{ padding: "12px 16px 0" }}>
-                        <StatCard label="Grupos" value={groupStats.total} icon={<Users size={20} />} accent="var(--primary-color)" loading={loading} />
-                        <StatCard label="Com não lidas" value={groupStats.unread} icon={<MessageSquare size={20} />} accent="#f39c12" loading={loading} />
-                        <StatCard label="Conexões ativas" value={groupStats.activeLanes} icon={<Wifi size={20} />} accent="#26c281" loading={loading} />
-                        <StatCard label="Conexões offline" value={groupStats.offlineLanes} icon={<WifiOff size={20} />} accent="#e7505a" loading={loading} />
                     </div>
 
                     {/* Kanban Lanes */}

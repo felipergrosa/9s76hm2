@@ -26,15 +26,8 @@ import Title from "../../components/Title"; // Importando Title
 
 // Bento design system — moldura + entrada spring (sem tocar no DnD)
 import { motion, useReducedMotion } from "framer-motion";
-import StatCard from "../../components/bento/StatCard";
 import { bentoContainer, bentoItem, bentoItemReduced } from "../../components/bento/motionPresets";
 import "../../components/bento/bento.css";
-import {
-  SquareKanban as BoardIcon,
-  Columns3 as LanesIcon,
-  MessageCircle as UnreadIcon,
-  CircleDollarSign as PipelineIcon,
-} from "lucide-react";
 
 const useStyles = makeStyles(theme => ({
   root: {
@@ -410,13 +403,6 @@ const Kanban = () => {
     (tickets || []).reduce((acc, t) => acc + (t.isDeal ? Number(t.value) || 0 : 0), 0),
     [tickets]
   );
-
-  // KPIs do strip bento — derivados do estado já carregado (sem fetch extra)
-  const boardStats = useMemo(() => ({
-    cards: (tickets || []).length,
-    lanes: (tags || []).length + 1, // +1 pela lane0 "Em aberto"
-    unread: (tickets || []).reduce((acc, t) => acc + Number(t.unreadMessages || 0), 0),
-  }), [tickets, tags]);
 
   // Respeita prefers-reduced-motion: troca o spring de entrada por fade simples
   const reducedMotion = useReducedMotion();
@@ -800,14 +786,6 @@ const Kanban = () => {
         >
           Organize seus atendimentos por tags e etapas visuais. Arraste os cards para mover entre as colunas.
         </Typography>
-
-        {/* Strip de KPIs bento — resume o board sem fetch extra */}
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-3">
-          <StatCard label="Cards no board" value={boardStats.cards} icon={<BoardIcon size={20} />} accent="var(--primary-color)" />
-          <StatCard label="Colunas" value={boardStats.lanes} icon={<LanesIcon size={20} />} accent="#3598dc" />
-          <StatCard label="Não lidas" value={boardStats.unread} icon={<UnreadIcon size={20} />} accent="#f39c12" />
-          <StatCard label="Pipeline" value={fmtBRL(pipelineTotal)} icon={<PipelineIcon size={20} />} accent="#26c281" />
-        </div>
 
         <motion.div className={classes.actionsBar} variants={itemVariant}>
           <InputBase
