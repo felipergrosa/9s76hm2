@@ -106,7 +106,16 @@ class TranscribeAudioMessageService {
         ? (integration.config.sttModel || "whisper-1")
         : (integration.config.sttModel || integration.config.model || "gemini-2.0-pro");
 
-      const transcribed = await client.transcribe({ filePath, model });
+      // Timeout defensivo: o SDK da IA pode ficar pendente por minutos —
+      // melhor falhar rápido com mensagem clara do que travar a request.
+      const STT_TIMEOUT_MS = 90_000;
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Tempo esgotado na transcrição (90s)")), STT_TIMEOUT_MS)
+      );
+      const transcribed = await Promise.race([
+        client.transcribe({ filePath, model }),
+        timeout
+      ]);
       return { transcribedText: transcribed };
     } catch (error: any) {
       console.error(`[STT] Erro ao transcrever áudio (companyId=${companyId}, ticketId=${ticketId})`, error?.message);

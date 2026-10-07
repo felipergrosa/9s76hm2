@@ -2032,7 +2032,10 @@ const MessageInput = ({
       stopAudioMeter(true);
       const Mp3Recorder = await getMp3Recorder();
       const [, blob] = await Mp3Recorder.stop().getMp3();
-      if (blob.size < 10000) {
+      // Gravações abaixo de ~1KB são vazias/corrompidas — antes descartava
+      // silenciosamente e o usuário achava que o envio não funcionava.
+      if (blob.size < 1000) {
+        toastError({ response: { data: { error: "Áudio muito curto ou vazio — grave novamente segurando o microfone por mais tempo." } } });
         setLoading(false);
         setRecording(false);
         return;
@@ -2040,7 +2043,12 @@ const MessageInput = ({
 
       const formData = new FormData();
       const filename = ticketChannel === "whatsapp" ? `${new Date().getTime()}.mp3` : `${new Date().getTime()}.m4a`;
-      formData.append("medias", blob, filename);
+      // File explícito garante mimetype consistente para o multer do backend,
+      // independente do type que a lib de gravação colocou no blob.
+      const audioFile = new File([blob], filename, {
+        type: ticketChannel === "whatsapp" ? "audio/mpeg" : "audio/mp4"
+      });
+      formData.append("medias", audioFile);
       formData.append("body", filename);
       formData.append("fromMe", true);
       // Marca como voice note — backend converte para OGG/OPUS e envia com

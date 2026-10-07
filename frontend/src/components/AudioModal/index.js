@@ -84,6 +84,8 @@ const AudioModal = ({ url, contact, fromMe }) => {
   const durationRef = useRef(0);
   const decodedDurationRef = useRef(0);
   const [waveError, setWaveError] = useState(false);
+  const [blobUrl, setBlobUrl] = useState(null);
+  const blobUrlRef = useRef(null);
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
   const [containerWidth, setContainerWidth] = useState(0);
 
@@ -99,6 +101,15 @@ const AudioModal = ({ url, contact, fromMe }) => {
   useEffect(() => {
     peaksRef.current = peaks;
   }, [peaks]);
+
+  // Quando o blob autenticado fica pronto, força o <audio> a re-selecionar a
+  // source — trocar <source> no DOM não recarrega o elemento automaticamente
+  useEffect(() => {
+    const a = audioRef.current;
+    if (a && blobUrl) {
+      try { a.load(); } catch {}
+    }
+  }, [blobUrl]);
 
   // Configura eventos do <audio>
   useEffect(() => {
@@ -189,6 +200,8 @@ const AudioModal = ({ url, contact, fromMe }) => {
       let loadError = null;
 
       // Tenta carregar de cada URL até conseguir
+      let loadedSrc = null;
+      let loadedContentType = null;
       for (const src of srcList) {
         if (!src || aborted) continue;
         try {
@@ -201,11 +214,14 @@ const AudioModal = ({ url, contact, fromMe }) => {
             resp = await fetch(src, { credentials: 'include' });
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             data = await resp.arrayBuffer();
+            loadedContentType = resp.headers.get("content-type");
           } else {
             // URL relativa: usar api.get (axios com baseURL e cookies)
             resp = await openApi.get(src, { responseType: "arraybuffer", withCredentials: true });
             data = resp.data;
+            loadedContentType = resp?.headers?.["content-type"];
           }
+          loadedSrc = src;
           break; // Sucesso, sai do loop
         } catch (e) {
           loadError = e;
@@ -217,6 +233,23 @@ const AudioModal = ({ url, contact, fromMe }) => {
         console.warn("[AudioModal] Failed to load audio from all sources:", loadError);
         setWaveError(true);
         return;
+      }
+
+      // Reutiliza os bytes autenticados já baixados como fonte do <audio>.
+      // O player nativo não passa pelo axios e depende do cookie wm_media +
+      // Range/Content-Type do servidor — a blob URL toca exatamente os bytes
+      // que decodificaram a waveform, imune a cookie expirado, CORS e
+      // extensões exóticas (.opus/.oga/.webm) mal servidas pelo static.
+      try {
+        const mimeGuess =
+          (loadedContentType && !/octet-stream|text\/html/i.test(loadedContentType) && loadedContentType.split(";")[0].trim()) ||
+          ({ mp3: "audio/mpeg", ogg: "audio/ogg", oga: "audio/ogg", opus: "audio/ogg", m4a: "audio/mp4", aac: "audio/aac", wav: "audio/wav", webm: "audio/webm" }[(loadedSrc || url || "").split(/[?#]/)[0].split(".").pop()?.toLowerCase()] || "audio/mpeg");
+        const objectUrl = URL.createObjectURL(new Blob([data], { type: mimeGuess }));
+        if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
+        blobUrlRef.current = objectUrl;
+        setBlobUrl(objectUrl);
+      } catch (blobErr) {
+        console.warn("[AudioModal] Falha ao criar blob URL:", blobErr);
       }
 
       try {
@@ -282,6 +315,11 @@ const AudioModal = ({ url, contact, fromMe }) => {
     return () => {
       aborted = true;
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current);
+        blobUrlRef.current = null;
+        setBlobUrl(null);
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url]);
@@ -430,6 +468,11 @@ const AudioModal = ({ url, contact, fromMe }) => {
   };
 
   const getAudioSource = () => {
+    // Bytes já baixados (autenticados) viram a fonte primária — dispensa
+    // cookie/rede para tocar. URLs diretas ficam apenas como fallback.
+    if (blobUrl) {
+      return <source src={blobUrl} />;
+    }
     // Fornece múltiplas sources para máxima compatibilidade
     const baseUrl = (url || "").replace(/\.(ogg|mp3|m4a|wav)$/i, "");
     const ext = (url || "").match(/\.(ogg|mp3|m4a|wav)$/i)?.[1] || "ogg";

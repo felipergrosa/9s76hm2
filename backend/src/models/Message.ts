@@ -88,8 +88,10 @@ class Message extends Model<Message> {
       const isDev = process.env.NODE_ENV !== 'production';
       
       if (isDev) {
-        // Em desenvolvimento: sempre usar localhost:8080
-        return `http://localhost:8080/public/company${this.companyId}/${filePath}`;
+        // Em desenvolvimento: respeitar BACKEND_URL (backend pode rodar em
+        // outra porta — ex.: 8081). Fallback para 8080 apenas sem env.
+        const devBackend = (process.env.BACKEND_URL || '').trim() || 'http://localhost:8080';
+        return `${devBackend}/public/company${this.companyId}/${filePath}`;
       } else {
         // Em produção: usar BACKEND_URL configurado
         const be = (process.env.BACKEND_URL || '').trim();

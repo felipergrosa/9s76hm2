@@ -1275,8 +1275,9 @@ const MessagesList = ({
     // Se já está carregando ou já tem transcrição, não faz nada
     if (transcriptions[messageId]?.loading || transcriptions[messageId]?.text) return;
 
-    // Extrair nome do arquivo da URL
-    const fileName = message.mediaUrl.split('/').pop();
+    // Extrair nome do arquivo da URL — remove query/hash (URLs assinadas
+    // carregam ?mediaSignature=... que quebraria a busca do arquivo)
+    const fileName = message.mediaUrl.split('/').pop()?.split('?')[0]?.split('#')[0];
     if (!fileName) return;
 
     setTranscriptions(prev => ({
@@ -1286,7 +1287,9 @@ const MessagesList = ({
 
     try {
       const { data } = await api.get(`/messages/transcribeAudio/${encodeURIComponent(fileName)}`, {
-        params: { ticketId: message.ticketId }
+        params: { ticketId: message.ticketId },
+        // Whisper pode demorar mais que o timeout global (30s) em áudios longos
+        timeout: 120000
       });
 
       setTranscriptions(prev => ({
@@ -2048,7 +2051,7 @@ const MessagesList = ({
           </div>
         </LazyMedia>
       );
-    } else if (message.mediaType === "audio") {
+    } else if (message.mediaType === "audio" || message.mediaType === "ptt" || message.mediaType === "audioMessage") {
       const persistedText = message?.audioTranscription;
       const transcription = transcriptions[message.id];
       const transcriptionText = transcription?.text || persistedText || "";
@@ -2888,7 +2891,7 @@ const MessagesList = ({
       
       const bubbleClass = clsx(
         bubbleClassName,
-        { [isLeft ? classes.messageLeftAudio : classes.messageRightAudio]: message.mediaType === "audio" }
+        { [isLeft ? classes.messageLeftAudio : classes.messageRightAudio]: ["audio", "ptt", "audioMessage"].includes(message.mediaType) }
       );
       
       // Verifica se a mensagem está selecionada
@@ -3011,7 +3014,7 @@ const MessagesList = ({
                     // Remover texto de áudios COM player inline, arquivos, e mensagens especiais
                     // Para áudio sem mediaUrl (history sync), NÃO filtrar - deixar cair no placeholder abaixo
                     if (
-                      (message.mediaType === "audio" && message.mediaUrl) ||
+                      (["audio", "ptt", "audioMessage"].includes(message.mediaType) && message.mediaUrl) ||
                       message.mediaType === "application" ||
                       message.mediaType === "document" ||
                       message.mediaType === "reactionMessage" ||
@@ -3041,7 +3044,7 @@ const MessagesList = ({
                     }
 
                     // Áudio sem mediaUrl (history sync)
-                    if (message.mediaType === "audio" || message.mediaType === "audioMessage") {
+                    if (["audio", "ptt", "audioMessage"].includes(message.mediaType)) {
                       if (!message.mediaUrl && !bodyTrim) {
                         return <span style={{ color: '#999', fontStyle: 'italic', fontSize: 13 }}>🎵 Áudio não disponível</span>;
                       }
@@ -3060,7 +3063,7 @@ const MessagesList = ({
                   {/* Renderiza botões interativos se houver dataJson com botões */}
                   <ButtonsPreview message={message} />
 
-                  {message.mediaType === "audio" && (
+                  {["audio", "ptt", "audioMessage"].includes(message.mediaType) && (
                     <span className={classes.audioDuration}>
                       <AudioDurationTag src={message.mediaUrl} />
                     </span>
