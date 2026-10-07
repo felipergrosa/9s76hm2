@@ -210,6 +210,25 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
     }
   };
 
+  // Re-sincroniza filtros/seleção a cada abertura — useState só captura
+  // initialFilters no primeiro mount; sem isso, abrir pela coluna de outro
+  // atendente no /moments reaproveitaria filtros e seleção antigos.
+  useEffect(() => {
+    if (open) {
+      setFilters({
+        status: initialFilters.status || 'pending',
+        searchParam: '',
+        users: initialFilters.users || [],
+        ...initialFilters,
+      });
+      setSelectedTickets([]);
+      setProcessResult(null);
+      setProcessLog([]);
+      setProgress(0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   // Carregar dados iniciais
   useEffect(() => {
     if (open) {
