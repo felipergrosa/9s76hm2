@@ -421,6 +421,19 @@ const ListTicketsService = async ({
       ...whereCondition,
       userId: users
     };
+
+    // Filtrar por outro atendente é operação de gestão: admin/super não devem
+    // ficar limitados às próprias filas — senão tickets do alvo em filas que
+    // o gestor não participa ficam invisíveis (ex.: transferência em massa
+    // a partir do /moments). Usuários comuns mantêm o escopo de fila.
+    if (user.profile === "admin" || user.super === true) {
+      const wc = whereCondition as Record<string | symbol, any>;
+      if (Array.isArray(wc[Op.and])) {
+        wc[Op.and].forEach((cond: any) => { delete cond.queueId; });
+      } else {
+        delete wc.queueId;
+      }
+    }
   }
 
   if (Array.isArray(whatsappIds) && whatsappIds.length > 0) {
