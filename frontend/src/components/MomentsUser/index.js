@@ -36,8 +36,10 @@ import {
 import ContactAvatar from "../ContactAvatar";
 import { grey, green, red, blue, orange } from "@material-ui/core/colors";
 import { getBackendUrl } from "../../config";
-import { Eye as VisibilityIcon } from "lucide-react";
+import { Eye as VisibilityIcon, ListChecks } from "lucide-react";
 import ConversationPeekModal from "../ConversationPeekModal";
+import BulkProcessTicketsModal from "../BulkProcessTicketsModal";
+import usePermissions from "../../hooks/usePermissions";
 import {
   canAssumeTicketConversation,
   canViewTicketConversation,
@@ -480,6 +482,11 @@ const MomentsUser = ({ onPanStart }) => {
   const [openTicketMessageDialog, setOpenTicketMessageDialog] = useState(false);
   const [selectedTicketForView, setSelectedTicketForView] = useState(null);
 
+  // Modal de processamento em massa (transferir em lote para outro atendente)
+  const { hasPermission } = usePermissions();
+  const canBulkProcess = hasPermission("tickets.bulk-process");
+  const [bulkModal, setBulkModal] = useState({ open: false, filters: {} });
+
   // Manipulador seguro para iniciar o arrasto apenas no cabeçalho
   const handleHeaderPointerDown = (e) => {
     if (e.button !== 0) return;
@@ -772,9 +779,28 @@ const MomentsUser = ({ onPanStart }) => {
                 </span>
               </div>
             </div>
-            <Badge badgeContent={group.tickets.length} color="primary" max={99999} overlap="rectangular">
-              <Box width={10} />
-            </Badge>
+            <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+              {canBulkProcess && (
+                <Tooltip title={`Processar tickets de ${group.user.name} em massa`}>
+                  <IconButton
+                    size="small"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setBulkModal({
+                        open: true,
+                        filters: { status: "open", users: [group.user.id] },
+                      });
+                    }}
+                    style={{ padding: 4, minWidth: 32, minHeight: 32 }}
+                  >
+                    <ListChecks size={16} />
+                  </IconButton>
+                </Tooltip>
+              )}
+              <Badge badgeContent={group.tickets.length} color="primary" max={99999} overlap="rectangular">
+                <Box width={10} />
+              </Badge>
+            </div>
           </div>
           <div className={classes.ticketsList}>
             {group.tickets.map(renderTicket)}
@@ -811,6 +837,14 @@ const MomentsUser = ({ onPanStart }) => {
         open={openTicketMessageDialog}
         onClose={() => setOpenTicketMessageDialog(false)}
         ticket={selectedTicketForView}
+      />
+
+      {/* Processar em massa — aberto pelo ícone na coluna do atendente,
+          já filtrando os tickets "open" daquele usuário */}
+      <BulkProcessTicketsModal
+        open={bulkModal.open}
+        onClose={() => setBulkModal({ open: false, filters: {} })}
+        initialFilters={bulkModal.filters}
       />
     </motion.div>
   );

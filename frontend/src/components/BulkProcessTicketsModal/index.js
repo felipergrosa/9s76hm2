@@ -167,6 +167,8 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
   const [filters, setFilters] = useState({
     status: initialFilters.status || 'pending',
     searchParam: '',
+    // Filtro de atendente de origem (ex.: aberto a partir da coluna do /moments)
+    users: initialFilters.users || [],
     ...initialFilters,
   });
 
@@ -288,6 +290,10 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
           showAll: true,
           queueIds,
           statusFilters,
+          // Restringe a um atendente de origem quando informado
+          users: Array.isArray(filters.users) && filters.users.length
+            ? JSON.stringify(filters.users)
+            : undefined,
           // Apenas filtrar por tag pessoal se NÃO for superadmin/admin
           personalTagOnly: isSuperUser ? false : true
         },
@@ -621,6 +627,28 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
                       onChange={(e) => setFilters({ ...filters, searchParam: e.target.value })}
                       fullWidth
                     />
+
+                    {/* Atendente de origem — pré-preenchido ao abrir pela coluna do /moments */}
+                    <FormControl variant="outlined" size="small" fullWidth>
+                      <InputLabel>Atendente</InputLabel>
+                      <Select
+                        value={filters.users[0] || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setFilters({ ...filters, users: val ? [Number(val)] : [] });
+                        }}
+                        label="Atendente"
+                      >
+                        <MenuItem value="">
+                          <em>Todos</em>
+                        </MenuItem>
+                        {users.map((u) => (
+                          <MenuItem key={u.id} value={u.id}>
+                            {u.name}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
                   </Box>
 
                   <TableContainer component={Paper} className={classes.tableContainer}>
