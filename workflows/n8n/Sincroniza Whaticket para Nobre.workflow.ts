@@ -309,7 +309,11 @@ SET
   -- de domínio (BusinessCadRepresentante/SegMercado) no sync reverso.
   CdRepresentante = CASE WHEN '{{$json.rep}}'         <> '' THEN '{{$json.rep}}'         ELSE CdRepresentante END,
   CdSegmento      = CASE WHEN '{{$json.segmentoCod}}' <> '' THEN '{{$json.segmentoCod}}' ELSE CdSegmento      END,
-  DtAlteracao = GETDATE()
+  DtAlteracao = GETDATE(),
+  -- Flags de sincronismo: sem elas o sistema local nunca puxa a alteração
+  -- (o INSERT já grava ambas como 'S' — o UPDATE deve fazer o mesmo)
+  FlEnvRecEmpresa = 'S',
+  FlEnvRecRepre   = 'S'
 WHERE
   (
     ('{{$json.cnpj}}' <> ''
