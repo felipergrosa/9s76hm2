@@ -6,6 +6,7 @@ import { emitToCompanyNamespace } from "../libs/socketEmit";
 import { head } from "lodash";
 
 import { Op, Sequelize, QueryTypes } from "sequelize";
+import removeAccents from "remove-accents";
 
 // Interface estendida para incluir o usuário autenticado
 interface AuthenticatedRequest extends Request {
@@ -2684,13 +2685,19 @@ export const uniqueValues = async (req: AuthenticatedRequest, res: Response): Pr
         [columnName]: { [Op.not]: null, [Op.ne]: "" }
       };
 
-      // Filtro de busca opcional
+      // Filtro de busca opcional — cobre código E nome, ignorando
+      // caixa e acentos (ex.: "irineu" casa "0011 - (INTSP) IRINEU")
       if (search) {
+        const sanitizedSearch = removeAccents(search.trim().toLowerCase());
         whereClause[columnName] = {
           [Op.and]: [
             { [Op.not]: null },
             { [Op.ne]: "" },
-            { [Op.iLike]: `%${search}%` }
+            Sequelize.where(
+              Sequelize.fn("LOWER", Sequelize.fn("unaccent", Sequelize.col(`Contact.${columnName}`))),
+              "LIKE",
+              `%${sanitizedSearch}%`
+            )
           ]
         };
       }

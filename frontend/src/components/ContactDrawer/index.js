@@ -442,7 +442,7 @@ const ContactDrawer = ({ open, handleDrawerClose, contact, ticket, loading, acti
                                         )}
                                         {contact.clientCode && (
                                             <Typography style={{ color: "#111b21", fontSize: 15, fontWeight: "bold" }}>
-                                                {`Código do Cliente: ${contact.clientCode}`}
+                                                {`Código: ${contact.clientCode}`}
                                             </Typography>
                                         )}
                                         {contact.email && (

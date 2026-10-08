@@ -502,12 +502,62 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 		}
 	};
 
+	// Busca server-side: digitar no autocomplete filtra no backend — antes só
+	// filtrava os 50 itens já carregados, então a maioria dos matches sumia.
+	// O termo fica em ref para a paginação por scroll manter o mesmo filtro.
+	const repSearchTerm = useRef("");
+	const segmentSearchTerm = useRef("");
+	const repSearchTimer = useRef(null);
+	const segmentSearchTimer = useRef(null);
+
+	const searchRepOptions = (term) => {
+		repSearchTerm.current = term || "";
+		if (repSearchTimer.current) clearTimeout(repSearchTimer.current);
+		repSearchTimer.current = setTimeout(async () => {
+			try {
+				setRepLoading(true);
+				const limit = 50;
+				const params = { field: 'representativeCode', limit, offset: 0 };
+				if (repSearchTerm.current) params.search = repSearchTerm.current;
+				const { data } = await api.get(`/contacts/unique-values`, { params });
+				setRepOptions(data.values || []);
+				setRepHasMore(data.hasMore);
+				setRepOffset(limit);
+			} catch (err) {
+			} finally {
+				setRepLoading(false);
+			}
+		}, 350);
+	};
+
+	const searchSegmentOptions = (term) => {
+		segmentSearchTerm.current = term || "";
+		if (segmentSearchTimer.current) clearTimeout(segmentSearchTimer.current);
+		segmentSearchTimer.current = setTimeout(async () => {
+			try {
+				setSegmentLoading(true);
+				const limit = 50;
+				const params = { field: 'segment', limit, offset: 0 };
+				if (segmentSearchTerm.current) params.search = segmentSearchTerm.current;
+				const { data } = await api.get(`/contacts/unique-values`, { params });
+				setSegmentOptions(data.values || []);
+				setSegmentHasMore(data.hasMore);
+				setSegmentOffset(limit);
+			} catch (err) {
+			} finally {
+				setSegmentLoading(false);
+			}
+		}, 350);
+	};
+
 	const loadMoreSegments = async () => {
 		if (segmentLoading || !segmentHasMore) return;
 		try {
 			setSegmentLoading(true);
 			const limit = 50;
-			const { data } = await api.get(`/contacts/unique-values?field=segment&limit=${limit}&offset=${segmentOffset}`);
+			const params = { field: 'segment', limit, offset: segmentOffset };
+			if (segmentSearchTerm.current) params.search = segmentSearchTerm.current;
+			const { data } = await api.get(`/contacts/unique-values`, { params });
 			setSegmentOptions(prev => [...prev, ...(data.values || [])]);
 			setSegmentHasMore(data.hasMore);
 			setSegmentOffset(prev => prev + limit);
@@ -522,7 +572,9 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 		try {
 			setRepLoading(true);
 			const limit = 50;
-			const { data } = await api.get(`/contacts/unique-values?field=representativeCode&limit=${limit}&offset=${repOffset}`);
+			const params = { field: 'representativeCode', limit, offset: repOffset };
+			if (repSearchTerm.current) params.search = repSearchTerm.current;
+			const { data } = await api.get(`/contacts/unique-values`, { params });
 			setRepOptions(prev => [...prev, ...(data.values || [])]);
 			setRepHasMore(data.hasMore);
 			setRepOffset(prev => prev + limit);
@@ -827,7 +879,12 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 											options={repOptions}
 											value={values.representativeCode || ''}
 											onChange={(e, newValue) => setFieldValue('representativeCode', newValue || '')}
-											onInputChange={(e, newInputValue) => setFieldValue('representativeCode', newInputValue)}
+											onInputChange={(e, newInputValue, reason) => {
+												setFieldValue('representativeCode', newInputValue);
+												if (reason === 'input' || reason === 'clear') {
+													searchRepOptions(newInputValue);
+												}
+											}}
 											disabled={!canEditRepresentative}
 											loading={repLoading}
 											ListboxProps={{
@@ -982,7 +1039,12 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 											options={segmentOptions}
 											value={values.segment || ''}
 											onChange={(e, newValue) => setFieldValue('segment', newValue || '')}
-											onInputChange={(e, newInputValue) => setFieldValue('segment', newInputValue)}
+											onInputChange={(e, newInputValue, reason) => {
+												setFieldValue('segment', newInputValue);
+												if (reason === 'input' || reason === 'clear') {
+													searchSegmentOptions(newInputValue);
+												}
+											}}
 											disabled={!canEditFields}
 											loading={segmentLoading}
 											ListboxProps={{
