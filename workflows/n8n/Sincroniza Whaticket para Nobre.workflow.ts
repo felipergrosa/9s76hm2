@@ -299,16 +299,42 @@ return out;`,
     })
     AtualizaClienteErp = {
         operation: 'executeQuery',
-        query: `UPDATE nobregerencia.dbo.BusinessCadCliente
+        query: `-- Largura real de cada coluna de destino: protege contra erro 8152
+-- (string truncation). Valor que não cabe é ignorado em vez de derrubar
+-- o UPDATE inteiro — o restante da alteração segue e as flags marcam.
+DECLARE @W_Whats   INT = ISNULL((SELECT CHARACTER_MAXIMUM_LENGTH FROM nobregerencia.INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'BusinessCadCliente' AND COLUMN_NAME = 'F_WhatsApp1'), 0);
+DECLARE @W_Email   INT = ISNULL((SELECT CHARACTER_MAXIMUM_LENGTH FROM nobregerencia.INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'BusinessCadCliente' AND COLUMN_NAME = 'Email1'), 0);
+DECLARE @W_Contato INT = ISNULL((SELECT CHARACTER_MAXIMUM_LENGTH FROM nobregerencia.INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'BusinessCadCliente' AND COLUMN_NAME = 'Contato1'), 0);
+DECLARE @W_Rep     INT = ISNULL((SELECT CHARACTER_MAXIMUM_LENGTH FROM nobregerencia.INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'BusinessCadCliente' AND COLUMN_NAME = 'CdRepresentante'), 0);
+DECLARE @W_Seg     INT = ISNULL((SELECT CHARACTER_MAXIMUM_LENGTH FROM nobregerencia.INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'BusinessCadCliente' AND COLUMN_NAME = 'CdSegmento'), 0);
+
+UPDATE nobregerencia.dbo.BusinessCadCliente
 SET
-  F_WhatsApp1 = CASE WHEN '{{$json.whatsapp}}' <> '' THEN '{{$json.whatsapp}}' ELSE F_WhatsApp1 END,
-  Email1      = CASE WHEN '{{$json.email}}'    <> '' THEN '{{$json.email}}'    ELSE Email1      END,
-  Contato1    = CASE WHEN '{{$json.contato}}'  <> '' THEN '{{$json.contato}}'  ELSE Contato1    END,
-  -- Representante/Segmento também voltam ao ERP quando alterados no Whaticket.
-  -- O código é gravado como dígito puro ('1016'); a descrição vem das tabelas
-  -- de domínio (BusinessCadRepresentante/SegMercado) no sync reverso.
-  CdRepresentante = CASE WHEN '{{$json.rep}}'         <> '' THEN '{{$json.rep}}'         ELSE CdRepresentante END,
-  CdSegmento      = CASE WHEN '{{$json.segmentoCod}}' <> '' THEN '{{$json.segmentoCod}}' ELSE CdSegmento      END,
+  -- (@W_* < 0 = varchar(max), largura ilimitada; 0 = coluna não existe → não escreve)
+  F_WhatsApp1 = CASE WHEN '{{$json.whatsapp}}' <> '' AND (@W_Whats < 0 OR LEN('{{$json.whatsapp}}') <= @W_Whats)
+                     THEN '{{$json.whatsapp}}' ELSE F_WhatsApp1 END,
+  Email1      = CASE WHEN '{{$json.email}}'    <> '' AND (@W_Email < 0 OR LEN('{{$json.email}}')    <= @W_Email)
+                     THEN '{{$json.email}}'    ELSE Email1      END,
+  Contato1    = CASE WHEN '{{$json.contato}}'  <> '' AND (@W_Contato < 0 OR LEN('{{$json.contato}}')  <= @W_Contato)
+                     THEN '{{$json.contato}}'  ELSE Contato1    END,
+  -- Representante: grava o código canônico da tabela de domínio — só atualiza
+  -- quando o rep existe em BusinessCadRepresentante E cabe na coluna destino
+  -- (ex.: CadCliente.CdRepresentante char(3) não aceita o código '1012').
+  CdRepresentante = CASE
+    WHEN '{{$json.rep}}' <> '' THEN COALESCE(
+      (SELECT TOP 1 R.CdRepresentante
+       FROM nobregerencia.dbo.BusinessCadRepresentante R
+       WHERE (
+          REPLACE(LTRIM(RTRIM(CAST(R.CdRepresentante AS VARCHAR(20)))), ' ', '') = '{{$json.rep}}'
+          OR TRY_CAST(REPLACE(LTRIM(RTRIM(CAST(R.CdRepresentante AS VARCHAR(20)))),' ','') AS BIGINT)
+             = TRY_CAST('{{$json.rep}}' AS BIGINT)
+       )
+       AND (@W_Rep < 0 OR LEN(RTRIM(CAST(R.CdRepresentante AS VARCHAR(20)))) <= @W_Rep)),
+      CdRepresentante)
+    ELSE CdRepresentante
+  END,
+  CdSegmento      = CASE WHEN '{{$json.segmentoCod}}' <> '' AND (@W_Seg < 0 OR LEN('{{$json.segmentoCod}}') <= @W_Seg)
+                         THEN '{{$json.segmentoCod}}' ELSE CdSegmento      END,
   DtAlteracao = GETDATE(),
   -- Flags de sincronismo: sem elas o sistema local nunca puxa a alteração
   -- (o INSERT já grava ambas como 'S' — o UPDATE deve fazer o mesmo)
