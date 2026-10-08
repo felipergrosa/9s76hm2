@@ -1,4 +1,4 @@
-import { Op, fn, col, where as sequelizeWhere } from "sequelize";
+import { Op, fn, col, cast, where as sequelizeWhere } from "sequelize";
 import Contact from "../../models/Contact";
 import TagRule from "../../models/TagRule";
 import Tag from "../../models/Tag";
@@ -52,10 +52,11 @@ const PreviewTagRulesService = async ({
 
     switch (rule.operator) {
       case "equals": {
-        // Case-insensitive usando LOWER
+        // Case-insensitive usando LOWER — CAST para TEXT pois colunas ENUM
+        // (ex.: situation) não aceitam LOWER() direto no Postgres
         if (!whereContact[Op.and]) whereContact[Op.and] = [];
         (whereContact[Op.and] as any[]).push(
-          sequelizeWhere(fn('LOWER', col(`${rule.field}`)), fieldValue.toLowerCase())
+          sequelizeWhere(fn('LOWER', cast(col(`${rule.field}`), 'text')), fieldValue.toLowerCase())
         );
         break;
       }
@@ -81,7 +82,8 @@ const PreviewTagRulesService = async ({
           const lowered = values.map(v => String(v).toLowerCase());
           if (!whereContact[Op.and]) whereContact[Op.and] = [];
           (whereContact[Op.and] as any[]).push(
-            sequelizeWhere(fn('LOWER', col(`${rule.field}`)), { [Op.in]: lowered })
+            // CAST para TEXT: colunas ENUM (ex.: situation) não aceitam LOWER() direto
+            sequelizeWhere(fn('LOWER', cast(col(`${rule.field}`), 'text')), { [Op.in]: lowered })
           );
         } catch (err) {
           console.warn(`TagRule ${rule.id}: valor 'in' inválido`, err);

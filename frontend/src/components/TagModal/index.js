@@ -308,12 +308,14 @@ const TagModal = ({ open, onClose, tagId, kanban }) => {
 		}
 
 		try {
+			let skipped = 0;
 			for (const rule of tagRules) {
-				if (!rule.field) continue;
+				if (!rule.field) { skipped++; continue; }
+				// String() defensivo: valores vindos do backend podem não ser string
 				const valuesArray = Array.isArray(rule.value)
-					? rule.value.filter(v => v && v.trim())
-					: (rule.value ? [rule.value] : []);
-				if (valuesArray.length === 0) continue;
+					? rule.value.map(v => String(v ?? "").trim()).filter(Boolean)
+					: (rule.value ? [String(rule.value).trim()] : []);
+				if (valuesArray.length === 0) { skipped++; continue; }
 
 				const valueToSave = JSON.stringify(valuesArray);
 
@@ -332,6 +334,9 @@ const TagModal = ({ open, onClose, tagId, kanban }) => {
 				}
 			}
 			toast.success("Regras salvas com sucesso!");
+			if (skipped > 0) {
+				toast.warning(`${skipped} regra(s) sem campo ou valor foram ignoradas`);
+			}
 			// Recarrega regras
 			const { data: rulesData } = await api.get(`/tag-rules/tag/${tagId}`);
 			const rulesForDisplay = rulesData.map(r => {
@@ -419,6 +424,11 @@ const TagModal = ({ open, onClose, tagId, kanban }) => {
 			}
 			toast.success(kanban === 0 ? `${i18n.t("tagModal.success")}` : `${i18n.t("tagModal.successKanban")}`);
 
+			// Persiste regras de automação pendentes junto com a tag —
+			// evita a sensação de "não salvou" ao fechar o modal pelo botão Salvar
+			if (tagId && tagRules.some(r => r.field)) {
+				await handleSaveRules();
+			}
 		} catch (err) {
 			toastError(err);
 		}

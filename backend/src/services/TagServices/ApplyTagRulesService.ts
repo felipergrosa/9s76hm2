@@ -1,4 +1,4 @@
-import { Op, fn, col, where as sequelizeWhere } from "sequelize";
+import { Op, fn, col, cast, where as sequelizeWhere } from "sequelize";
 import Contact from "../../models/Contact";
 import TagRule from "../../models/TagRule";
 import ContactTag from "../../models/ContactTag";
@@ -107,7 +107,8 @@ const ApplyTagRulesService = async ({
             if (!whereContact[Op.and]) whereContact[Op.and] = [];
             (whereContact[Op.and] as any[]).push({
               [Op.or]: [
-                sequelizeWhere(fn('LOWER', col(`${rule.field}`)), { [Op.in]: lowered }),
+                // CAST para TEXT: colunas ENUM (ex.: situation) não aceitam LOWER() direto
+                sequelizeWhere(fn('LOWER', cast(col(`${rule.field}`), 'text')), { [Op.in]: lowered }),
                 { [rule.field]: { [Op.in]: values } }
               ]
             });
@@ -187,7 +188,8 @@ const ApplyTagRulesService = async ({
               if (!whereContact[Op.and]) whereContact[Op.and] = [];
               (whereContact[Op.and] as any[]).push({
                 [Op.or]: [
-                  sequelizeWhere(fn('LOWER', col(`${rule.field}`)), { [Op.in]: lowered }),
+                  // CAST para TEXT: colunas ENUM (ex.: situation) não aceitam LOWER() direto
+                  sequelizeWhere(fn('LOWER', cast(col(`${rule.field}`), 'text')), { [Op.in]: lowered }),
                   { [rule.field]: { [Op.in]: values } }
                 ]
               });
