@@ -75,7 +75,7 @@ export class SincronizaWhaticketParaNobreWorkflow {
     WebhookEntrada = {
         httpMethod: 'POST',
         path: 'whaticket-contato-sync',
-        responseMode: 'onReceived',
+        options: {},
     };
 
     @node({
@@ -203,6 +203,7 @@ WHERE
   OR
   ('{{$json.clientCode}}' <> ''
     AND CDCLIENTE = TRY_CAST('{{$json.clientCode}}' AS BIGINT))`,
+        options: {},
     };
 
     @node({
@@ -238,6 +239,7 @@ return out;`,
         conditions: {
             options: {
                 caseSensitive: true,
+                leftValue: '',
                 typeValidation: 'strict',
                 version: 2,
             },
@@ -269,6 +271,7 @@ return out;`,
         conditions: {
             options: {
                 caseSensitive: true,
+                leftValue: '',
                 typeValidation: 'strict',
                 version: 2,
             },
@@ -361,6 +364,7 @@ WHERE
         AND COALESCE(TRY_CAST(REPLACE(LTRIM(RTRIM(CAST(CdSegmento AS VARCHAR(20)))), ' ', '') AS BIGINT), -1)
             <> COALESCE(TRY_CAST('{{$json.segmentoCod}}' AS BIGINT), -2))
   )`,
+        options: {},
     };
 
     @node({
@@ -379,6 +383,7 @@ WHERE
   WHERE LOWER(LTRIM(RTRIM(DsMunicipio))) = LOWER(LTRIM(RTRIM('{{$('Decide Acao').item.json.cidade}}')))
     AND LOWER(LTRIM(RTRIM(Estado))) = LOWER(LTRIM(RTRIM('{{$('Decide Acao').item.json.uf}}')))
 ) AS CdMunicipio;`,
+        options: {},
     };
 
     @node({
@@ -392,6 +397,7 @@ WHERE
         conditions: {
             options: {
                 caseSensitive: true,
+                leftValue: '',
                 typeValidation: 'strict',
                 version: 2,
             },
@@ -497,6 +503,7 @@ return [{
 )
 INSERT INTO nobregerencia.dbo.BusinessCadClienteLC (Cnpj_Cnpf, CdEmpresa, LimiteCredito)
 VALUES ('{{$('Decide Acao').item.json.cnpj}}', '{{$('Decide Acao').item.json.empresa}}', 0);`,
+        options: {},
     };
 
     @node({
