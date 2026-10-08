@@ -1686,7 +1686,7 @@ async function finalizeCampaignRun(campaign: any): Promise<void> {
   // Recarrega campos mínimos: `campaign` pode ser o objeto serializado do
   // job (campaignData), que pode estar desatualizado em relação ao banco.
   const fresh = await Campaign.findByPk(campaignId, {
-    attributes: ["id", "status", "scheduledAt", "recurrence", "recurrenceEndAt"]
+    attributes: ["id", "status", "scheduledAt", "recurrence", "recurrenceEndAt", "companyId", "campaignTagId"]
   });
   if (!fresh || fresh.status !== "EM_ANDAMENTO") {
     // Já cancelada/finalizada/reagendada por outro caminho — não mexe
@@ -1732,6 +1732,32 @@ async function finalizeCampaignRun(campaign: any): Promise<void> {
   invalidateCampaignCache(campaignId);
   campaign.status = "FINALIZADA";
   campaign.completedAt = new Date();
+
+  // Tag de controle da campanha: limpa em massa a marcação residual de todos
+  // os contatos disparados (a resposta já remove individualmente no listener)
+  if (fresh.campaignTagId) {
+    try {
+      const shippings = await CampaignShipping.findAll({
+        where: { campaignId, contactId: { [Op.ne]: null } },
+        attributes: ["contactId"],
+        raw: true
+      });
+      const contactIds = Array.from(
+        new Set(shippings.map((s: any) => Number(s.contactId)).filter(Number.isInteger))
+      );
+      if (contactIds.length) {
+        await ContactTag.destroy({
+          where: {
+            companyId: fresh.companyId,
+            tagId: fresh.campaignTagId,
+            contactId: { [Op.in]: contactIds }
+          }
+        });
+      }
+    } catch (e) {
+      logger.warn(`[finalizeCampaignRun] Falha ao limpar tag ${fresh.campaignTagId} da campanha ${campaignId}: ${e}`);
+    }
+  }
 }
 
 async function verifyAndFinalizeCampaign(campaign) {
@@ -2593,6 +2619,22 @@ async function handleDispatchCampaign(job) {
             logger.info(`[DispatchCampaign][Official] Ticket #${ticket.id} criado com status "campaign", fila=${campaign.queueId}, userId=${targetUserId} (carteira)`);
           }
 
+          // Tag de controle da campanha: marca o contato como "em campanha"
+          // (removida quando ele responde ou quando a campanha finaliza)
+          if (campaign.campaignTagId && contact?.id) {
+            try {
+              await ContactTag.findOrCreate({
+                where: {
+                  contactId: contact.id,
+                  tagId: campaign.campaignTagId,
+                  companyId: campaign.companyId
+                }
+              });
+            } catch (e) {
+              logger.warn(`[DispatchCampaign][Official] Falha ao aplicar tag ${campaign.campaignTagId} no contato ${contact.id}: ${e}`);
+            }
+          }
+
           // Enviar template
           const adapter = await GetWhatsAppAdapter(whatsapp);
           if (typeof adapter.sendTemplate === "function") {
@@ -2760,6 +2802,22 @@ async function handleDispatchCampaign(job) {
         });
         ticket = await ShowTicketService(ticket.id, campaign.companyId);
         logger.info(`[DispatchCampaign][Baileys] Ticket #${ticket.id} criado com status "campaign", fila=${campaign.queueId}, userId=${targetUserId} (carteira)`);
+      }
+
+      // Tag de controle da campanha: marca o contato como "em campanha"
+      // (removida quando ele responde ou quando a campanha finaliza)
+      if (campaign.campaignTagId && contact?.id) {
+        try {
+          await ContactTag.findOrCreate({
+            where: {
+              contactId: contact.id,
+              tagId: campaign.campaignTagId,
+              companyId: campaign.companyId
+            }
+          });
+        } catch (e) {
+          logger.warn(`[DispatchCampaign][Baileys] Falha ao aplicar tag ${campaign.campaignTagId} no contato ${contact.id}: ${e}`);
+        }
       }
 
       // NOTA: Verificação de wbot.user já foi feita no início da função (linhas 1732-1754)

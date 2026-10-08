@@ -17,6 +17,7 @@ interface Data {
   whatsappId?: number;
   tagListId?: string | number | null;
   negativeTagListIds?: number[] | string | null;
+  campaignTagId?: string | number | null;
   message1?: string;
   message2?: string;
   message3?: string;
@@ -129,6 +130,7 @@ const CreateService = async (data: Data): Promise<Campaign> => {
   await assertSameCompany(ContactList, toIdList(data.contactListIds), data.companyId, "Listas de contatos");
   await assertSameCompany(Tag, toIdList(data.tagListId), data.companyId, "Tag");
   await assertSameCompany(Tag, toIdList(data.negativeTagListIds), data.companyId, "Tags de exclusão");
+  await assertSameCompany(Tag, toIdList(data.campaignTagId), data.companyId, "Tag de controle");
   await assertSameCompany(Whatsapp, toIdList(data.whatsappId), data.companyId, "Conexão WhatsApp");
   await assertSameCompany(Whatsapp, toIdList(data.allowedWhatsappIds), data.companyId, "Conexões permitidas");
   await assertSameCompany(Queue, toIdList(data.queueId), data.companyId, "Fila");
@@ -137,6 +139,13 @@ const CreateService = async (data: Data): Promise<Campaign> => {
 
   // Serializa allowedWhatsappIds e contactListIds se vierem como array/objeto
   const payload: any = { ...data };
+
+  // "" vindo do formulário ("Nenhuma") não é inteiro válido → null
+  if (payload.campaignTagId === "" || payload.campaignTagId === undefined) {
+    payload.campaignTagId = null;
+  } else if (payload.campaignTagId !== null) {
+    payload.campaignTagId = Number(payload.campaignTagId);
+  }
   if (
     payload.allowedWhatsappIds != null &&
     typeof payload.allowedWhatsappIds !== "string"

@@ -17,6 +17,7 @@ import { safeNormalizePhoneNumber } from "../../utils/phone";
 import { UpdateSessionWindow } from "../TicketServices/UpdateSessionWindowService";
 import { sessionWindowRenewalQueue } from "../../queues";
 import CampaignShipping from "../../models/CampaignShipping";
+import removeCampaignMarkerTags from "../../helpers/removeCampaignMarkerTags";
 import { Op } from "sequelize";
 
 // Lock mechanism para evitar race conditions na criação de contatos/tickets
@@ -617,6 +618,9 @@ async function processIncomingMessage(
       const { ticketEventBus } = await import("../TicketServices/TicketEventBus");
       ticketEventBus.publishStatusChanged(companyId, ticket.id, ticket.uuid, ticket, "campaign", newStatus);
     }
+
+    // Contato respondeu: remove "tag de controle de campanha" (idem Baileys)
+    await removeCampaignMarkerTags(ticket.contactId, companyId);
 
     // Atribuição CTWA: grava adId/headline no ticket quando a mensagem
     // que o originou veio de um anúncio Click-to-WhatsApp

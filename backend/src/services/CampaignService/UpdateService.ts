@@ -17,6 +17,7 @@ interface Data {
   whatsappId?: number;
   tagListId?: string | number | null;
   negativeTagListIds?: number[] | string | null;
+  campaignTagId?: string | number | null;
   message1?: string;
   message2?: string;
   message3?: string;
@@ -94,6 +95,7 @@ const EDITABLE_FIELDS = [
   "confirmationMessage1", "confirmationMessage2", "confirmationMessage3",
   "confirmationMessage4", "confirmationMessage5",
   "contactListId", "contactListIds", "tagListId", "negativeTagListIds",
+  "campaignTagId",
   "whatsappId", "userId", "userIds", "queueId",
   "statusTicket", "openTicket", "dispatchStrategy", "allowedWhatsappIds",
   "mediaUrl1", "mediaName1", "mediaUrl2", "mediaName2",
@@ -145,6 +147,7 @@ const UpdateService = async (data: Data): Promise<Campaign> => {
   await assertSameCompany(ContactList, toIdList(data.contactListIds), companyId, "Listas de contatos");
   await assertSameCompany(Tag, toIdList(data.tagListId), companyId, "Tag");
   await assertSameCompany(Tag, toIdList(data.negativeTagListIds), companyId, "Tags de exclusão");
+  await assertSameCompany(Tag, toIdList(data.campaignTagId), companyId, "Tag de controle");
   await assertSameCompany(Whatsapp, toIdList(data.whatsappId), companyId, "Conexão WhatsApp");
   await assertSameCompany(Whatsapp, toIdList(data.allowedWhatsappIds), companyId, "Conexões permitidas");
   await assertSameCompany(Queue, toIdList(data.queueId), companyId, "Fila");
@@ -168,6 +171,13 @@ const UpdateService = async (data: Data): Promise<Campaign> => {
     if (payload.recurrence === "none") {
       payload.recurrenceEndAt = null;
     }
+  }
+
+  // "" vindo do formulário ("Nenhuma") não é inteiro válido → null
+  if (payload.campaignTagId === "") {
+    payload.campaignTagId = null;
+  } else if (payload.campaignTagId != null) {
+    payload.campaignTagId = Number(payload.campaignTagId);
   }
 
   // Serializa allowedWhatsappIds e contactListIds se vierem como array/objeto

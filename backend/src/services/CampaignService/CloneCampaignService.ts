@@ -67,6 +67,7 @@ const CloneCampaignService = async (
         allowedWhatsappIds: original.allowedWhatsappIds,
         tagListId: original.tagListId,
         negativeTagListIds: original.negativeTagListIds,
+        campaignTagId: original.campaignTagId,
         sendMediaSeparately: original.sendMediaSeparately,
         // Templates Meta
         metaTemplateName: original.metaTemplateName,

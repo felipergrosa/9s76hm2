@@ -162,6 +162,7 @@ const CampaignModal = ({
     //whatsappId: "",
     contactListId: "",
     tagListId: "Nenhuma",
+    campaignTagId: "",
     companyId,
     statusTicket: "closed",
     openTicket: "disabled",
@@ -1587,6 +1588,41 @@ const CampaignModal = ({
                                   </MenuItem>
                                 ))}
                             </Field>
+                          </FormControl>
+                        </Grid>
+
+                        <Grid xs={12} md={4} item>
+                          <FormControl
+                            variant="outlined"
+                            margin="dense"
+                            fullWidth
+                            className={classes.formControl}
+                          >
+                            <InputLabel id="campaign-tag-selection-label">
+                              Tag de controle
+                            </InputLabel>
+                            <Field
+                              as={Select}
+                              label="Tag de controle"
+                              labelId="campaign-tag-selection-label"
+                              id="campaignTagId"
+                              name="campaignTagId"
+                              error={touched.campaignTagId && Boolean(errors.campaignTagId)}
+                              disabled={!campaignEditable}
+                            >
+                              <MenuItem value="">Nenhuma</MenuItem>
+                              {Array.isArray(tagLists) &&
+                                tagLists.map((tagList) => (
+                                  <MenuItem key={tagList.id} value={tagList.id}>
+                                    {tagList.name}
+                                  </MenuItem>
+                                ))}
+                            </Field>
+                            {values.campaignTagId && (
+                              <FormHelperText>
+                                Marca o contato no disparo e remove quando ele responde
+                              </FormHelperText>
+                            )}
                           </FormControl>
                         </Grid>
 

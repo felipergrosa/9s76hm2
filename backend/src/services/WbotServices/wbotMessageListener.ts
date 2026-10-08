@@ -46,6 +46,7 @@ import UpdateTicketService from "../TicketServices/UpdateTicketService";
 import { ticketEventBus } from "../TicketServices/TicketEventBus";
 import { messageEventBus } from "../MessageServices/MessageEventBus";
 import { emitTicketUpdateSimple } from "../../helpers/emitTicketUpdate";
+import removeCampaignMarkerTags from "../../helpers/removeCampaignMarkerTags";
 import formatBody from "../../helpers/Mustache";
 import TicketTraking from "../../models/TicketTraking";
 import UserRating from "../../models/UserRating";
@@ -5991,6 +5992,12 @@ const handleMessage = async (
       ticketEventBus.publishStatusChanged(companyId, ticket.id, ticket.uuid, ticket, oldStatus, newStatus);
       
       logger.info(`[wbotMessageListener] Ticket #${ticket.id} movido para status "${newStatus}", fila: ${ticket.queueId}`);
+    }
+
+    // Contato respondeu: remove "tag de controle de campanha" — cobre também
+    // campanhas com statusTicket=closed, cujo ticket não passa por "campaign"
+    if (!msg.key.fromMe && ticket?.contactId) {
+      await removeCampaignMarkerTags(ticket.contactId, companyId);
     }
 
     let bodyRollbackTag = "";

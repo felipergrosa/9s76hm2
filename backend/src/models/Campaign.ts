@@ -154,6 +154,11 @@ class Campaign extends Model<Campaign> {
   @Column({ type: DataType.TEXT, allowNull: true })
   negativeTagListIds: string;
 
+  // Tag de controle: aplicada ao contato no disparo e removida quando ele
+  // responde (ou quando a campanha finaliza). Opt-in por campanha.
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  campaignTagId: number;
+
   // Campos de mídia por mensagem (1..5)
   @Column
   mediaUrl1: string;

@@ -44,6 +44,7 @@ type StoreData = {
   contactListId: number;
   tagListId: number | string;
   negativeTagListIds?: number[] | string | null;
+  campaignTagId?: number | string | null;
   userId: number | string;
   queueId: number | string;
   statusTicket: string;
