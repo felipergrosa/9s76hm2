@@ -167,6 +167,9 @@ for (const item of $input.all()) {
   const { cidade, uf: ufCity } = extraiCidadeUf(c.city);
   const ddd = whatsapp.slice(0, 2);
   const uf = ufCity || UF_POR_DDD[ddd] || '';
+  // UF só é gravável no UPDATE quando veio explícita do campo cidade —
+  // a derivada do DDD reflete o telefone, não o endereço fiscal do cliente.
+  const ufExpl = ufCity;
   const endereco = esc(c.businessAddress);
 
   // Sem nenhuma chave nem dado útil → ignora
@@ -180,7 +183,7 @@ for (const item of $input.all()) {
     json: {
       cnpj, cnpjInformado, clientCode, whatsapp, email, contato,
       razao, fantasia, rep, segmentoCod, empresa,
-      cidade, uf, endereco, cadastroCompleto,
+      cidade, uf, ufExpl, endereco, cadastroCompleto,
     },
   });
 }
@@ -312,10 +315,29 @@ DECLARE @W_Email   INT = ISNULL((SELECT CHARACTER_MAXIMUM_LENGTH FROM nobregeren
 DECLARE @W_Contato INT = ISNULL((SELECT CHARACTER_MAXIMUM_LENGTH FROM nobregerencia.INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'BusinessCadCliente' AND COLUMN_NAME = 'Contato1'), 0);
 DECLARE @W_Rep     INT = ISNULL((SELECT CHARACTER_MAXIMUM_LENGTH FROM nobregerencia.INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'BusinessCadCliente' AND COLUMN_NAME = 'CdRepresentante'), 0);
 DECLARE @W_Seg     INT = ISNULL((SELECT CHARACTER_MAXIMUM_LENGTH FROM nobregerencia.INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'BusinessCadCliente' AND COLUMN_NAME = 'CdSegmento'), 0);
+DECLARE @W_Rz      INT = ISNULL((SELECT CHARACTER_MAXIMUM_LENGTH FROM nobregerencia.INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'BusinessCadCliente' AND COLUMN_NAME = 'RzCliente'), 0);
+DECLARE @W_Fs      INT = ISNULL((SELECT CHARACTER_MAXIMUM_LENGTH FROM nobregerencia.INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'BusinessCadCliente' AND COLUMN_NAME = 'FsCliente'), 0);
+DECLARE @W_End     INT = ISNULL((SELECT CHARACTER_MAXIMUM_LENGTH FROM nobregerencia.INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'BusinessCadCliente' AND COLUMN_NAME = 'F_Endereco'), 0);
+DECLARE @W_Cid     INT = ISNULL((SELECT CHARACTER_MAXIMUM_LENGTH FROM nobregerencia.INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'BusinessCadCliente' AND COLUMN_NAME = 'F_Cidade'), 0);
+DECLARE @W_Uf      INT = ISNULL((SELECT CHARACTER_MAXIMUM_LENGTH FROM nobregerencia.INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'BusinessCadCliente' AND COLUMN_NAME = 'F_Estado'), 0);
 
 UPDATE nobregerencia.dbo.BusinessCadCliente
 SET
   -- (@W_* < 0 = varchar(max), largura ilimitada; 0 = coluna não existe → não escreve)
+  -- Razão/Fantasia/Endereço no bloco F_* — o sync reverso lê F_ primeiro
+  -- (COALESCE(F_, C_, E_)), então a escrita segue a mesma prioridade.
+  -- ERP grava em maiúsculas: compara e escreve com UPPER para não marcar
+  -- diferença fantasma a cada ciclo.
+  RzCliente   = CASE WHEN '{{$json.razao}}'    <> '' AND (@W_Rz  < 0 OR LEN('{{$json.razao}}')    <= @W_Rz)
+                     THEN UPPER('{{$json.razao}}')    ELSE RzCliente  END,
+  FsCliente   = CASE WHEN '{{$json.fantasia}}' <> '' AND (@W_Fs  < 0 OR LEN('{{$json.fantasia}}') <= @W_Fs)
+                     THEN UPPER('{{$json.fantasia}}') ELSE FsCliente  END,
+  F_Endereco  = CASE WHEN '{{$json.endereco}}' <> '' AND (@W_End < 0 OR LEN('{{$json.endereco}}') <= @W_End)
+                     THEN UPPER('{{$json.endereco}}') ELSE F_Endereco END,
+  F_Cidade    = CASE WHEN '{{$json.cidade}}'   <> '' AND (@W_Cid < 0 OR LEN('{{$json.cidade}}')   <= @W_Cid)
+                     THEN UPPER('{{$json.cidade}}')   ELSE F_Cidade   END,
+  F_Estado    = CASE WHEN '{{$json.ufExpl}}'   <> '' AND (@W_Uf  < 0 OR LEN('{{$json.ufExpl}}')   <= @W_Uf)
+                     THEN UPPER('{{$json.ufExpl}}')   ELSE F_Estado   END,
   F_WhatsApp1 = CASE WHEN '{{$json.whatsapp}}' <> '' AND (@W_Whats < 0 OR LEN('{{$json.whatsapp}}') <= @W_Whats)
                      THEN '{{$json.whatsapp}}' ELSE F_WhatsApp1 END,
   Email1      = CASE WHEN '{{$json.email}}'    <> '' AND (@W_Email < 0 OR LEN('{{$json.email}}')    <= @W_Email)
@@ -358,6 +380,11 @@ WHERE
     ('{{$json.whatsapp}}' <> '' AND ISNULL(REPLACE(REPLACE(REPLACE(REPLACE(F_WhatsApp1, '(', ''), ')', ''), '-', ''), ' ', ''), '') <> '{{$json.whatsapp}}')
     OR ('{{$json.email}}'    <> '' AND ISNULL(LOWER(LTRIM(RTRIM(Email1))), '')    <> '{{$json.email}}')
     OR ('{{$json.contato}}'  <> '' AND ISNULL(LTRIM(RTRIM(Contato1)), '')         <> '{{$json.contato}}')
+    OR ('{{$json.razao}}'    <> '' AND ISNULL(UPPER(LTRIM(RTRIM(RzCliente))), '')  <> UPPER('{{$json.razao}}'))
+    OR ('{{$json.fantasia}}' <> '' AND ISNULL(UPPER(LTRIM(RTRIM(FsCliente))), '')  <> UPPER('{{$json.fantasia}}'))
+    OR ('{{$json.endereco}}' <> '' AND ISNULL(UPPER(LTRIM(RTRIM(F_Endereco))), '') <> UPPER('{{$json.endereco}}'))
+    OR ('{{$json.cidade}}'   <> '' AND ISNULL(UPPER(LTRIM(RTRIM(F_Cidade))), '')   <> UPPER('{{$json.cidade}}'))
+    OR ('{{$json.ufExpl}}'   <> '' AND ISNULL(UPPER(LTRIM(RTRIM(F_Estado))), '')   <> UPPER('{{$json.ufExpl}}'))
     -- Comparação por TRY_CAST cobre coluna char ('0001') e int (1) sem falso positivo
     OR ('{{$json.rep}}' <> ''
         AND COALESCE(TRY_CAST(REPLACE(LTRIM(RTRIM(CAST(CdRepresentante AS VARCHAR(20)))), ' ', '') AS BIGINT), -1)
