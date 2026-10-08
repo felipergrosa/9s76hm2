@@ -314,7 +314,10 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
             ? JSON.stringify(filters.users)
             : undefined,
           // Apenas filtrar por tag pessoal se NÃO for superadmin/admin
-          personalTagOnly: isSuperUser ? false : true
+          personalTagOnly: isSuperUser ? false : true,
+          // Gestão: backend só honra para admin/super/bulk-process — permite
+          // enxergar tickets "open" de outros atendentes neste modal
+          viewOthersOpen: isSuperUser ? "true" : undefined
         },
       });
       setTickets(data.tickets || []);

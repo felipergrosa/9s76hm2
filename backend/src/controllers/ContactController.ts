@@ -112,6 +112,7 @@ type IndexQuery = {
   bzEmpresa?: string | string[];
   isWhatsappValid?: string;
   whatsappIds?: string | string[];
+  walletIds?: string | string[];
 };
 
 type IndexGetContactQuery = {
@@ -570,6 +571,7 @@ export const index = async (req: AuthenticatedRequest, res: Response): Promise<R
   };
 
   const whatsappIds = parseIdArrayParam("whatsappIds");
+  const walletIds = parseIdArrayParam("walletIds");
   // Parse excludeTagsIds com tratamento especial para JSON stringificado
   let excludeTagsIds: number[] | undefined;
   const excludeTagsRaw = (req.query as any).excludeTags;
@@ -623,7 +625,8 @@ export const index = async (req: AuthenticatedRequest, res: Response): Promise<R
     florder,
     bzEmpresa: bzEmpresas,
     isWhatsappValid,
-    whatsappIds
+    whatsappIds,
+    walletIds
   });
 
   // [ANTI-BAN] Dispara validações em background de forma controlada

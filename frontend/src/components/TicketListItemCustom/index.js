@@ -137,10 +137,25 @@ const useStyles = makeStyles((theme) => ({
         background: "green",
         color: "#FFF",
         marginRight: 1,
-        padding: "1px 5px",
+        padding: "0 6px",
         fontWeight: 'bold',
         borderRadius: 4,
-        fontSize: "0.7em",
+        fontSize: "0.7rem",
+        height: 18,
+        lineHeight: "18px",
+        display: "block",
+        textAlign: "center",
+        // Nomes longos (conexão/fila/atendente) truncam com ellipsis em vez de
+        // quebrar linha — o tooltip do wrapper mostra o nome completo
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        maxWidth: 110,
+        minWidth: 0,
+        flex: "0 1 auto",
+        [theme.breakpoints.down("sm")]: {
+            maxWidth: 88,
+        },
     },
     noTicketsTitle: {
         textAlign: "center",
@@ -214,7 +229,7 @@ const useStyles = makeStyles((theme) => ({
 
     pillsRow: {
         display: "flex",
-        flexWrap: "wrap",
+        flexWrap: "nowrap",
         flexDirection: "row",
         alignItems: "center",
         gap: 1,
@@ -222,9 +237,10 @@ const useStyles = makeStyles((theme) => ({
         width: "100%",
         maxWidth: "100%",
         minHeight: 15,
-        overflow: "visible",
+        overflow: "hidden",
         "& > *": {
-            flex: "0 0 auto",
+            flex: "0 1 auto",
+            minWidth: 0,
             maxWidth: "100%",
             marginBottom: "1px",
         }
@@ -793,50 +809,40 @@ const handleCloseTicket = async (id) => {
                             <div className={classes.pillsRow}>
                                 {ticket?.whatsapp ? (
                                     <Tooltip title={`Conexao: ${ticket.whatsapp?.name || ticket.channel || "Sem conexao"}`} arrow>
-                                        <span>
-                                            <Badge
-                                                className={classes.connectionTag}
-                                                style={{
-                                                    backgroundColor: ticket.whatsapp?.color || "#25D366",
-                                                    color: "#fff"
-                                                }}
-                                                overlap="rectangular"
-                                            >
-                                                {ticket.whatsapp?.name.toUpperCase()}
-                                            </Badge>
-                                        </span>
+                                        <div
+                                            className={classes.connectionTag}
+                                            style={{
+                                                backgroundColor: ticket.whatsapp?.color || "#25D366",
+                                                color: "#fff"
+                                            }}
+                                        >
+                                            {ticket.whatsapp?.name.toUpperCase()}
+                                        </div>
                                     </Tooltip>
                                 ) : null}
 
                                 {!ticket.isGroup && (
                                     <Tooltip title={`Fila: ${ticket.queueId ? ticket.queue?.name || "Sem fila" : ticket.status === "lgpd" ? "LGPD" : "Sem fila"}`} arrow>
-                                        <span>
-                                            <Badge
-                                                style={{ backgroundColor: ticket.queue?.color || "#7c7c7c" }}
-                                                className={classes.connectionTag}
-                                                overlap="rectangular"
-                                            >
-                                                {ticket.queueId ? ticket.queue?.name.toUpperCase() : ticket.status === "lgpd" ? "LGPD" : "SEM FILA"}
-                                            </Badge>
-                                        </span>
+                                        <div
+                                            className={classes.connectionTag}
+                                            style={{ backgroundColor: ticket.queue?.color || "#7c7c7c" }}
+                                        >
+                                            {ticket.queueId ? ticket.queue?.name.toUpperCase() : ticket.status === "lgpd" ? "LGPD" : "SEM FILA"}
+                                        </div>
                                     </Tooltip>
                                 )}
 
                                 {ticket?.user && (
                                     <Tooltip title={`Usuario: ${ticket.user?.name || "Nao atribuido"}`} arrow>
-                                        <span>
-                                            <Badge
-                                                style={{
-                                                    backgroundColor: ticket.user?.color || "#000000",
-                                                    color: "#fff",
-                                                    borderColor: ticket.user?.color || "#000000"
-                                                }}
-                                                className={classes.connectionTag}
-                                                overlap="rectangular"
-                                            >
-                                                {ticket.user?.name?.toUpperCase()}
-                                            </Badge>
-                                        </span>
+                                        <div
+                                            className={classes.connectionTag}
+                                            style={{
+                                                backgroundColor: ticket.user?.color || "#000000",
+                                                color: "#fff"
+                                            }}
+                                        >
+                                            {ticket.user?.name?.toUpperCase()}
+                                        </div>
                                     </Tooltip>
                                 )}
                             </div>

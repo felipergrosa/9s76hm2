@@ -59,6 +59,7 @@ const ShowTicketUUIDService = async (uuid: string,
           "isGroup",
           // Campos adicionais que o frontend precisa exibir
           "cpfCnpj",
+          "clientCode",
           "representativeCode",
           "city",
           "instagram",

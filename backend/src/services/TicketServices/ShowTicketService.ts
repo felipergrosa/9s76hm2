@@ -99,6 +99,7 @@ const ShowTicketService = async (
           "isGroup",
           "lgpdAcceptedAt",
           "cpfCnpj",
+          "clientCode",
           "representativeCode",
           "city",
           "instagram",

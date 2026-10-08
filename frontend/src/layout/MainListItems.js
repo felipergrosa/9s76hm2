@@ -55,7 +55,6 @@ import {
   BookOpen as KnowledgeBaseIcon,
   Sliders as CustomFieldsIcon,
   Zap as MetaAutomationsIcon,
-  Wallet as WalletIcon,
   HeartPulse as HealthIcon,
   Target as TargetIcon,
   PhoneCall as PhoneCallIcon,
@@ -513,17 +512,6 @@ const MainListItems = ({ collapsed, drawerClose }) => {
           to="/contacts"
           primary={i18n.t("mainDrawer.listItems.contacts")}
           icon={<ContactPhoneOutlinedIcon />}
-          viewMode={viewMode}
-          tooltip={collapsed}
-        />
-      )}
-
-      {/* 5b. CARTEIRAS */}
-      {hasPermission("contacts.view") && (
-        <ListItemLink
-          to="/wallets"
-          primary={i18n.t("wallets.title")}
-          icon={<WalletIcon />}
           viewMode={viewMode}
           tooltip={collapsed}
         />

@@ -53,6 +53,8 @@ interface Request {
   // Filtro opcional: tickets cujo contato está na carteira (tag pessoal #)
   // de algum dos usuários informados — mesmo modelo do /wallets
   walletUserIds?: number[];
+  // Gestão: admin/super pode ver tickets "open" de outros atendentes (bulk)
+  viewOthersOpen?: string;
 }
 
 interface Response {
@@ -81,7 +83,8 @@ const ListTicketsService = async ({
   sortTickets = "DESC",
   searchOnMessages = "false",
   walletOnly = false,
-  walletUserIds
+  walletUserIds,
+  viewOthersOpen
 }: Request): Promise<Response> => {
   // BackendPerfMonitor.start('ListTicketsService:Total');
   // BackendPerfMonitor.mark('ListTicketsService:Start', { searchParam, status, pageNumber });
@@ -545,7 +548,7 @@ const ListTicketsService = async ({
 
   // Filtro por carteira: apenas tickets cujo contato possui a tag pessoal (#)
   // de algum dos usuários selecionados (allowedContactTags) — mesma regra
-  // do ListWalletsService, via helper compartilhado helpers/walletExistsSql.
+  // do filtro "Carteira" de /contacts, via helper helpers/walletExistsSql.
   // Aplicado DEPOIS dos blocos de status para combinar com os demais filtros
   // (Op.and) sem ser sobrescrito pelas reconstruções de whereCondition.
   // Usuário sem tag pessoal retorna vazio corretamente (EXISTS = false).
@@ -654,19 +657,36 @@ const ListTicketsService = async ({
   // 3. REGRA PRINCIPAL: Ticket em atendimento (open com userId) só pode ser visto pelo atendente
   // Grupos (status=group) são excluídos - visibilidade de grupos controlada por allowGroup
   // Independente de ser admin, supervisor ou estar na carteira
-  
-  whereCondition = {
-    [Op.and]: [
-      whereCondition,
-      {
-        [Op.or]: [
-          { userId: userId }, // Meus tickets (sempre vejo os meus)
-          { userId: null }, // Tickets sem atribuição (pendentes)
-          { status: { [Op.notIn]: ["open"] } } // Tickets group/closed/outros (qualquer um pode ver se permitido)
-        ]
-      }
-    ]
-  } as any;
+  // EXCEÇÃO: viewOthersOpen="true" + admin/super/bulk-process (modal Processar em
+  // Massa) — nesse caso também removemos a restrição de filas para enxergar
+  // tickets em qualquer fila da empresa.
+  const canViewOthersOpen = viewOthersOpen === "true" && (
+    user.profile === "admin" ||
+    user.super === true ||
+    user.permissions?.includes("tickets.bulk-process")
+  );
+
+  if (canViewOthersOpen) {
+    const wc = whereCondition as Record<string | symbol, any>;
+    if (Array.isArray(wc[Op.and])) {
+      wc[Op.and].forEach((cond: any) => { delete cond.queueId; });
+    } else {
+      delete wc.queueId;
+    }
+  } else {
+    whereCondition = {
+      [Op.and]: [
+        whereCondition,
+        {
+          [Op.or]: [
+            { userId: userId }, // Meus tickets (sempre vejo os meus)
+            { userId: null }, // Tickets sem atribuição (pendentes)
+            { status: { [Op.notIn]: ["open"] } } // Tickets group/closed/outros (qualquer um pode ver se permitido)
+          ]
+        }
+      ]
+    } as any;
+  }
 
   // 4. REGRA GLOBAL: Apenas o último ticket por contato + conexão
   // Aplica-se a TODOS os status exceto "open" (tickets em atendimento)

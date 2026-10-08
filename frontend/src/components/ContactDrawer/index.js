@@ -441,7 +441,7 @@ const ContactDrawer = ({ open, handleDrawerClose, contact, ticket, loading, acti
                                             </div>
                                         )}
                                         {contact.clientCode && (
-                                            <Typography style={{ color: "primary", fontSize: 12 }}>
+                                            <Typography style={{ color: "#111b21", fontSize: 15, fontWeight: "bold" }}>
                                                 {`Código do Cliente: ${contact.clientCode}`}
                                             </Typography>
                                         )}

@@ -1,7 +1,7 @@
 /**
  * SQL da condição "contato está na carteira" de usuário(s).
  *
- * Regra (mesma do ListWalletsService / Contact.getWalletOwners):
+ * Regra (mesma do filtro "Carteira" de /contacts e /tickets):
  * um contato está na carteira de um usuário quando possui uma ContactTag
  * cuja tag é a TAG PESSOAL do usuário (Tags.name LIKE '#%', exceto '##%'
  * que é tag de grupo) e essa tag consta em User.allowedContactTags.

@@ -54,6 +54,8 @@ type IndexQuery = {
   viewingUserId?: string;
   // Filtro por carteira: IDs de usuários donos de tag pessoal (#)
   walletUserIds?: string;
+  // Gestão: permite admin ver tickets "open" de outros atendentes (bulk)
+  viewOthersOpen?: string;
 };
 
 type IndexQueryReport = {
@@ -124,7 +126,8 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
     statusFilter: statusStringfied,
     sortTickets,
     searchOnMessages,
-    walletUserIds: walletUserIdsStringified
+    walletUserIds: walletUserIdsStringified,
+    viewOthersOpen
   } = req.query as IndexQuery;
 
   const userId = Number(req.user.id);
@@ -163,7 +166,8 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
     companyId,
     sortTickets,
     searchOnMessages,
-    walletUserIds
+    walletUserIds,
+    viewOthersOpen
   });
 
   return res.status(200).json({ tickets, count, hasMore });

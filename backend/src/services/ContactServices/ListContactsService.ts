@@ -8,6 +8,7 @@ import Whatsapp from "../../models/Whatsapp";
 import User from "../../models/User";
 import ShowUserService from "../UserServices/ShowUserService";
 import logger from "../../utils/logger";
+import walletExistsSql from "../../helpers/walletExistsSql";
 
 interface Request {
   searchParam?: string;
@@ -38,6 +39,9 @@ interface Request {
   bzEmpresa?: string[];
   isWhatsappValid?: boolean;
   whatsappIds?: number[];
+  // Filtro "Carteira (Responsáveis)": contatos na carteira desses usuários
+  // (tag pessoal # vinculada ao contato — mesmo critério do /wallets)
+  walletIds?: number[];
 }
 
 interface Response {
@@ -74,7 +78,8 @@ const ListContactsService = async ({
   florder,
   bzEmpresa,
   isWhatsappValid,
-  whatsappIds
+  whatsappIds,
+  walletIds
 }: Request): Promise<Response> => {
   let whereCondition: Filterable["where"] = {};
   const additionalWhere: any[] = [];
@@ -485,6 +490,14 @@ const ListContactsService = async ({
         )
       }
     });
+  }
+
+  // Filtro por carteira: contato precisa ter a tag pessoal (#) de algum dos
+  // usuários selecionados — substitui a tela /wallets removida
+  if (Array.isArray(walletIds) && walletIds.length > 0) {
+    additionalWhere.push(
+      literal(walletExistsSql('"Contact"."id"', Number(companyId), walletIds))
+    );
   }
 
   // Filtro por conexões WhatsApp
