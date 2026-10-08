@@ -158,7 +158,9 @@ for (const item of $input.all()) {
   // Rep: só dígitos, PRESERVANDO zeros à esquerda ('0001' continua '0001') —
   // remover padding gerava '1' e divergia do código gravado no ERP.
   // Tudo-zero ('0000') é tratado como vazio.
-  const repDigits = esc(c.representativeCode).replace(/\\D/g, '');
+  // Extrai só os dígitos iniciais: "1012 - (B1)LEO" → '1012'
+  // (replace(/D/g) pegaria também o '1' de 'B1', virando '10121' e truncando no ERP)
+  const repDigits = (esc(c.representativeCode).match(/^\\d+/) || [''])[0];
   const rep = /^0+$/.test(repDigits) ? '' : repDigits;
   const segmentoCod = (esc(c.segment).match(/^\\d+/) || [''])[0];
   const empresa = esc(c.bzEmpresa).replace(/\\D/g, '') || '97';
