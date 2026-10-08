@@ -223,6 +223,18 @@ class Ticket extends Model<Ticket> {
 
   @Column(DataType.TEXT)
   closingSummary: string;
+
+  // Atribuição de anúncio Click-to-WhatsApp (CTWA): gravados quando a
+  // mensagem que origina o ticket traz referral.source_type="ad" da Meta.
+  // Alimentam o Relatório de Anúncios (/ads-report).
+  @Column
+  ctwaClid: string;
+
+  @Column
+  adId: string;
+
+  @Column
+  adHeadline: string;
 }
 
 export default Ticket;

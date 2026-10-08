@@ -540,6 +540,15 @@ class Contact extends Model<Contact> {
       return;
     }
 
+    // Identificadores sintéticos de canais não-telefônicos contêm letras
+    // (webchat_<wappId>_<visitorId>, tg_<wappId>_<chatId>, JIDs com @lid).
+    // safeNormalizePhoneNumber ignora não-dígitos e aceitaria 10-13 dígitos
+    // "de sorte" — corrompendo o number. Letras = nunca é telefone: pular.
+    if (/[a-zA-Z]/.test(contact.number || "")) {
+      contact.canonicalNumber = null;
+      return;
+    }
+
     const shouldNormalize = contact.changed("number") || !contact.canonicalNumber;
 
     if (!shouldNormalize) {

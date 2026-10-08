@@ -87,6 +87,7 @@ import WabaPricingRate from "../models/WabaPricingRate";
 import AISandboxSession from "../models/AISandboxSession";
 import MetaAutomationRule from "../models/MetaAutomationRule";
 import EmailVerificationCode from "../models/EmailVerificationCode";
+import CallLog from "../models/CallLog";
 
 // eslint-disable-next-line
 const dbConfig = require("../config/database");
@@ -253,7 +254,8 @@ const models = [
   WabaPricingRate,
   AISandboxSession,
   MetaAutomationRule,
-  EmailVerificationCode
+  EmailVerificationCode,
+  CallLog
 ];
 
 sequelize.addModels(models);

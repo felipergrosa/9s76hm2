@@ -2,6 +2,11 @@ const messages = {
   es: {
     translations: {
 
+      accountSwitch: {
+        title: "Cambiar de cuenta",
+        switching: "Cambiando...",
+        error: "No se pudo cambiar de cuenta.",
+      },
       signup: {
         title: "Registrarse",
         toasts: {
@@ -536,6 +541,30 @@ const messages = {
       },
       flowbuilderModal: {
         flowNotIdPhrase: "Flujo predeterminado"
+      },
+      flowbuilderNodes: {
+        asaasCharge: {
+          name: "2ª vía Asaas",
+          docFromContact: "CPF/CNPJ del contacto",
+          modalAdd: "Agregar 2ª vía Asaas al flujo",
+          modalEdit: "Editar 2ª vía Asaas",
+          btnAdd: "Agregar",
+          btnEdit: "Guardar",
+          campoDocumento: "Variable con CPF/CNPJ (opcional)",
+          campoDocumentoHint:
+            "Nombre de la variable capturada por un bloque Pregunta/Esperar respuesta (ej.: cpf). Vacío usa el CPF/CNPJ del contacto.",
+          mensagem: "Mensaje de introducción (opcional)",
+          mensagemHint: "Enviado antes de las facturas. Acepta {{variables}} del flujo.",
+          mensagemNaoEncontrado: "Mensaje cuando no se encuentran cobros (opcional)",
+          mensagemNaoEncontradoHint:
+            "También se usa para CPF/CNPJ inválido o error de consulta — luego el flujo sigue por la salida de fallo.",
+          sectionEnvio: "Qué enviar por factura",
+          incluirBoletoUrl: "Enlace del boleto/factura",
+          incluirBoletoPdf: "PDF del boleto",
+          incluirLinhaDigitavel: "Línea digitale",
+          incluirPix: "PIX copia y pega",
+          incluirPixQr: "Código QR PIX (imagen)",
+        },
       },
       queueModal: {
         title: {
@@ -1430,6 +1459,80 @@ const messages = {
           exportCsv: "Exportar CSV",
         },
       },
+      adsReport: {
+        title: "Informe de Anuncios",
+        subtitle: "Embudo de leads de anuncios Click-to-WhatsApp en el período",
+        foundSuffix: "anuncios con leads en el período",
+        empty: "Ningún lead de anuncio en el período",
+        filters: {
+          startDate: "Fecha Inicial",
+          endDate: "Fecha Final",
+        },
+        cards: {
+          leads: "Leads de anuncio",
+          converted: "Convertidos",
+          conversionRate: "Tasa de conversión",
+          ads: "Anuncios",
+        },
+        table: {
+          ad: "Anuncio",
+          adId: "ID del Anuncio",
+          leads: "Leads",
+          converted: "Convertidos",
+          conversionRate: "Conversión",
+          firstContact: "Primer Contacto",
+          noAdId: "Sin ID",
+        },
+        buttons: {
+          filter: "Aplicar Filtro",
+        },
+      },
+      callReport: {
+        title: "Informe de Llamadas",
+        subtitle: "Seleccione los filtros y genere el informe de llamadas",
+        foundSuffix: "llamadas encontradas",
+        empty: "Ninguna llamada en el período",
+        filters: {
+          startDate: "Fecha Inicial",
+          endDate: "Fecha Final",
+          user: "Agente",
+          direction: "Dirección",
+          status: "Estado",
+          all: "Todos",
+        },
+        directionLabels: {
+          in: "Recibida",
+          out: "Realizada",
+        },
+        statusLabels: {
+          answered: "Atendida",
+          missed: "Perdida",
+          rejected: "Rechazada",
+          failed: "Fallida",
+        },
+        cards: {
+          total: "Total en el período",
+          answered: "Atendidas",
+          missed: "Perdidas",
+          avgTime: "Duración promedio",
+        },
+        table: {
+          number: "Número",
+          contact: "Contacto",
+          direction: "Dirección",
+          status: "Estado",
+          user: "Agente",
+          whatsapp: "Conexión",
+          start: "Inicio",
+          end: "Fin",
+          duration: "Duración",
+          provider: "Proveedor",
+        },
+        buttons: {
+          filter: "Aplicar Filtro",
+          exportCsv: "Exportar CSV",
+        },
+      },
       metaWebhook: {
         title: "Webhook Unificado Meta",
         subtitle:
@@ -1846,6 +1949,22 @@ const messages = {
             preview: "Vista previa",
             previewEmpty: "Configure el mensaje para ver el ejemplo aquí"
           },
+          sip: {
+            sectionTitle: "Troncal SIP",
+            enabled: "Habilitar troncal SIP (softphone)",
+            host: "Host SIP",
+            port: "Puerto WebSocket",
+            domain: "Dominio (realm)",
+            user: "Usuario SIP",
+            password: "Contraseña SIP",
+            passwordKeep: "Contraseña ya registrada — deje en blanco para mantener",
+            transport: "Transporte",
+            transportHint: "El navegador usa WebSocket: WSS recomendado (udp/tcp resuelven a ws://)",
+            callerId: "Caller ID",
+            statusDisconnected: "SIP desconectado",
+            statusIncomplete: "Configuración SIP incompleta",
+            wsPortHint: "Puerto WebSocket del servidor SIP (ej.: 8089 en Asterisk)"
+          },
           LGPD: {
             title: "LGPD",
             welcome: "Mensaje de bienvenida(LGPD)",
@@ -2142,6 +2261,125 @@ const messages = {
         },
         empty: "No se encontraron plantillas."
       },
+      metaAutomations: {
+        title: "Automatizaciones Meta",
+        subtitle:
+          "Reglas automáticas para comentarios, menciones y DMs de Facebook/Instagram",
+        newRule: "Nueva regla",
+        searchPlaceholder: "Buscar regla...",
+        stats: {
+          rules: "Reglas",
+          active: "Activas",
+          inactive: "Inactivas",
+          dispatches: "Disparos",
+        },
+        filters: {
+          status: "Estado",
+          channel: "Canal",
+          all: "Todos",
+          active: "Activas",
+          inactive: "Inactivas",
+        },
+        channels: {
+          facebook: "Facebook",
+          instagram: "Instagram",
+          both: "Facebook + Instagram",
+        },
+        triggers: {
+          comment_keyword: "Comentario con palabra clave",
+          comment_any: "Cualquier comentario",
+          story_mention: "Mención en story",
+          referral_ref: "Enlace m.me con ref",
+          dm_keyword: "DM con palabra clave",
+        },
+        table: {
+          name: "Nombre",
+          channel: "Canal",
+          trigger: "Disparador",
+          target: "Objetivo",
+          action: "Acción",
+          dispatches: "Disparos",
+          active: "Activa",
+          actions: "Acciones",
+        },
+        actionParts: {
+          publicReply: "Respuesta pública",
+          autoLike: "Me gusta al comentario",
+          followerCheck: "Solo seguidores",
+          reward: "Recompensa",
+          flow: "Flujo",
+          flowNamed: "Flujo: {{name}}",
+        },
+        empty: {
+          filtered: "No se encontraron reglas con estos filtros",
+          none: "Aún no se creó ninguna regla de automatización",
+          hint: "Crea una regla para responder comentarios y menciones automáticamente.",
+        },
+        toasts: {
+          created: "Regla de automatización creada",
+          updated: "Regla de automatización actualizada",
+          deleted: "Regla de automatización eliminada",
+          activated: "Regla activada",
+          deactivated: "Regla desactivada",
+        },
+        confirm: {
+          deleteTitle: '¿Eliminar la regla "{{name}}"?',
+          deleteMessage: "Esta acción no se puede deshacer.",
+        },
+        actions: {
+          edit: "Editar",
+          delete: "Eliminar",
+        },
+        modal: {
+          createTitle: "Nueva regla de automatización",
+          editTitle: "Editar regla de automatización",
+          name: "Nombre de la regla",
+          connection: "Conexión",
+          connectionEmpty: "No se encontró ninguna conexión de Facebook/Instagram.",
+          selectConnection: "Selecciona una conexión",
+          channel: "Canal",
+          trigger: "Disparador",
+          required: "Obligatorio",
+          matchValueLabels: {
+            comment_keyword: "Palabra clave",
+            dm_keyword: "Palabra clave",
+            referral_ref: "Ref del enlace",
+            story_mention: "ID del post/media (opcional)",
+          },
+          actionsSection: "Acciones",
+          dmMessage: "Mensaje de DM",
+          dmHint: "Variables disponibles: {{contact.name}} — opcional si hay un flujo seleccionado.",
+          rewardUrl: "URL del medio de recompensa",
+          rewardType: "Tipo de medio",
+          rewardTypes: {
+            image: "Imagen",
+            video: "Video",
+            audio: "Audio",
+            file: "Archivo",
+          },
+          rewardHint:
+            "Recompensa enviada por DM (imagen/video/archivo). En respuestas a comentarios, Meta solo permite un mensaje de texto — el medio se envía como enlace.",
+          publicReply: "Respuesta pública al comentario",
+          flow: "Flujo (FlowBuilder)",
+          flowNone: "Ninguno",
+          autoLike: "Dar me gusta al comentario automáticamente",
+          autoLikeHint:
+            "El me gusta requiere el permiso instagram_manage_engagement (IG) o pages_manage_engagement (FB).",
+          requireFollower: "Exigir que el remitente siga la cuenta",
+          requireFollowerHint:
+            "La verificación de seguidor solo existe en Instagram. En Facebook no es posible verificar y la regla continúa normalmente.",
+          nonFollowerAction: "Si no es seguidor",
+          nonFollowerSkip: "No enviar nada",
+          nonFollowerAsk: "Pedir que siga la cuenta",
+          nonFollowerText: "Mensaje pidiendo el follow",
+          active: "Regla activa",
+          cancel: "Cancelar",
+          save: "Guardar",
+          create: "Crear regla",
+          validationAction:
+            "Define al menos una acción: mensaje de DM, medio, respuesta pública o flujo.",
+        },
+      },
       apiDocs: {
         title: "API Externa",
         subtitle:
@@ -2275,8 +2513,36 @@ const messages = {
           "No es posible disparar un flujo en grupos.",
         ERR_FLOW_CHANNEL_NOT_SUPPORTED:
           "El canal de este ticket no admite disparo de flujo.",
-        ERR_FLOW_TRIGGER_FAILED: "Error al ejecutar el flujo en este ticket."
+        ERR_FLOW_TRIGGER_FAILED: "Error al ejecutar el flujo en este ticket.",
+        ERR_TELEGRAM_INVALID_TOKEN:
+          "Token de bot de Telegram inválido. Verifique el token generado por @BotFather.",
+        ERR_TELEGRAM_SETUP_FAILED:
+          "No se pudo registrar el webhook en Telegram. Inténtelo de nuevo.",
+        ERR_TELEGRAM_SEND_FAILED:
+          "Error al enviar el mensaje por Telegram.",
+        ERR_TELEGRAM_NOT_CONFIGURED:
+          "Esta conexión de Telegram no tiene token de bot configurado.",
+        ERR_TELEGRAM_INVALID_CONTACT:
+          "Contacto del ticket sin chat_id de Telegram válido.",
+        ERR_TELEGRAM_NO_BACKEND_URL:
+          "BACKEND_URL no configurado en el servidor — necesario para el webhook.",
+        ERR_WAPP_NOT_TELEGRAM: "Esta conexión no es del canal Telegram."
       }
+    },
+    // WhatsApp Embedded Signup — alta del número oficial vía popup de Meta
+    embeddedSignup: {
+      button: "Registrar número (Meta)",
+      hint: "Registro oficial guiado por Meta — el número queda listo sin salir del CRM.",
+      loading: "Conectando con Meta…",
+      success: "¡Número registrado con éxito!",
+      configMissing:
+        "Registro vía Meta no disponible: configure REACT_APP_META_EMBEDDED_SIGNUP_CONFIG_ID en el frontend.",
+      appIdMissing:
+        "Registro vía Meta no disponible: configure REACT_APP_FACEBOOK_APP_ID en el frontend.",
+      sdkError: "No se pudo cargar el SDK de Facebook. Verifique su conexión.",
+      cancelled: "Registro cancelado o no completado en Meta.",
+      noSessionInfo:
+        "Meta no devolvió los datos del número (waba_id/phone_number_id). Intente de nuevo.",
     },
     // Webchat público (/webchat/:token) — página sin login para visitantes
     publicWebchat: {
@@ -2289,7 +2555,44 @@ const messages = {
       invalidLink: "Enlace de atención inválido o expirado.",
       copyLink: "Copiar enlace del WebChat",
       linkCopied: "¡Enlace del WebChat copiado!",
-    }
+    },
+    // Canal Telegram Bot — conexión vía webhook registrado en la Bot API
+    telegram: {
+      title: "Bot de Telegram",
+      botTokenLabel: "Token del bot",
+      botTokenHelper:
+        "Pegue el token generado por @BotFather. Al guardar, el webhook se registra automáticamente en Telegram.",
+      botTokenHelperEdit:
+        "Déjelo en blanco para mantener el token actual. Para cambiar de bot, pegue el nuevo token — el webhook se registrará de nuevo.",
+      botTokenRequired:
+        "Ingrese el token del bot de Telegram (generado por @BotFather).",
+      setupSuccess: "¡Bot de Telegram conectado con éxito!",
+    },
+    // Nodo "Google Agenda" del FlowBuilder — crea evento en Google Calendar
+    googleCalendarModal: {
+      titleAdd: "Agregar evento de Google Calendar al flujo",
+      titleEdit: "Editar evento de Google Calendar",
+      add: "Agregar",
+      save: "Guardar",
+      fields: {
+        summary: "Título del evento",
+        startAt: "Fecha/hora de inicio (opcional)",
+        startOffsetMinutes: "Anticipación en minutos",
+        durationMinutes: "Duración (minutos)",
+        description: "Descripción",
+        location: "Ubicación (opcional)",
+        attendees: "Participantes (e-mails, opcional)",
+      },
+      helpers: {
+        variables: "Use {{variables}} para interpolar datos del contacto (ej.: {{name}})",
+        startAt: "Formatos aceptados: ISO (2025-01-30T14:00) o DD/MM/AAAA HH:mm. Vacío usa la anticipación de abajo",
+        startOffset: "Se usa cuando la fecha/hora de inicio está vacía — minutos a partir de ahora",
+        attendees: "Separe por comas. Vacío usa el e-mail del contacto",
+      },
+      errors: {
+        summaryRequired: "Ingrese el título del evento",
+      },
+    },
   }
 };
 

@@ -57,6 +57,8 @@ import {
   Zap as MetaAutomationsIcon,
   Wallet as WalletIcon,
   HeartPulse as HealthIcon,
+  Target as TargetIcon,
+  PhoneCall as PhoneCallIcon,
 } from "lucide-react";
 
 import { WhatsAppsContext } from "../context/WhatsApp/WhatsAppsContext";
@@ -544,6 +546,28 @@ const MainListItems = ({ collapsed, drawerClose }) => {
           to="/closing-report"
           primary={i18n.t("closingReport.title")}
           icon={<Description />}
+          viewMode={viewMode}
+          tooltip={collapsed}
+        />
+      )}
+
+      {/* 6c. RELATÓRIO DE ANÚNCIOS (CTWA) */}
+      {hasPermission("reports.view") && (
+        <ListItemLink
+          to="/ads-report"
+          primary={i18n.t("adsReport.title")}
+          icon={<TargetIcon />}
+          viewMode={viewMode}
+          tooltip={collapsed}
+        />
+      )}
+
+      {/* 6d. RELATÓRIO DE CHAMADAS */}
+      {hasPermission("reports.view") && (
+        <ListItemLink
+          to="/call-report"
+          primary={i18n.t("callReport.title")}
+          icon={<PhoneCallIcon />}
           viewMode={viewMode}
           tooltip={collapsed}
         />

@@ -18,7 +18,11 @@ const SECRET_FIELDS = [
   "proxyUrl",
   // Token do webchat público: bearer credential da URL /webchat/:token.
   // Só é entregue via POST /whatsapp/:id/webchat-token (connections.edit).
-  "webchatToken"
+  "webchatToken",
+  // Credenciais do canal Telegram: botToken é segredo do BotFather;
+  // webhookToken é bearer credential da URL /public/telegram/:token.
+  "telegramBotToken",
+  "telegramWebhookToken"
 ] as const;
 
 /**

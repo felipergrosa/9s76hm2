@@ -63,6 +63,8 @@ const Annoucements = lazy(() => import("../pages/Annoucements"));
 const Admin = lazy(() => import("../pages/Admin"));
 const Reports = lazy(() => import("../pages/Reports"));
 const ClosingReport = lazy(() => import("../pages/ClosingReport"));
+const AdsReport = lazy(() => import("../pages/AdsReport"));
+const CallReport = lazy(() => import("../pages/CallReport"));
 const Wallets = lazy(() => import("../pages/Wallets"));
 const MetaWebhook = lazy(() => import("../pages/MetaWebhook"));
 const WhatsappHealth = lazy(() => import("../pages/WhatsappHealth"));
@@ -215,6 +217,8 @@ const Routes = () => {
                 <PrivateRoute exact path="/queues" component={Queues} permission="queues.view" />
                 <PrivateRoute exact path="/reports" component={Reports} permission="reports.view" />
                 <PrivateRoute exact path="/closing-report" component={ClosingReport} permission="reports.view" />
+                <PrivateRoute exact path="/ads-report" component={AdsReport} permission="reports.view" />
+                <PrivateRoute exact path="/call-report" component={CallReport} permission="reports.view" />
                 <PrivateRoute exact path="/wallets" component={Wallets} permission="contacts.view" />
                 <PrivateRoute exact path="/meta-unified-webhook" component={MetaWebhook} permission="settings.view" />
                 <PrivateRoute exact path="/whatsapp-health" component={WhatsappHealth} permission="connections.view" />

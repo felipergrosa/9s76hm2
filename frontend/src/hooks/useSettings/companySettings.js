@@ -106,10 +106,27 @@ const useCompanySettings = () => {
 		}
 	};
 
+	// Config do troncal SIP para o softphone (GET /companySipTrunk).
+	// Sem checkPermission: o endpoint exige apenas isAuth — agentes sem
+	// settings.view também precisam registrar o ramal no softphone.
+	const getSipTrunk = async () => {
+		try {
+			const { data } = await api.request({
+				url: "/companySipTrunk",
+				method: "GET",
+			});
+			return data;
+		} catch (err) {
+			// Falha silenciosa: o softphone simplesmente não é exibido
+			return null;
+		}
+	};
+
 	return {
 		getAll,
 		get,
 		update,
+		getSipTrunk,
 		checkPermission, // Exporta para componentes que precisam verificar
 	};
 };

@@ -39,7 +39,7 @@ import { i18n } from "../../translate/i18n";
 import toastError from "../../errors/toastError";
 import QueueSelect from "../QueueSelect";
 import TabPanel from "../TabPanel";
-import { Autorenew, FileCopy, WhatsApp, CheckCircle, Facebook, Instagram, Chat as WebChatIcon } from "@material-ui/icons";
+import { Autorenew, FileCopy, WhatsApp, CheckCircle, Facebook, Instagram, Chat as WebChatIcon, Telegram as TelegramIcon } from "@material-ui/icons";
 import useCompanySettings from "../../hooks/useSettings/companySettings";
 import SchedulesForm from "../SchedulesForm";
 import usePlans from "../../hooks/usePlans";
@@ -48,6 +48,7 @@ import useTags from "../../hooks/useTags";
 import usePermissions from "../../hooks/usePermissions";
 import OfficialAPIFields from "./OfficialAPIFields";
 import OfficialAPIGuide from "./OfficialAPIGuide";
+import EmbeddedSignupButton from "./EmbeddedSignupButton";
 import MetaAPIFields from "./MetaAPIFields";
 
 const useStyles = makeStyles((theme) => ({
@@ -109,7 +110,7 @@ const SessionSchema = Yup.object().shape({
     .max(50, "Parâmetros acima do esperado!")
     .required("Required"),
   channelType: Yup.string()
-    .oneOf(["baileys", "official", "facebook", "instagram", "webchat"], "Tipo de canal inválido")
+    .oneOf(["baileys", "official", "facebook", "instagram", "webchat", "telegram"], "Tipo de canal inválido")
     .required("Selecione o tipo de canal"),
   // Validações condicionais para API Oficial
   wabaPhoneNumberId: Yup.string().when("channelType", {
@@ -197,7 +198,10 @@ const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
     // Plataforma do dispositivo (android/ios/web)
     devicePlatform: "android",
     // Proxy dedicado da conexão (opcional)
-    proxyUrl: ""
+    proxyUrl: "",
+    // Token do bot Telegram (write-only: sanitizado no GET, enviado só ao
+    // endpoint /telegram-setup ao salvar — nunca vai no payload comum)
+    telegramBotToken: ""
   };
   const [whatsApp, setWhatsApp] = useState(initialState);
   const [selectedQueueIds, setSelectedQueueIds] = useState([]);
@@ -446,9 +450,17 @@ const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
         case "facebook": return "facebook";
         case "instagram": return "instagram";
         case "webchat": return "webchat";
+        case "telegram": return "telegram";
         default: return "whatsapp"; // baileys e official são whatsapp
       }
     };
+
+    // Canal Telegram exige botToken na criação (edição pode deixar em branco
+    // para manter o token atual — ele nunca é devolvido pelo GET).
+    if (values.channelType === "telegram" && !whatsAppId && !(values.telegramBotToken || "").trim()) {
+      toastError(i18n.t("telegram.botTokenRequired"));
+      return;
+    }
 
     const whatsappData = {
       ...values,
@@ -477,7 +489,13 @@ const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
       delete whatsappData["proxyUrl"];
     }
 
+    // telegramBotToken é write-only e só viaja pelo endpoint dedicado
+    // /telegram-setup (valida no getMe e registra o webhook no Telegram).
+    const telegramBotToken = (values.telegramBotToken || "").trim();
+    delete whatsappData["telegramBotToken"];
+
     try {
+      let savedWhatsAppId = whatsAppId;
       if (whatsAppId) {
         if (whatsAppId && enableImportMessage && whatsApp?.status === "CONNECTED") {
           try {
@@ -499,12 +517,29 @@ const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
         }
       } else {
         const { data } = await api.post("/whatsapp", whatsappData);
+        savedWhatsAppId = data.id;
         if (attachment != null) {
           const formData = new FormData();
           formData.append("file", attachment);
           await api.post(`/whatsapp/${data.id}/media-upload`, formData);
         }
       }
+
+      // Canal Telegram: registra o webhook no Telegram via endpoint dedicado
+      // (valida botToken no getMe + setWebhook). Só roda quando um novo token
+      // foi informado — na criação é obrigatório, na edição em branco mantém
+      // o token atual sem tocar no webhook. Falha aqui não desfaz a conexão.
+      if (values.channelType === "telegram" && telegramBotToken && savedWhatsAppId) {
+        try {
+          await api.post(`/whatsapp/${savedWhatsAppId}/telegram-setup`, {
+            botToken: telegramBotToken
+          });
+          toast.success(i18n.t("telegram.setupSuccess"));
+        } catch (err) {
+          toastError(err);
+        }
+      }
+
       toast.success(i18n.t("whatsappModal.success"));
 
       handleClose();
@@ -710,6 +745,12 @@ const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
                                 <span>WebChat</span>
                               </Box>
                             </MenuItem>
+                            <MenuItem value="telegram">
+                              <Box display="flex" alignItems="center" gap={1}>
+                                <TelegramIcon style={{ color: "#0088cc" }} />
+                                <span>Telegram</span>
+                              </Box>
+                            </MenuItem>
                           </Field>
                         </FormControl>
                       </Grid>
@@ -886,6 +927,11 @@ const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
                     {values.channelType === "official" && (
                       <>
                         <Divider style={{ margin: "20px 0" }} />
+                        {/* Embedded Signup: cadastra o número via popup da Meta
+                            e já cria a conexão — ao concluir, fecha o modal */}
+                        <EmbeddedSignupButton
+                          onConnected={() => handleClose()}
+                        />
                         <OfficialAPIFields
                           values={values}
                           errors={errors}
@@ -907,6 +953,40 @@ const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
                           channelType={values.channelType}
                           whatsAppId={whatsAppId}
                         />
+                      </>
+                    )}
+
+                    {/* CAMPOS DO TELEGRAM - Mostrar apenas para Telegram */}
+                    {values.channelType === "telegram" && (
+                      <>
+                        <Divider style={{ margin: "20px 0" }} />
+                        <Grid container spacing={1}>
+                          <Grid item xs={12} md={6}>
+                            <Field
+                              as={TextField}
+                              label={i18n.t("telegram.botTokenLabel")}
+                              name="telegramBotToken"
+                              type="password"
+                              autoComplete="new-password"
+                              placeholder="123456789:AAE..."
+                              variant="outlined"
+                              margin="dense"
+                              size="small"
+                              fullWidth
+                            />
+                            <Typography
+                              variant="caption"
+                              color="textSecondary"
+                              style={{ marginTop: 4, display: "block" }}
+                            >
+                              {i18n.t(
+                                whatsAppId
+                                  ? "telegram.botTokenHelperEdit"
+                                  : "telegram.botTokenHelper"
+                              )}
+                            </Typography>
+                          </Grid>
+                        </Grid>
                       </>
                     )}
 

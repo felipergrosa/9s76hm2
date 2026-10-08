@@ -33,6 +33,13 @@ export const StartWhatsAppSessionUnified = async (
 
   logger.info(`[StartSession] Iniciando ${channelType} para whatsappId=${whatsapp.id}`);
 
+  // Canais inbound-only via HTTP/webhook (webchat, telegram): não há sessão
+  // Baileys/Official para iniciar. Early return evita o throw "não suportado"
+  // e a consequente marcação DISCONNECTED de conexões sadias.
+  if (channelType === "webchat" || channelType === "telegram") {
+    logger.info(`[StartSession] Canal ${channelType} não usa sessão — nada a iniciar para whatsappId=${whatsapp.id}`);
+    return;
+  }
 
   const io = getIO();
   io.of(`/workspace-${companyId}`)

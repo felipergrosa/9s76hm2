@@ -24,6 +24,7 @@ import Typography from "@material-ui/core/Typography";
 
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
+import { i18n } from "../../translate/i18n";
 
 const useStyles = makeStyles(theme => ({
 	root: {
@@ -57,36 +58,38 @@ const useStyles = makeStyles(theme => ({
 	},
 }));
 
-// Rótulos amigáveis dos gatilhos — mesmos valores usados pelo matcher do webhook
+// Valores dos gatilhos — mesmos usados pelo matcher do webhook no backend
 export const TRIGGER_OPTIONS = [
-	{ value: "comment_keyword", label: "Comentário com palavra-chave" },
-	{ value: "comment_any", label: "Qualquer comentário" },
-	{ value: "story_mention", label: "Menção em story" },
-	{ value: "referral_ref", label: "Link m.me com ref" },
-	{ value: "dm_keyword", label: "DM com palavra-chave" },
+	"comment_keyword",
+	"comment_any",
+	"story_mention",
+	"referral_ref",
+	"dm_keyword",
 ];
 
-// Label do campo "alvo" (matchValue) varia conforme o gatilho;
-// gatilhos ausentes do mapa não exibem o campo
-const MATCH_VALUE_LABELS = {
-	comment_keyword: "Palavra-chave",
-	dm_keyword: "Palavra-chave",
-	referral_ref: "Ref do link",
-	story_mention: "ID do post/media (opcional)",
-};
+// Gatilhos que exibem o campo "alvo" (matchValue) — label vem do i18n
+const TRIGGERS_WITH_MATCH_VALUE = [
+	"comment_keyword",
+	"dm_keyword",
+	"referral_ref",
+	"story_mention",
+];
 
-// Resposta pública só existe para gatilhos de comentário
+// Comportamentos que só existem para gatilhos de comentário
 const COMMENT_TRIGGERS = ["comment_keyword", "comment_any"];
 
+// Tipos de attachment aceitos pelo Send API da Meta (mídia de recompensa)
+const REWARD_MEDIA_TYPES = ["image", "video", "audio", "file"];
+
 const MetaAutomationSchema = Yup.object().shape({
-	name: Yup.string().required("Obrigatório"),
+	name: Yup.string().required(i18n.t("metaAutomations.modal.required")),
 	whatsappId: Yup.number()
-		.typeError("Selecione uma conexão")
-		.required("Obrigatório"),
+		.typeError(i18n.t("metaAutomations.modal.selectConnection"))
+		.required(i18n.t("metaAutomations.modal.required")),
 	channel: Yup.string()
 		.oneOf(["facebook", "instagram", "both"])
-		.required("Obrigatório"),
-	trigger: Yup.string().required("Obrigatório"),
+		.required(i18n.t("metaAutomations.modal.required")),
+	trigger: Yup.string().required(i18n.t("metaAutomations.modal.required")),
 });
 
 const initialState = {
@@ -98,6 +101,12 @@ const initialState = {
 	dmText: "",
 	publicReplyText: "",
 	flowId: "",
+	autoLikeComment: false,
+	requireFollower: false,
+	nonFollowerAction: "skip",
+	nonFollowerText: "",
+	rewardMediaUrl: "",
+	rewardMediaType: "image",
 	active: true,
 };
 
@@ -159,6 +168,8 @@ const MetaAutomationModal = ({ open, onClose, ruleId, onSaved }) => {
 					...initialState,
 					...data,
 					flowId: data.flowId || "",
+					nonFollowerAction: data.nonFollowerAction || "skip",
+					rewardMediaType: data.rewardMediaType || "image",
 				});
 			} catch (err) {
 				toastError(err);
@@ -177,32 +188,37 @@ const MetaAutomationModal = ({ open, onClose, ruleId, onSaved }) => {
 		const hasAction =
 			!!(values.dmText && values.dmText.trim()) ||
 			!!(values.publicReplyText && values.publicReplyText.trim()) ||
+			!!(values.rewardMediaUrl && values.rewardMediaUrl.trim()) ||
 			!!values.flowId;
 		if (!hasAction) {
-			toast.error(
-				"Defina ao menos uma ação: mensagem de DM, resposta pública ou fluxo."
-			);
+			toast.error(i18n.t("metaAutomations.modal.validationAction"));
 			return;
 		}
 
+		const isCommentTrigger = COMMENT_TRIGGERS.includes(values.trigger);
+		const rewardUrl = (values.rewardMediaUrl || "").trim();
 		const payload = {
 			...values,
 			flowId: values.flowId || null,
-			matchValue: MATCH_VALUE_LABELS[values.trigger]
+			matchValue: TRIGGERS_WITH_MATCH_VALUE.includes(values.trigger)
 				? values.matchValue
 				: "",
-			publicReplyText: COMMENT_TRIGGERS.includes(values.trigger)
-				? values.publicReplyText
-				: "",
+			publicReplyText: isCommentTrigger ? values.publicReplyText : "",
+			// Auto-like só existe para comentários
+			autoLikeComment: isCommentTrigger ? values.autoLikeComment : false,
+			// Sem URL de recompensa, o tipo não faz sentido persistir
+			rewardMediaUrl: rewardUrl || "",
+			rewardMediaType: rewardUrl ? values.rewardMediaType : "",
+			nonFollowerText: values.requireFollower ? values.nonFollowerText : "",
 		};
 
 		try {
 			if (ruleId) {
 				await api.put(`/meta-automations/${ruleId}`, payload);
-				toast.success("Regra de automação atualizada");
+				toast.success(i18n.t("metaAutomations.toasts.updated"));
 			} else {
 				await api.post("/meta-automations", payload);
-				toast.success("Regra de automação criada");
+				toast.success(i18n.t("metaAutomations.toasts.created"));
 			}
 			if (onSaved) onSaved();
 			handleClose();
@@ -221,7 +237,9 @@ const MetaAutomationModal = ({ open, onClose, ruleId, onSaved }) => {
 				scroll="paper"
 			>
 				<DialogTitle id="meta-automation-dialog-title">
-					{ruleId ? "Editar regra de automação" : "Nova regra de automação"}
+					{ruleId
+						? i18n.t("metaAutomations.modal.editTitle")
+						: i18n.t("metaAutomations.modal.createTitle")}
 				</DialogTitle>
 				<Formik
 					initialValues={rule}
@@ -241,7 +259,7 @@ const MetaAutomationModal = ({ open, onClose, ruleId, onSaved }) => {
 									<Grid item xs={12}>
 										<Field
 											as={TextField}
-											label="Nome da regra"
+											label={i18n.t("metaAutomations.modal.name")}
 											name="name"
 											autoFocus
 											error={touched.name && Boolean(errors.name)}
@@ -259,11 +277,11 @@ const MetaAutomationModal = ({ open, onClose, ruleId, onSaved }) => {
 											fullWidth
 											error={touched.whatsappId && Boolean(errors.whatsappId)}
 										>
-											<InputLabel>Conexão</InputLabel>
+											<InputLabel>{i18n.t("metaAutomations.modal.connection")}</InputLabel>
 											<Select
 												value={values.whatsappId}
 												onChange={e => setFieldValue("whatsappId", e.target.value)}
-												label="Conexão"
+												label={i18n.t("metaAutomations.modal.connection")}
 											>
 												{whatsapps.map(w => (
 													<MenuItem key={w.id} value={w.id}>
@@ -278,7 +296,7 @@ const MetaAutomationModal = ({ open, onClose, ruleId, onSaved }) => {
 											)}
 											{whatsapps.length === 0 && (
 												<Typography className={classes.hint}>
-													Nenhuma conexão Facebook/Instagram encontrada.
+													{i18n.t("metaAutomations.modal.connectionEmpty")}
 												</Typography>
 											)}
 										</FormControl>
@@ -286,41 +304,43 @@ const MetaAutomationModal = ({ open, onClose, ruleId, onSaved }) => {
 
 									<Grid item xs={12} sm={6}>
 										<FormControl variant="outlined" margin="dense" fullWidth>
-											<InputLabel>Canal</InputLabel>
+											<InputLabel>{i18n.t("metaAutomations.modal.channel")}</InputLabel>
 											<Select
 												value={values.channel}
 												onChange={e => setFieldValue("channel", e.target.value)}
-												label="Canal"
+												label={i18n.t("metaAutomations.modal.channel")}
 											>
 												<MenuItem value="facebook">Facebook</MenuItem>
 												<MenuItem value="instagram">Instagram</MenuItem>
-												<MenuItem value="both">Ambos</MenuItem>
+												<MenuItem value="both">{i18n.t("metaAutomations.channels.both")}</MenuItem>
 											</Select>
 										</FormControl>
 									</Grid>
 
 									<Grid item xs={12} sm={6}>
 										<FormControl variant="outlined" margin="dense" fullWidth>
-											<InputLabel>Gatilho</InputLabel>
+											<InputLabel>{i18n.t("metaAutomations.modal.trigger")}</InputLabel>
 											<Select
 												value={values.trigger}
 												onChange={e => setFieldValue("trigger", e.target.value)}
-												label="Gatilho"
+												label={i18n.t("metaAutomations.modal.trigger")}
 											>
 												{TRIGGER_OPTIONS.map(t => (
-													<MenuItem key={t.value} value={t.value}>
-														{t.label}
+													<MenuItem key={t} value={t}>
+														{i18n.t(`metaAutomations.triggers.${t}`)}
 													</MenuItem>
 												))}
 											</Select>
 										</FormControl>
 									</Grid>
 
-									{MATCH_VALUE_LABELS[values.trigger] && (
+									{TRIGGERS_WITH_MATCH_VALUE.includes(values.trigger) && (
 										<Grid item xs={12} sm={6}>
 											<Field
 												as={TextField}
-												label={MATCH_VALUE_LABELS[values.trigger]}
+												label={i18n.t(
+													`metaAutomations.modal.matchValueLabels.${values.trigger}`
+												)}
 												name="matchValue"
 												variant="outlined"
 												margin="dense"
@@ -331,14 +351,14 @@ const MetaAutomationModal = ({ open, onClose, ruleId, onSaved }) => {
 
 									<Grid item xs={12}>
 										<Typography className={classes.sectionLabel}>
-											Ações
+											{i18n.t("metaAutomations.modal.actionsSection")}
 										</Typography>
 									</Grid>
 
 									<Grid item xs={12}>
 										<Field
 											as={TextField}
-											label="Mensagem de DM"
+											label={i18n.t("metaAutomations.modal.dmMessage")}
 											name="dmText"
 											multiline
 											rows={3}
@@ -347,8 +367,42 @@ const MetaAutomationModal = ({ open, onClose, ruleId, onSaved }) => {
 											fullWidth
 										/>
 										<Typography className={classes.hint}>
-											Variáveis disponíveis: {"{{contact.name}}"} — opcional se um
-											fluxo estiver selecionado.
+											{i18n.t("metaAutomations.modal.dmHint")}
+										</Typography>
+									</Grid>
+
+									<Grid item xs={12} sm={8}>
+										<Field
+											as={TextField}
+											label={i18n.t("metaAutomations.modal.rewardUrl")}
+											name="rewardMediaUrl"
+											variant="outlined"
+											margin="dense"
+											fullWidth
+											placeholder="https://..."
+										/>
+									</Grid>
+
+									<Grid item xs={12} sm={4}>
+										<FormControl variant="outlined" margin="dense" fullWidth>
+											<InputLabel>{i18n.t("metaAutomations.modal.rewardType")}</InputLabel>
+											<Select
+												value={values.rewardMediaType}
+												onChange={e => setFieldValue("rewardMediaType", e.target.value)}
+												label={i18n.t("metaAutomations.modal.rewardType")}
+											>
+												{REWARD_MEDIA_TYPES.map(t => (
+													<MenuItem key={t} value={t}>
+														{i18n.t(`metaAutomations.modal.rewardTypes.${t}`)}
+													</MenuItem>
+												))}
+											</Select>
+										</FormControl>
+									</Grid>
+
+									<Grid item xs={12}>
+										<Typography className={classes.hint}>
+											{i18n.t("metaAutomations.modal.rewardHint")}
 										</Typography>
 									</Grid>
 
@@ -356,7 +410,7 @@ const MetaAutomationModal = ({ open, onClose, ruleId, onSaved }) => {
 										<Grid item xs={12}>
 											<Field
 												as={TextField}
-												label="Resposta pública ao comentário"
+												label={i18n.t("metaAutomations.modal.publicReply")}
 												name="publicReplyText"
 												multiline
 												rows={2}
@@ -369,13 +423,13 @@ const MetaAutomationModal = ({ open, onClose, ruleId, onSaved }) => {
 
 									<Grid item xs={12}>
 										<FormControl variant="outlined" margin="dense" fullWidth>
-											<InputLabel>Fluxo (FlowBuilder)</InputLabel>
+											<InputLabel>{i18n.t("metaAutomations.modal.flow")}</InputLabel>
 											<Select
 												value={values.flowId}
 												onChange={e => setFieldValue("flowId", e.target.value)}
-												label="Fluxo (FlowBuilder)"
+												label={i18n.t("metaAutomations.modal.flow")}
 											>
-												<MenuItem value="">Nenhum</MenuItem>
+												<MenuItem value="">{i18n.t("metaAutomations.modal.flowNone")}</MenuItem>
 												{flows.map(f => (
 													<MenuItem key={f.id} value={f.id}>
 														{f.name}
@@ -384,6 +438,76 @@ const MetaAutomationModal = ({ open, onClose, ruleId, onSaved }) => {
 											</Select>
 										</FormControl>
 									</Grid>
+
+									{COMMENT_TRIGGERS.includes(values.trigger) && (
+										<Grid item xs={12} sm={6}>
+											<FormControlLabel
+												control={
+													<Switch
+														checked={Boolean(values.autoLikeComment)}
+														onChange={e => setFieldValue("autoLikeComment", e.target.checked)}
+														color="primary"
+													/>
+												}
+												label={i18n.t("metaAutomations.modal.autoLike")}
+											/>
+											<Typography className={classes.hint}>
+												{i18n.t("metaAutomations.modal.autoLikeHint")}
+											</Typography>
+										</Grid>
+									)}
+
+									<Grid item xs={12} sm={6}>
+										<FormControlLabel
+											control={
+												<Switch
+													checked={Boolean(values.requireFollower)}
+													onChange={e => setFieldValue("requireFollower", e.target.checked)}
+													color="primary"
+												/>
+											}
+											label={i18n.t("metaAutomations.modal.requireFollower")}
+										/>
+										<Typography className={classes.hint}>
+											{i18n.t("metaAutomations.modal.requireFollowerHint")}
+										</Typography>
+									</Grid>
+
+									{values.requireFollower && (
+										<>
+											<Grid item xs={12} sm={6}>
+												<FormControl variant="outlined" margin="dense" fullWidth>
+													<InputLabel>{i18n.t("metaAutomations.modal.nonFollowerAction")}</InputLabel>
+													<Select
+														value={values.nonFollowerAction}
+														onChange={e => setFieldValue("nonFollowerAction", e.target.value)}
+														label={i18n.t("metaAutomations.modal.nonFollowerAction")}
+													>
+														<MenuItem value="skip">
+															{i18n.t("metaAutomations.modal.nonFollowerSkip")}
+														</MenuItem>
+														<MenuItem value="ask_follow">
+															{i18n.t("metaAutomations.modal.nonFollowerAsk")}
+														</MenuItem>
+													</Select>
+												</FormControl>
+											</Grid>
+											{values.nonFollowerAction === "ask_follow" && (
+												<Grid item xs={12}>
+													<Field
+														as={TextField}
+														label={i18n.t("metaAutomations.modal.nonFollowerText")}
+														name="nonFollowerText"
+														multiline
+														rows={2}
+														variant="outlined"
+														margin="dense"
+														fullWidth
+													/>
+												</Grid>
+											)}
+										</>
+									)}
 
 									<Grid item xs={12}>
 										<FormControlLabel
@@ -394,7 +518,7 @@ const MetaAutomationModal = ({ open, onClose, ruleId, onSaved }) => {
 													color="primary"
 												/>
 											}
-											label="Regra ativa"
+											label={i18n.t("metaAutomations.modal.active")}
 										/>
 									</Grid>
 								</Grid>
@@ -406,7 +530,7 @@ const MetaAutomationModal = ({ open, onClose, ruleId, onSaved }) => {
 									disabled={isSubmitting}
 									variant="outlined"
 								>
-									Cancelar
+									{i18n.t("metaAutomations.modal.cancel")}
 								</Button>
 								<Button
 									type="submit"
@@ -415,7 +539,9 @@ const MetaAutomationModal = ({ open, onClose, ruleId, onSaved }) => {
 									variant="contained"
 									className={classes.btnWrapper}
 								>
-									{ruleId ? "Salvar" : "Criar regra"}
+									{ruleId
+										? i18n.t("metaAutomations.modal.save")
+										: i18n.t("metaAutomations.modal.create")}
 									{isSubmitting && (
 										<CircularProgress size={24} className={classes.buttonProgress} />
 									)}

@@ -162,6 +162,27 @@ export default function Options(props) {
   const [loadingBirthdayWhatsappId, setLoadingBirthdayWhatsappId] = useState(false);
   const { whatsApps } = useWhatsApps();
 
+  // ── Troncal SIP (referência Fluxoo) — credenciais para o softphone ──
+  const [sipEnabled, setSipEnabled] = useState("disabled");
+  const [loadingSipEnabled, setLoadingSipEnabled] = useState(false);
+  const [sipHost, setSipHost] = useState("");
+  const [loadingSipHost, setLoadingSipHost] = useState(false);
+  const [sipPort, setSipPort] = useState("");
+  const [loadingSipPort, setLoadingSipPort] = useState(false);
+  const [sipDomain, setSipDomain] = useState("");
+  const [loadingSipDomain, setLoadingSipDomain] = useState(false);
+  const [sipUser, setSipUser] = useState("");
+  const [loadingSipUser, setLoadingSipUser] = useState(false);
+  // Senha é write-only: o backend mascara o valor nos GETs (só retorna
+  // sipPasswordSet). Campo em branco = manter a senha atual.
+  const [sipPasswordInput, setSipPasswordInput] = useState("");
+  const [sipPasswordSet, setSipPasswordSet] = useState(false);
+  const [loadingSipPassword, setLoadingSipPassword] = useState(false);
+  const [sipTransport, setSipTransport] = useState("wss");
+  const [loadingSipTransport, setLoadingSipTransport] = useState(false);
+  const [sipCallerId, setSipCallerId] = useState("");
+  const [loadingSipCallerId, setLoadingSipCallerId] = useState(false);
+
 
   //MENSAGENS CUSTOMIZADAS
   const [transferMessage, setTransferMessage] = useState("Seu Atendimento foi Transferido para o setor ${queue.name},Aguarde atendimento por favor...");
@@ -236,6 +257,16 @@ export default function Options(props) {
       if (key === "birthdayMessageEnabled") setBirthdayMessageEnabled(value);
       if (key === "birthdayMessage") setBirthdayMessage(value);
       if (key === "birthdayWhatsappId") setBirthdayWhatsappId(value || "");
+      // Troncal SIP — sipPassword chega mascarada ("__set__") e não é
+      // carregada no campo; sipPasswordSet indica se já existe senha salva.
+      if (key === "sipEnabled") setSipEnabled(value);
+      if (key === "sipHost") setSipHost(value || "");
+      if (key === "sipPort") setSipPort(value || "");
+      if (key === "sipDomain") setSipDomain(value || "");
+      if (key === "sipUser") setSipUser(value || "");
+      if (key === "sipPasswordSet") setSipPasswordSet(Boolean(value));
+      if (key === "sipTransport") setSipTransport(value || "wss");
+      if (key === "sipCallerId") setSipCallerId(value || "");
 
     }
   }, [settings]);
@@ -544,6 +575,46 @@ export default function Options(props) {
       data: value === null || value === undefined ? "" : String(value),
     });
     setLoadingBirthdayWhatsappId(false);
+  }
+
+  // ── Troncal SIP ────────────────────────────────────────────────────
+  async function handleSipEnabled(value) {
+    setSipEnabled(value);
+    setLoadingSipEnabled(true);
+    await update({
+      column: "sipEnabled",
+      data: value,
+    });
+    setLoadingSipEnabled(false);
+  }
+
+  async function handleSipTransport(value) {
+    setSipTransport(value);
+    setLoadingSipTransport(true);
+    await update({
+      column: "sipTransport",
+      data: value,
+    });
+    setLoadingSipTransport(false);
+  }
+
+  // Campos de texto do troncal salvam no blur (não a cada tecla), evitando
+  // PUTs excessivos e a gravação de valores parciais (ex.: host pela metade).
+  async function saveSipTextColumn(column, value, setLoading) {
+    setLoading(true);
+    await update({ column, data: value });
+    setLoading(false);
+  }
+
+  // Senha: write-only. Em branco = mantém a senha atual; valor novo sobrescreve.
+  async function handleSipPasswordBlur() {
+    const value = sipPasswordInput.trim();
+    if (!value) return;
+    setLoadingSipPassword(true);
+    await update({ column: "sipPassword", data: value });
+    setSipPasswordSet(true);
+    setSipPasswordInput("");
+    setLoadingSipPassword(false);
   }
 
   return (
@@ -1078,6 +1149,36 @@ export default function Options(props) {
           </FormControl>
         </Grid>
 
+        {/* ── SEÇÃO: TRONCAL SIP (softphone — referência Fluxoo) ── */}
+        <Grid xs={12} item>
+          <div style={{ borderBottom: "2px solid var(--primaryColor, #065183)", paddingBottom: 6, marginTop: 12, marginBottom: 4 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "1.2px", textTransform: "uppercase", color: "var(--primaryColor, #065183)" }}>
+              {i18n.t("settings.settings.sip.sectionTitle")}
+            </span>
+          </div>
+        </Grid>
+
+        <Grid xs={12} sm={6} md={4} item>
+          <FormControl className={classes.selectContainer}>
+            <InputLabel id="sipEnabled-label">
+              {i18n.t("settings.settings.sip.enabled")}
+            </InputLabel>
+            <Select
+              labelId="sipEnabled-label"
+              value={sipEnabled}
+              onChange={async (e) => {
+                handleSipEnabled(e.target.value);
+              }}
+            >
+              <MenuItem value={"disabled"}>{i18n.t("settings.settings.options.disabled")}</MenuItem>
+              <MenuItem value={"enabled"}>{i18n.t("settings.settings.options.enabled")}</MenuItem>
+            </Select>
+            <FormHelperText>
+              {loadingSipEnabled && i18n.t("settings.settings.options.updating")}
+            </FormHelperText>
+          </FormControl>
+        </Grid>
+
         {/* CONSOLE LOGS PARA DEBUG EM PRODUÇÃO - Apenas Super Admin */}
         {isSuper() && (
           <Grid xs={12} sm={6} md={4} item>
@@ -1297,6 +1398,178 @@ export default function Options(props) {
                     ? renderBirthdayPreview(birthdayMessage)
                     : i18n.t("settings.settings.birthday.previewEmpty")}
                 </div>
+              </FormControl>
+            </Grid>
+          </Grid>
+        </>
+      )}
+      {/*-----------------TRONCAL SIP (campos do troncal)-----------------*/}
+      {sipEnabled === "enabled" && (
+        <>
+          <Grid spacing={3} container style={{ marginTop: 8, marginBottom: 4 }}>
+            <Grid xs={12} item>
+              <Tabs
+                value={0}
+                indicatorColor="primary"
+                textColor="primary"
+                scrollButtons="on"
+                variant="scrollable"
+                className={classes.tab}
+              >
+                <Tab label={i18n.t("settings.settings.sip.sectionTitle")} />
+              </Tabs>
+            </Grid>
+          </Grid>
+          <Grid spacing={1} container>
+            {/* HOST */}
+            <Grid xs={12} sm={6} md={4} item>
+              <FormControl className={classes.selectContainer}>
+                <TextField
+                  id="sipHost"
+                  name="sipHost"
+                  margin="dense"
+                  label={i18n.t("settings.settings.sip.host")}
+                  variant="outlined"
+                  value={sipHost}
+                  onChange={(e) => setSipHost(e.target.value)}
+                  onBlur={async () => {
+                    // Salva no blur — evita gravar valores parciais a cada tecla
+                    await saveSipTextColumn("sipHost", sipHost, setLoadingSipHost);
+                  }}
+                />
+                <FormHelperText>
+                  {loadingSipHost && i18n.t("settings.settings.options.updating")}
+                </FormHelperText>
+              </FormControl>
+            </Grid>
+            {/* PORTA (WebSocket) */}
+            <Grid xs={12} sm={6} md={4} item>
+              <FormControl className={classes.selectContainer}>
+                <TextField
+                  id="sipPort"
+                  name="sipPort"
+                  margin="dense"
+                  label={i18n.t("settings.settings.sip.port")}
+                  variant="outlined"
+                  value={sipPort}
+                  onChange={(e) => setSipPort(e.target.value)}
+                  onBlur={async () => {
+                    await saveSipTextColumn("sipPort", sipPort, setLoadingSipPort);
+                  }}
+                />
+                <FormHelperText>
+                  {loadingSipPort
+                    ? i18n.t("settings.settings.options.updating")
+                    : i18n.t("settings.settings.sip.wsPortHint")}
+                </FormHelperText>
+              </FormControl>
+            </Grid>
+            {/* DOMÍNIO (realm) */}
+            <Grid xs={12} sm={6} md={4} item>
+              <FormControl className={classes.selectContainer}>
+                <TextField
+                  id="sipDomain"
+                  name="sipDomain"
+                  margin="dense"
+                  label={i18n.t("settings.settings.sip.domain")}
+                  variant="outlined"
+                  value={sipDomain}
+                  onChange={(e) => setSipDomain(e.target.value)}
+                  onBlur={async () => {
+                    await saveSipTextColumn("sipDomain", sipDomain, setLoadingSipDomain);
+                  }}
+                />
+                <FormHelperText>
+                  {loadingSipDomain && i18n.t("settings.settings.options.updating")}
+                </FormHelperText>
+              </FormControl>
+            </Grid>
+            {/* USUÁRIO SIP */}
+            <Grid xs={12} sm={6} md={4} item>
+              <FormControl className={classes.selectContainer}>
+                <TextField
+                  id="sipUser"
+                  name="sipUser"
+                  margin="dense"
+                  label={i18n.t("settings.settings.sip.user")}
+                  variant="outlined"
+                  value={sipUser}
+                  onChange={(e) => setSipUser(e.target.value)}
+                  onBlur={async () => {
+                    await saveSipTextColumn("sipUser", sipUser, setLoadingSipUser);
+                  }}
+                />
+                <FormHelperText>
+                  {loadingSipUser && i18n.t("settings.settings.options.updating")}
+                </FormHelperText>
+              </FormControl>
+            </Grid>
+            {/* SENHA SIP (write-only — backend mascara nos GETs) */}
+            <Grid xs={12} sm={6} md={4} item>
+              <FormControl className={classes.selectContainer}>
+                <TextField
+                  id="sipPassword"
+                  name="sipPassword"
+                  type="password"
+                  margin="dense"
+                  label={i18n.t("settings.settings.sip.password")}
+                  variant="outlined"
+                  value={sipPasswordInput}
+                  onChange={(e) => setSipPasswordInput(e.target.value)}
+                  onBlur={handleSipPasswordBlur}
+                  autoComplete="new-password"
+                />
+                <FormHelperText>
+                  {loadingSipPassword
+                    ? i18n.t("settings.settings.options.updating")
+                    : sipPasswordSet
+                      ? i18n.t("settings.settings.sip.passwordKeep")
+                      : ""}
+                </FormHelperText>
+              </FormControl>
+            </Grid>
+            {/* CALLER ID */}
+            <Grid xs={12} sm={6} md={4} item>
+              <FormControl className={classes.selectContainer}>
+                <TextField
+                  id="sipCallerId"
+                  name="sipCallerId"
+                  margin="dense"
+                  label={i18n.t("settings.settings.sip.callerId")}
+                  variant="outlined"
+                  value={sipCallerId}
+                  onChange={(e) => setSipCallerId(e.target.value)}
+                  onBlur={async () => {
+                    await saveSipTextColumn("sipCallerId", sipCallerId, setLoadingSipCallerId);
+                  }}
+                />
+                <FormHelperText>
+                  {loadingSipCallerId && i18n.t("settings.settings.options.updating")}
+                </FormHelperText>
+              </FormControl>
+            </Grid>
+            {/* TRANSPORTE */}
+            <Grid xs={12} sm={6} md={4} item>
+              <FormControl className={classes.selectContainer}>
+                <InputLabel id="sipTransport-label">
+                  {i18n.t("settings.settings.sip.transport")}
+                </InputLabel>
+                <Select
+                  labelId="sipTransport-label"
+                  value={sipTransport}
+                  onChange={async (e) => {
+                    handleSipTransport(e.target.value);
+                  }}
+                >
+                  <MenuItem value={"udp"}>UDP</MenuItem>
+                  <MenuItem value={"tcp"}>TCP</MenuItem>
+                  <MenuItem value={"wss"}>WSS (WebSocket TLS)</MenuItem>
+                </Select>
+                <FormHelperText>
+                  {loadingSipTransport
+                    ? i18n.t("settings.settings.options.updating")
+                    : i18n.t("settings.settings.sip.transportHint")}
+                </FormHelperText>
               </FormControl>
             </Grid>
           </Grid>

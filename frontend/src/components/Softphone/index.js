@@ -1,58 +1,132 @@
-import React from 'react'
-import  SoftPhone  from 'react-softphone'
-import { WebSocketInterface } from 'jssip';
+/**
+ * Softphone — Troncal SIP (referência Fluxoo)
+ *
+ * Lê a configuração do troncal da empresa via GET /companySipTrunk
+ * (backend/src/controllers/CompanySettingsController.ts → showSipTrunk) e
+ * monta a config do jssip/react-softphone em runtime — sem credenciais
+ * hardcoded.
+ *
+ * Comportamento:
+ * - SIP desabilitado (sipEnabled != "enabled") → ícone "SIP desconectado"
+ *   (status visível como no Fluxoo) e NÃO inicializa o jssip.
+ * - Habilitado mas sem host/usuário → aviso "Configuração SIP incompleta".
+ * - Habilitado e completo → renderiza o widget do softphone.
+ *
+ * Usuário SIP: usa o ramal do usuário logado (Users.ramal); fallback para
+ * sipUser do troncal. Senha: sipPassword do troncal (entregue apenas pelo
+ * endpoint autenticado dedicado).
+ */
+import React, { useEffect, useMemo, useState } from "react";
+import ReactSoftPhone from "react-softphone";
+import { WebSocketInterface } from "jssip";
+import Tooltip from "@material-ui/core/Tooltip";
+import PhoneDisabledIcon from "@material-ui/icons/PhoneDisabled";
+import { orange } from "@material-ui/core/colors";
 
+import useCompanySettings from "../../hooks/useSettings/companySettings";
+import { i18n } from "../../translate/i18n";
 
-  const config = {
-    domain: '192.168.2.4', // sip-server@your-domain.io
-    uri: 'sip:202@192.168.2.4', // sip:sip-user@your-domain.io
-    password: 'btelefonia12', //  PASSWORD ,
-    ws_servers: 'wss://202@192.168.2.4:8089/ws', //ws server
-    sockets: new WebSocketInterface('wss://192.168.2.4:8089/ws'),
-    display_name: '202',//jssip Display Name
-    websocket_url: 'wss://192.168.2.4:443',
-    sip_outbound_ur: 'udp://192.168.2.4:5060',
-    debug: true // Turn debug messages on
+// Callbacks de persistência do react-softphone → localStorage
+const persistLocal = (key) => (newValue) => {
+  try {
+    localStorage.setItem(`softphone-${key}`, String(newValue));
+  } catch (e) {
+    // localStorage indisponível (modo privado etc.) — ignora silenciosamente
+  }
+  return true;
+};
 
-  };
-const setConnectOnStartToLocalStorage =(newValue)=>{
-// Handle save the auto connect value to local storage
-return true
-}
-const setNotifications =(newValue)=>{
-// Handle save the Show notifications of an incoming call to local storage
-return true
-}
-const setCallVolume =(newValue)=>{
-// Handle save the call Volume value to local storage
-return true
-}
-const setRingVolume =(newValue)=>{
-// Handle save the Ring Volume value to local storage
-return true
-}
+const setConnectOnStartToLocalStorage = persistLocal("connectOnStart");
+const setNotifications = persistLocal("notifications");
+const setCallVolume = persistLocal("callVolume");
+const setRingVolume = persistLocal("ringVolume");
 
-console.log(setConnectOnStartToLocalStorage)
+function Softphone() {
+  const { getSipTrunk } = useCompanySettings();
+  const [sipTrunk, setSipTrunk] = useState(null);
+  const [loaded, setLoaded] = useState(false);
 
-function SoftPhone() {
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const data = await getSipTrunk();
+      if (mounted) {
+        setSipTrunk(data);
+        setLoaded(true);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Config jssip montada a partir das settings da empresa.
+  const config = useMemo(() => {
+    if (!sipTrunk || !sipTrunk.enabled || !sipTrunk.host) return null;
+
+    const domain = sipTrunk.domain || sipTrunk.host;
+    // Navegador só suporta SIP sobre WebSocket: "wss" → TLS;
+    // udp/tcp do troncal resolvem para ws:// (referência/parity com o Fluxoo).
+    const wsScheme = sipTrunk.transport === "wss" ? "wss" : "ws";
+    const wsPort = sipTrunk.port || (wsScheme === "wss" ? "8089" : "8088");
+    const wsUrl = `${wsScheme}://${sipTrunk.host}:${wsPort}/ws`;
+    // Ramal interno do usuário logado tem prioridade sobre o usuário do troncal.
+    const username = sipTrunk.ramal || sipTrunk.user;
+
+    if (!username) return null;
+
+    return {
+      domain,
+      uri: `sip:${username}@${domain}`,
+      password: sipTrunk.password,
+      ws_servers: wsUrl,
+      sockets: [new WebSocketInterface(wsUrl)],
+      display_name: sipTrunk.callerId || username,
+      session_timers: false,
+      register_expires: 600,
+      debug: false // nunca habilitar: o debug do jssip vaza credenciais no console
+    };
+  }, [sipTrunk]);
+
+  // Enquanto carrega ou SIP desabilitado → status "SIP desconectado"
+  // (o softphone NÃO é inicializado — sem tentativa de REGISTER).
+  if (!loaded || !sipTrunk || !sipTrunk.enabled) {
+    if (!loaded) return null;
+    return (
+      <Tooltip title={i18n.t("settings.settings.sip.statusDisconnected")}>
+        <PhoneDisabledIcon fontSize="small" style={{ opacity: 0.6, margin: "0 8px" }} />
+      </Tooltip>
+    );
+  }
+
+  // Habilitado mas configuração incompleta → aviso (não inicializa o jssip).
+  if (!config) {
+    return (
+      <Tooltip title={i18n.t("settings.settings.sip.statusIncomplete")}>
+        <PhoneDisabledIcon fontSize="small" style={{ color: orange[700], margin: "0 8px" }} />
+      </Tooltip>
+    );
+  }
+
   return (
     <div className="SoftPhone">
       <header className="SoftPhone-header">
-         <SoftPhone
-                     callVolume={33} //Set Default callVolume
-                     ringVolume={44} //Set Default ringVolume
-                     connectOnStart={false} //Auto connect to sip
-                     notifications={false} //Show Browser Notification of an incoming call
-                     config={config} //Voip config
-                     setConnectOnStartToLocalStorage={setConnectOnStartToLocalStorage} // Callback function
-                     setNotifications={setNotifications} // Callback function
-                     setCallVolume={setCallVolume} // Callback function
-                     setRingVolume={setRingVolume} // Callback function
-                     timelocale={'UTC+3'} //Set time local for call history
-                   />
+        <ReactSoftPhone
+          callVolume={33} // Volume padrão de chamada
+          ringVolume={44} // Volume padrão do ring
+          connectOnStart={false} // Conecta ao SIP apenas sob ação do usuário
+          notifications={false} // Notificação do navegador em chamada recebida
+          config={config} // Config VoIP (montada das settings da empresa)
+          setConnectOnStartToLocalStorage={setConnectOnStartToLocalStorage}
+          setNotifications={setNotifications}
+          setCallVolume={setCallVolume}
+          setRingVolume={setRingVolume}
+          timelocale={"UTC-3"} // Fuso do histórico de chamadas
+        />
       </header>
     </div>
   );
 }
 
-export default SoftPhone;
+export default Softphone;

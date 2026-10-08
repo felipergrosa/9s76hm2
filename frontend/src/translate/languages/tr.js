@@ -1,6 +1,11 @@
 const messages = {
   tr: {
     translations: {
+      accountSwitch: {
+        title: "Hesap değiştir",
+        switching: "Değiştiriliyor...",
+        error: "Hesap değiştirilemedi.",
+      },
       signup: {
         title: "Kaydol",
         toasts: {
@@ -239,6 +244,80 @@ const messages = {
           dateOpen: "Açılış",
           dateClose: "Kapanış",
           duration: "Süre",
+        },
+        buttons: {
+          filter: "Filtreyi Uygula",
+          exportCsv: "CSV Aktar",
+        },
+      },
+      adsReport: {
+        title: "Reklam Raporu",
+        subtitle: "Dönemdeki WhatsApp'a Tıkla reklamlarından gelen lead hunisi",
+        foundSuffix: "dönemde lead getiren reklam",
+        empty: "Dönemde reklam lead'i yok",
+        filters: {
+          startDate: "Başlangıç Tarihi",
+          endDate: "Bitiş Tarihi",
+        },
+        cards: {
+          leads: "Reklam lead'leri",
+          converted: "Dönüşenler",
+          conversionRate: "Dönüşüm oranı",
+          ads: "Reklamlar",
+        },
+        table: {
+          ad: "Reklam",
+          adId: "Reklam ID",
+          leads: "Lead'ler",
+          converted: "Dönüşenler",
+          conversionRate: "Dönüşüm",
+          firstContact: "İlk Temas",
+          noAdId: "ID yok",
+        },
+        buttons: {
+          filter: "Filtreyi Uygula",
+        },
+      },
+      callReport: {
+        title: "Arama Raporu",
+        subtitle: "Filtreleri seçin ve arama raporunu oluşturun",
+        foundSuffix: "arama bulundu",
+        empty: "Dönemde arama yok",
+        filters: {
+          startDate: "Başlangıç Tarihi",
+          endDate: "Bitiş Tarihi",
+          user: "Temsilci",
+          direction: "Yön",
+          status: "Durum",
+          all: "Tümü",
+        },
+        directionLabels: {
+          in: "Gelen",
+          out: "Giden",
+        },
+        statusLabels: {
+          answered: "Cevaplanan",
+          missed: "Cevapsız",
+          rejected: "Reddedilen",
+          failed: "Başarısız",
+        },
+        cards: {
+          total: "Dönemdeki toplam",
+          answered: "Cevaplananlar",
+          missed: "Cevapsızlar",
+          avgTime: "Ortalama süre",
+        },
+        table: {
+          number: "Numara",
+          contact: "Kişi",
+          direction: "Yön",
+          status: "Durum",
+          user: "Temsilci",
+          whatsapp: "Bağlantı",
+          start: "Başlangıç",
+          end: "Bitiş",
+          duration: "Süre",
+          provider: "Sağlayıcı",
         },
         buttons: {
           filter: "Filtreyi Uygula",
@@ -629,6 +708,30 @@ const messages = {
       },
       flowbuilderModal: {
         flowNotIdPhrase: "Varsayılan Akış",
+      },
+      flowbuilderNodes: {
+        asaasCharge: {
+          name: "Asaas 2. nüsha",
+          docFromContact: "Kişinin CPF/CNPJ'si",
+          modalAdd: "Akışa Asaas 2. nüsha ekle",
+          modalEdit: "Asaas 2. nüshayı düzenle",
+          btnAdd: "Ekle",
+          btnEdit: "Kaydet",
+          campoDocumento: "CPF/CNPJ içeren değişken (isteğe bağlı)",
+          campoDocumentoHint:
+            "Soru/Yanıt bekle bloğuyla yakalanan değişkenin adı (örn.: cpf). Boş bırakılırsa kişi kaydındaki CPF/CNPJ kullanılır.",
+          mensagem: "Giriş mesajı (isteğe bağlı)",
+          mensagemHint: "Faturalardan önce gönderilir. {{değişkenler}} kabul eder.",
+          mensagemNaoEncontrado: "Tahsilat bulunamadığında mesaj (isteğe bağlı)",
+          mensagemNaoEncontradoHint:
+            "Geçersiz CPF/CNPJ veya sorgu hatasında da kullanılır — ardından akış hata çıkışından devam eder.",
+          sectionEnvio: "Fatura başına gönderilecekler",
+          incluirBoletoUrl: "Boleto/fatura bağlantısı",
+          incluirBoletoPdf: "Boleto PDF'i",
+          incluirLinhaDigitavel: "Ödeme kodu (linha digitável)",
+          incluirPix: "PIX kopyala-yapıştır",
+          incluirPixQr: "PIX QR kodu (görsel)",
+        },
       },
       queueModal: {
         title: {
@@ -1754,6 +1857,22 @@ const messages = {
             preview: "Önizleme",
             previewEmpty: "Örneği görmek için mesajı yapılandırın",
           },
+          sip: {
+            sectionTitle: "SIP Trunk",
+            enabled: "SIP trunkı etkinleştir (softphone)",
+            host: "SIP Host",
+            port: "WebSocket portu",
+            domain: "Alan adı (realm)",
+            user: "SIP kullanıcısı",
+            password: "SIP şifresi",
+            passwordKeep: "Şifre kayıtlı — korumak için boş bırakın",
+            transport: "Taşıma",
+            transportHint: "Tarayıcı WebSocket kullanır: WSS önerilir (udp/tcp ws:// olarak çözümlenir)",
+            callerId: "Caller ID",
+            statusDisconnected: "SIP bağlı değil",
+            statusIncomplete: "SIP yapılandırması eksik",
+            wsPortHint: "SIP sunucusunun WebSocket portu (örn.: Asterisk'te 8089)",
+          },
           LGPD: {
             title: "LGPD",
             welcome: "Hoş Geldiniz Mesajı (LGPD)",
@@ -2055,6 +2174,125 @@ const messages = {
         },
         empty: "Şablon bulunamadı.",
       },
+      metaAutomations: {
+        title: "Meta Otomasyonları",
+        subtitle:
+          "Facebook/Instagram yorumları, bahsetmeleri ve DM'leri için otomatik kurallar",
+        newRule: "Yeni kural",
+        searchPlaceholder: "Kural ara...",
+        stats: {
+          rules: "Kurallar",
+          active: "Aktif",
+          inactive: "Pasif",
+          dispatches: "Tetikleme",
+        },
+        filters: {
+          status: "Durum",
+          channel: "Kanal",
+          all: "Tümü",
+          active: "Aktif",
+          inactive: "Pasif",
+        },
+        channels: {
+          facebook: "Facebook",
+          instagram: "Instagram",
+          both: "Facebook + Instagram",
+        },
+        triggers: {
+          comment_keyword: "Anahtar kelimeli yorum",
+          comment_any: "Herhangi bir yorum",
+          story_mention: "Hikayede bahsetme",
+          referral_ref: "Ref'li m.me bağlantısı",
+          dm_keyword: "Anahtar kelimeli DM",
+        },
+        table: {
+          name: "Ad",
+          channel: "Kanal",
+          trigger: "Tetikleyici",
+          target: "Hedef",
+          action: "Eylem",
+          dispatches: "Tetikleme",
+          active: "Aktif",
+          actions: "Eylemler",
+        },
+        actionParts: {
+          publicReply: "Herkese açık yanıt",
+          autoLike: "Yorumu beğen",
+          followerCheck: "Sadece takipçiler",
+          reward: "Ödül",
+          flow: "Akış",
+          flowNamed: "Akış: {{name}}",
+        },
+        empty: {
+          filtered: "Bu filtrelerle kural bulunamadı",
+          none: "Henüz otomasyon kuralı oluşturulmadı",
+          hint: "Yorumlara ve bahsetmelere otomatik yanıt vermek için bir kural oluşturun.",
+        },
+        toasts: {
+          created: "Otomasyon kuralı oluşturuldu",
+          updated: "Otomasyon kuralı güncellendi",
+          deleted: "Otomasyon kuralı silindi",
+          activated: "Kural etkinleştirildi",
+          deactivated: "Kural devre dışı bırakıldı",
+        },
+        confirm: {
+          deleteTitle: '"{{name}}" kuralı silinsin mi?',
+          deleteMessage: "Bu işlem geri alınamaz.",
+        },
+        actions: {
+          edit: "Düzenle",
+          delete: "Sil",
+        },
+        modal: {
+          createTitle: "Yeni otomasyon kuralı",
+          editTitle: "Otomasyon kuralını düzenle",
+          name: "Kural adı",
+          connection: "Bağlantı",
+          connectionEmpty: "Facebook/Instagram bağlantısı bulunamadı.",
+          selectConnection: "Bir bağlantı seçin",
+          channel: "Kanal",
+          trigger: "Tetikleyici",
+          required: "Zorunlu",
+          matchValueLabels: {
+            comment_keyword: "Anahtar kelime",
+            dm_keyword: "Anahtar kelime",
+            referral_ref: "Bağlantı ref'i",
+            story_mention: "Post/medya ID'si (opsiyonel)",
+          },
+          actionsSection: "Eylemler",
+          dmMessage: "DM mesajı",
+          dmHint: "Kullanılabilir değişkenler: {{contact.name}} — bir akış seçiliyse opsiyoneldir.",
+          rewardUrl: "Ödül medya URL'si",
+          rewardType: "Medya tipi",
+          rewardTypes: {
+            image: "Görsel",
+            video: "Video",
+            audio: "Ses",
+            file: "Dosya",
+          },
+          rewardHint:
+            "DM'de gönderilen ödül (görsel/video/dosya). Yorum yanıtlarında Meta yalnızca tek bir metin mesajına izin verir — medya bağlantı olarak gönderilir.",
+          publicReply: "Yoruma herkese açık yanıt",
+          flow: "Akış (FlowBuilder)",
+          flowNone: "Yok",
+          autoLike: "Yorumu otomatik beğen",
+          autoLikeHint:
+            "Beğeni, instagram_manage_engagement (IG) veya pages_manage_engagement (FB) izni gerektirir.",
+          requireFollower: "Gönderenin hesabı takip etmesini zorunlu kıl",
+          requireFollowerHint:
+            "Takipçi kontrolü yalnızca Instagram'da mevcuttur. Facebook'ta doğrulama yapılamaz ve kural normal şekilde devam eder.",
+          nonFollowerAction: "Takipçi değilse",
+          nonFollowerSkip: "Hiçbir şey gönderme",
+          nonFollowerAsk: "Takip etmesini iste",
+          nonFollowerText: "Takip isteyen mesaj",
+          active: "Kural aktif",
+          cancel: "İptal",
+          save: "Kaydet",
+          create: "Kural oluştur",
+          validationAction:
+            "En az bir eylem tanımlayın: DM mesajı, medya, herkese açık yanıt veya akış.",
+        },
+      },
       apiDocs: {
         title: "Harici API",
         subtitle:
@@ -2199,7 +2437,35 @@ const messages = {
         ERR_FLOW_CHANNEL_NOT_SUPPORTED:
           "Bu ticketın kanalı akış başlatmayı desteklemiyor.",
         ERR_FLOW_TRIGGER_FAILED: "Bu ticketta akış çalıştırılamadı.",
+        ERR_TELEGRAM_INVALID_TOKEN:
+          "Geçersiz Telegram bot tokeni. @BotFather tarafından oluşturulan tokeni kontrol edin.",
+        ERR_TELEGRAM_SETUP_FAILED:
+          "Telegram webhook'u kaydedilemedi. Tekrar deneyin.",
+        ERR_TELEGRAM_SEND_FAILED:
+          "Telegram üzerinden mesaj gönderilirken hata oluştu.",
+        ERR_TELEGRAM_NOT_CONFIGURED:
+          "Bu Telegram bağlantısında bot tokeni yapılandırılmamış.",
+        ERR_TELEGRAM_INVALID_CONTACT:
+          "Ticket kişisinde geçerli bir Telegram chat_id yok.",
+        ERR_TELEGRAM_NO_BACKEND_URL:
+          "Sunucuda BACKEND_URL yapılandırılmamış — webhook için gerekli.",
+        ERR_WAPP_NOT_TELEGRAM: "Bu bağlantı Telegram kanalına ait değil.",
       },
+    },
+    // WhatsApp Embedded Signup — Meta popup'ı ile resmî numara kaydı
+    embeddedSignup: {
+      button: "Numara kaydet (Meta)",
+      hint: "Meta tarafından yönlendirilen resmî kayıt — numara CRM'den çıkmadan hazır olur.",
+      loading: "Meta'ya bağlanıyor…",
+      success: "Numara başarıyla kaydedildi!",
+      configMissing:
+        "Meta ile kayıt kullanılamıyor: frontend ortamında REACT_APP_META_EMBEDDED_SIGNUP_CONFIG_ID tanımlayın.",
+      appIdMissing:
+        "Meta ile kayıt kullanılamıyor: frontend ortamında REACT_APP_FACEBOOK_APP_ID tanımlayın.",
+      sdkError: "Facebook SDK yüklenemedi. Bağlantınızı kontrol edin.",
+      cancelled: "Kayıt Meta'da iptal edildi veya tamamlanmadı.",
+      noSessionInfo:
+        "Meta numara bilgilerini döndürmedi (waba_id/phone_number_id). Tekrar deneyin.",
     },
     // Herkese açık webchat (/webchat/:token) — giriş gerektirmeyen ziyaretçi sayfası
     publicWebchat: {
@@ -2212,6 +2478,43 @@ const messages = {
       invalidLink: "Geçersiz veya süresi dolmuş destek bağlantısı.",
       copyLink: "WebChat bağlantısını kopyala",
       linkCopied: "WebChat bağlantısı kopyalandı!",
+    },
+    // Telegram Bot kanalı — Bot API'de kayıtlı webhook üzerinden bağlantı
+    telegram: {
+      title: "Telegram Botu",
+      botTokenLabel: "Bot tokeni",
+      botTokenHelper:
+        "@BotFather tarafından oluşturulan tokeni yapıştırın. Kaydederken webhook Telegram'da otomatik olarak kaydedilir.",
+      botTokenHelperEdit:
+        "Mevcut tokeni korumak için boş bırakın. Botu değiştirmek için yeni tokeni yapıştırın — webhook yeniden kaydedilir.",
+      botTokenRequired:
+        "Telegram bot tokenini girin (@BotFather tarafından oluşturulur).",
+      setupSuccess: "Telegram botu başarıyla bağlandı!",
+    },
+    // FlowBuilder "Google Takvim" düğümü — Google Takvim'de etkinlik oluşturur
+    googleCalendarModal: {
+      titleAdd: "Akışa Google Takvim etkinliği ekle",
+      titleEdit: "Google Takvim etkinliğini düzenle",
+      add: "Ekle",
+      save: "Kaydet",
+      fields: {
+        summary: "Etkinlik başlığı",
+        startAt: "Başlangıç tarihi/saati (isteğe bağlı)",
+        startOffsetMinutes: "Dakika cinsinden önde zaman",
+        durationMinutes: "Süre (dakika)",
+        description: "Açıklama",
+        location: "Konum (isteğe bağlı)",
+        attendees: "Katılımcılar (e-postalar, isteğe bağlı)",
+      },
+      helpers: {
+        variables: "Kişi verilerini eklemek için {{değişkenler}} kullanın (örn.: {{name}})",
+        startAt: "Kabul edilen biçimler: ISO (2025-01-30T14:00) veya GG/AA/YYYY SS:dd. Boş bırakılırsa aşağıdaki önde zaman kullanılır",
+        startOffset: "Başlangıç tarihi/saati boşken kullanılır — şu andan itibaren dakika",
+        attendees: "Virgülle ayırın. Boş bırakılırsa kişinin e-postası kullanılır",
+      },
+      errors: {
+        summaryRequired: "Etkinlik başlığını girin",
+      },
     },
   },
 };

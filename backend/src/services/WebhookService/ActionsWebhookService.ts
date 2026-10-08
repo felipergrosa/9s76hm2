@@ -66,6 +66,13 @@ import TicketFunnelState from "../../models/TicketFunnelState";
 import { emitToCompanyRoom } from "../../libs/socketEmit";
 import { scheduleFlowResume } from "../../queues/FlowResumeQueue";
 import { SendMail } from "../../helpers/SendMail";
+import {
+  listPendingPaymentsByCpfCnpj,
+  getPixQrCode,
+  getBoletoIdentificationField,
+  normalizeCpfCnpj
+} from "../AsaasService";
+import CreateCalendarEventService from "../GoogleCalendarService/CreateCalendarEventService";
 
 interface IAddContact {
   companyId: number;
@@ -114,6 +121,32 @@ const flowDelayMs = (amount: any, unit: string): number | null => {
   const ms = n * factor;
   if (ms > 30 * 86400000) return null;
   return ms;
+};
+
+// Converte texto em Date para o nó "googleCalendar": aceita ISO
+// ("2025-01-30T14:00", com ou sem timezone) e o formato brasileiro
+// "DD/MM/YYYY[ HH:mm[:ss]]". Retorna null quando não reconhece o formato.
+const parseFlowDate = (raw: string): Date | null => {
+  const s = String(raw || "").trim();
+  if (!s) return null;
+
+  const br = s.match(
+    /^(\d{2})\/(\d{2})\/(\d{4})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/
+  );
+  if (br) {
+    const d = new Date(
+      Number(br[3]),
+      Number(br[2]) - 1,
+      Number(br[1]),
+      Number(br[4] || 0),
+      Number(br[5] || 0),
+      Number(br[6] || 0)
+    );
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
 };
 
 // Resolve caminho local para mídia do nó "file": aceita URL externa (baixa
@@ -828,6 +861,8 @@ export const ActionsWebhookService = async (
       let isCondition = false;
       let isGotoFlow = false;
       let isBusinessHours = false;
+      // Nó "asaasCharge" também escolhe a saída manualmente (a=ok / b=falha)
+      let isAsaasCharge = false;
 
       // Nó "condition": desvia pelo sourceHandle "a" (verdadeiro) ou "b"
       // (falso) conforme a comparação da chave com o valor configurado.
@@ -2126,6 +2161,334 @@ export const ActionsWebhookService = async (
         }
       }
 
+      // Nó "googleCalendar": cria evento na agenda Google (service account
+      // configurada por env — vide CreateCalendarEventService). Campos
+      // aceitam interpolação {{var}} com dados do contato + variáveis do
+      // fluxo. Falha → warn e segue pela saída padrão ("a"), como sendEmail.
+      if (nodeSelected.type === "googleCalendar") {
+        try {
+          await ensureTicket();
+
+          const dataGc = nodeSelected.data || {};
+          const contactGc = await resolveFlowContact();
+
+          // Variáveis disponíveis: campos do contato (name/number/email)
+          // + dataWebhook do ticket + variáveis capturadas pelo fluxo.
+          const varsGc: any = {
+            name: contactGc?.name || "",
+            number: contactGc?.number || numberClient,
+            email: contactGc?.email || "",
+            ...(ticket?.dataWebhook || {}),
+            ...(ticket?.dataWebhook?.variables || {})
+          };
+
+          const interpGc = (value: any): string =>
+            replaceMessages(varsGc, String(value ?? ""));
+
+          const summaryGc = interpGc(dataGc.summary).trim();
+          const descriptionGc = interpGc(dataGc.description);
+          const locationGc = interpGc(dataGc.location).trim();
+
+          // Início: campo startAt interpolado (ISO ou DD/MM/YYYY HH:mm);
+          // vazio/inválido cai no offset em minutos a partir de agora.
+          const startRawGc = interpGc(dataGc.startAt).trim();
+          let startAtGc = parseFlowDate(startRawGc);
+          if (!startAtGc) {
+            const offsetMinGc = Number(dataGc.startOffsetMinutes);
+            const safeOffsetGc =
+              Number.isFinite(offsetMinGc) && offsetMinGc >= 0
+                ? offsetMinGc
+                : 60;
+            startAtGc = new Date(Date.now() + safeOffsetGc * 60000);
+          }
+
+          const durationRawGc = Number(dataGc.durationMinutes);
+          const durationGc =
+            Number.isFinite(durationRawGc) && durationRawGc > 0
+              ? durationRawGc
+              : 30;
+
+          // Participantes: lista separada por vírgula/ponto-e-vírgula,
+          // aceita {{var}}; vazio usa o e-mail do contato quando existir.
+          let attendeesGc = interpGc(dataGc.attendees)
+            .split(/[;,]/)
+            .map(item => item.trim())
+            .filter(Boolean);
+          if (attendeesGc.length === 0 && contactGc?.email) {
+            attendeesGc = [contactGc.email.trim()];
+          }
+
+          if (!summaryGc) {
+            logger.warn(
+              `[FlowBuilder][googleCalendar] node=${nodeSelected.id} sem título (summary vazio)`
+            );
+          } else {
+            const eventGc = await CreateCalendarEventService({
+              summary: summaryGc,
+              description: descriptionGc,
+              location: locationGc,
+              startAt: startAtGc,
+              durationMinutes: durationGc,
+              attendees: attendeesGc
+            });
+            logger.info(
+              `[FlowBuilder][googleCalendar] Evento ${eventGc.id} criado no node ${nodeSelected.id} (empresa ${companyId})`
+            );
+          }
+        } catch (errGc) {
+          logger.warn(
+            `[FlowBuilder][googleCalendar] Falha no node ${nodeSelected.id}: ${errGc?.message || errGc}`
+          );
+        }
+      }
+
+      // Nó "asaasCharge": 2ª via de cobrança Asaas — busca cobranças
+      // OVERDUE+PENDING pelo CPF/CNPJ (variável do fluxo em
+      // data.campoDocumento — answerKey do bloco Pergunta/Aguardar resposta
+      // — ou contact.cpfCnpj quando vazio) e envia boleto (link/PDF/linha
+      // digitável) + PIX copia-e-cola/QR conforme a config do nó.
+      // Saída "a" = cobranças enviadas; saída "b" = falha (documento
+      // inválido, cliente/cobrança não encontrado, erro da API). Sem "b"
+      // conectada, a falha segue pela saída "a"/default.
+      if (nodeSelected.type === "asaasCharge") {
+        let okAsaas = false;
+
+        const dataAsaas = nodeSelected.data || {};
+        const dwAsaas: any = ticket?.dataWebhook || {};
+        const varsAsaas: any = {
+          ...dwAsaas,
+          ...(dwAsaas?.variables || {})
+        };
+
+        // Envia texto pelo ticket (canal do fluxo) ou, sem ticket, direto
+        // pelo número — mesmo fallback do nó "carousel".
+        const sendAsaasText = async (bodyTxt: string) => {
+          const bodyAsaas = replaceMessages(varsAsaas, String(bodyTxt || ""));
+          if (!bodyAsaas.trim()) return;
+          if (ticket) {
+            const ticketDetailsAsaas = await ShowTicketService(
+              ticket.id,
+              companyId
+            );
+            try {
+              await typeSimulation(ticket, "composing");
+            } catch {
+              // canal oficial não tem wbot — presença é best-effort
+            }
+            await SendWhatsAppMessage({
+              body: bodyAsaas,
+              ticket: ticketDetailsAsaas,
+              quotedMsg: null
+            });
+            SetTicketMessagesAsRead(ticketDetailsAsaas);
+            await ticketDetailsAsaas.update({
+              lastMessage: formatBody(bodyAsaas, ticketDetailsAsaas)
+            });
+          } else if (numberClient) {
+            await SendMessage(whatsapp, {
+              number: numberClient,
+              body: bodyAsaas
+            });
+          }
+        };
+
+        // Mensagem amigável reutilizada para documento inválido, cliente
+        // não encontrado, zero cobranças e falha de consulta.
+        const msgNaoEncontradoAsaas =
+          String(dataAsaas.mensagemNaoEncontrado || "").trim() ||
+          "Não localizei cobranças em aberto para este CPF/CNPJ. Em caso de dúvida, fale com um atendente.";
+
+        try {
+          await ensureTicket();
+
+          const campoDocAsaas = String(dataAsaas.campoDocumento || "").trim();
+          let docAsaas = campoDocAsaas
+            ? String(varsAsaas[campoDocAsaas] || "")
+            : "";
+          if (!docAsaas) {
+            const contactAsaas = await resolveFlowContact();
+            docAsaas = contactAsaas?.cpfCnpj || "";
+          }
+          const docDigitsAsaas = normalizeCpfCnpj(docAsaas);
+
+          if (!docDigitsAsaas) {
+            logger.warn(
+              `[FlowBuilder][asaasCharge] node=${nodeSelected.id} CPF/CNPJ ausente ou inválido`
+            );
+            await sendAsaasText(msgNaoEncontradoAsaas);
+          } else {
+            const { customer: customerAsaas, payments: paymentsAsaas } =
+              await listPendingPaymentsByCpfCnpj(docDigitsAsaas);
+
+            if (!customerAsaas || paymentsAsaas.length === 0) {
+              await sendAsaasText(msgNaoEncontradoAsaas);
+            } else {
+              okAsaas = true;
+
+              const introAsaas =
+                String(dataAsaas.mensagem || "").trim() ||
+                `Encontrei ${
+                  paymentsAsaas.length > 1
+                    ? `${paymentsAsaas.length} cobranças`
+                    : "1 cobrança"
+                } em aberto para *${customerAsaas.name || "você"}*:`;
+              await sendAsaasText(introAsaas);
+
+              // Teto de 5 cobranças por execução — evita spam e estouro
+              // de tempo dentro do loop do fluxo
+              const MAX_COBRANCAS_ASAAS = 5;
+              for (const payAsaas of paymentsAsaas.slice(
+                0,
+                MAX_COBRANCAS_ASAAS
+              )) {
+                try {
+                  const valorAsaas = Number(payAsaas.value || 0).toLocaleString(
+                    "pt-BR",
+                    { style: "currency", currency: "BRL" }
+                  );
+                  const vencAsaas = String(payAsaas.dueDate || "")
+                    .split("-")
+                    .reverse()
+                    .join("/");
+
+                  let detalheAsaas = `*Fatura:* ${
+                    payAsaas.invoiceNumber || payAsaas.id
+                  }\n*Valor:* ${valorAsaas}\n*Vencimento:* ${vencAsaas}`;
+                  if (payAsaas.description) {
+                    detalheAsaas += `\n*Descrição:* ${payAsaas.description}`;
+                  }
+                  const linkBoletoAsaas =
+                    payAsaas.bankSlipUrl || payAsaas.invoiceUrl;
+                  if (
+                    dataAsaas.incluirBoletoUrl !== false &&
+                    linkBoletoAsaas
+                  ) {
+                    detalheAsaas += `\n*Link do boleto:* ${linkBoletoAsaas}`;
+                  }
+                  await sendAsaasText(detalheAsaas);
+
+                  if (dataAsaas.incluirLinhaDigitavel) {
+                    const linhaAsaas = await getBoletoIdentificationField(
+                      payAsaas.id
+                    );
+                    if (linhaAsaas) {
+                      await sendAsaasText(`*Linha digitável:*\n${linhaAsaas}`);
+                    }
+                  }
+
+                  if (
+                    dataAsaas.incluirBoletoPdf &&
+                    payAsaas.bankSlipUrl &&
+                    ticket
+                  ) {
+                    try {
+                      const pdfPathAsaas = await resolveFlowMediaPath(
+                        payAsaas.bankSlipUrl,
+                        companyId,
+                        `boleto-${payAsaas.id}.pdf`
+                      );
+                      await sendFlowFile(
+                        ticket,
+                        whatsapp,
+                        pdfPathAsaas,
+                        "Segue o PDF do boleto.",
+                        `boleto-${payAsaas.id}.pdf`
+                      );
+                    } catch (errPdfAsaas) {
+                      logger.warn(
+                        `[FlowBuilder][asaasCharge] Falha ao enviar PDF do boleto ${payAsaas.id}: ${errPdfAsaas?.message || errPdfAsaas}`
+                      );
+                    }
+                  }
+
+                  if (dataAsaas.incluirPix || dataAsaas.incluirPixQr) {
+                    const pixAsaas = await getPixQrCode(payAsaas.id);
+                    if (pixAsaas?.payload && dataAsaas.incluirPix) {
+                      await sendAsaasText("*PIX copia-e-cola:*");
+                      // Payload isolado em mensagem própria facilita o
+                      // "copiar" no WhatsApp
+                      await sendAsaasText(pixAsaas.payload);
+                    }
+                    if (pixAsaas?.encodedImage && dataAsaas.incluirPixQr) {
+                      try {
+                        const qrDirAsaas = path.resolve(
+                          __dirname,
+                          "..",
+                          "..",
+                          "..",
+                          "public",
+                          `company${companyId}`
+                        );
+                        if (!fs.existsSync(qrDirAsaas)) {
+                          fs.mkdirSync(qrDirAsaas, { recursive: true });
+                        }
+                        const qrPathAsaas = path.join(
+                          qrDirAsaas,
+                          `asaas-pix-${payAsaas.id}-${Date.now()}.png`
+                        );
+                        fs.writeFileSync(
+                          qrPathAsaas,
+                          Buffer.from(pixAsaas.encodedImage, "base64")
+                        );
+                        if (ticket) {
+                          await sendFlowFile(
+                            ticket,
+                            whatsapp,
+                            qrPathAsaas,
+                            "QR Code PIX",
+                            `pix-${payAsaas.id}.png`
+                          );
+                        } else if (numberClient) {
+                          await SendMessage(whatsapp, {
+                            number: numberClient,
+                            body: "QR Code PIX",
+                            mediaPath: qrPathAsaas
+                          });
+                        }
+                      } catch (errQrAsaas) {
+                        logger.warn(
+                          `[FlowBuilder][asaasCharge] Falha ao enviar QR PIX da fatura ${payAsaas.id}: ${errQrAsaas?.message || errQrAsaas}`
+                        );
+                      }
+                    }
+                  }
+                } catch (errPayAsaas) {
+                  logger.warn(
+                    `[FlowBuilder][asaasCharge] Falha ao enviar fatura ${payAsaas?.id} do node ${nodeSelected.id}: ${errPayAsaas?.message || errPayAsaas}`
+                  );
+                }
+                await intervalWhats("1");
+              }
+            }
+          }
+        } catch (errAsaas) {
+          // Erro amigável ao contato + saída de falha — nunca derruba o
+          // fluxo (a API key ausente/inválida cai aqui via AppError)
+          logger.warn(
+            `[FlowBuilder][asaasCharge] Falha no node ${nodeSelected.id}: ${errAsaas?.message || errAsaas}`
+          );
+          try {
+            await sendAsaasText(msgNaoEncontradoAsaas);
+          } catch {
+            // sem ticket/conexão funcional — já logado acima
+          }
+        }
+
+        const edgesAsaas = connects.filter(
+          c => c.source === nodeSelected.id
+        );
+        const edgeOkAsaas =
+          edgesAsaas.find(c => c.sourceHandle === "a") ||
+          edgesAsaas.find(c => !c.sourceHandle);
+        const edgeFailAsaas = edgesAsaas.find(c => c.sourceHandle === "b");
+        const targetAsaas = okAsaas
+          ? edgeOkAsaas
+          : edgeFailAsaas || edgeOkAsaas;
+        next = targetAsaas?.target || "";
+        noAlterNext = true;
+        isAsaasCharge = true;
+      }
+
       let isMenu: boolean;
 
       if (nodeSelected.type === "menu") {
@@ -2283,13 +2646,14 @@ ${optionsMenu}`;
         } else if (isRandomizer) {
           isRandomizer = false;
           result = next;
-        } else if (isCondition || isGotoFlow || isBusinessHours) {
-          // condition/gotoFlow/businessHours já definiram `next`
+        } else if (isCondition || isGotoFlow || isBusinessHours || isAsaasCharge) {
+          // condition/gotoFlow/businessHours/asaasCharge já definiram `next`
           // manualmente — não recalcular nem zerar quando o alvo não tem
           // edge de saída
           isCondition = false;
           isGotoFlow = false;
           isBusinessHours = false;
+          isAsaasCharge = false;
           result = next;
         } else {
           result = connects.filter(connect => connect.source === next)[0];

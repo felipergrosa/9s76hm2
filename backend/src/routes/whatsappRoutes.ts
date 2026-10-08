@@ -4,6 +4,10 @@ import { checkPermission } from "../middleware/checkPermission";
 
 import * as WhatsAppController from "../controllers/WhatsAppController";
 import * as MetaController from "../controllers/MetaController";
+// Canal Telegram: setup autenticado (/whatsapp/:id/telegram-setup) e webhook
+// público (/public/telegram/:token) vivem em arquivo próprio — montado aqui
+// porque routes/index.ts não pode ser editado (sub-rotas resolvem na raiz).
+import telegramRoutes from "./telegramRoutes";
 
 import multer from "multer";
 import uploadConfig from "../config/upload";
@@ -52,5 +56,8 @@ whatsappRoutes.get("/whatsapp/:whatsappId/active-tickets-count", isAuth, checkPe
 whatsappRoutes.post("/whatsapp/:whatsappId/transfer-tickets", isAuth, checkPermission("connections.edit"), WhatsAppController.transferTickets);
 whatsappRoutes.post("/whatsapp/:whatsappId/sync-full-history", isAuth, checkPermission("connections.edit"), WhatsAppController.syncFullHistory);
 whatsappRoutes.get("/whatsapp/:whatsappId/sync-progress", isAuth, checkPermission("connections.view"), WhatsAppController.getSyncProgressStatus);
+
+// Rotas do canal Telegram (setup + webhook público) — ver telegramRoutes.ts
+whatsappRoutes.use(telegramRoutes);
 
 export default whatsappRoutes;

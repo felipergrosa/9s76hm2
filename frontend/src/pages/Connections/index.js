@@ -37,6 +37,7 @@ import {
   Instagram,
   WhatsApp,
   Chat as WebChatIcon,
+  Telegram as TelegramIcon,
 } from "@material-ui/icons";
 import {
   Search as SearchIcon,
@@ -289,6 +290,10 @@ const IconChannel = (channel, channelType) => {
     return <WebChatIcon style={{ color: "#6B46C1" }} />;
   }
 
+  if (channel === "telegram" || channelType === "telegram") {
+    return <TelegramIcon style={{ color: "#0088cc" }} />;
+  }
+
   // Padrão: WhatsApp (Baileys ou Oficial)
   return <WhatsApp style={{ color: "#25d366" }} />;
 };
@@ -304,6 +309,9 @@ const channelInfo = (whatsApp) => {
   }
   if (channel === "webchat" || channelType === "webchat") {
     return { label: "WebChat", color: "#6B46C1" };
+  }
+  if (channel === "telegram" || channelType === "telegram") {
+    return { label: "Telegram", color: "#0088cc" };
   }
   if (channelType === "official") {
     return { label: "WhatsApp · API Oficial", color: "#075E54" };
@@ -1186,7 +1194,7 @@ const Connections = () => {
             <div className={classes.headerText}>
               <Title>{i18n.t("connections.title")} ({sortedWhatsApps.length})</Title>
               <span className={classes.subtitle}>
-                Gerencie os canais de atendimento da empresa — WhatsApp, Facebook, Instagram e WebChat.
+                Gerencie os canais de atendimento da empresa — WhatsApp, Facebook, Instagram, WebChat e Telegram.
               </span>
             </div>
             <div className={classes.headerActions}>
@@ -1323,6 +1331,23 @@ const Connections = () => {
                                     />
                                     WebChat
                                   </MenuItem>
+                                  {/* TELEGRAM */}
+                                  <MenuItem
+                                    onClick={() => {
+                                      setSelectedWhatsApp({ channel: "telegram", channelType: "telegram" });
+                                      handleOpenWhatsAppModal();
+                                      popupState.close();
+                                    }}
+                                  >
+                                    <TelegramIcon
+                                      fontSize="small"
+                                      style={{
+                                        marginRight: "10px",
+                                        color: "#0088cc",
+                                      }}
+                                    />
+                                    Telegram
+                                  </MenuItem>
                                 </Menu>
                       </>
                     )}
@@ -1361,6 +1386,7 @@ const Connections = () => {
                 <option value="facebook">Facebook</option>
                 <option value="instagram">Instagram</option>
                 <option value="webchat">WebChat</option>
+                <option value="telegram">Telegram</option>
               </Select>
             </FormControl>
             <FormControl size="small" variant="outlined" className={classes.filterSelect}>

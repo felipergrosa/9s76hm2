@@ -166,6 +166,37 @@ import {
     // Vazio/null = usa a conexão padrão da empresa.
     @Column
     birthdayWhatsappId: string;
+
+    // ── Troncal SIP (referência Fluxoo) ─────────────────────────────
+    // Credenciais do troncal por empresa, consumidas pelo softphone
+    // (jssip/react-softphone) no frontend.
+    @Default("disabled")
+    @Column
+    sipEnabled: string; // "enabled" ou "disabled" — padrão dos toggles de settings
+
+    @Column
+    sipHost: string;
+
+    @Column
+    sipPort: string; // porta WebSocket do servidor SIP (ex.: 8089 no Asterisk)
+
+    @Column
+    sipDomain: string; // domínio/realm SIP (fallback: sipHost)
+
+    @Column
+    sipUser: string; // usuário de registro (fallback quando o usuário não tem ramal)
+
+    // SENSÍVEL: mascarada nas respostas de leitura dos GETs genéricos
+    // (CompanySettingsController); valor real só sai via GET /companySipTrunk.
+    @Column
+    sipPassword: string;
+
+    @Default("wss")
+    @Column
+    sipTransport: string; // "udp" | "tcp" | "wss" — navegador resolve para ws/wss
+
+    @Column
+    sipCallerId: string; // Caller ID exibido nas chamadas (display_name)
   }
   
   export default CompaniesSettings;

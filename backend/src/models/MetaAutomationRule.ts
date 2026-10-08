@@ -71,6 +71,35 @@ class MetaAutomationRule extends Model<MetaAutomationRule> {
   @BelongsTo(() => FlowBuilderModel)
   flow: FlowBuilderModel;
 
+  // Curtir automaticamente o comentário que disparou a regra (auto-like
+  // estilo ManyChat). Só se aplica a gatilhos de comentário.
+  @Column({ defaultValue: false })
+  autoLikeComment: boolean;
+
+  // Exigir que o remetente siga a conta para receber a DM. Check real só
+  // existe no Instagram (is_user_follow_business); no Facebook é sempre
+  // indeterminado e a regra segue fail-open.
+  @Column({ defaultValue: false })
+  requireFollower: boolean;
+
+  // Ação quando o remetente NÃO é seguidor: "skip" (pula DM/fluxo) ou
+  // "ask_follow" (envia nonFollowerText pedindo o follow)
+  @Column({ defaultValue: "skip" })
+  nonFollowerAction: string;
+
+  // Mensagem enviada ao não-seguidor quando nonFollowerAction = ask_follow
+  @Column(DataType.TEXT)
+  nonFollowerText: string;
+
+  // "Recompensa": URL pública de mídia/anexo enviado na DM (no private reply
+  // de comentário vai como link no texto — a Meta só permite 1 mensagem)
+  @Column(DataType.TEXT)
+  rewardMediaUrl: string;
+
+  // Tipo do attachment da recompensa: image | video | audio | file
+  @Column
+  rewardMediaType: string;
+
   @Column({ defaultValue: true })
   active: boolean;
 

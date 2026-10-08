@@ -28,6 +28,7 @@ import CreateMessageService from "../services/MessageServices/CreateMessageServi
 import { sendFacebookMessageMedia } from "../services/FacebookServices/sendFacebookMessageMedia";
 
 import sendFaceMessage from "../services/FacebookServices/sendFacebookMessage";
+import sendTelegramMessage from "../services/TelegramServices/sendTelegramMessage";
 
 import ShowPlanCompanyService from "../services/CompanyService/ShowPlanCompanyService";
 import ListMessagesServiceAll from "../services/MessageServices/ListMessagesServiceAll";
@@ -1097,6 +1098,43 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
           channel: "webchat"
         };
         await CreateMessageService({ messageData, companyId: ticket.companyId });
+      } else if (ticket.channel === "telegram") {
+        if (isPrivate === "true") {
+          // Nota interna: não sai no Telegram — só persiste no histórico
+          const messageData = {
+            wid: `tg_pvt_${ticket.id}_${Date.now()}`,
+            ticketId: ticket.id,
+            contactId: ticket.contactId,
+            body,
+            fromMe: true,
+            mediaType: "extendedTextMessage",
+            read: true,
+            quotedMsgId: quotedMsg?.id || null,
+            ack: 2,
+            isPrivate: true,
+            channel: "telegram"
+          };
+          await CreateMessageService({ messageData, companyId: ticket.companyId });
+        } else {
+          // Canal Telegram: push real via Bot API (sendMessage). O chat_id é
+          // derivado do contato (number sintético tg_<wappId>_<chatId> ou
+          // remoteJid). ack=2: não há leitura rastreada no canal.
+          const sent = await sendTelegramMessage({ body, ticket, quotedMsg });
+          const messageData = {
+            wid: `tg_out_${sent?.message_id ?? `${ticket.id}_${Date.now()}`}`,
+            ticketId: ticket.id,
+            contactId: ticket.contactId,
+            body,
+            fromMe: true,
+            mediaType: "extendedTextMessage",
+            read: true,
+            quotedMsgId: quotedMsg?.id || null,
+            ack: 2,
+            isPrivate: false,
+            channel: "telegram"
+          };
+          await CreateMessageService({ messageData, companyId: ticket.companyId });
+        }
       }
     }
     return res.status(200).json({ message: "Mensagem enviada com sucesso" });

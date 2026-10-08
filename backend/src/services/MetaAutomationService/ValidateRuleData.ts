@@ -14,12 +14,23 @@ export const VALID_TRIGGERS = [
 // Canais onde a regra pode escutar eventos
 export const VALID_CHANNELS = ["facebook", "instagram", "both"];
 
+// Ação para remetente que não é seguidor (requireFollower=true):
+// "skip" = pula DM/fluxo | "ask_follow" = envia nonFollowerText pedindo follow
+export const VALID_NON_FOLLOWER_ACTIONS = ["skip", "ask_follow"];
+
+// Tipos de attachment aceitos pelo Send API da Meta para a mídia de recompensa
+export const VALID_REWARD_MEDIA_TYPES = ["image", "video", "audio", "file"];
+
 interface RuleData {
   name?: string;
   whatsappId?: number | null;
   channel?: string;
   trigger?: string;
   flowId?: number | null;
+  nonFollowerAction?: string | null;
+  nonFollowerText?: string | null;
+  rewardMediaUrl?: string | null;
+  rewardMediaType?: string | null;
 }
 
 /**
@@ -77,6 +88,54 @@ const ValidateRuleData = async (
 
     if (!flow) {
       throw new AppError("Fluxo não encontrado nesta empresa", 404);
+    }
+  }
+
+  // Check de seguidor: valida ação alternativa e texto do pedido de follow
+  if (
+    data.nonFollowerAction !== undefined &&
+    data.nonFollowerAction !== null &&
+    !VALID_NON_FOLLOWER_ACTIONS.includes(data.nonFollowerAction)
+  ) {
+    throw new AppError(
+      `Ação para não-seguidor inválida. Use: ${VALID_NON_FOLLOWER_ACTIONS.join(", ")}`,
+      400
+    );
+  }
+
+  if (
+    data.nonFollowerAction === "ask_follow" &&
+    !(data.nonFollowerText && String(data.nonFollowerText).trim())
+  ) {
+    throw new AppError(
+      "Informe a mensagem para pedir o follow (ação 'ask_follow')",
+      400
+    );
+  }
+
+  // Mídia de recompensa: exige URL http(s) e tipo de attachment válido
+  if (data.rewardMediaUrl !== undefined && data.rewardMediaUrl !== null) {
+    const url = String(data.rewardMediaUrl).trim();
+    if (url && !/^https?:\/\//i.test(url)) {
+      throw new AppError(
+        "A URL da mídia de recompensa precisa ser http(s) pública",
+        400
+      );
+    }
+    if (url && data.rewardMediaType !== undefined && data.rewardMediaType !== null) {
+      if (!VALID_REWARD_MEDIA_TYPES.includes(data.rewardMediaType)) {
+        throw new AppError(
+          `Tipo de mídia inválido. Use: ${VALID_REWARD_MEDIA_TYPES.join(", ")}`,
+          400
+        );
+      }
+    }
+  } else if (data.rewardMediaType !== undefined && data.rewardMediaType !== null) {
+    if (!VALID_REWARD_MEDIA_TYPES.includes(data.rewardMediaType)) {
+      throw new AppError(
+        `Tipo de mídia inválido. Use: ${VALID_REWARD_MEDIA_TYPES.join(", ")}`,
+        400
+      );
     }
   }
 };

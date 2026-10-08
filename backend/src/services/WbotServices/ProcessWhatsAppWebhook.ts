@@ -149,6 +149,18 @@ interface WebhookChange {
         from?: string;
         id?: string;
       };
+      // Referral de anúncio Click-to-WhatsApp (CTWA): presente quando a
+      // mensagem foi iniciada a partir de um anúncio da Meta
+      // (source_type="ad", ctwa_clid, source_id=id do anúncio, headline)
+      referral?: {
+        source_type?: string;
+        source_id?: string;
+        source_url?: string;
+        headline?: string;
+        body?: string;
+        media_type?: string;
+        ctwa_clid?: string;
+      };
     }>;
     statuses?: Array<{
       id: string;
@@ -166,6 +178,47 @@ const serializeOfficialWebhookMessage = (message: any): string =>
     source: "official-webhook",
     message
   });
+
+// Extrai a atribuição de anúncio Click-to-WhatsApp (CTWA) do referral da
+// mensagem. Anúncios da Meta chegam com referral.source_type === "ad".
+const extractCtwaReferral = (
+  message: any
+): { ctwaClid: string | null; adId: string | null; adHeadline: string | null } | null => {
+  const referral = message?.referral;
+  if (!referral || referral.source_type !== "ad") return null;
+
+  const ctwaClid = referral.ctwa_clid ? String(referral.ctwa_clid) : null;
+  const adId = referral.source_id ? String(referral.source_id) : null;
+  const adHeadline = referral.headline ? String(referral.headline) : null;
+
+  // Sem identificador algum não há o que atribuir
+  if (!ctwaClid && !adId) return null;
+
+  return { ctwaClid, adId, adHeadline };
+};
+
+// Grava a atribuição CTWA no ticket somente se ele ainda não tiver uma
+// (first-touch por ciclo de atendimento: não sobrescreve um anúncio
+// já registrado). Falha aqui não pode derrubar o processamento da mensagem.
+const persistCtwaReferral = async (ticket: Ticket, message: any): Promise<void> => {
+  const referral = extractCtwaReferral(message);
+  if (!referral || ticket?.ctwaClid) return;
+
+  try {
+    await ticket.update({
+      ctwaClid: referral.ctwaClid,
+      adId: referral.adId,
+      adHeadline: referral.adHeadline
+    });
+    logger.info(
+      `[WebhookProcessor] Atribuição CTWA gravada no ticket ${ticket.id}: adId=${referral.adId}`
+    );
+  } catch (err: any) {
+    logger.warn(
+      `[WebhookProcessor] Erro ao gravar CTWA no ticket ${ticket?.id}: ${err.message}`
+    );
+  }
+};
 
 const findReferencedOfficialMessage = async (
   message: any,
@@ -335,6 +388,9 @@ async function processMessageWithExistingContact(
   );
 
   logger.info(`[WebhookProcessor] Ticket ${ticket.id} usado para mensagem de ID Meta (contato=${contact.id})`);
+
+  // Atribuição CTWA: grava adId/headline quando a mensagem veio de anúncio
+  await persistCtwaReferral(ticket, message);
 
   // Processar corpo da mensagem de forma simplificada
   let body = "";
@@ -561,6 +617,10 @@ async function processIncomingMessage(
       const { ticketEventBus } = await import("../TicketServices/TicketEventBus");
       ticketEventBus.publishStatusChanged(companyId, ticket.id, ticket.uuid, ticket, "campaign", newStatus);
     }
+
+    // Atribuição CTWA: grava adId/headline no ticket quando a mensagem
+    // que o originou veio de um anúncio Click-to-WhatsApp
+    await persistCtwaReferral(ticket, message);
 
     // Processar corpo da mensagem
     let body = "";

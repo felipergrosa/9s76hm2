@@ -12,6 +12,12 @@ interface Request {
   dmText?: string | null;
   publicReplyText?: string | null;
   flowId?: number | null;
+  autoLikeComment?: boolean;
+  requireFollower?: boolean;
+  nonFollowerAction?: string | null;
+  nonFollowerText?: string | null;
+  rewardMediaUrl?: string | null;
+  rewardMediaType?: string | null;
   active?: boolean;
   companyId: number;
 }
@@ -37,6 +43,12 @@ const UpdateService = async (data: Request): Promise<MetaAutomationRule> => {
     "dmText",
     "publicReplyText",
     "flowId",
+    "autoLikeComment",
+    "requireFollower",
+    "nonFollowerAction",
+    "nonFollowerText",
+    "rewardMediaUrl",
+    "rewardMediaType",
     "active"
   ] as const;
 

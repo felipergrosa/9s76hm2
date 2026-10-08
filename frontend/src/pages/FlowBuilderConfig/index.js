@@ -47,6 +47,8 @@ import waitReplyNode from "./nodes/waitReplyNode";
 import quickRepliesNode from "./nodes/quickRepliesNode";
 import carouselNode from "./nodes/carouselNode";
 import sendEmailNode from "./nodes/sendEmailNode";
+import asaasChargeNode from "./nodes/asaasChargeNode";
+import googleCalendarNode from "./nodes/googleCalendarNode";
 
 import api from "../../services/api";
 
@@ -108,6 +110,8 @@ import {
   ViewCarousel,
   Email,
   AutoFixHigh,
+  RequestQuote,
+  Event,
 } from "@mui/icons-material";
 import RemoveEdge from "./nodes/removeEdge";
 import FlowBuilderAddImgModal from "../../components/FlowBuilderAddImgModal";
@@ -145,6 +149,8 @@ import FlowBuilderWaitReplyModal from "../../components/FlowBuilderWaitReplyModa
 import FlowBuilderQuickRepliesModal from "../../components/FlowBuilderQuickRepliesModal";
 import FlowBuilderCarouselModal from "../../components/FlowBuilderCarouselModal";
 import FlowBuilderSendEmailModal from "../../components/FlowBuilderSendEmailModal";
+import FlowBuilderAsaasChargeModal from "../../components/FlowBuilderAsaasChargeModal";
+import FlowBuilderGoogleCalendarModal from "../../components/FlowBuilderGoogleCalendarModal";
 import FlowValidationDialog from "../../components/FlowValidationDialog";
 import GetAppIcon from "@mui/icons-material/GetApp";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
@@ -304,6 +310,8 @@ const nodeTypes = {
   quickReplies: quickRepliesNode,
   carousel: carouselNode,
   sendEmail: sendEmailNode,
+  asaasCharge: asaasChargeNode,
+  googleCalendar: googleCalendarNode,
 };
 
 const edgeTypes = {
@@ -373,6 +381,8 @@ export const FlowBuilderConfig = () => {
   const [modalAddQuickReplies, setModalAddQuickReplies] = useState(null);
   const [modalAddCarousel, setModalAddCarousel] = useState(null);
   const [modalAddSendEmail, setModalAddSendEmail] = useState(null);
+  const [modalAddAsaasCharge, setModalAddAsaasCharge] = useState(null);
+  const [modalAddGoogleCalendar, setModalAddGoogleCalendar] = useState(null);
   const [validationIssues, setValidationIssues] = useState(null);
   const [importModal, setImportModal] = useState(false);
   const [flowStatus, setFlowStatus] = useState("published"); // item 9 do plano: draft/published
@@ -750,6 +760,14 @@ export const FlowBuilderConfig = () => {
     addAndResetDrop("sendEmail", data);
   };
 
+  const asaasChargeAdd = (data) => {
+    addAndResetDrop("asaasCharge", data);
+  };
+
+  const googleCalendarAdd = (data) => {
+    addAndResetDrop("googleCalendar", data);
+  };
+
   useEffect(() => {
     setLoading(true);
     const delayDebounceFn = setTimeout(() => {
@@ -1018,6 +1036,12 @@ export const FlowBuilderConfig = () => {
     if (node.type === "sendEmail") {
       setModalAddSendEmail("edit");
     }
+    if (node.type === "asaasCharge") {
+      setModalAddAsaasCharge("edit");
+    }
+    if (node.type === "googleCalendar") {
+      setModalAddGoogleCalendar("edit");
+    }
   };
 
   // Seleção de nó usa a classe .selected do react-flow (estilizada no CSS),
@@ -1068,6 +1092,8 @@ export const FlowBuilderConfig = () => {
     setModalAddQuickReplies(null);
     setModalAddCarousel(null);
     setModalAddSendEmail(null);
+    setModalAddAsaasCharge(null);
+    setModalAddGoogleCalendar(null);
   };
 
   // Validação pré-publish no estilo ManyChat: blocos órfãos, início sem
@@ -1111,6 +1137,8 @@ export const FlowBuilderConfig = () => {
         quickReplies: "Respostas rápidas",
         carousel: "Carrossel",
         sendEmail: "Enviar e-mail",
+        asaasCharge: "2ª via Asaas",
+        googleCalendar: "Google Agenda",
       };
       const base = names[n.type] || n.type;
       const detail =
@@ -1505,6 +1533,20 @@ export const FlowBuilderConfig = () => {
           type: "sendEmail",
         },
         {
+          icon: <RequestQuote sx={{ color: "#7C3AED" }} />,
+          color: "#7C3AED",
+          name: "2ª via Asaas",
+          desc: "Consulta CPF/CNPJ e envia boleto + PIX",
+          type: "asaasCharge",
+        },
+        {
+          icon: <Event sx={{ color: "#0B8043" }} />,
+          color: "#0B8043",
+          name: "Google Agenda",
+          desc: "Cria evento na agenda Google",
+          type: "googleCalendar",
+        },
+        {
           icon: (
             <Box
               component="img"
@@ -1616,6 +1658,12 @@ export const FlowBuilderConfig = () => {
         break;
       case "sendEmail":
         setModalAddSendEmail("create");
+        break;
+      case "asaasCharge":
+        setModalAddAsaasCharge("create");
+        break;
+      case "googleCalendar":
+        setModalAddGoogleCalendar("create");
         break;
       default:
     }
@@ -1886,6 +1934,22 @@ export const FlowBuilderConfig = () => {
         data={dataNode}
         onUpdate={updateNode}
         close={setModalAddSendEmail}
+      />
+
+      <FlowBuilderAsaasChargeModal
+        open={modalAddAsaasCharge}
+        onSave={asaasChargeAdd}
+        data={dataNode}
+        onUpdate={updateNode}
+        close={setModalAddAsaasCharge}
+      />
+
+      <FlowBuilderGoogleCalendarModal
+        open={modalAddGoogleCalendar}
+        onSave={googleCalendarAdd}
+        data={dataNode}
+        onUpdate={updateNode}
+        close={setModalAddGoogleCalendar}
       />
 
       <FlowValidationDialog

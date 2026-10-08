@@ -158,12 +158,17 @@ Dashboard, Tickets, Respostas rápidas, Templates Meta, Kanban, Contatos+import,
 | ✅ | Ramal interno (usuário) + CPF/CNPJ e código verificação (contato) | P | **Implementado 11/10/2026** (Onda 4): `Users.ramal` + `Contacts.verificationCode` (cpfCnpj já existia — pontas fechadas) |
 | ✅ | Disparar fluxo num ticket | M | **Implementado 11/10/2026** (Onda 4): `POST /tickets/:id/trigger-flow` + `GET /tickets/:id/flows` + `TriggerFlowModal`; ticket vira `bot` |
 | ✅ | Filtro de tickets por carteira | P | **Implementado 11/10/2026** (Onda 4): `walletUserIds` em `GET /tickets` + multi-select na aba de busca (admin) |
-| Média | Nó Asaas boleto/PIX no FlowBuilder | M | Só se usarmos Asaas |
-| Baixa | Google Agenda → FlowBuilder | M | OAuth + node de calendar |
-| Baixa | Discador/WhatsApp calls (wacalls) | G | Microserviço whatsmeow + WebRTC |
-| Baixa | Telegram/Z-API como canais | G | Novos adapters |
-| Baixa | Troncal SIP nas settings + ramal no usuário | M | Ramal cadastrado (Onda 4); falta troncal + softphone configurável |
+| ✅ | Nó Asaas boleto/PIX no FlowBuilder | M | **Implementado 14/10/2026** (Onda 5): `asaasCharge` — consulta CPF/CNPJ (OVERDUE+PENDING), envia boleto/linha digitável/PDF/PIX copia-e-cola+QR, saídas a/b. Env `ASAAS_API_KEY`/`ASAAS_BASE_URL` |
+| ✅ | Google Agenda → FlowBuilder | M | **Implementado 14/10/2026** (Onda 5): `googleCalendar` — cria evento via Service Account (env `GOOGLE_CALENDAR_*`); OAuth por empresa pendente |
+| 🟡 | Discador/WhatsApp calls (wacalls) | G | **Parcial 14/10/2026** (Onda 5): tabela `CallLogs` + `POST /call-logs` (X-Service-Token/`INTERNAL_SERVICE_TOKEN`) + relatório `/call-report`. Microserviço whatsmeow + WebRTC seguem fora |
+| 🟡 | Telegram/Z-API como canais | G | **Telegram implementado 14/10/2026** (Onda 5): `telegram-setup` + webhook público `/public/telegram/:token`, inbound→ticket, outbound `sendMessage`. Mídia bidirecional e Z-API pendentes |
+| ✅ | Troncal SIP nas settings + ramal no usuário | M | **Implementado 14/10/2026** (Onda 5): `CompaniesSettings.sip*` (senha mascarada `__set__`), `GET /companySipTrunk`, Softphone lê config real (hardcode removido). Servidor Asterisk/FreePBX é pré-requisito externo |
+| ✅ | Multi-conta (account switch) | M | **Implementado 14/10/2026** (Onda 5): `GET /auth/switchable-accounts` + `POST /auth/switch` (vínculo por e-mail), item no menu do avatar |
+| ✅ | Embedded Signup Meta | M | **Implementado 14/10/2026** (Onda 5): `POST /whatsapp/embedded-signup` + botão FB.login no WhatsAppModal. Precisa `REACT_APP_META_EMBEDDED_SIGNUP_CONFIG_ID` |
+| ✅ | Ads report CTWA | M | **Implementado 14/10/2026** (Onda 5): captura `referral.ctwa_clid` no webhook + `Ticket.ctwaClid/adId/adHeadline` + página `/ads-report` |
+| ✅ | Automação IG comentário→DM (delta) | M | **Implementado 14/10/2026** (Onda 5): `autoLikeComment` (IG v26), `requireFollower` (`is_user_follow_business`, fail-open), `nonFollowerAction` skip/ask_follow, `rewardMediaUrl`. Permissão `instagram_manage_engagement` exige App Review |
 | Verificar | Gestor de Grupos paridade | - | Comparar com nosso /groups |
+| Alta restante | Multi-boards Kanban | G | Não iniciado — modelo board→lanes é refatoração grande |
 
 ---
 

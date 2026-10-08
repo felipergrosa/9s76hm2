@@ -44,6 +44,7 @@ import TableRowSkeleton from "../../components/TableRowSkeleton";
 import ConfirmationModal from "../../components/ConfirmationModal";
 import toastError from "../../errors/toastError";
 import usePermissions from "../../hooks/usePermissions";
+import { i18n } from "../../translate/i18n";
 import { motion, useReducedMotion } from "framer-motion";
 import StatCard from "../../components/bento/StatCard";
 import { bentoContainer, bentoItem, bentoItemReduced } from "../../components/bento/motionPresets";
@@ -259,27 +260,19 @@ const useStyles = makeStyles(theme => ({
 const chipBaseClass =
   "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium";
 
-const TRIGGER_LABELS = {
-  comment_keyword: "Comentário com palavra-chave",
-  comment_any: "Qualquer comentário",
-  story_mention: "Menção em story",
-  referral_ref: "Link m.me com ref",
-  dm_keyword: "DM com palavra-chave",
-};
-
-const CHANNEL_LABELS = {
-  facebook: "Facebook",
-  instagram: "Instagram",
-  both: "Facebook + Instagram",
-};
-
 // Ícone(s) do canal — ambos canais exibem os dois ícones lado a lado
 const ChannelIcons = ({ channel }) => {
   const classes = useStyles();
   const showFacebook = channel === "facebook" || channel === "both";
   const showInstagram = channel === "instagram" || channel === "both";
   return (
-    <Tooltip title={CHANNEL_LABELS[channel] || channel || "—"}>
+    <Tooltip
+      title={
+        channel
+          ? i18n.t(`metaAutomations.channels.${channel}`, { defaultValue: channel })
+          : "—"
+      }
+    >
       <span className={classes.channelIcons}>
         {showFacebook && <FacebookIcon size={16} />}
         {showInstagram && <InstagramIcon size={16} />}
@@ -289,13 +282,24 @@ const ChannelIcons = ({ channel }) => {
   );
 };
 
+// Rótulo traduzido do gatilho (fallback para o valor cru se chave não existir)
+const triggerLabel = trigger =>
+  trigger
+    ? i18n.t(`metaAutomations.triggers.${trigger}`, { defaultValue: trigger })
+    : "—";
+
 // Monta o rótulo da coluna "Ação" combinando DM / resposta pública / fluxo
 // (a listagem inclui o nome do fluxo via associação `flow`)
 const actionLabel = record => {
   const parts = [];
   if (record.dmText) parts.push("DM");
-  if (record.publicReplyText) parts.push("Resposta pública");
-  if (record.flowId) parts.push(record.flow?.name ? `Fluxo: ${record.flow.name}` : "Fluxo");
+  if (record.publicReplyText) parts.push(i18n.t("metaAutomations.actionParts.publicReply"));
+  if (record.autoLikeComment) parts.push(i18n.t("metaAutomations.actionParts.autoLike"));
+  if (record.requireFollower) parts.push(i18n.t("metaAutomations.actionParts.followerCheck"));
+  if (record.rewardMediaUrl) parts.push(i18n.t("metaAutomations.actionParts.reward"));
+  if (record.flowId) parts.push(record.flow?.name
+    ? i18n.t("metaAutomations.actionParts.flowNamed", { name: record.flow.name })
+    : i18n.t("metaAutomations.actionParts.flow"));
   return parts.length ? parts.join(" + ") : "—";
 };
 
@@ -400,7 +404,11 @@ const MetaAutomations = () => {
     try {
       await api.put(`/meta-automations/${record.id}`, { active: !record.active });
       dispatch({ type: "UPDATE", payload: { ...record, active: !record.active } });
-      toast.success(record.active ? "Regra desativada" : "Regra ativada");
+      toast.success(
+        record.active
+          ? i18n.t("metaAutomations.toasts.deactivated")
+          : i18n.t("metaAutomations.toasts.activated")
+      );
     } catch (err) {
       toastError(err);
     }
@@ -411,7 +419,7 @@ const MetaAutomations = () => {
       await api.delete(`/meta-automations/${id}`);
       dispatch({ type: "DELETE", payload: id });
       setTotalCount(c => Math.max(0, c - 1));
-      toast.success("Regra de automação excluída");
+      toast.success(i18n.t("metaAutomations.toasts.deleted"));
     } catch (err) {
       toastError(err);
     }
@@ -430,7 +438,7 @@ const MetaAutomations = () => {
   const renderActions = record => (
     <>
       {canEdit && (
-        <Tooltip title="Editar">
+        <Tooltip title={i18n.t("metaAutomations.actions.edit")}>
           <IconButton
             size="small"
             className={classes.actionButton}
@@ -441,7 +449,7 @@ const MetaAutomations = () => {
         </Tooltip>
       )}
       {canDelete && (
-        <Tooltip title="Excluir">
+        <Tooltip title={i18n.t("metaAutomations.actions.delete")}>
           <IconButton
             size="small"
             className={classes.actionButton}
@@ -468,12 +476,15 @@ const MetaAutomations = () => {
   return (
     <MainContainer useWindowScroll>
       <ConfirmationModal
-        title={deleting && `Excluir regra "${deleting.name}"?`}
+        title={
+          deleting &&
+          i18n.t("metaAutomations.confirm.deleteTitle", { name: deleting.name })
+        }
         open={confirmOpen}
         onClose={() => setConfirmOpen(false)}
         onConfirm={() => handleDelete(deleting.id)}
       >
-        Essa ação não pode ser desfeita.
+        {i18n.t("metaAutomations.confirm.deleteMessage")}
       </ConfirmationModal>
 
       <MetaAutomationModal
@@ -491,10 +502,10 @@ const MetaAutomations = () => {
       >
         {/* Strip de KPIs bento — derivado da lista carregada */}
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-          <StatCard label="Regras" value={stats.total} icon={<AutomationIcon size={20} />} accent="var(--primary-color)" loading={loading} />
-          <StatCard label="Ativas" value={stats.active} icon={<ActiveIcon size={20} />} accent="#26c281" loading={loading} />
-          <StatCard label="Inativas" value={stats.inactive} icon={<PausedIcon size={20} />} accent="#f39c12" loading={loading} />
-          <StatCard label="Disparos" value={stats.sent} icon={<SentIcon size={20} />} accent="#3598dc" loading={loading} />
+          <StatCard label={i18n.t("metaAutomations.stats.rules")} value={stats.total} icon={<AutomationIcon size={20} />} accent="var(--primary-color)" loading={loading} />
+          <StatCard label={i18n.t("metaAutomations.stats.active")} value={stats.active} icon={<ActiveIcon size={20} />} accent="#26c281" loading={loading} />
+          <StatCard label={i18n.t("metaAutomations.stats.inactive")} value={stats.inactive} icon={<PausedIcon size={20} />} accent="#f39c12" loading={loading} />
+          <StatCard label={i18n.t("metaAutomations.stats.dispatches")} value={stats.sent} icon={<SentIcon size={20} />} accent="#3598dc" loading={loading} />
         </div>
 
         <motion.div variants={itemVariant} style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
@@ -502,9 +513,9 @@ const MetaAutomations = () => {
             {/* Header interno — mesmo padrão de FollowUps/MetaTemplates */}
             <Box className={classes.header}>
               <div className={classes.headerText}>
-                <Title>Automações Meta ({totalCount})</Title>
+                <Title>{i18n.t("metaAutomations.title")} ({totalCount})</Title>
                 <span className={classes.subtitle}>
-                  Regras automáticas para comentários, menções e DMs do Facebook/Instagram
+                  {i18n.t("metaAutomations.subtitle")}
                 </span>
               </div>
               <div className={classes.headerActions}>
@@ -517,7 +528,7 @@ const MetaAutomations = () => {
                     onClick={() => handleOpenModal(null)}
                     startIcon={<AddIcon fontSize="small" />}
                   >
-                    Nova regra
+                    {i18n.t("metaAutomations.newRule")}
                   </Button>
                 )}
               </div>
@@ -526,7 +537,7 @@ const MetaAutomations = () => {
             {/* Barra de busca e filtros */}
             <Box className={classes.toolbar}>
               <TextField
-                placeholder="Buscar regra..."
+                placeholder={i18n.t("metaAutomations.searchPlaceholder")}
                 type="search"
                 variant="outlined"
                 size="small"
@@ -542,28 +553,28 @@ const MetaAutomations = () => {
                 }}
               />
               <FormControl variant="outlined" size="small" className={classes.filterSelect}>
-                <InputLabel>Status</InputLabel>
+                <InputLabel>{i18n.t("metaAutomations.filters.status")}</InputLabel>
                 <Select
                   value={statusFilter}
                   onChange={e => setStatusFilter(e.target.value)}
-                  label="Status"
+                  label={i18n.t("metaAutomations.filters.status")}
                 >
-                  <MenuItem value="">Todos</MenuItem>
-                  <MenuItem value="active">Ativas</MenuItem>
-                  <MenuItem value="inactive">Inativas</MenuItem>
+                  <MenuItem value="">{i18n.t("metaAutomations.filters.all")}</MenuItem>
+                  <MenuItem value="active">{i18n.t("metaAutomations.filters.active")}</MenuItem>
+                  <MenuItem value="inactive">{i18n.t("metaAutomations.filters.inactive")}</MenuItem>
                 </Select>
               </FormControl>
               <FormControl variant="outlined" size="small" className={classes.filterSelect}>
-                <InputLabel>Canal</InputLabel>
+                <InputLabel>{i18n.t("metaAutomations.filters.channel")}</InputLabel>
                 <Select
                   value={channelFilter}
                   onChange={e => setChannelFilter(e.target.value)}
-                  label="Canal"
+                  label={i18n.t("metaAutomations.filters.channel")}
                 >
-                  <MenuItem value="">Todos</MenuItem>
+                  <MenuItem value="">{i18n.t("metaAutomations.filters.all")}</MenuItem>
                   <MenuItem value="facebook">Facebook</MenuItem>
                   <MenuItem value="instagram">Instagram</MenuItem>
-                  <MenuItem value="both">Ambos</MenuItem>
+                  <MenuItem value="both">{i18n.t("metaAutomations.channels.both")}</MenuItem>
                 </Select>
               </FormControl>
             </Box>
@@ -580,11 +591,11 @@ const MetaAutomations = () => {
                   <AutomationIcon size={44} className={classes.emptyIcon} />
                   <Typography variant="subtitle1">
                     {searchParam || statusFilter || channelFilter
-                      ? "Nenhuma regra encontrada com esses filtros"
-                      : "Nenhuma regra de automação criada ainda"}
+                      ? i18n.t("metaAutomations.empty.filtered")
+                      : i18n.t("metaAutomations.empty.none")}
                   </Typography>
                   <Typography variant="body2">
-                    Crie uma regra para responder comentários e menções automaticamente.
+                    {i18n.t("metaAutomations.empty.hint")}
                   </Typography>
                 </Box>
               ) : (
@@ -610,23 +621,23 @@ const MetaAutomations = () => {
                         </div>
                         <div className={classes.cardMeta}>
                           <div>
-                            <div className={classes.metaLabel}>Gatilho</div>
+                            <div className={classes.metaLabel}>{i18n.t("metaAutomations.table.trigger")}</div>
                             <div className={classes.metaValue}>
-                              {TRIGGER_LABELS[record.trigger] || record.trigger || "—"}
+                              {triggerLabel(record.trigger)}
                             </div>
                           </div>
                           <div>
-                            <div className={classes.metaLabel}>Alvo</div>
+                            <div className={classes.metaLabel}>{i18n.t("metaAutomations.table.target")}</div>
                             <div className={classes.metaValue}>
                               {record.matchValue || "—"}
                             </div>
                           </div>
                           <div>
-                            <div className={classes.metaLabel}>Ação</div>
+                            <div className={classes.metaLabel}>{i18n.t("metaAutomations.table.action")}</div>
                             <div className={classes.metaValue}>{actionLabel(record)}</div>
                           </div>
                           <div>
-                            <div className={classes.metaLabel}>Disparos</div>
+                            <div className={classes.metaLabel}>{i18n.t("metaAutomations.table.dispatches")}</div>
                             <div className={classes.metaValue}>{record.sentCount || 0}</div>
                           </div>
                         </div>
@@ -640,14 +651,14 @@ const MetaAutomations = () => {
                     <Table size="small">
                       <TableHead>
                         <TableRow>
-                          <TableCell className={classes.headCell}>Nome</TableCell>
-                          <TableCell align="center" className={classes.headCell}>Canal</TableCell>
-                          <TableCell className={classes.headCell}>Gatilho</TableCell>
-                          <TableCell className={classes.headCell}>Alvo</TableCell>
-                          <TableCell className={classes.headCell}>Ação</TableCell>
-                          <TableCell align="center" className={classes.headCell}>Disparos</TableCell>
-                          <TableCell align="center" className={classes.headCell}>Ativa</TableCell>
-                          <TableCell align="center" className={classes.headCell}>Ações</TableCell>
+                          <TableCell className={classes.headCell}>{i18n.t("metaAutomations.table.name")}</TableCell>
+                          <TableCell align="center" className={classes.headCell}>{i18n.t("metaAutomations.table.channel")}</TableCell>
+                          <TableCell className={classes.headCell}>{i18n.t("metaAutomations.table.trigger")}</TableCell>
+                          <TableCell className={classes.headCell}>{i18n.t("metaAutomations.table.target")}</TableCell>
+                          <TableCell className={classes.headCell}>{i18n.t("metaAutomations.table.action")}</TableCell>
+                          <TableCell align="center" className={classes.headCell}>{i18n.t("metaAutomations.table.dispatches")}</TableCell>
+                          <TableCell align="center" className={classes.headCell}>{i18n.t("metaAutomations.table.active")}</TableCell>
+                          <TableCell align="center" className={classes.headCell}>{i18n.t("metaAutomations.table.actions")}</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -664,7 +675,7 @@ const MetaAutomations = () => {
                             </TableCell>
                             <TableCell className={classes.bodyCell}>
                               <span className={`${chipBaseClass} bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200`}>
-                                {TRIGGER_LABELS[record.trigger] || record.trigger || "—"}
+                                {triggerLabel(record.trigger)}
                               </span>
                             </TableCell>
                             <TableCell className={classes.bodyCell}>

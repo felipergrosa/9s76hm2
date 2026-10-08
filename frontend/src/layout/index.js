@@ -3,8 +3,9 @@ import clsx from "clsx";
 // import moment from "moment";
 
 // import { isNill } from "lodash";
-// import SoftPhone from "react-softphone";
-// import { WebSocketInterface } from "jssip";
+// Softphone do troncal SIP — lê as settings da empresa (GET /companySipTrunk)
+// e só inicializa o jssip quando o troncal está habilitado (settings > Troncal SIP)
+import Softphone from "../components/Softphone";
 
 import { makeStyles, useTheme } from "@material-ui/core/styles";
 import useMediaQuery from "@material-ui/core/useMediaQuery";
@@ -34,6 +35,7 @@ import {
 // import whatsappIcon from "../assets/nopicture.png";
 
 import MainListItems from "./MainListItems";
+import AccountSwitchMenuItems from "../components/AccountSwitchMenu";
 import NotificationsPopOver from "../components/NotificationsPopOver";
 import NotificationsVolume from "../components/NotificationsVolume";
 import UserModal from "../components/UserModal";
@@ -644,20 +646,10 @@ const LoggedInLayout = ({ children, themeToggle }) => {
             />
           )}
 
-          {/* DESABILITADO POIS TEM BUGS */}
           {<UserLanguageSelector />}
-          {/* <SoftPhone
-            callVolume={33} //Set Default callVolume
-            ringVolume={44} //Set Default ringVolume
-            connectOnStart={false} //Auto connect to sip
-            notifications={false} //Show Browser Notification of an incoming call
-            config={config} //Voip config
-            setConnectOnStartToLocalStorage={setConnectOnStartToLocalStorage} // Callback function
-            setNotifications={setNotifications} // Callback function
-            setCallVolume={setCallVolume} // Callback function
-            setRingVolume={setRingVolume} // Callback function
-            timelocale={'UTC-3'} //Set time local for call history
-          /> */}
+          {/* Softphone do troncal SIP: exibe "SIP desconectado" quando
+              desabilitado e só monta o widget quando há config válida */}
+          {user.id && <Softphone />}
           <Tooltip title={i18n.t("dashboard.buttons.darkMode")} arrow>
             <IconButton
               edge="start"
@@ -739,6 +731,9 @@ const LoggedInLayout = ({ children, themeToggle }) => {
               <MenuItem onClick={handleOpenUserModal}>
                 {i18n.t("mainDrawer.appBar.user.profile")}
               </MenuItem>
+              {/* Trocar de conta (Fluxoo): itens só aparecem se existir
+                  outra empresa vinculada ao mesmo e-mail */}
+              <AccountSwitchMenuItems />
               <MenuItem onClick={handleClickLogout}>
                 {i18n.t("mainDrawer.appBar.user.logout")}
               </MenuItem>

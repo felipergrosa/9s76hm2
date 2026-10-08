@@ -25,6 +25,12 @@ const UpdateCompanySettingsService = async ({ companyId, column, data }: Params)
     throw new AppError("ERR_INVALID_COMPANY_ID", 400);
   }
 
+  // Validação específica do troncal SIP: transporte é enum ("udp"|"tcp"|"wss").
+  // (udp/tcp são referência do troncal; o softphone no navegador resolve para ws/wss)
+  if (column === "sipTransport" && !["udp", "tcp", "wss"].includes(String(data))) {
+    throw new AppError("ERR_INVALID_SIP_TRANSPORT", 400);
+  }
+
   // Nome da coluna é seguro (vindo da allowlist). Valores via replacements.
   const [results] = await sequelize.query(
     `UPDATE "CompaniesSettings" SET "${column}" = :data WHERE "companyId" = :companyId`,

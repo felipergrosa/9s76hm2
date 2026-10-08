@@ -39,7 +39,18 @@ export const ALLOWED_COMPANY_SETTINGS_COLUMNS = new Set<string>([
   // Config. Aniversário (envio automático de parabéns)
   "birthdayMessageEnabled",
   "birthdayMessage",
-  "birthdayWhatsappId"
+  "birthdayWhatsappId",
+  // Troncal SIP (referência Fluxoo) — credenciais por empresa para o softphone
+  "sipEnabled",
+  "sipHost",
+  "sipPort",
+  "sipDomain",
+  "sipUser",
+  // SENSÍVEL: o PUT grava em texto; os GETs genéricos mascaram este campo
+  // (ver CompanySettingsController) — valor real só via GET /companySipTrunk.
+  "sipPassword",
+  "sipTransport",
+  "sipCallerId"
 ]);
 
 export const isAllowedCompanySettingColumn = (column: string): boolean => {

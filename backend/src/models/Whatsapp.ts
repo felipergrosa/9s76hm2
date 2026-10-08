@@ -344,6 +344,21 @@ class Whatsapp extends Model<Whatsapp> {
   @Unique
   @Column(DataType.TEXT)
   webchatToken: string;
+
+  // Token do bot Telegram (gerado pelo @BotFather). Segredo — nunca sai no
+  // sanitizeWhatsapp; gravado apenas via POST /whatsapp/:id/telegram-setup.
+  // NUNCA logar este campo.
+  @AllowNull(true)
+  @Column(DataType.TEXT)
+  telegramBotToken: string;
+
+  // Token opaco da URL do webhook público (/public/telegram/:token).
+  // Bearer credential como o webchatToken: fora do sanitizeWhatsapp e também
+  // usado como secret_token no setWebhook (header X-Telegram-Bot-Api-Secret-Token).
+  @AllowNull(true)
+  @Unique
+  @Column(DataType.TEXT)
+  telegramWebhookToken: string;
 }
 
 export default Whatsapp;
