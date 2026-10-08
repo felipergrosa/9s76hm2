@@ -13,7 +13,8 @@ import {
     AutoIncrement,
     ForeignKey,
     BelongsTo,
-    Default
+    Default,
+    DataType
   } from "sequelize-typescript";
   import Company from "./Company";
  
@@ -143,6 +144,28 @@ import {
     // Cotação USD→BRL usada na conversão das tarifas Meta para exibição em R$
     @Column
     usdToBrlRate: string;
+
+    // "Tela de fechamento": quando true, exige assunto e permite resumo
+    // ao finalizar o ticket (preenche closingSubject/closingSummary)
+    @Default(false)
+    @Column
+    enableClosingForm: boolean;
+
+    // Config. Aniversário: envio automático de parabéns no dia do aniversário
+    // do contato (Contacts.birthdate). Segue o padrão "enabled"/"disabled".
+    @Default("disabled")
+    @Column
+    birthdayMessageEnabled: string;
+
+    // Template da mensagem; variáveis aceitas: {name}, {firstName}, {ms} etc.
+    // (resolvidas via formatBody/Mustache no envio)
+    @Column(DataType.TEXT)
+    birthdayMessage: string;
+
+    // ID da conexão WhatsApp de envio (Whatsapp.id como string).
+    // Vazio/null = usa a conexão padrão da empresa.
+    @Column
+    birthdayWhatsappId: string;
   }
   
   export default CompaniesSettings;

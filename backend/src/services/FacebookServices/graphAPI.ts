@@ -363,3 +363,166 @@ export const removeApplcation = async (
     logger.error("ERR_REMOVING_APP_FROM_PAGE");
   }
 };
+
+// Quick replies: botões de resposta rápida (Messenger/IG). Título máx 20
+// chars; o payload volta no webhook (postback) quando o usuário toca.
+export const sendQuickReplies = async (
+  recipientId: string,
+  text: string,
+  replies: { title: string; payload?: string }[],
+  token: string
+): Promise<void> => {
+  try {
+    const { data } = await apiBase(token).post("me/messages", {
+      recipient: {
+        id: recipientId
+      },
+      messaging_type: "RESPONSE",
+      message: {
+        text,
+        quick_replies: replies.map(r => ({
+          content_type: "text",
+          title: r.title.slice(0, 20),
+          payload: r.payload || r.title
+        }))
+      }
+    });
+    return data;
+  } catch (error) {
+    logGraphError("sendQuickReplies", error);
+  }
+};
+
+type TemplateButton = {
+  type: "postback" | "web_url";
+  title: string;
+  payload?: string;
+  url?: string;
+};
+
+// Botões de template: postback volta no webhook; web_url abre link externo.
+const mapTemplateButtons = (buttons: TemplateButton[]) =>
+  buttons.map(b =>
+    b.type === "web_url"
+      ? { type: "web_url", title: b.title.slice(0, 20), url: b.url }
+      : {
+          type: "postback",
+          title: b.title.slice(0, 20),
+          payload: b.payload || b.title
+        }
+  );
+
+export const sendButtonTemplate = async (
+  recipientId: string,
+  text: string,
+  buttons: TemplateButton[],
+  token: string
+): Promise<void> => {
+  try {
+    const { data } = await apiBase(token).post("me/messages", {
+      recipient: {
+        id: recipientId
+      },
+      messaging_type: "RESPONSE",
+      message: {
+        attachment: {
+          type: "template",
+          payload: {
+            template_type: "button",
+            text,
+            buttons: mapTemplateButtons(buttons)
+          }
+        }
+      }
+    });
+    return data;
+  } catch (error) {
+    logGraphError("sendButtonTemplate", error);
+  }
+};
+
+// Generic template: carrossel de cards (título/subtítulo/imagem/botões).
+// A Graph API aceita no máx 10 elementos — o excedente é truncado.
+export const sendGenericTemplate = async (
+  recipientId: string,
+  elements: {
+    title: string;
+    subtitle?: string;
+    image_url?: string;
+    buttons?: TemplateButton[];
+  }[],
+  token: string
+): Promise<void> => {
+  try {
+    const { data } = await apiBase(token).post("me/messages", {
+      recipient: {
+        id: recipientId
+      },
+      messaging_type: "RESPONSE",
+      message: {
+        attachment: {
+          type: "template",
+          payload: {
+            template_type: "generic",
+            elements: elements.slice(0, 10).map(e => ({
+              ...e,
+              buttons: e.buttons ? mapTemplateButtons(e.buttons) : undefined
+            }))
+          }
+        }
+      }
+    });
+    return data;
+  } catch (error) {
+    logGraphError("sendGenericTemplate", error);
+  }
+};
+
+// Resposta PÚBLICA a um comentário (post FB ou mídia IG) — não é DM.
+export const replyToComment = async (
+  commentId: string,
+  message: string,
+  token: string
+): Promise<void> => {
+  try {
+    const { data } = await apiBase(token).post(`${commentId}/replies`, {
+      message
+    });
+    return data;
+  } catch (error) {
+    logGraphError("replyToComment", error);
+  }
+};
+
+// Oculta/exibe comentário na thread pública (moderação).
+export const hideComment = async (
+  commentId: string,
+  hide: boolean,
+  token: string
+): Promise<void> => {
+  try {
+    const { data } = await apiBase(token).post(`${commentId}`, {
+      is_hidden: hide
+    });
+    return data;
+  } catch (error) {
+    logGraphError("hideComment", error);
+  }
+};
+
+// subscribeApp assina a PÁGINA; o objeto Instagram (igUserId) é outro nó do
+// grafo e precisa de subscribed_apps próprio p/ receber comments/mentions.
+export const subscribeInstagramObject = async (
+  igUserId: string,
+  fields: string[],
+  token: string
+): Promise<void> => {
+  try {
+    const { data } = await apiBase(token).post(`${igUserId}/subscribed_apps`, {
+      subscribed_fields: fields
+    });
+    return data;
+  } catch (error) {
+    logGraphError("subscribeInstagramObject", error);
+  }
+};

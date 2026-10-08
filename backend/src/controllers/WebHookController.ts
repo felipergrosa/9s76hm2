@@ -4,6 +4,7 @@ import Whatsapp from "../models/Whatsapp";
 import { handleMessage } from "../services/FacebookServices/facebookMessageListener";
 import { takeThreadControl } from "../services/FacebookServices/graphAPI";
 import { extractCommentFromWebhook, replyCommentWithDM } from "../services/FacebookServices/CommentToDMService";
+import { processMetaAutomationEvent } from "../services/FacebookServices/MetaAutomationService";
 import {
   checkMetaWebhookSignature
 } from "../services/WebhookService/CheckMetaWebhookSignature";
@@ -65,7 +66,7 @@ export const webHook = async (
     }
 
     if (body.object === "page" || body.object === "instagram") {
-      let channel: string;
+      let channel: "facebook" | "instagram";
 
       if (body.object === "page") {
         channel = "facebook";
@@ -74,9 +75,19 @@ export const webHook = async (
       }
 
       body.entry?.forEach(async (entry: any) => {
-        const getTokenPage = await Whatsapp.findOne({
+        // IG: entry.id é o instagram_business_account, gravado em
+        // facebookPageUserId (MetaOAuthController grava a connectionKey lá);
+        // fallback em instagramAccountId cobre conexões legadas.
+        // FB: entry.id é o page id → facebookPageUserId.
+        let getTokenPage = await Whatsapp.findOne({
           where: { facebookPageUserId: entry.id, channel }
         });
+
+        if (!getTokenPage && channel === "instagram") {
+          getTokenPage = await Whatsapp.findOne({
+            where: { instagramAccountId: entry.id, channel }
+          });
+        }
 
         if (!getTokenPage) {
           // Diagnóstico: evento entregue pela Meta sem conexão correspondente
@@ -86,6 +97,9 @@ export const webHook = async (
           );
           return;
         }
+
+        // Alias const: narrowing de `let` não entra em closures
+        const tokenPage = getTokenPage;
 
         entry.messaging?.forEach((data: any) => {
           // Erros async do listener não podem cair em unhandledRejection —
@@ -133,6 +147,86 @@ export const webHook = async (
         const comment = extractCommentFromWebhook({ entry: [entry] });
         if (comment) {
           replyCommentWithDM(getTokenPage, comment).catch(() => {});
+        }
+
+        // Automação Meta: comentários e menções disparam o matcher de
+        // palavras-chave, reutilizando a mesma conexão resolvida das DMs.
+        // TODO: assinar comments/mentions — a assinatura de subscribed_fields
+        // fica em MetaOAuthService.subscribePageWebhook (outro arquivo); os
+        // campos exclusivos do objeto "Instagram" (comments, mentions) também
+        // precisam estar ativos no webhook do app no dashboard da Meta.
+        const fireAutomationEvent = (event: {
+          trigger: "comment_keyword" | "story_mention";
+          commentText?: string;
+          commentId?: string;
+          postId?: string;
+          mediaId?: string;
+          username?: string;
+          senderId?: string;
+          ref?: string;
+        }) => {
+          Promise.resolve(
+            processMetaAutomationEvent({
+              companyId: tokenPage.companyId,
+              whatsappId: tokenPage.id,
+              channel,
+              ...event
+            })
+          ).catch(err => {
+            logger.error(
+              `[Webhook] Erro no matcher ${event.trigger} ${channel} ` +
+              `(whatsappId=${tokenPage.id} entryId=${entry.id}): ${err?.message || err}`
+            );
+          });
+        };
+
+        if (Array.isArray(entry.changes)) {
+          entry.changes.forEach((change: any) => {
+            const val = change?.value || {};
+
+            if (change?.field === "comments") {
+              // Comentário em post do Instagram:
+              // value = { id (commentId), text, media_id (post), from: {id, username}, timestamp }
+              fireAutomationEvent({
+                trigger: "comment_keyword",
+                commentText: val.text,
+                commentId: val.id || val.comment_id,
+                mediaId: val.media_id || val.media?.id,
+                username: val.from?.username,
+                senderId: val.from?.id
+              });
+              return;
+            }
+
+            if (change?.field === "mentions") {
+              // Menção IG (story/mídia): value = { comment_id? | media_id, ... }
+              fireAutomationEvent({
+                trigger: "story_mention",
+                mediaId: val.media_id,
+                commentId: val.comment_id,
+                senderId: val.from?.id || val.sender_id || val.user_id
+              });
+              return;
+            }
+
+            if (
+              change?.field === "feed" &&
+              channel === "facebook" &&
+              val.item === "comment" &&
+              val.verb === "add"
+            ) {
+              // Comentário no feed da página FB: mesmo matcher do
+              // CommentToDMService (que continua executando acima).
+              fireAutomationEvent({
+                trigger: "comment_keyword",
+                commentText: val.message,
+                commentId: val.comment_id || val.id,
+                postId: val.post_id || val.parent_id,
+                username: val.from?.name,
+                senderId: val.from?.id
+              });
+            }
+          });
         }
       });
 

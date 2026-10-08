@@ -46,7 +46,7 @@ const upsertConnectionFromPage = async (
     return "skipped";
   }
 
-  await subscribePageWebhook(page.pageId, page.pageToken, stash.channel);
+  await subscribePageWebhook(page.pageId, page.pageToken, stash.channel, page.instagramAccountId);
 
   const connectionData = {
     name: `${page.pageName} (${stash.channel === "instagram" ? "Instagram" : "Facebook"})`,

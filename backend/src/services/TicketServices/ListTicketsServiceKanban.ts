@@ -68,7 +68,8 @@ const ListTicketsServiceKanban = async ({
     {
       model: Queue,
       as: "queue",
-      attributes: ["id", "name", "color"]
+      // slaMinutes alimenta o cálculo de SLA real por fila no Kanban (frontend/sla.js)
+      attributes: ["id", "name", "color", "slaMinutes"]
     },
     {
       model: User,

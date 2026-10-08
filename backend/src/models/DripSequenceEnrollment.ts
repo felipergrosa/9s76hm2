@@ -46,7 +46,10 @@ class DripSequenceEnrollment extends Model<DripSequenceEnrollment> {
   currentStepIndex: number;
 
   @Column({ defaultValue: "active" })
-  status: string; // active, completed, failed, cancelled
+  // active, waiting_window, completed, failed, cancelled
+  // waiting_window = step de texto livre segurado fora da janela de 24h da
+  // API Oficial — reenvia quando o contato reabrir a janela (TTL no queue)
+  status: string;
 
   @Column
   nextSendAt: Date;

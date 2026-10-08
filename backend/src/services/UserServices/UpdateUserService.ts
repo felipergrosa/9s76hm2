@@ -52,6 +52,7 @@ interface UserData {
   allowedConnectionIds?: number[];
   isPrivate?: boolean;
   color?: string;
+  ramal?: string | null; // Ramal interno (cadastro; futuramente SIP)
 }
 
 interface Request {
@@ -186,6 +187,15 @@ const UpdateUserService = async ({
   // Atualiza isPrivate apenas se enviado
   if (userData.hasOwnProperty("isPrivate")) {
     (dataToUpdate as any).isPrivate = userData.isPrivate;
+  }
+
+  // Atualiza ramal apenas se enviado (string vazia limpa o campo → null)
+  if (userData.hasOwnProperty("ramal")) {
+    const ramal = (userData as any).ramal;
+    (dataToUpdate as any).ramal =
+      ramal === null || ramal === undefined
+        ? null
+        : (String(ramal).trim() || null);
   }
 
   if (!canEditPrivileged) {
@@ -374,7 +384,8 @@ const UpdateUserService = async ({
     allowedContactTags: user.allowedContactTags,
     managedUserIds: (user as any).managedUserIds || [],
     supervisorViewMode: (user as any).supervisorViewMode || "include",
-    permissions: user.permissions || []
+    permissions: user.permissions || [],
+    ramal: (user as any).ramal
   };
 
   return serializedUser;

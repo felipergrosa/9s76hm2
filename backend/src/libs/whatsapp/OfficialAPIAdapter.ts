@@ -212,7 +212,9 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
         listTitle,
         listButtonText,
         vcard,
-        quotedMsgId
+        quotedMsgId,
+        footer,
+        ctaUrlButton
       } = options;
 
       // Normalizar número para formato canônico (DDI + nacional)
@@ -247,6 +249,30 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
             }))
           }
         };
+
+        // Rodapé opcional (max 60 chars na Meta)
+        if (footer) {
+          payload.interactive.footer = { text: footer.substring(0, 60) };
+        }
+      }
+      // Mensagem com botão CTA de URL (apenas API Oficial)
+      else if (ctaUrlButton && ctaUrlButton.url) {
+        payload.type = "interactive";
+        payload.interactive = {
+          type: "cta_url",
+          body: { text: body || "" },
+          action: {
+            name: "cta_url",
+            parameters: {
+              display_text: ctaUrlButton.displayText.substring(0, 20), // Max 20 chars
+              url: ctaUrlButton.url
+            }
+          }
+        };
+
+        if (footer) {
+          payload.interactive.footer = { text: footer.substring(0, 60) };
+        }
       }
       // Mensagem com lista interativa
       else if (listSections && listSections.length > 0) {
@@ -273,6 +299,11 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
             type: "text",
             text: listTitle.substring(0, 60)  // Max 60 chars
           };
+        }
+
+        // Rodapé opcional (max 60 chars na Meta)
+        if (footer) {
+          payload.interactive.footer = { text: footer.substring(0, 60) };
         }
       }
       // vCard (contato)

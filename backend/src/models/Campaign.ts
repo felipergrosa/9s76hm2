@@ -73,6 +73,14 @@ class Campaign extends Model<Campaign> {
   @Column
   scheduledAt: Date;
 
+  // Recorrência do disparo: none | daily | weekly | monthly
+  @Column({ defaultValue: "none" })
+  recurrence: string;
+
+  // Data limite da recorrência (null = repete indefinidamente)
+  @Column({ type: DataType.DATE, allowNull: true })
+  recurrenceEndAt: Date;
+
   @Column
   completedAt: Date;
 

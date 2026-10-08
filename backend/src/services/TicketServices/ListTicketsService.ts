@@ -19,6 +19,7 @@ import removeAccents from "remove-accents";
 
 import FindCompanySettingOneService from "../CompaniesSettings/FindCompanySettingOneService";
 import GetUserPersonalTagContactIds from "../../helpers/GetUserPersonalTagContactIds";
+import walletExistsSql from "../../helpers/walletExistsSql";
 import ListUserGroupPermissionsService from "../UserGroupPermissionServices/ListUserGroupPermissionsService";
 import { withCache } from "../../utils/serviceCache";
 
@@ -49,6 +50,9 @@ interface Request {
   sortTickets?: string;
   searchOnMessages?: string;
   walletOnly?: string | boolean;
+  // Filtro opcional: tickets cujo contato está na carteira (tag pessoal #)
+  // de algum dos usuários informados — mesmo modelo do /wallets
+  walletUserIds?: number[];
 }
 
 interface Response {
@@ -76,7 +80,8 @@ const ListTicketsService = async ({
   companyId,
   sortTickets = "DESC",
   searchOnMessages = "false",
-  walletOnly = false
+  walletOnly = false,
+  walletUserIds
 }: Request): Promise<Response> => {
   // BackendPerfMonitor.start('ListTicketsService:Total');
   // BackendPerfMonitor.mark('ListTicketsService:Start', { searchParam, status, pageNumber });
@@ -129,7 +134,9 @@ const ListTicketsService = async ({
     {
       model: Queue,
       as: "queue",
-      attributes: ["id", "name", "color"]
+      // slaMinutes: mantém o SLA da fila disponível se o card do Kanban
+      // for atualizado via socket a partir desta listagem
+      attributes: ["id", "name", "color", "slaMinutes"]
     },
     {
       model: User,
@@ -535,6 +542,25 @@ const ListTicketsService = async ({
     ...whereCondition,
     companyId
   };
+
+  // Filtro por carteira: apenas tickets cujo contato possui a tag pessoal (#)
+  // de algum dos usuários selecionados (allowedContactTags) — mesma regra
+  // do ListWalletsService, via helper compartilhado helpers/walletExistsSql.
+  // Aplicado DEPOIS dos blocos de status para combinar com os demais filtros
+  // (Op.and) sem ser sobrescrito pelas reconstruções de whereCondition.
+  // Usuário sem tag pessoal retorna vazio corretamente (EXISTS = false).
+  const walletIdsFilter = (walletUserIds || [])
+    .map(id => Number(id))
+    .filter(id => Number.isInteger(id) && id > 0);
+
+  if (walletIdsFilter.length > 0) {
+    whereCondition = {
+      [Op.and]: [
+        whereCondition,
+        literal(walletExistsSql('"Ticket"."contactId"', companyId, walletIdsFilter))
+      ]
+    } as any;
+  }
 
   // Restrição de carteira: vê tickets de sua carteira + carteiras gerenciadas + atribuídos a ele/gerenciados
   // Cache: evita query repetida para cada aba

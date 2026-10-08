@@ -28,6 +28,8 @@ import ShowContactService from "../services/ContactServices/ShowContactService";
 import Chatbot from "../models/Chatbot";
 import AIAgent from "../models/AIAgent";
 import GetUserPersonalTagContactIds from "../helpers/GetUserPersonalTagContactIds";
+import { FlowBuilderModel } from "../models/FlowBuilder";
+import TriggerFlowService from "../services/TicketServices/TriggerFlowService";
 import { createAuditLogFromRequest, AuditActions, AuditEntities } from "../helpers/AuditLogger";
 import { hasPermissionAsync } from "../helpers/PermissionAdapter";
 
@@ -50,6 +52,8 @@ type IndexQuery = {
   sortTickets?: string;
   searchOnMessages?: string;
   viewingUserId?: string;
+  // Filtro por carteira: IDs de usuários donos de tag pessoal (#)
+  walletUserIds?: string;
 };
 
 type IndexQueryReport = {
@@ -119,7 +123,8 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
     whatsapps: whatsappIdsStringified,
     statusFilter: statusStringfied,
     sortTickets,
-    searchOnMessages
+    searchOnMessages,
+    walletUserIds: walletUserIdsStringified
   } = req.query as IndexQuery;
 
   const userId = Number(req.user.id);
@@ -130,12 +135,14 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
   let usersIds: number[] = [];
   let whatsappIds: number[] = [];
   let statusFilters: string[] = [];
+  let walletUserIds: number[] = [];
 
   queueIds = safeParseArray(queueIdsStringified) as number[];
   tagsIds = safeParseArray(tagIdsStringified) as number[];
   usersIds = safeParseArray(userIdsStringified) as number[];
   whatsappIds = safeParseArray(whatsappIdsStringified) as number[];
   statusFilters = safeParseArray(statusStringfied) as string[];
+  walletUserIds = safeParseArray(walletUserIdsStringified) as number[];
 
   const { tickets, count, hasMore } = await ListTicketsService({
     searchParam,
@@ -155,7 +162,8 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
     statusFilters,
     companyId,
     sortTickets,
-    searchOnMessages
+    searchOnMessages,
+    walletUserIds
   });
 
   return res.status(200).json({ tickets, count, hasMore });
@@ -884,4 +892,66 @@ export const markAllNotificationsAsRead = async (
   }
 
   return res.status(200).json({ success: true, count: tickets.length });
+};
+
+/**
+ * Lista os fluxos do FlowBuilder disponíveis para disparo manual no ticket.
+ * Endpoint próprio (e não GET /flowbuilder) porque atendentes não costumam
+ * ter a permissão "flowbuilder.view" — aqui basta "tickets.view".
+ * Também devolve o estado atual do ticket para o modal avisar quando já
+ * houver um fluxo em execução (overwrite exige confirmação no front).
+ */
+export const listTicketFlows = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { ticketId } = req.params;
+  const { companyId } = req.user;
+
+  // findOne direto: a listagem não pode disparar os side-effects de abertura
+  // do ShowTicketService (sync de histórico/refresh de avatar)
+  const ticket = await Ticket.findOne({
+    where: { id: ticketId, companyId },
+    attributes: ["id", "flowStopped", "flowWebhook", "lastFlowId"]
+  });
+  if (!ticket) {
+    throw new AppError("ERR_NO_TICKET_FOUND", 404);
+  }
+
+  const flows = await FlowBuilderModel.findAll({
+    where: { company_id: companyId, active: true },
+    attributes: ["id", "name", "active", "status"],
+    order: [["name", "ASC"]]
+  });
+
+  return res.status(200).json({
+    flows,
+    inFlow:
+      Boolean(ticket.flowStopped) &&
+      (Boolean(ticket.flowWebhook) || Boolean(ticket.lastFlowId)),
+    currentFlowId: ticket.flowStopped ? Number(ticket.flowStopped) : null
+  });
+};
+
+/**
+ * Dispara manualmente um fluxo do FlowBuilder no ticket ("Disparar Fluxo").
+ * Body: { flowId, force? } — force=true sobrescreve um fluxo em execução.
+ */
+export const triggerFlow = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { ticketId } = req.params;
+  const { flowId, force } = req.body as { flowId?: number; force?: boolean };
+  const { companyId, id: userId } = req.user;
+
+  const ticket = await TriggerFlowService({
+    ticketId,
+    flowId,
+    companyId,
+    userId: Number(userId),
+    force: Boolean(force)
+  });
+
+  return res.status(200).json(ticket);
 };

@@ -106,7 +106,9 @@ const ShowTicketService = async (
           "segment",
           "fantasyName",
           "foundationDate",
-          "creditLimit"
+          "creditLimit",
+          "birthdate",
+          "verificationCode"
         ],
         include: [
           {
@@ -123,7 +125,8 @@ const ShowTicketService = async (
       {
         model: Queue,
         as: "queue",
-        attributes: ["id", "name", "color"],
+        // slaMinutes: tickets reemitidos via socket mantêm o SLA da fila (Kanban)
+        attributes: ["id", "name", "color", "slaMinutes"],
         include: ["chatbots"]
       },
       {

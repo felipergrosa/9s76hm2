@@ -53,6 +53,8 @@ interface ContactData {
   dtUltCompra?: Date | string | null;
   bzEmpresa?: string;
   clientCode?: string;
+  birthdate?: Date | string | null; // data de nascimento (Config. Aniversário)
+  verificationCode?: string; // Código de Verificação (referência Fluxoo)
 }
 
 interface Request {
@@ -98,7 +100,9 @@ const UpdateContactService = async ({
     vlUltCompra,
     dtUltCompra,
     bzEmpresa,
-    clientCode
+    clientCode,
+    birthdate,
+    verificationCode
   } = contactData;
 
   const sanitizedCreditLimit = creditLimit !== undefined ? creditLimit : null;
@@ -141,6 +145,23 @@ const UpdateContactService = async ({
     lastPurchaseValue = null;
   }
 
+  // Normalização da data de nascimento (Config. Aniversário)
+  let birthdateValue: Date | null = null;
+  if (birthdate && typeof birthdate === 'string' && birthdate !== '') {
+    const d = new Date(birthdate);
+    if (isNaN(d.getTime())) {
+      throw new AppError("INVALID_BIRTHDATE");
+    } else {
+      birthdateValue = d;
+    }
+  }
+  if (typeof birthdate === 'string' && birthdate === '') {
+    birthdateValue = null;
+  }
+  if (birthdate instanceof Date) {
+    birthdateValue = birthdate;
+  }
+
   // Normalização do valor da última compra (aceita string BRL)
   const MAX_LAST_PURCHASE = 10000000000; // 10 bilhões (limite DECIMAL(12,2))
 
@@ -169,7 +190,8 @@ const UpdateContactService = async ({
       "urlPicture", "florder", "contactName", "isGroupParticipant",
       // Adicionar novos campos aos atributos
       "cpfCnpj", "representativeCode", "city", "region", "instagram", "facebook",
-      "situation", "fantasyName", "foundationDate", "creditLimit", "segment", "dtUltCompra", "vlUltCompra", "clientCode"
+      "situation", "fantasyName", "foundationDate", "creditLimit", "segment", "dtUltCompra", "vlUltCompra", "clientCode",
+      "birthdate", "verificationCode"
     ],
     include: ["extraInfo", "tags"]
   });
@@ -367,6 +389,8 @@ const UpdateContactService = async ({
     segment: segment !== undefined ? emptyToNull(segment) : (contact as any).segment,
     vlUltCompra: vlUltCompra !== undefined ? vlUltCompraValue : (contact as any).vlUltCompra,
     dtUltCompra: dtUltCompra !== undefined ? lastPurchaseValue : (contact as any).dtUltCompra,
+    birthdate: birthdate !== undefined ? birthdateValue : (contact as any).birthdate,
+    verificationCode: verificationCode !== undefined ? emptyToNull(verificationCode) : (contact as any).verificationCode,
     florder: florder !== undefined ? !!florder : (contact as any).florder,
     bzEmpresa: bzEmpresa !== undefined ? emptyToNull(bzEmpresa) : (contact as any).bzEmpresa,
     clientCode: clientCode !== undefined ? emptyToNull(clientCode) : contact.clientCode,

@@ -15,6 +15,7 @@ const useTickets = ({
   searchParam,
   tags,
   users,
+  walletUserIds,
   pageNumber,
   status,
   date,
@@ -44,6 +45,7 @@ const useTickets = ({
       searchParam,
       tags,
       users,
+      walletUserIds,
       pageNumber,
       status,
       date,
@@ -59,7 +61,7 @@ const useTickets = ({
       userFilter
     });
   }, [
-    searchParam, tags, users, pageNumber, status, date, updatedAt,
+    searchParam, tags, users, walletUserIds, pageNumber, status, date, updatedAt,
     showAll, queueIds, withUnreadMessages, whatsappIds, statusFilter,
     forceSearch, sortTickets, searchOnMessages, userFilter
   ]);
@@ -86,6 +88,8 @@ const useTickets = ({
             pageNumber: params.pageNumber,
             tags: params.tags,
             users: params.users,
+            // Carteira: IDs de usuários donos da tag pessoal do contato
+            walletUserIds: params.walletUserIds,
             status: params.status,
             date: params.date,
             updatedAt: params.updatedAt,

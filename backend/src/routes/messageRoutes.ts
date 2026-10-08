@@ -20,6 +20,8 @@ messageRoutes.post("/messages/copy/:ticketId", isAuth, checkPermission("tickets.
 messageRoutes.post("/messages/call/:ticketId", isAuth, checkPermission("tickets.update"), MessageController.sendCALLMessage);
 messageRoutes.post("/messages/url/:ticketId", isAuth, checkPermission("tickets.update"), MessageController.sendURLMessage);
 messageRoutes.post("/messages/PIX/:ticketId", isAuth, checkPermission("tickets.update"), MessageController.sendPIXMessage);
+// Mensagem interativa via API Oficial (WABA): botões, lista, CTA URL e PIX
+messageRoutes.post("/messages/:ticketId/interactive", isAuth, checkPermission("tickets.update"), MessageController.sendInteractiveMessage);
 messageRoutes.post('/messages/:messageId/reactions', isAuth, checkPermission("tickets.update"), MessageController.addReaction);
 messageRoutes.post('/message/forward', isAuth, checkPermission("tickets.update"), MessageController.forwardMessage);
 messageRoutes.post('/message/forward-external', isAuth, checkPermission("tickets.update"), MessageController.forwardToExternalNumber);

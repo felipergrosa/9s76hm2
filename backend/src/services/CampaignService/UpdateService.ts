@@ -50,7 +50,13 @@ interface Data {
   metaTemplateLanguage?: string | null;
   metaTemplateVariables?: Record<string, any> | null;  // Mapeamento de variáveis do template
   sendMediaSeparately?: boolean;  // Enviar mídia separada do texto
+  // Recorrência do disparo: none | daily | weekly | monthly + data limite opcional
+  recurrence?: string | null;
+  recurrenceEndAt?: string | null;
 }
+
+// Valores aceitos para recorrência — qualquer outro vira "none"
+const RECURRENCE_VALUES = ["none", "daily", "weekly", "monthly"];
 
 // N2: extrai IDs numéricos de campo que pode vir como número, array ou JSON string
 const toIdList = (value: any): number[] => {
@@ -93,7 +99,8 @@ const EDITABLE_FIELDS = [
   "mediaUrl1", "mediaName1", "mediaUrl2", "mediaName2",
   "mediaUrl3", "mediaName3", "mediaUrl4", "mediaName4",
   "mediaUrl5", "mediaName5", "sendMediaSeparately",
-  "metaTemplateName", "metaTemplateLanguage", "metaTemplateVariables"
+  "metaTemplateName", "metaTemplateLanguage", "metaTemplateVariables",
+  "recurrence", "recurrenceEndAt"
 ];
 
 const UpdateService = async (data: Data): Promise<Campaign> => {
@@ -151,6 +158,17 @@ const UpdateService = async (data: Data): Promise<Campaign> => {
       payload[field] = (data as any)[field];
     }
   });
+
+  // Normaliza recorrência: valor fora da whitelist vira "none" e
+  // recurrenceEndAt só faz sentido com recorrência ativa
+  if (payload.recurrence !== undefined) {
+    if (!payload.recurrence || !RECURRENCE_VALUES.includes(payload.recurrence)) {
+      payload.recurrence = "none";
+    }
+    if (payload.recurrence === "none") {
+      payload.recurrenceEndAt = null;
+    }
+  }
 
   // Serializa allowedWhatsappIds e contactListIds se vierem como array/objeto
   if (

@@ -62,7 +62,7 @@ const useStyles = makeStyles(theme => ({
     },
 }));
 
-export default function KanbanLane({ lane, onCardClick, allTags, onMoveRequest, innerRef, draggableProps, dragHandleProps, onPanStart, onAddDeal, onEditLane, onDeleteLane, onEditDeal, onDeleteDeal }) {
+export default function KanbanLane({ lane, laneIndex, compact, focusedCardIndex = -1, onCardClick, allTags, onMoveRequest, innerRef, draggableProps, dragHandleProps, onPanStart, onAddDeal, onEditLane, onDeleteLane, onEditDeal, onDeleteDeal }) {
     const classes = useStyles();
 
     return (
@@ -71,6 +71,7 @@ export default function KanbanLane({ lane, onCardClick, allTags, onMoveRequest, 
             ref={innerRef}
             {...draggableProps}
             style={{ ...draggableProps?.style }}
+            data-kanban-lane={laneIndex}
         >
             {/* Acento de cor da fase — div fina no topo (o border do .bento-panel
                 é !important e sobrescreveria um borderTop inline) */}
@@ -113,17 +114,23 @@ export default function KanbanLane({ lane, onCardClick, allTags, onMoveRequest, 
                                         {...provided.draggableProps}
                                         {...provided.dragHandleProps}
                                         className={classes.cardWrapper}
+                                        data-kanban-card={index}
                                         style={{
                                             ...provided.draggableProps.style,
                                             opacity: snapshot.isDragging ? 0.9 : 1,
                                             transform: snapshot.isDragging
                                                 ? provided.draggableProps.style?.transform
                                                 : "none",
+                                            // Destaque do card focado via teclado (↑/↓ + Enter)
+                                            outline: focusedCardIndex === index ? "2px solid #1976d2" : "none",
+                                            outlineOffset: 1,
+                                            borderRadius: 8,
                                         }}
                                     >
                                         <KanbanCard
                                             ticket={card.ticket}
                                             allTags={allTags}
+                                            compact={compact}
                                             onClick={() => onCardClick(card.ticket)}
                                             onMoveRequest={(tagId) => onMoveRequest && onMoveRequest(card.ticket, tagId)}
                                             onEditDeal={onEditDeal}

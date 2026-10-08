@@ -34,6 +34,8 @@ interface Request {
   clientCode?: string;
   contactName?: string; // ✅ Adicionado campo faltante
   silentMode?: boolean;
+  birthdate?: Date | string | null; // data de nascimento (Config. Aniversário)
+  verificationCode?: string; // Código de Verificação (referência Fluxoo)
   dtUltCompra?: Date | string | null;
   vlUltCompra?: number | string | null;
   userId?: number;
@@ -63,6 +65,8 @@ const CreateOrUpdateContactServiceForImport = async ({
   clientCode,
   contactName, // ✅ Adicionado parâmetro
   silentMode,
+  birthdate,
+  verificationCode,
   dtUltCompra,
   vlUltCompra,
   userId
@@ -101,8 +105,8 @@ const CreateOrUpdateContactServiceForImport = async ({
     return s === '' ? null : s;
   };
 
-  // helper: normalize region to null when empty/whitespace; undefined quando não enviado
-  const normalizeRegion = (v: any): string | null | undefined => {
+  // helper: normaliza campo texto para null quando vazio/whitespace; undefined quando não enviado
+  const normalizeTextField = (v: any): string | null | undefined => {
     if (typeof v === 'undefined') return undefined;
     if (v === null) return null;
     if (typeof v === 'string') {
@@ -145,7 +149,7 @@ const CreateOrUpdateContactServiceForImport = async ({
     cpfCnpj: cpfCnpj ? String(cpfCnpj) : undefined,
     representativeCode: normalizeCodeName(representativeCode),
     city,
-    region: normalizeRegion(region),
+    region: normalizeTextField(region),
     instagram,
     facebook,
     situation: situation || 'Ativo',
@@ -155,6 +159,9 @@ const CreateOrUpdateContactServiceForImport = async ({
     bzEmpresa: normalizeCodeName(bzEmpresa),
     clientCode: clientCode || undefined,
     contactName: contactName || undefined, // ✅ Adicionado campo ao contactData
+    birthdate: parseDate(birthdate),
+    // Código de Verificação: undefined = não altera; vazio/whitespace = null
+    verificationCode: normalizeTextField(verificationCode),
     dtUltCompra: parseDate(dtUltCompra),
     vlUltCompra: parseMoney(vlUltCompra)
   };

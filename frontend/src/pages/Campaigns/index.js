@@ -14,6 +14,7 @@ import TableCell from "@material-ui/core/TableCell";
 import TableHead from "@material-ui/core/TableHead";
 import TableRow from "@material-ui/core/TableRow";
 import IconButton from "@material-ui/core/IconButton";
+import Checkbox from "@material-ui/core/Checkbox";
 import Tooltip from "@material-ui/core/Tooltip";
 import Box from "@material-ui/core/Box";
 import Typography from "@material-ui/core/Typography";
@@ -271,6 +272,18 @@ const useStyles = makeStyles((theme) => ({
     fontWeight: 600,
     wordBreak: "break-word",
   },
+  bulkBar: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1),
+    flexWrap: "wrap",
+    padding: theme.spacing(1, 2.5),
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    background:
+      theme.palette.type === "dark"
+        ? "rgba(53,152,220,0.12)"
+        : "#e8f2fb",
+  },
   cardActions: {
     display: "flex",
     alignItems: "center",
@@ -314,6 +327,21 @@ const StatusChip = ({ status }) => {
   );
 };
 
+// Badge de recorrência (none não renderiza nada)
+const RecurrenceChip = ({ recurrence }) => {
+  if (!recurrence || recurrence === "none") return null;
+  const label = {
+    daily: i18n.t("campaigns.recurrence.daily"),
+    weekly: i18n.t("campaigns.recurrence.weekly"),
+    monthly: i18n.t("campaigns.recurrence.monthly"),
+  };
+  return (
+    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200">
+      ↻ {label[recurrence] || recurrence}
+    </span>
+  );
+};
+
 const Campaigns = () => {
   const classes = useStyles();
   const history = useHistory();
@@ -326,6 +354,10 @@ const Campaigns = () => {
   const [searchParam, setSearchParam] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [campaigns, dispatch] = useReducer(reducer, []);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [bulkAction, setBulkAction] = useState(null);
+  const [bulkModalOpen, setBulkModalOpen] = useState(false);
+  const [bulkProcessing, setBulkProcessing] = useState(false);
   const { user, socket } = useContext(AuthContext);
 
   const { datetimeToClient } = useDate();
@@ -387,6 +419,8 @@ const Campaigns = () => {
       // Substitui a lista ao trocar de página/filtro
       dispatch({ type: "SET_CAMPAIGNS", payload: data.records });
       setTotalCampaigns(typeof data.count === "number" ? data.count : 0);
+      // Limpa seleção: a página carregada mudou
+      setSelectedIds([]);
       setLoading(false);
     } catch (err) {
       toastError(err);
@@ -494,11 +528,42 @@ const Campaigns = () => {
 
   const handleCloneCampaign = async (campaign) => {
     try {
-      const { data } = await api.post(`/campaigns/${campaign.id}/clone`);
-      toast.success("Campanha clonada com sucesso!");
-      handleEditCampaign(data); // Abre edição da campanha clonada
+      const { data } = await api.post(`/campaigns/${campaign.id}/duplicate`);
+      toast.success(i18n.t("campaigns.toasts.duplicated"));
+      handleEditCampaign(data); // Abre edição da campanha duplicada
     } catch (err) {
       toastError(err);
+    }
+  };
+
+  // ===== Ações em lote =====
+  const requestBulkAction = (action) => {
+    setBulkAction(action);
+    setBulkModalOpen(true);
+  };
+
+  const executeBulkAction = async () => {
+    setBulkProcessing(true);
+    try {
+      const { data } = await api.post("/campaigns/bulk", {
+        ids: selectedIds,
+        action: bulkAction,
+      });
+      toast.success(
+        i18n.t("campaigns.toasts.bulkProcessed", { processed: data.processed })
+      );
+      if (data.errors?.length) {
+        toast.error(
+          i18n.t("campaigns.toasts.bulkErrors", { count: data.errors.length })
+        );
+      }
+      setSelectedIds([]);
+      fetchCampaigns();
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setBulkProcessing(false);
+      setBulkAction(null);
     }
   };
 
@@ -545,7 +610,7 @@ const Campaigns = () => {
           <EditIcon size={18} />
         </IconButton>
       </Tooltip>
-      <Tooltip title="Clonar campanha">
+      <Tooltip title="Duplicar campanha">
         <IconButton
           size="small"
           onClick={() => handleCloneCampaign(campaign)}
@@ -572,6 +637,41 @@ const Campaigns = () => {
     ? campaigns.filter((c) => c.status === statusFilter)
     : campaigns;
 
+  // ===== Seleção em lote =====
+  const isSelected = (id) => selectedIds.includes(id);
+
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  };
+
+  const allSelected =
+    filteredCampaigns.length > 0 &&
+    filteredCampaigns.every((c) => selectedIds.includes(c.id));
+
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      // Desmarca apenas as linhas visíveis na página/filtro atual
+      setSelectedIds((prev) =>
+        prev.filter((id) => !filteredCampaigns.some((c) => c.id === id))
+      );
+    } else {
+      setSelectedIds((prev) => [
+        ...prev,
+        ...filteredCampaigns
+          .map((c) => c.id)
+          .filter((id) => !prev.includes(id)),
+      ]);
+    }
+  };
+
+  const BULK_ACTION_LABELS = {
+    cancel: i18n.t("campaigns.bulk.cancel"),
+    restart: i18n.t("campaigns.bulk.restart"),
+    delete: i18n.t("campaigns.bulk.delete"),
+  };
+
   // KPIs do strip bento — o total vem do count da API; os contadores por
   // status refletem a página carregada (socket atualiza em tempo real)
   const campaignStats = useMemo(() => ({
@@ -596,6 +696,18 @@ const Campaigns = () => {
         onConfirm={() => handleDeleteCampaign(deletingCampaign.id)}
       >
         {i18n.t("campaigns.confirmationModal.deleteMessage")}
+      </ConfirmationModal>
+      {/* Modal de confirmação para ações em lote */}
+      <ConfirmationModal
+        title={i18n.t("campaigns.bulk.confirmTitle")}
+        open={bulkModalOpen}
+        onClose={setBulkModalOpen}
+        onConfirm={executeBulkAction}
+      >
+        {i18n.t("campaigns.bulk.confirmMessage", {
+          action: bulkAction ? BULK_ACTION_LABELS[bulkAction] : "",
+          count: selectedIds.length,
+        })}
       </ConfirmationModal>
       {hasPermission("campaigns.view") ? (
         <motion.div
@@ -675,13 +787,56 @@ const Campaigns = () => {
             </FormControl>
           </Box>
 
+          {/* Barra de ações em lote — visível apenas com itens selecionados */}
+          {selectedIds.length > 0 && (
+            <Box className={classes.bulkBar}>
+              <Typography variant="body2" style={{ fontWeight: 600 }}>
+                {i18n.t("campaigns.bulk.selected", { count: selectedIds.length })}
+              </Typography>
+              <div style={{ flex: 1 }} />
+              <Button
+                size="small"
+                disabled={bulkProcessing}
+                startIcon={<PauseCircleOutlineIcon size={16} />}
+                onClick={() => requestBulkAction("cancel")}
+              >
+                {i18n.t("campaigns.bulk.cancel")}
+              </Button>
+              <Button
+                size="small"
+                disabled={bulkProcessing}
+                startIcon={<PlayCircleOutlineIcon size={16} />}
+                onClick={() => requestBulkAction("restart")}
+              >
+                {i18n.t("campaigns.bulk.restart")}
+              </Button>
+              <Button
+                size="small"
+                disabled={bulkProcessing}
+                style={{ color: "#e7505a" }}
+                startIcon={<DeleteOutlineIcon size={16} />}
+                onClick={() => requestBulkAction("delete")}
+              >
+                {i18n.t("campaigns.bulk.delete")}
+              </Button>
+            </Box>
+          )}
+
           {/* Mobile cards */}
           <div className={classes.mobileList}>
             {filteredCampaigns.map((campaign) => (
               <div key={campaign.id} className={classes.card}>
                 <div className={classes.cardHeader}>
+                  <Checkbox
+                    size="small"
+                    style={{ padding: 4 }}
+                    checked={isSelected(campaign.id)}
+                    onChange={() => toggleSelect(campaign.id)}
+                    inputProps={{ "aria-label": `selecionar ${campaign.name}` }}
+                  />
                   <div className={classes.cardTitle}>{campaign.name}</div>
                   <StatusChip status={campaign.status} />
+                  <RecurrenceChip recurrence={campaign.recurrence} />
                 </div>
                 <div className={classes.cardMeta}>
                   <div>
@@ -714,6 +869,15 @@ const Campaigns = () => {
             <Table size="small">
               <TableHead>
                 <TableRow>
+                  <TableCell padding="checkbox" className={classes.headCell}>
+                    <Checkbox
+                      size="small"
+                      indeterminate={selectedIds.length > 0 && !allSelected}
+                      checked={allSelected}
+                      onChange={toggleSelectAll}
+                      inputProps={{ "aria-label": "selecionar todas" }}
+                    />
+                  </TableCell>
                   <TableCell className={classes.headCell}>
                     {i18n.t("campaigns.table.name")}
                   </TableCell>
@@ -743,6 +907,14 @@ const Campaigns = () => {
               <TableBody>
                 {filteredCampaigns.map((campaign) => (
                   <TableRow key={campaign.id} className={classes.rowHover} hover={false}>
+                    <TableCell padding="checkbox" className={classes.bodyCell}>
+                      <Checkbox
+                        size="small"
+                        checked={isSelected(campaign.id)}
+                        onChange={() => toggleSelect(campaign.id)}
+                        inputProps={{ "aria-label": `selecionar ${campaign.name}` }}
+                      />
+                    </TableCell>
                     <TableCell className={classes.bodyCell}>
                       <div className={classes.campaignName}>{campaign.name}</div>
                       {campaign.confirmation && (
@@ -753,6 +925,7 @@ const Campaigns = () => {
                     </TableCell>
                     <TableCell align="center" className={classes.bodyCell}>
                       <StatusChip status={campaign.status} />
+                      <RecurrenceChip recurrence={campaign.recurrence} />
                     </TableCell>
                     <TableCell align="center" className={classes.bodyCell}>
                       {getContactListName(campaign)}
@@ -780,7 +953,7 @@ const Campaigns = () => {
                     </TableCell>
                   </TableRow>
                 ))}
-                {loading && <TableRowSkeleton columns={8} />}
+                {loading && <TableRowSkeleton columns={9} />}
               </TableBody>
             </Table>
           </div>

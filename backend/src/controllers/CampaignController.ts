@@ -27,6 +27,7 @@ import { CancelService } from "../services/CampaignService/CancelService";
 import { RestartService } from "../services/CampaignService/RestartService";
 import { StartService } from "../services/CampaignService/StartService";
 import CloneCampaignService from "../services/CampaignService/CloneCampaignService";
+import { hasPermissionAsync } from "../modules/permissions/resolver";
 
 type IndexQuery = {
   searchParam: string;
@@ -463,4 +464,100 @@ export const clone = async (
     if (err instanceof AppError) throw err;
     throw new AppError(err.message);
   }
+};
+
+/**
+ * Duplica uma campanha existente (alias de clone com param :campaignId)
+ * Reutiliza CloneCampaignService — nome recebe sufixo " (cópia)"
+ */
+export const duplicate = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { campaignId } = req.params;
+  const { companyId } = req.user;
+
+  try {
+    const record = await CloneCampaignService(campaignId, companyId);
+
+    const io = getIO();
+    io.of(`/workspace-${companyId}`)
+      .emit(`company-${companyId}-campaign`, {
+        action: "create",
+        record
+      });
+
+    return res.status(201).json(record);
+  } catch (err: any) {
+    if (err instanceof AppError) throw err;
+    throw new AppError(err.message);
+  }
+};
+
+type BulkAction = "cancel" | "restart" | "delete";
+
+// Permissão exigida por ação em lote (validada dentro do controller,
+// pois a rota é única para as três ações)
+const BULK_ACTION_PERMISSION: Record<BulkAction, string> = {
+  cancel: "campaigns.edit",
+  restart: "campaigns.edit",
+  delete: "campaigns.delete"
+};
+
+/**
+ * Ações em lote sobre campanhas: cancel | restart | delete
+ * Reutiliza os services individuais — cada um já filtra por companyId,
+ * então ids de outro tenant caem como erro "não encontrada".
+ */
+export const bulk = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { companyId } = req.user;
+  const { ids, action } = req.body as { ids: number[]; action: BulkAction };
+
+  const schema = Yup.object().shape({
+    ids: Yup.array().of(Yup.number().integer().positive()).min(1).required(),
+    action: Yup.string().oneOf(["cancel", "restart", "delete"]).required()
+  });
+
+  try {
+    await schema.validate({ ids, action });
+  } catch (err: any) {
+    throw new AppError(err.message);
+  }
+
+  // N2 (autorização): valida a permissão específica da ação solicitada
+  const fullUser = (req as any).fullUser;
+  const requiredPermission = BULK_ACTION_PERMISSION[action];
+  if (!(await hasPermissionAsync(fullUser, requiredPermission))) {
+    throw new AppError(`ERR_NO_PERMISSION: ${requiredPermission}`, 403);
+  }
+
+  const errors: { id: number; error: string }[] = [];
+  let processed = 0;
+  const io = getIO();
+
+  for (const id of ids) {
+    try {
+      if (action === "cancel") {
+        await CancelService(+id, companyId);
+      } else if (action === "restart") {
+        await RestartService(+id, companyId);
+      } else {
+        await DeleteService(String(id), companyId);
+        // Mesmo evento emitido pelo remove individual, para sync via socket
+        io.of(`/workspace-${companyId}`)
+          .emit(`company-${companyId}-campaign`, {
+            action: "delete",
+            id
+          });
+      }
+      processed += 1;
+    } catch (err: any) {
+      errors.push({ id, error: err.message });
+    }
+  }
+
+  return res.status(200).json({ processed, errors });
 };

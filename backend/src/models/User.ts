@@ -235,6 +235,14 @@ class User extends Model<User> {
   @Column(DataType.BOOLEAN)
   isPrivate: boolean;
 
+  // Ramal interno do usuário (referência Fluxoo) — hoje só cadastro;
+  // será usado futuramente pelo tronco SIP/softphone.
+  @Column({
+    type: DataType.STRING,
+    allowNull: true
+  })
+  ramal: string;
+
   @HasMany(() => UserGroupPermission, {
     onUpdate: "CASCADE",
     onDelete: "CASCADE",

@@ -482,7 +482,7 @@ const Queues = () => {
           {loading ? (
             <Table>
               <TableBody>
-                <TableRowSkeleton columns={6} />
+                <TableRowSkeleton columns={7} />
               </TableBody>
             </Table>
           ) : filteredQueues.length === 0 ? (
@@ -517,6 +517,14 @@ const Queues = () => {
                         </div>
                         <div className={classes.metaValue}>
                           {queue.orderQueue ?? "—"}
+                        </div>
+                      </div>
+                      <div>
+                        <div className={classes.metaLabel}>
+                          {i18n.t("queues.table.sla")}
+                        </div>
+                        <div className={classes.metaValue}>
+                          {queue.slaMinutes ? `${queue.slaMinutes} min` : "—"}
                         </div>
                       </div>
                       <div>
@@ -576,6 +584,9 @@ const Queues = () => {
                         {i18n.t("queues.table.orderQueue")}
                       </TableCell>
                       <TableCell align="center" className={classes.headCell}>
+                        {i18n.t("queues.table.sla")}
+                      </TableCell>
+                      <TableCell align="center" className={classes.headCell}>
                         {i18n.t("queues.table.greeting")}
                       </TableCell>
                       <TableCell align="center" className={classes.headCell}>
@@ -600,6 +611,10 @@ const Queues = () => {
                         </TableCell>
                         <TableCell align="center" className={classes.bodyCell}>
                           {queue.orderQueue ?? "—"}
+                        </TableCell>
+                        <TableCell align="center" className={classes.bodyCell}>
+                          {/* SLA por fila em minutos; vazio = sem SLA (fallback heurístico no Kanban) */}
+                          {queue.slaMinutes ? `${queue.slaMinutes} min` : "—"}
                         </TableCell>
                         <TableCell align="center" className={classes.bodyCell}>
                           <span className={classes.greetingText}>

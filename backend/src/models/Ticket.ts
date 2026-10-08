@@ -215,6 +215,14 @@ class Ticket extends Model<Ticket> {
 
   @Column(DataType.TEXT)
   dealDescription: string;
+
+  // Campos de fechamento preenchidos pela tela de fechamento
+  // (assunto e resumo) e exibidos no Relatório de Fechamento
+  @Column
+  closingSubject: string;
+
+  @Column(DataType.TEXT)
+  closingSummary: string;
 }
 
 export default Ticket;

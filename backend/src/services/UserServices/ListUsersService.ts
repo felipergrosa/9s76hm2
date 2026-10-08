@@ -68,7 +68,8 @@ const ListUsersService = async ({
     "allowedContactTags",
     "managedUserIds",
     "supervisorViewMode",
-    "super"
+    "super",
+    "ramal"
   ];
 
   const include = [

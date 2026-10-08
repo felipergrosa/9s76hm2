@@ -20,6 +20,10 @@ import { getWbot } from "../libs/wbot";
 import FindCompaniesWhatsappService from "../services/CompanyService/FindCompaniesWhatsappService";
 import User from "../models/User";
 import Plan from "../models/Plan";
+import {
+  isEmailVerificationEnabled,
+  consumeVerificationToken
+} from "../services/AuthServices/EmailVerificationService";
 
 import { head } from "lodash";
 import ToggleChangeWidthService from "../services/UserServices/ToggleChangeWidthService";
@@ -165,7 +169,8 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     permissions: rawPermissions,
     allowedConnectionIds: rawAllowedConnectionIds,
     isPrivate: rawIsPrivate,
-    color
+    color,
+    ramal // Ramal interno (referência Fluxoo — cadastro simples)
   } = req.body;
   let userCompanyId: number | null = null;
 
@@ -203,6 +208,20 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
 
   if (process.env.DEMO === "ON") {
     throw new AppError("ERR_NO_PERMISSION", 403);
+  }
+
+  // SEGURANÇA (N2): com e-mail configurado, o signup público só conclui com um
+  // verificationToken válido (emitido por /auth/verify-email/check após o
+  // código de 6 dígitos). Token é de uso único e casa com o e-mail do body.
+  // Fail-open: sem SMTP configurado, o cadastro segue sem verificação.
+  if (isPublicSignup && isEmailVerificationEnabled()) {
+    const verified = await consumeVerificationToken(
+      email,
+      req.body.emailVerificationToken
+    );
+    if (!verified) {
+      throw new AppError("ERR_EMAIL_VERIFICATION_REQUIRED", 400);
+    }
   }
 
   // SEGURANÇA: no signup público o companyId do body é SEMPRE ignorado —
@@ -327,6 +346,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
       allowedConnectionIds,
       isPrivate,
       color,
+      ramal,
       superUser,
       requestUserIsSuper: isRequestSuper
     });

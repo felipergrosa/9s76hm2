@@ -1,4 +1,4 @@
-import { Sequelize, Op, Filterable } from "sequelize";
+import { Sequelize, Op } from "sequelize";
 import QuickMessage from "../../models/QuickMessage";
 import User from "../../models/User";
 
@@ -29,14 +29,17 @@ const ListService = async ({
 }: Request): Promise<Response> => {
   const sanitizedSearchParam = searchParam.toLocaleLowerCase().trim();
 
-  let whereCondition: Filterable["where"] = {
+  const whereCondition: any = {
     companyId
   };
 
+  // Condições combinadas via Op.and para que busca e visibilidade
+  // não disputem o mesmo Op.or no nível raiz do where
+  const andConditions: any[] = [];
+
   // Filtro de busca por shortcode E message
   if (sanitizedSearchParam) {
-    whereCondition = {
-      ...whereCondition,
+    andConditions.push({
       [Op.or]: [
         {
           shortcode: Sequelize.where(
@@ -53,25 +56,28 @@ const ListService = async ({
           )
         }
       ]
-    };
+    });
   }
 
   // Filtro de visibilidade por perfil
   // Admin/superadmin veem todas da company
-  // User padrão vê APENAS AS SUAS (strict permission)
+  // User padrão vê as respostas globais (visao=true) + as próprias
   if (!isAdmin) {
-    whereCondition = {
-      ...whereCondition,
-      userId
-    };
+    andConditions.push({
+      [Op.or]: [
+        { visao: true },
+        { userId }
+      ]
+    });
+  }
+
+  if (andConditions.length > 0) {
+    whereCondition[Op.and] = andConditions;
   }
 
   // Filtro opcional por groupName
   if (groupName) {
-    whereCondition = {
-      ...whereCondition,
-      groupName
-    };
+    whereCondition.groupName = groupName;
   }
 
   const limit = 200; // Aumentado para o painel do ticket carregar tudo

@@ -98,9 +98,10 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
 
 export const show = async (req: Request, res: Response): Promise<Response> => {
   const { id } = req.params;
-  const { companyId } = req.user;
+  const { companyId, id: userId, profile } = req.user;
+  const isAdmin = profile === "admin" || (req.user as any).super === true;
 
-  const record = await ShowService(id, companyId);
+  const record = await ShowService(id, companyId, userId, isAdmin);
 
   return res.status(200).json(record);
 };
@@ -190,7 +191,8 @@ export const mediaUpload = async (
   res: Response
 ): Promise<Response> => {
   const { id } = req.params;
-  const { companyId } = req.user;
+  const { companyId, profile } = req.user;
+  const isAdmin = profile === "admin" || (req.user as any).super === true;
   const files = req.files as Express.Multer.File[];
 
   try {
@@ -203,6 +205,11 @@ export const mediaUpload = async (
 
     if (!quickmessage) {
       throw new AppError("Mensagem rápida não encontrada", 404);
+    }
+
+    // Mesma regra de edição: dono, admin ou resposta com edição compartilhada (geral)
+    if (!isAdmin && quickmessage.userId !== Number(req.user.id) && quickmessage.geral !== true) {
+      throw new AppError("ERR_NO_PERMISSION", 403);
     }
 
     let currentPaths: string[] = [];
@@ -288,7 +295,8 @@ export const deleteMedia = async (
 ): Promise<Response> => {
   const { id } = req.params;
   const { filename } = req.query; // Para excluir um arquivo específico
-  const { companyId } = req.user
+  const { companyId, profile } = req.user
+  const isAdmin = profile === "admin" || (req.user as any).super === true;
 
   try {
     // Filtra por companyId para impedir remoção de mídia em mensagem de outra empresa
@@ -296,6 +304,11 @@ export const deleteMedia = async (
 
     if (!quickmessage) {
       throw new AppError("Mensagem rápida não encontrada", 404);
+    }
+
+    // Mesma regra de edição: dono, admin ou resposta com edição compartilhada (geral)
+    if (!isAdmin && quickmessage.userId !== Number(req.user.id) && quickmessage.geral !== true) {
+      throw new AppError("ERR_NO_PERMISSION", 403);
     }
 
     const rawPath = quickmessage.getDataValue("mediaPath");

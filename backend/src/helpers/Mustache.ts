@@ -98,6 +98,10 @@ export default (body: string, ticket?: Ticket): string => {
     situation: ticket ? ticket?.contact?.situation : "",
     fantasyName: ticket ? ticket?.contact?.fantasyName : "",
     foundationDate: ticket ? formatDate(ticket?.contact?.foundationDate as any) : "",
+    // Data de nascimento do contato (Config. Aniversário)
+    birthdate: ticket ? formatDate((ticket?.contact as any)?.birthdate) : "",
+    // Código de Verificação do contato (referência Fluxoo)
+    verificationCode: ticket ? ((ticket?.contact as any)?.verificationCode || "") : "",
     creditLimit: ticket ? (ticket?.contact?.creditLimit || "") : "",
     segment: ticket ? ticket?.contact?.segment : "",
     bzEmpresa: ticket ? ticket?.contact?.bzEmpresa : "",

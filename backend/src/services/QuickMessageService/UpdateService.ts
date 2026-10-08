@@ -31,23 +31,32 @@ const UpdateService = async (data: Data): Promise<QuickMessage> => {
     throw new AppError("ERR_NO_TICKETNOTE_FOUND", 404);
   }
 
-  // Admin/superadmin podem editar qualquer mensagem
-  // User padrão só edita as próprias
-  if (!isAdmin && record.userId !== Number(userId)) {
+  // Regra de edição (flags no padrão da referência):
+  // - admin/superadmin editam qualquer mensagem;
+  // - o dono (userId) sempre edita a própria;
+  // - "geral" = permitir edição: qualquer usuário que a visualize pode editar o conteúdo.
+  const isOwnerOrAdmin = isAdmin || record.userId === Number(userId);
+  if (!isOwnerOrAdmin && record.geral !== true) {
     throw new AppError("ERR_NO_PERMISSION", 403);
   }
 
   const updateData: any = {
     shortcode,
     message,
-    geral,
-    visao,
     groupName,
     color,
     delay,
     sendAsCaption,
     flow
   };
+
+  // As flags de compartilhamento (visao/geral) só podem ser alteradas pelo
+  // dono ou admin — um editor convidado não pode revogar o compartilhamento
+  // nem alterar a visibilidade da resposta de outro usuário.
+  if (isOwnerOrAdmin) {
+    updateData.geral = geral;
+    updateData.visao = visao;
+  }
 
   if (mediaPath !== undefined) {
     updateData.mediaPath = mediaPath;

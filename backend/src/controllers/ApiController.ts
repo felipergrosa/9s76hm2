@@ -60,6 +60,7 @@ interface ContactData {
   cpfCnpj?: string;
   clientCode?: string;
   representativeCode?: string;
+  verificationCode?: string; // Código de Verificação (referência Fluxoo)
   extraInfo?: any[];
 }
 
@@ -76,6 +77,7 @@ const createContact = async (
     cpfCnpj?: string;
     clientCode?: string;
     representativeCode?: string;
+    verificationCode?: string;
     extraInfo?: any[];
   }
 ) => {
@@ -94,6 +96,7 @@ const createContact = async (
       cpfCnpj: contactInfo?.cpfCnpj,
       clientCode: contactInfo?.clientCode,
       representativeCode: contactInfo?.representativeCode,
+      verificationCode: contactInfo?.verificationCode,
       extraInfo: contactInfo?.extraInfo,
       remoteJid: validNumber.length > 17 ? `${validNumber}@g.us` : `${validNumber}@s.whatsapp.net`,
       wbot
@@ -360,6 +363,7 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
       cpfCnpj: newContact.cpfCnpj,
       clientCode: newContact.clientCode,
       representativeCode: newContact.representativeCode,
+      verificationCode: newContact.verificationCode,
       extraInfo: newContact.extraInfo
     });
 
@@ -548,6 +552,7 @@ export const indexImage = async (req: Request, res: Response): Promise<Response>
     cpfCnpj: newContact.cpfCnpj,
     clientCode: newContact.clientCode,
     representativeCode: newContact.representativeCode,
+    verificationCode: newContact.verificationCode,
     extraInfo: newContact.extraInfo
   });
 
@@ -669,30 +674,21 @@ export const checkNumber = async (req: Request, res: Response): Promise<Response
 };
 
 export const indexWhatsappsId = async (req: Request, res: Response): Promise<Response> => {
+  // Resolve a empresa a partir do token Bearer (mesmo token validado por isAuthCompany)
+  const authHeader = req.headers.authorization;
+  const [, token] = authHeader.split(" ");
+  const whatsapp = await Whatsapp.findOne({ where: { token } });
+  if (!whatsapp) {
+    throw new AppError("ERR_NO_WAPP_FOUND", 404);
+  }
+  const companyId = whatsapp.companyId;
 
-  return res.status(200).json('oi');
+  // Lista conexões da empresa — whitelist de campos para nunca expor token/session
+  const whatsapps = await Whatsapp.findAll({
+    where: { companyId },
+    attributes: ["id", "name", "status", "isDefault", "number", "channel"],
+    order: [["id", "ASC"]]
+  });
 
-  // const { companyId } = req.user;
-  // const whatsapps = await ListWhatsAppsService({ companyId });
-
-  // let wpp = [];
-
-  // if (whatsapps.length > 0) {
-  //     whatsapps.forEach(whatsapp => {
-
-  //         let wppString;
-  //         wppString = {
-  //             id: whatsapp.id,
-  //             name: whatsapp.name,
-  //             status: whatsapp.status,
-  //             isDefault: whatsapp.isDefault,
-  //             number: whatsapp.number
-  //         }
-
-  //         wpp.push(wppString)
-
-  //     });
-  // }
-
-  // return res.status(200).json(wpp);
+  return res.status(200).json({ count: whatsapps.length, whatsapps });
 };

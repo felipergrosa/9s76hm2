@@ -72,6 +72,15 @@ const SignUp = () => {
   const [loading, setLoading] = useState(false);
   const [userCreationEnabled, setUserCreationEnabled] = useState(true);
 
+  // Estado da etapa de verificação de e-mail (código de 6 dígitos, estilo Fluxoo).
+  const [step, setStep] = useState("form"); // "form" | "code"
+  const [pendingValues, setPendingValues] = useState(null);
+  const [code, setCode] = useState("");
+  const [codeError, setCodeError] = useState("");
+  const [verifying, setVerifying] = useState(false);
+  const [sendingCode, setSendingCode] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+
   let companyId = null;
   const params = qs.parse(window.location.search);
   if (params.companyId !== undefined) {
@@ -138,13 +147,101 @@ const SignUp = () => {
     fetchData();
   }, [getPlanList]);
 
-  const handleSignUp = async (values) => {
-    try {
-      await openApi.post("/auth/signup", values);
-      toast.success(i18n.t("signup.toasts.success"));
-      history.push("/login");
-    } catch (err) {
+  // Countdown do botão "Reenviar código" (cooldown de 60s imposto no backend).
+  useEffect(() => {
+    if (resendCooldown <= 0) return undefined;
+    const timer = setTimeout(() => setResendCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendCooldown]);
+
+  // Erros do fluxo de verificação usam códigos ERR_* do backend mapeados
+  // em signup.verification.errors.*; demais erros caem no toastError padrão.
+  const showVerificationError = (err) => {
+    const errCode = err.response?.data?.error;
+    if (errCode && i18n.exists(`signup.verification.errors.${errCode}`)) {
+      toast.error(i18n.t(`signup.verification.errors.${errCode}`));
+    } else {
       toastError(err);
+    }
+  };
+
+  const finishSignUp = async (values, verificationToken) => {
+    // O token de verificação é exigido pelo backend quando SMTP está ativo.
+    const payload = verificationToken
+      ? { ...values, emailVerificationToken: verificationToken }
+      : values;
+    await openApi.post("/auth/signup", payload);
+    toast.success(i18n.t("signup.toasts.success"));
+    history.push("/login");
+  };
+
+  const handleSignUp = async (values) => {
+    setSendingCode(true);
+    try {
+      // Etapa 1: solicita o código de verificação antes de concluir o registro.
+      const { data } = await openApi.post("/auth/verify-email/send", {
+        email: values.email,
+      });
+      if (data && data.required === false) {
+        // Fail-open: SMTP não configurado no backend — cadastro direto.
+        await finishSignUp(values);
+        return;
+      }
+      setPendingValues(values);
+      setCode("");
+      setCodeError("");
+      setResendCooldown(data?.cooldownSeconds || 60);
+      setStep("code");
+      toast.success(i18n.t("signup.verification.codeSent"));
+    } catch (err) {
+      showVerificationError(err);
+    } finally {
+      setSendingCode(false);
+    }
+  };
+
+  const handleVerifyCode = async () => {
+    if (code.length !== 6 || verifying || !pendingValues) return;
+    setVerifying(true);
+    setCodeError("");
+    try {
+      // Etapa 2: confere o código e recebe o token de uso único para o signup.
+      const { data } = await openApi.post("/auth/verify-email/check", {
+        email: pendingValues.email,
+        code,
+      });
+      await finishSignUp(pendingValues, data.verificationToken);
+    } catch (err) {
+      const errCode = err.response?.data?.error;
+      if (errCode && i18n.exists(`signup.verification.errors.${errCode}`)) {
+        setCodeError(i18n.t(`signup.verification.errors.${errCode}`));
+      } else {
+        toastError(err);
+      }
+      // Expirado ou máx. de tentativas: limpa o campo e força novo envio.
+      if (
+        errCode === "ERR_VERIFICATION_CODE_EXPIRED" ||
+        errCode === "ERR_VERIFICATION_MAX_ATTEMPTS"
+      ) {
+        setCode("");
+      }
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    if (resendCooldown > 0 || !pendingValues) return;
+    try {
+      const { data } = await openApi.post("/auth/verify-email/send", {
+        email: pendingValues.email,
+      });
+      setResendCooldown(data?.cooldownSeconds || 60);
+      setCode("");
+      setCodeError("");
+      toast.success(i18n.t("signup.verification.codeResent"));
+    } catch (err) {
+      showVerificationError(err);
     }
   };
 
@@ -160,8 +257,99 @@ const SignUp = () => {
           <LockOutlinedIcon />
         </Avatar>
         <Typography component="h1" variant="h5" style={{ marginBottom: 8 }}>
-          {i18n.t("signup.title")}
+          {step === "code"
+            ? i18n.t("signup.verification.title")
+            : i18n.t("signup.title")}
         </Typography>
+        {step === "code" ? (
+          <Box width="100%" mt={2}>
+            {/* Etapa de verificação: código de 6 dígitos enviado por e-mail.
+                O código nunca é logado nem persistido em claro no backend. */}
+            <Typography variant="body2" align="center">
+              {i18n.t("signup.verification.subtitle")}
+            </Typography>
+            <Typography
+              variant="body2"
+              align="center"
+              style={{ fontWeight: "bold", marginBottom: 8 }}
+            >
+              {pendingValues?.email}
+            </Typography>
+            <TextField
+              variant="outlined"
+              fullWidth
+              id="verification-code"
+              label={i18n.t("signup.verification.codeLabel")}
+              placeholder={i18n.t("signup.verification.codePlaceholder")}
+              value={code}
+              onChange={(e) =>
+                setCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+              }
+              onKeyPress={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleVerifyCode();
+                }
+              }}
+              error={Boolean(codeError)}
+              helperText={codeError}
+              autoFocus
+              inputProps={{
+                inputMode: "numeric",
+                maxLength: 6,
+                style: {
+                  textAlign: "center",
+                  letterSpacing: 10,
+                  fontSize: 24,
+                  fontWeight: "bold",
+                },
+              }}
+            />
+            <Button
+              fullWidth
+              variant="contained"
+              color="primary"
+              className={classes.submit}
+              disabled={code.length !== 6 || verifying}
+              onClick={handleVerifyCode}
+            >
+              {i18n.t("signup.verification.verify")}
+            </Button>
+            <Grid container justifyContent="center" spacing={2}>
+              <Grid item>
+                <Link
+                  href="#"
+                  variant="body2"
+                  component="button"
+                  type="button"
+                  onClick={handleResendCode}
+                  disabled={resendCooldown > 0}
+                >
+                  {resendCooldown > 0
+                    ? i18n.t("signup.verification.resendIn", {
+                        seconds: resendCooldown,
+                      })
+                    : i18n.t("signup.verification.resend")}
+                </Link>
+              </Grid>
+              <Grid item>
+                <Link
+                  href="#"
+                  variant="body2"
+                  component="button"
+                  type="button"
+                  onClick={() => {
+                    setStep("form");
+                    setCode("");
+                    setCodeError("");
+                  }}
+                >
+                  {i18n.t("signup.verification.back")}
+                </Link>
+              </Grid>
+            </Grid>
+          </Box>
+        ) : (
         <Formik
           initialValues={user}
           enableReinitialize={true}
@@ -268,6 +456,7 @@ const SignUp = () => {
                 variant="contained"
                 color="primary"
                 className={classes.submit}
+                disabled={sendingCode}
               >
                 {i18n.t("signup.buttons.submit")}
               </Button>
@@ -286,6 +475,7 @@ const SignUp = () => {
             </Form>
           )}
         </Formik>
+        )}
       </div>
       <Box mt={5}></Box>
     </Container>

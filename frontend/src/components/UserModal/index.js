@@ -130,6 +130,7 @@ const UserSchema = Yup.object().shape({
   allowedContactTags: Yup.array().of(Yup.number()).min(1, "Tag pessoal obrigatória").max(1, "Apenas 1 tag pessoal permitida").required("Tag pessoal obrigatória"),
   allowedConnectionIds: Yup.array().of(Yup.number()).nullable(),
   isPrivate: Yup.boolean().nullable(),
+  ramal: Yup.string().nullable().max(50, "Ramal muito longo"), // Ramal interno (futuro SIP)
 });
 
 const UserModal = ({ open, onClose, userId }) => {
@@ -161,6 +162,7 @@ const UserModal = ({ open, onClose, userId }) => {
     allowedConnectionIds: [],
     isPrivate: false,
     color: "",
+    ramal: "",
   };
 
   const { user: loggedInUser } = useContext(AuthContext);
@@ -614,6 +616,25 @@ const UserModal = ({ open, onClose, userId }) => {
                                 </Typography>
                               </div>
                             }
+                          />
+                        </Grid>
+                      </Grid>
+                    )}
+                    {/* Ramal interno (referência Fluxoo) — campo de cadastro;
+                        futuramente alimenta o tronco SIP/softphone. Restrito a
+                        quem tem users.edit (backend descarta em auto-edição). */}
+                    {hasPermission("users.edit") && (
+                      <Grid container spacing={1}>
+                        <Grid item xs={12} md={6} xl={6}>
+                          <Field
+                            as={TextField}
+                            label={i18n.t("userModal.form.ramal")}
+                            name="ramal"
+                            error={touched.ramal && Boolean(errors.ramal)}
+                            helperText={touched.ramal && errors.ramal}
+                            variant="outlined"
+                            margin="dense"
+                            fullWidth
                           />
                         </Grid>
                       </Grid>

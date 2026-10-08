@@ -26,10 +26,11 @@ interface QueueData {
   maxFilesPerSession?: number;
   ragCollection?: string;
   folderId?: number;
+  slaMinutes?: number | null;
 }
 
 const CreateQueueService = async (queueData: QueueData): Promise<Queue> => {
-  const { color, name, companyId } = queueData;
+  const { color, name, companyId, slaMinutes } = queueData;
 
   const company = await Company.findOne({
     where: {
@@ -89,11 +90,16 @@ const CreateQueueService = async (queueData: QueueData): Promise<Queue> => {
           }
           return false;
         }
-      )
+      ),
+    // SLA em minutos: inteiro >= 0 ou nulo (0/null = fila sem SLA)
+    slaMinutes: Yup.number()
+      .integer("ERR_QUEUE_INVALID_SLA")
+      .min(0, "ERR_QUEUE_INVALID_SLA")
+      .nullable()
   });
 
   try {
-    await queueSchema.validate({ color, name });
+    await queueSchema.validate({ color, name, slaMinutes });
   } catch (err: any) {
     throw new AppError(err.message);
   }

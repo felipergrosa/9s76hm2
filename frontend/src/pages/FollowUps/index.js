@@ -343,8 +343,11 @@ const FollowUps = () => {
       const active = data.filter(e => e.status === "active").length;
       const completed = data.filter(e => e.status === "completed").length;
       const failed = data.filter(e => e.status === "failed").length;
+      // waiting_window: segurados fora da janela de 24h da API Oficial
+      const waitingWindow = data.filter(e => e.status === "waiting_window").length;
       toast.info(
-        `Inscritos: ${data.length} | Ativos: ${active} | Concluídos: ${completed} | Falharam: ${failed}`,
+        `Inscritos: ${data.length} | Ativos: ${active} | Concluídos: ${completed} | Falharam: ${failed}` +
+          (waitingWindow > 0 ? ` | Aguardando janela 24h: ${waitingWindow}` : ""),
         { autoClose: 8000 }
       );
     } catch (err) {

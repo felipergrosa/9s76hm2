@@ -92,7 +92,8 @@ const mergeStringFields = [
   "segment",
   "contactName",
   "bzEmpresa",
-  "cpfCnpj"
+  "cpfCnpj",
+  "verificationCode"
 ];
 
 const mergeDirectFields = ["foundationDate", "dtUltCompra", "vlUltCompra", "situation"] as const;

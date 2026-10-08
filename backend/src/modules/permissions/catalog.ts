@@ -96,7 +96,11 @@ export const AVAILABLE_PERMISSIONS = {
     "meta-templates.view",
     "meta-templates.create",
     "meta-templates.edit",
-    "meta-templates.delete"
+    "meta-templates.delete",
+    "meta-automations.view",
+    "meta-automations.create",
+    "meta-automations.edit",
+    "meta-automations.delete"
   ],
 
   // FLOWBUILDER
@@ -416,6 +420,10 @@ export const formatPermissionLabel = (key: string): string => {
     "meta-templates.create": "Criar Templates Meta",
     "meta-templates.edit": "Editar Templates Meta",
     "meta-templates.delete": "Deletar Templates Meta",
+    "meta-automations.view": "Ver Automações Meta",
+    "meta-automations.create": "Criar Automações Meta",
+    "meta-automations.edit": "Editar Automações Meta",
+    "meta-automations.delete": "Deletar Automações Meta",
     "users.view": "Ver Usuários",
     "users.create": "Criar Usuários",
     "users.edit": "Editar Usuários",
@@ -513,6 +521,10 @@ export const getPermissionDescription = (key: string): string => {
     "meta-templates.create": "Criar e submeter novos templates de mensagem à Meta",
     "meta-templates.edit": "Editar templates de mensagem Meta existentes",
     "meta-templates.delete": "Deletar templates de mensagem Meta",
+    "meta-automations.view": "Visualizar automações Meta (DM automática por comentário/menção)",
+    "meta-automations.create": "Criar automações Meta (gatilhos de comentário, story, referral e DM)",
+    "meta-automations.edit": "Editar automações Meta existentes",
+    "meta-automations.delete": "Deletar automações Meta",
     "users.edit": "Editar informações e permissões de outros usuários",
     "users.edit-own": "Permitir que o usuário edite seu próprio perfil (nome, avatar, cor, etc)",
     "connections.edit": "Adicionar, editar e remover conexões WhatsApp",

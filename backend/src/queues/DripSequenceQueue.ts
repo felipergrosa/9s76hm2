@@ -11,6 +11,7 @@ import TicketTag from "../models/TicketTag";
 import Ticket from "../models/Ticket";
 import SendDripStepMessageService from "../services/DripSequenceService/SendDripStepMessageService";
 import SendTemplateToContact from "../services/MetaServices/SendTemplateToContact";
+import GetSessionWindow from "../services/MetaServices/GetSessionWindow";
 import ExecuteFollowUpEndActionService from "../services/DripSequenceService/ExecuteFollowUpEndActionService";
 import logger from "../utils/logger";
 
@@ -86,6 +87,15 @@ async function isTriggerStillApplied(
 const MAX_ATTEMPTS = 5;
 const RETRY_DELAY_MS = 30 * 60 * 1000; // 30 minutos
 
+// Gate da janela de 24h da API Oficial (Cloud API): mensagem livre de
+// follow-up só pode sair dentro da janela aberta pela última mensagem do
+// contato. Fora dela, o enrollment fica "waiting_window" e é reagendado —
+// mesma regra da referência Fluxoo (steps seguintes só disparam após o
+// contato responder). A coluna status é STRING livre → sem migration.
+const ENROLLMENT_DISPATCHABLE_STATUSES = ["active", "waiting_window"];
+const WINDOW_WAIT_RETRY_MS = 30 * 60 * 1000; // re-checa a janela a cada 30min
+const WINDOW_WAIT_TTL_MS = 7 * MS_PER_DAY;   // janela não reabriu em 7d → cancela
+
 export const dripSequenceQueue = new BullQueue("DripSequenceQueue", connection, {
   defaultJobOptions: {
     removeOnComplete: { age: 3600, count: 200 },
@@ -96,7 +106,7 @@ export const dripSequenceQueue = new BullQueue("DripSequenceQueue", connection, 
 async function verifyDripEnrollments(): Promise<void> {
   const enrollments = await DripSequenceEnrollment.findAll({
     where: {
-      status: "active",
+      status: { [Op.in]: ENROLLMENT_DISPATCHABLE_STATUSES },
       nextSendAt: { [Op.lte]: new Date() }
     }
   });
@@ -110,7 +120,7 @@ async function dispatchDripStep(job: any): Promise<void> {
   const { enrollmentId } = job.data;
 
   const enrollment = await DripSequenceEnrollment.findByPk(enrollmentId);
-  if (!enrollment || enrollment.status !== "active") {
+  if (!enrollment || !ENROLLMENT_DISPATCHABLE_STATUSES.includes(enrollment.status)) {
     return;
   }
 
@@ -165,6 +175,46 @@ async function dispatchDripStep(job: any): Promise<void> {
       return;
     }
 
+    // Gate da janela de 24h (API Oficial): step de mensagem livre só envia
+    // com a janela aberta. Step com template Meta ignora o gate — template
+    // aprovado é justamente o envio permitido fora da janela.
+    if (whatsapp.channelType === "official" && !currentStep.metaTemplateName) {
+      const { hasOpenSession } = await GetSessionWindow({
+        whatsappId: whatsapp.id,
+        contactId: contact.id,
+        companyId: enrollment.companyId
+      });
+
+      if (!hasOpenSession) {
+        // lastErrorAt ancora o início da espera — TTL evita enrollment
+        // preso para sempre se o contato nunca responder.
+        const nowMs = Date.now();
+        const waitingSince =
+          enrollment.status === "waiting_window" && enrollment.lastErrorAt
+            ? new Date(enrollment.lastErrorAt).getTime()
+            : nowMs;
+
+        if (nowMs - waitingSince >= WINDOW_WAIT_TTL_MS) {
+          await enrollment.update({
+            status: "cancelled",
+            lastError:
+              "Janela de 24h não reaberta — follow-up expirado aguardando resposta do contato",
+            lastErrorAt: new Date()
+          });
+          return;
+        }
+
+        await enrollment.update({
+          status: "waiting_window",
+          lastError:
+            "Aguardando janela de 24h da API Oficial (contato precisa responder ou o step precisa de template Meta)",
+          lastErrorAt: new Date(waitingSince),
+          nextSendAt: new Date(nowMs + WINDOW_WAIT_RETRY_MS)
+        });
+        return;
+      }
+    }
+
     // Step com template Meta: usado em conexão oficial (obrigatório fora da
     // janela de 24h) — mas também funciona para enviar template em Baileys?
     // Não: Baileys não suporta templates Meta. Se a conexão não for oficial,
@@ -198,6 +248,8 @@ async function dispatchDripStep(job: any): Promise<void> {
     if (nextStep) {
       await enrollment.update({
         currentStepIndex: nextIndex,
+        // Volta para "active" caso tenha enviado após período em waiting_window
+        status: "active",
         nextSendAt: clampToSendWindow(
           new Date(Date.now() + stepDelayMs(nextStep)),
           dripSequence.sendWindowStart,

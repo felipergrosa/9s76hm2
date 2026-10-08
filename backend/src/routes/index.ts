@@ -80,6 +80,14 @@ import instagramSessionRoutes from "./instagramSessionRoutes";
 import customFieldConfigRoutes from "./customFieldConfigRoutes";
 import metaOAuthRoutes from "./metaOAuthRoutes";
 import metaTemplateRoutes from "./metaTemplateRoutes";
+import metaAutomationRoutes from "./metaAutomationRoutes";
+import publicFlowWebhookRoutes from "./publicFlowWebhookRoutes";
+import closingReportRoutes from "./closingReportRoutes";
+import walletRoutes from "./walletRoutes";
+import metaWebhookRoutes from "./metaWebhookRoutes";
+import whatsappHealthRoutes from "./whatsappHealthRoutes";
+import emailVerificationRoutes from "./emailVerificationRoutes";
+import publicWebchatRoutes from "./publicWebchatRoutes";
 import { getLinkPreviewData, detectAndPreview } from "../controllers/LinkPreviewController";
 
 const routes = Router();
@@ -89,6 +97,11 @@ const routes = Router();
 routes.get("/health", (req, res) => {
     res.status(200).json({ status: "ok" });
 });
+
+// Webhook público de disparo de fluxo (autenticação via hash_id na URL).
+// Registrado antes das rotas autenticadas — não passa por isAuth.
+routes.use(publicFlowWebhookRoutes);
+routes.use(publicWebchatRoutes);
 
 routes.use(userRoutes);
 routes.use("/auth", authRoutes);
@@ -171,6 +184,12 @@ routes.use(instagramSessionRoutes);
 routes.use(customFieldConfigRoutes);
 routes.use(metaOAuthRoutes);
 routes.use(metaTemplateRoutes);
+routes.use(metaAutomationRoutes);
+routes.use(closingReportRoutes);
+routes.use(walletRoutes);
+routes.use(metaWebhookRoutes);
+routes.use(whatsappHealthRoutes);
+routes.use(emailVerificationRoutes);
 
 // Link Preview routes
 routes.post("/link-preview", isAuth, getLinkPreviewData);

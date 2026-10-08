@@ -55,4 +55,9 @@ ticketRoutes.get("/tickets/:ticketId/session-window", isAuth, checkPermission("t
 ticketRoutes.post("/tickets/:ticketId/mark-as-read", isAuth, checkPermission("tickets.update"), TicketController.markNotificationAsRead);
 ticketRoutes.post("/tickets/mark-all-as-read", isAuth, checkPermission("tickets.update"), TicketController.markAllNotificationsAsRead);
 
+// Disparo manual de fluxo do FlowBuilder no ticket ("Disparar Fluxo").
+// GET lista os fluxos ativos da empresa (permissão de leitura); POST executa.
+ticketRoutes.get("/tickets/:ticketId/flows", isAuth, checkPermission("tickets.view"), TicketController.listTicketFlows);
+ticketRoutes.post("/tickets/:ticketId/trigger-flow", isAuth, checkPermission("tickets.update"), TicketController.triggerFlow);
+
 export default ticketRoutes;

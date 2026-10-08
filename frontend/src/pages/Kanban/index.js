@@ -9,7 +9,7 @@ import { debounce } from 'lodash';
 import ColorModeContext from "../../layout/themeContext";
 import { i18n } from "../../translate/i18n";
 import { useHistory } from 'react-router-dom';
-import { FilterList, Add, Refresh, AttachMoney } from "@material-ui/icons";
+import { FilterList, Add, Refresh, AttachMoney, ViewCompact, ViewAgenda, Warning } from "@material-ui/icons";
 import Autocomplete from "@material-ui/lab/Autocomplete";
 import { toast } from "react-toastify";
 import usePermissions from "../../hooks/usePermissions";
@@ -22,6 +22,7 @@ import {
 
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import KanbanFiltersModal from "./KanbanFiltersModal";
+import { isTicketSlaOverdue } from "./sla";
 import Title from "../../components/Title"; // Importando Title
 
 // Bento design system — moldura + entrada spring (sem tocar no DnD)
@@ -147,6 +148,14 @@ const useStyles = makeStyles(theme => ({
     display: "flex",
     position: "relative",
   },
+  // Hint discreto dos atalhos de teclado — some em telas pequenas
+  shortcutsHint: {
+    marginLeft: "auto",
+    whiteSpace: "nowrap",
+    [theme.breakpoints.down("sm")]: {
+      display: "none",
+    },
+  },
 }));
 
 const Kanban = () => {
@@ -175,6 +184,18 @@ const Kanban = () => {
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [isTransferring, setIsTransferring] = useState(false);
   const [filtersModalOpen, setFiltersModalOpen] = useState(false);
+
+  // Filtro "SLA atrasado": exibe apenas cards vencidos (ver sla.js)
+  const [slaOnly, setSlaOnly] = useState(false);
+
+  // Modo compacto dos cards, persistido em localStorage
+  const [compactMode, setCompactMode] = useState(() => {
+    try { return localStorage.getItem("kanbanCompactMode") === "1"; } catch (e) { return false; }
+  });
+
+  // Foco de teclado no board: { lane, card } ou null (nada focado)
+  const [focusPos, setFocusPos] = useState(null);
+  const searchInputRef = useRef(null);
 
   // CRUD inline de fases (tags kanban) e negócios (deals)
   const { hasPermission } = usePermissions();
@@ -404,6 +425,17 @@ const Kanban = () => {
     [tickets]
   );
 
+  // Contagem de cards com SLA vencido (exibida no chip da toolbar)
+  const slaOverdueCount = useMemo(() =>
+    (tickets || []).filter(t => isTicketSlaOverdue(t)).length,
+    [tickets]
+  );
+
+  // Persiste a preferência de modo compacto
+  useEffect(() => {
+    try { localStorage.setItem("kanbanCompactMode", compactMode ? "1" : "0"); } catch (e) { }
+  }, [compactMode]);
+
   // Respeita prefers-reduced-motion: troca o spring de entrada por fade simples
   const reducedMotion = useReducedMotion();
   const itemVariant = reducedMotion ? bentoItemReduced : bentoItem;
@@ -429,6 +461,10 @@ const Kanban = () => {
         return filterTags.every(ft => tagIds.includes(String(ft)));
       });
     }
+    // Filtro "SLA atrasado": só cards vencidos (janela 24h ou >24h sem resposta)
+    if (slaOnly) {
+      filtered = filtered.filter(t => isTicketSlaOverdue(t));
+    }
     if (sortBy === "recent") {
       filtered = filtered.slice().sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
     } else if (sortBy === "oldest") {
@@ -440,7 +476,7 @@ const Kanban = () => {
       filtered = filtered.slice().sort((a, b) => (p(b.unreadMessages) - p(a.unreadMessages)) || (new Date(b.updatedAt) - new Date(a.updatedAt)));
     }
     return filtered;
-  }, [searchText, filterQueues, filterUsers, filterTags, sortBy]);
+  }, [searchText, filterQueues, filterUsers, filterTags, sortBy, slaOnly]);
 
   const handleCardMove = useCallback(async (...args) => {
     try {
@@ -775,6 +811,92 @@ const Kanban = () => {
     };
   }, []);
 
+  // ── Atalhos de teclado do board ─────────────────────────────────────────
+  // ←/→ navegam entre colunas, ↑/↓ entre cards, Enter abre o ticket focado,
+  // C alterna compacto e / foca a busca. Não captura teclas quando o foco
+  // está em input/textarea/select, com modificadores ou com modal/menu aberto.
+  useEffect(() => {
+    const isEditableTarget = (el) => {
+      if (!el) return false;
+      const tag = (el.tagName || "").toLowerCase();
+      return tag === "input" || tag === "textarea" || tag === "select" || el.isContentEditable;
+    };
+
+    // Modal/menu do MUI aberto renderiza .MuiModal-root no DOM
+    const anyOverlayOpen = () =>
+      confirmModalOpen || filtersModalOpen || laneDialogOpen || dealDialogOpen ||
+      !!document.querySelector(".MuiModal-root");
+
+    // Mantém o card focado visível no viewport do board
+    const scrollToFocus = (pos) => {
+      try {
+        const laneEl = kanbanScrollRef.current?.querySelector(`[data-kanban-lane="${pos.lane}"]`);
+        const cardEl = laneEl?.querySelector(`[data-kanban-card="${pos.card}"]`);
+        (cardEl || laneEl)?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+      } catch (e) { }
+    };
+
+    const onKeyDown = (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (isEditableTarget(e.target)) return;
+      if (anyOverlayOpen()) return;
+
+      const lanes = file?.lanes || [];
+      if (!lanes.length) return;
+
+      // Clampa a posição dentro dos limites atuais do board
+      const clampPos = (pos) => {
+        const lane = Math.max(0, Math.min(pos.lane, lanes.length - 1));
+        const cardsCount = (lanes[lane]?.cards || []).length;
+        const card = Math.max(0, Math.min(pos.card, cardsCount - 1));
+        return { lane, card };
+      };
+
+      switch (e.key) {
+        case "/":
+          e.preventDefault();
+          searchInputRef.current?.focus();
+          return;
+        case "c":
+        case "C":
+          setCompactMode(v => !v);
+          return;
+        case "ArrowRight":
+        case "ArrowLeft": {
+          e.preventDefault();
+          const cur = focusPos || { lane: 0, card: 0 };
+          const next = clampPos({ lane: cur.lane + (e.key === "ArrowRight" ? 1 : -1), card: 0 });
+          setFocusPos(next);
+          scrollToFocus(next);
+          return;
+        }
+        case "ArrowDown":
+        case "ArrowUp": {
+          e.preventDefault();
+          const cur = focusPos || { lane: 0, card: 0 };
+          const next = clampPos({ lane: cur.lane, card: cur.card + (e.key === "ArrowDown" ? 1 : -1) });
+          setFocusPos(next);
+          scrollToFocus(next);
+          return;
+        }
+        case "Enter": {
+          if (!focusPos) return;
+          const ticket = lanes[focusPos.lane]?.cards?.[focusPos.card]?.ticket;
+          if (ticket) {
+            e.preventDefault();
+            handleCardClick(ticket);
+          }
+          return;
+        }
+        default:
+          return;
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [file, focusPos, confirmModalOpen, filtersModalOpen, laneDialogOpen, dealDialogOpen, handleCardClick]);
+
   return (
     <motion.div className={classes.root} variants={bentoContainer} initial="hidden" animate="show">
       <div className={classes.headerContainer}>
@@ -793,6 +915,7 @@ const Kanban = () => {
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
             className={classes.searchInput}
+            inputRef={searchInputRef}
           />
 
           {(user.profile === "admin" || user.super || (user.managedUserIds && user.managedUserIds.length > 0)) && (
@@ -841,6 +964,35 @@ const Kanban = () => {
               <FilterList />
             </IconButton>
           </Tooltip>
+
+          {/* Toggle "SLA atrasado": filtra só cards vencidos */}
+          <Tooltip title={i18n.t('kanban.slaFilterTooltip')}>
+            <Chip
+              icon={<Warning style={{ fontSize: 16 }} />}
+              label={`${i18n.t('kanban.slaFilter')} (${slaOverdueCount})`}
+              size="small"
+              clickable
+              onClick={() => setSlaOnly(v => !v)}
+              variant={slaOnly ? "default" : "outlined"}
+              style={slaOnly ? { background: "#fdecea", color: "#b71c1c", fontWeight: 700 } : {}}
+            />
+          </Tooltip>
+
+          {/* Toggle modo compacto/expandido (persistido em localStorage) */}
+          <Tooltip title={i18n.t('kanban.compactMode')}>
+            <IconButton
+              className={classes.actionButton}
+              color={compactMode ? "primary" : "default"}
+              onClick={() => setCompactMode(v => !v)}
+            >
+              {compactMode ? <ViewAgenda /> : <ViewCompact />}
+            </IconButton>
+          </Tooltip>
+
+          {/* Hint discreto dos atalhos (some no mobile) */}
+          <Typography variant="caption" color="textSecondary" className={classes.shortcutsHint}>
+            {i18n.t('kanban.shortcutsHint')}
+          </Typography>
         </motion.div>
       </div>
 
@@ -874,6 +1026,9 @@ const Kanban = () => {
                           <KanbanLane
                             key={lane.id}
                             lane={lane}
+                            laneIndex={index}
+                            compact={compactMode}
+                            focusedCardIndex={focusPos && focusPos.lane === index ? focusPos.card : -1}
                             onCardClick={handleCardClick}
                             allTags={tags}
                             onMoveRequest={quickMove}

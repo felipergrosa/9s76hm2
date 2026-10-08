@@ -34,7 +34,12 @@ export const ALLOWED_COMPANY_SETTINGS_COLUMNS = new Set<string>([
   "openaiApiKey",
   "openaiModel",
   "autoCaptureGroupContacts",
-  "externalFormWebhookToken"
+  "externalFormWebhookToken",
+  "enableClosingForm",
+  // Config. Aniversário (envio automático de parabéns)
+  "birthdayMessageEnabled",
+  "birthdayMessage",
+  "birthdayWhatsappId"
 ]);
 
 export const isAllowedCompanySettingColumn = (column: string): boolean => {

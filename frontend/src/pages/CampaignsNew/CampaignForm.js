@@ -743,6 +743,8 @@ const CampaignForm = () => {
     confirmationMessage1: "", confirmationMessage2: "", confirmationMessage3: "", confirmationMessage4: "", confirmationMessage5: "",
     mediaUrl1: "", mediaName1: "", mediaUrl2: "", mediaName2: "", mediaUrl3: "", mediaName3: "", mediaUrl4: "", mediaName4: "", mediaUrl5: "", mediaName5: "",
     status: "INATIVA", confirmation: false, scheduledAt: "",
+    // Recorrência do disparo (none | daily | weekly | monthly) + fim opcional
+    recurrence: "none", recurrenceEndAt: "",
     contactListId: "", contactListIds: [], tagListId: "Nenhuma", negativeTagListIds: [], companyId,
     statusTicket: "closed", openTicket: "disabled", dispatchStrategy: "single",
     allowedWhatsappIds: [], metaTemplateName: null, metaTemplateLanguage: null,
@@ -991,11 +993,13 @@ const CampaignForm = () => {
           prev.negativeTagListIds = parseStoredIdArray(data?.negativeTagListIds);
           
           // Copiar demais campos, mas NÃO sobrescrever campos normalizados acima
-          Object.entries(data).forEach(([k,v]) => { 
+          Object.entries(data).forEach(([k,v]) => {
             if (k !== "tagListId" && k !== "negativeTagListIds") {
-              prev[k] = k === "scheduledAt" && v ? moment(v).format("YYYY-MM-DDTHH:mm") : (v === null ? "" : v); 
+              prev[k] = (k === "scheduledAt" || k === "recurrenceEndAt") && v ? moment(v).format("YYYY-MM-DDTHH:mm") : (v === null ? "" : v);
             }
           });
+          // Recorrência ausente em campanhas antigas → "none"
+          if (!prev.recurrence) prev.recurrence = "none";
           
           if (data?.contactListIds) {
             try {
@@ -1191,7 +1195,10 @@ const CampaignForm = () => {
   const handleSaveCampaign = async (values) => {
     try {
       const processed = {};
-      Object.entries(values).forEach(([k,v]) => { processed[k] = k === "scheduledAt" && v ? moment(v).format("YYYY-MM-DD HH:mm:ss") : (v === "" ? null : v); });
+      Object.entries(values).forEach(([k,v]) => { processed[k] = (k === "scheduledAt" || k === "recurrenceEndAt") && v ? moment(v).format("YYYY-MM-DD HH:mm:ss") : (v === "" ? null : v); });
+      // Recorrência só se aplica a campanha agendada; "none" zera o fim
+      if (!processed.scheduledAt) { processed.recurrence = "none"; processed.recurrenceEndAt = null; }
+      else if (processed.recurrence === "none") { processed.recurrenceEndAt = null; }
       const userIds = selectedUsers.length > 0 ? JSON.stringify(selectedUsers.map(u => u.id)) : null;
       const userId = selectedUsers.length === 1 ? selectedUsers[0].id : null;
       // Convert contactListIds to JSON string if it's an array
@@ -1222,7 +1229,10 @@ const CampaignForm = () => {
     try {
       setSubmitting(true);
       const processed = {};
-      Object.entries(values).forEach(([k,v]) => { processed[k] = k === "scheduledAt" && v ? moment(v).format("YYYY-MM-DD HH:mm:ss") : (v === "" ? null : v); });
+      Object.entries(values).forEach(([k,v]) => { processed[k] = (k === "scheduledAt" || k === "recurrenceEndAt") && v ? moment(v).format("YYYY-MM-DD HH:mm:ss") : (v === "" ? null : v); });
+      // Recorrência só se aplica a campanha agendada; "none" zera o fim
+      if (!processed.scheduledAt) { processed.recurrence = "none"; processed.recurrenceEndAt = null; }
+      else if (processed.recurrence === "none") { processed.recurrenceEndAt = null; }
       const hasSched = !!processed.scheduledAt;
       processed.status = hasSched ? "PROGRAMADA" : "INATIVA";
       const userIds = selectedUsers.length > 0 ? JSON.stringify(selectedUsers.map(u => u.id)) : null;
@@ -1856,6 +1866,36 @@ const CampaignForm = () => {
                               </Box>
                               <Field as={TextField} name="scheduledAt" type="datetime-local" fullWidth variant="outlined" InputLabelProps={{ shrink: true }} disabled={!campaignEditable} className={classes.formField} />
                             </Grid>
+                            {/* Recorrência — só aparece quando a campanha está agendada */}
+                            <Grid item xs={12} sm={6}>
+                              <Box display="flex" alignItems="center" mb={1} gap={0.5}>
+                                <label className={classes.label} style={{ marginBottom: 0 }}>{i18n.t("campaigns.recurrence.label")}</label>
+                                <Tooltip title={i18n.t("campaigns.recurrence.help")}><InfoOutlinedIcon style={{ fontSize: 16, color: "#64748b", cursor: "pointer" }} /></Tooltip>
+                              </Box>
+                              <Field
+                                as={Select}
+                                name="recurrence"
+                                fullWidth
+                                variant="outlined"
+                                disabled={!campaignEditable}
+                                className={classes.formField}
+                              >
+                                <MenuItem value="none">{i18n.t("campaigns.recurrence.none")}</MenuItem>
+                                <MenuItem value="daily">{i18n.t("campaigns.recurrence.daily")}</MenuItem>
+                                <MenuItem value="weekly">{i18n.t("campaigns.recurrence.weekly")}</MenuItem>
+                                <MenuItem value="monthly">{i18n.t("campaigns.recurrence.monthly")}</MenuItem>
+                              </Field>
+                            </Grid>
+                            {/* Fim da recorrência — opcional, só com recorrência ativa */}
+                            {values.recurrence && values.recurrence !== "none" && (
+                              <Grid item xs={12} sm={6}>
+                                <Box display="flex" alignItems="center" mb={1} gap={0.5}>
+                                  <label className={classes.label} style={{ marginBottom: 0 }}>{i18n.t("campaigns.recurrence.endAt")}</label>
+                                  <Tooltip title={i18n.t("campaigns.recurrence.endAtHelper")}><InfoOutlinedIcon style={{ fontSize: 16, color: "#64748b", cursor: "pointer" }} /></Tooltip>
+                                </Box>
+                                <Field as={TextField} name="recurrenceEndAt" type="datetime-local" fullWidth variant="outlined" InputLabelProps={{ shrink: true }} disabled={!campaignEditable} className={classes.formField} />
+                              </Grid>
+                            )}
                           </Grid></Box>
                         )}
                         <Box className={classes.tipBox} mt={3}>
@@ -1935,6 +1975,17 @@ const CampaignForm = () => {
                                 {values.scheduledAt ? moment(values.scheduledAt).format("DD/MM [às] HH:mm") : "Imediato"}
                               </Typography>
                             </Box>
+
+                            {/* Recorrência no resumo — só quando agendada e ativa */}
+                            {values.scheduledAt && values.recurrence && values.recurrence !== "none" && (
+                              <Box display="flex" justifyContent="space-between" mb={1}>
+                                <Typography variant="caption" color="textSecondary">{i18n.t("campaigns.recurrence.label").toUpperCase()}</Typography>
+                                <Typography variant="body2" style={{ fontWeight: 600 }}>
+                                  ↻ {i18n.t(`campaigns.recurrence.${values.recurrence}`)}
+                                  {values.recurrenceEndAt && ` — até ${moment(values.recurrenceEndAt).format("DD/MM/YYYY")}`}
+                                </Typography>
+                              </Box>
+                            )}
 
                             <Box display="flex" justifyContent="space-between" mb={0.5}>
                               <Typography variant="caption" color="textSecondary">FREQUÊNCIA ESTIMA.</Typography>

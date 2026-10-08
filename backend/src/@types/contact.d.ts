@@ -20,6 +20,7 @@ declare namespace Contact {
     fantasyName?: string;
     foundationDate?: Date;
     creditLimit?: string;
+    verificationCode?: string; // Código de Verificação (referência Fluxoo)
   }
 
   interface CreateDTO {
@@ -35,6 +36,7 @@ declare namespace Contact {
     fantasyName?: string;
     foundationDate?: Date;
     creditLimit?: string;
+    verificationCode?: string; // Código de Verificação (referência Fluxoo)
   }
 
   interface UpdateDTO {
@@ -50,6 +52,7 @@ declare namespace Contact {
     fantasyName?: string;
     foundationDate?: Date;
     creditLimit?: string;
+    verificationCode?: string; // Código de Verificação (referência Fluxoo)
   }
 
   interface FilterOptions {

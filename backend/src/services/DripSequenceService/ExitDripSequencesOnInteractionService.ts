@@ -22,8 +22,10 @@ const ExitDripSequencesOnInteractionService = async ({
   contactId: number;
   ticketId: number;
 }): Promise<void> => {
+  // "waiting_window" também sai: inscrição segurada pela janela de 24h da API
+  // Oficial conta como ativa — se o contato respondeu, a sequência encerra.
   const enrollments = await DripSequenceEnrollment.findAll({
-    where: { contactId, companyId, status: "active" },
+    where: { contactId, companyId, status: { [Op.in]: ["active", "waiting_window"] } },
     include: [{ model: DripSequence, attributes: ["id", "tagId"] }]
   });
 

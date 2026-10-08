@@ -559,6 +559,8 @@ const ListContactsService = async ({
       "creditLimit",
       "segment",
       "dtUltCompra",
+      "birthdate",
+      "verificationCode",
       "bzEmpresa",
       // Campos persistidos
       "isWhatsappValid",

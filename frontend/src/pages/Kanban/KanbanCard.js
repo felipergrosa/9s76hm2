@@ -10,6 +10,7 @@ import { grey, blue } from "@material-ui/core/colors";
 import { Eye as VisibilityIcon } from "lucide-react";
 import ConversationPeekModal from "../../components/ConversationPeekModal";
 import { canViewTicketConversation } from "../../utils/ticketPreviewPermissions";
+import { isTicketSlaOverdue } from "./sla";
 
 const useStyles = makeStyles(theme => ({
   ticketCard: {
@@ -303,7 +304,7 @@ const getPriorityFromUnread = (unread) => {
   return { label: "Medium", color: "#f59e0b" };
 };
 
-export default function KanbanCard({ ticket, onClick, allTags = [], onMoveRequest, onEditDeal, onDeleteDeal }) {
+export default function KanbanCard({ ticket, onClick, allTags = [], onMoveRequest, onEditDeal, onDeleteDeal, compact = false }) {
   const classes = useStyles();
   const { user } = useContext(AuthContext);
   const [menuEl, setMenuEl] = useState(null);
@@ -369,6 +370,9 @@ export default function KanbanCard({ ticket, onClick, allTags = [], onMoveReques
   const attachments = Number(ticket?.mediaCount) || 0;
   const schedules = Number(ticket?.schedulesCount || ticket?.appointmentsCount || 0);
 
+  // SLA vencido: janela 24h expirada ou >24h sem resposta (ver sla.js)
+  const slaOverdue = useMemo(() => isTicketSlaOverdue(ticket), [ticket]);
+
   // Negócio (deal): ticket manual do pipeline
   const isDeal = !!ticket?.isDeal;
   const dealValue = Number(ticket?.value) || 0;
@@ -388,6 +392,9 @@ export default function KanbanCard({ ticket, onClick, allTags = [], onMoveReques
 
   return (
     <Card variant="outlined" elevation={0} className={classes.ticketCard} onClick={onClick}>
+      {/* Botões flutuantes ficam ocultos no modo compacto (card de linha única) */}
+      {!compact && (
+        <>
       {/* Botões de Ação */}
       <Tooltip title="Opções">
         <IconButton className={classes.menuBtn} size="small" onClick={(e) => { e.stopPropagation(); setMenuEl(e.currentTarget); }}>
@@ -415,18 +422,54 @@ export default function KanbanCard({ ticket, onClick, allTags = [], onMoveReques
       {/* Ícone de espiar conversa */}
       {canPreviewConversation && (
         <Tooltip title="Espiar Conversa">
-          <IconButton 
-            className={classes.viewButton} 
-            size="small" 
+          <IconButton
+            className={classes.viewButton}
+            size="small"
             onClick={handleOpenMessageDialog}
           >
             <VisibilityIcon size={20} />
           </IconButton>
         </Tooltip>
       )}
+        </>
+      )}
 
-      <div style={{ paddingTop: 20, cursor: 'pointer' }}>
+      <div style={{ paddingTop: compact ? 4 : 20, cursor: 'pointer' }}>
         <CardContent className={classes.ticketContent}>
+          {compact ? (
+            /* Compacto: avatar + nome do contato + fila/tag + não lidas */
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <ContactAvatar contact={ticket?.contact} style={{ width: 28, height: 28 }} />
+              <Typography className={classes.ticketName} style={{ flex: 1, maxWidth: "none" }}>
+                {(isDeal && ticket?.dealTitle) || ticket?.contact?.name}
+              </Typography>
+              {slaOverdue && (
+                <Tooltip title={i18n.t('kanban.slaOverdueTooltip')}>
+                  <div className={classes.badge} style={{ backgroundColor: "#fdecea", color: "#b71c1c", textTransform: "uppercase" }}>
+                    {i18n.t('kanban.slaBadge')}
+                  </div>
+                </Tooltip>
+              )}
+              <Tooltip title={`Fila: ${ticket?.queue?.name || "Sem Fila"}`}>
+                <div
+                  className={classes.badge}
+                  style={{
+                    backgroundColor: ticket?.queue?.color || "#e0e0e0",
+                    color: ticket?.queue?.color ? "#fff" : "inherit",
+                    textTransform: "uppercase"
+                  }}
+                >
+                  {ticket?.queue?.name || "Sem Fila"}
+                </div>
+              </Tooltip>
+              {Number(ticket.unreadMessages) > 0 && (
+                <div className={classes.unreadBadge} style={{ transform: 'scale(0.8)' }}>
+                  {ticket.unreadMessages}
+                </div>
+              )}
+            </div>
+          ) : (
+          <>
           {/* Header: Avatar + Nome + Ticket ID */}
           <div className={classes.ticketHeader}>
             <div style={{ display: "flex", alignItems: "center" }}>
@@ -487,6 +530,17 @@ export default function KanbanCard({ ticket, onClick, allTags = [], onMoveReques
 
           {/* Tags de Conexão, Fila e Usuário no rodapé */}
           <div className={classes.tagContainer}>
+            {slaOverdue && (
+              <Tooltip title={i18n.t('kanban.slaOverdueTooltip')}>
+                <div
+                  className={classes.badge}
+                  style={{ backgroundColor: "#fdecea", color: "#b71c1c", textTransform: "uppercase" }}
+                >
+                  {i18n.t('kanban.slaBadge')}
+                </div>
+              </Tooltip>
+            )}
+
             {isDeal && (
               <Tooltip title="Negócio do pipeline">
                 <div
@@ -562,6 +616,8 @@ export default function KanbanCard({ ticket, onClick, allTags = [], onMoveReques
               </div>
             </Tooltip>
           </div>
+          </>
+          )}
         </CardContent>
       </div>
 

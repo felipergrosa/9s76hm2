@@ -24,12 +24,15 @@ const CloneCampaignService = async (
 
     // Campos a serem copiados
     const cloneData: any = {
-        name: `Cópia de - ${original.name}`,
+        name: `${original.name} (cópia)`,
         companyId: original.companyId,
         status: "INATIVA", // Sempre inicia como inativa
         confirmation: original.confirmation,
         scheduledAt: null, // Não copia agendamento
+        recurrence: "none", // Cópia não herda recorrência (sem agendamento)
+        recurrenceEndAt: null,
         contactListId: original.contactListId,
+        contactListIds: original.contactListIds,
         whatsappId: original.whatsappId,
         // Mensagens
         message1: original.message1,
@@ -64,6 +67,7 @@ const CloneCampaignService = async (
         allowedWhatsappIds: original.allowedWhatsappIds,
         tagListId: original.tagListId,
         negativeTagListIds: original.negativeTagListIds,
+        sendMediaSeparately: original.sendMediaSeparately,
         // Templates Meta
         metaTemplateName: original.metaTemplateName,
         metaTemplateLanguage: original.metaTemplateLanguage,

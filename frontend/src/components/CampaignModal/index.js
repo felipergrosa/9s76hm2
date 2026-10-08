@@ -156,6 +156,9 @@ const CampaignModal = ({
     status: "INATIVA", // INATIVA, PROGRAMADA, EM_ANDAMENTO, CANCELADA, FINALIZADA,
     confirmation: false,
     scheduledAt: "",
+    // Recorrência do disparo (none | daily | weekly | monthly) + fim opcional
+    recurrence: "none",
+    recurrenceEndAt: "",
     //whatsappId: "",
     contactListId: "",
     tagListId: "Nenhuma",
@@ -702,12 +705,20 @@ const CampaignModal = ({
           // Atualizar estado da campanha
           const prevCampaignData = {};
           Object.entries(data).forEach(([key, value]) => {
-            if (key === "scheduledAt" && value !== "" && value !== null) {
+            if (
+              (key === "scheduledAt" || key === "recurrenceEndAt") &&
+              value !== "" &&
+              value !== null
+            ) {
               prevCampaignData[key] = moment(value).format("YYYY-MM-DDTHH:mm");
             } else {
               prevCampaignData[key] = value === null ? "" : value;
             }
           });
+          // Recorrência ausente em campanhas antigas → "none"
+          if (!prevCampaignData.recurrence) {
+            prevCampaignData.recurrence = "none";
+          }
           setCampaign(prevCampaignData);
           setCampaignLoading(false);
         } else if (initialValues) {
@@ -820,12 +831,24 @@ const CampaignModal = ({
       // Primeiro processa os values do Formik
       const processedValues = {};
       Object.entries(values).forEach(([key, value]) => {
-        if (key === "scheduledAt" && value !== "" && value !== null) {
+        if (
+          (key === "scheduledAt" || key === "recurrenceEndAt") &&
+          value !== "" &&
+          value !== null
+        ) {
           processedValues[key] = moment(value).format("YYYY-MM-DD HH:mm:ss");
         } else {
           processedValues[key] = value === "" ? null : value;
         }
       });
+
+      // Recorrência só se aplica a campanha agendada; "none" zera o fim
+      if (!processedValues.scheduledAt) {
+        processedValues.recurrence = "none";
+        processedValues.recurrenceEndAt = null;
+      } else if (processedValues.recurrence === "none") {
+        processedValues.recurrenceEndAt = null;
+      }
 
       // Depois monta o dataValues com os campos extras (que têm prioridade)
       // Se múltiplos usuários selecionados, envia userIds (array JSON)
@@ -892,12 +915,24 @@ const CampaignModal = ({
       // Primeiro processa os values do Formik
       const processedValues = {};
       Object.entries(values).forEach(([key, value]) => {
-        if (key === "scheduledAt" && value !== "" && value !== null) {
+        if (
+          (key === "scheduledAt" || key === "recurrenceEndAt") &&
+          value !== "" &&
+          value !== null
+        ) {
           processedValues[key] = moment(value).format("YYYY-MM-DD HH:mm:ss");
         } else {
           processedValues[key] = value === "" ? null : value;
         }
       });
+
+      // Recorrência só se aplica a campanha agendada; "none" zera o fim
+      if (!processedValues.scheduledAt) {
+        processedValues.recurrence = "none";
+        processedValues.recurrenceEndAt = null;
+      } else if (processedValues.recurrence === "none") {
+        processedValues.recurrenceEndAt = null;
+      }
 
       // Força status INATIVA mesmo que tenha agendamento
       processedValues.status = "INATIVA";
@@ -959,12 +994,24 @@ const CampaignModal = ({
       // Primeiro processa os values do Formik
       const processedValues = {};
       Object.entries(values).forEach(([key, value]) => {
-        if (key === "scheduledAt" && value !== "" && value !== null) {
+        if (
+          (key === "scheduledAt" || key === "recurrenceEndAt") &&
+          value !== "" &&
+          value !== null
+        ) {
           processedValues[key] = moment(value).format("YYYY-MM-DD HH:mm:ss");
         } else {
           processedValues[key] = value === "" ? null : value;
         }
       });
+
+      // Recorrência só se aplica a campanha agendada; "none" zera o fim
+      if (!processedValues.scheduledAt) {
+        processedValues.recurrence = "none";
+        processedValues.recurrenceEndAt = null;
+      } else if (processedValues.recurrence === "none") {
+        processedValues.recurrenceEndAt = null;
+      }
 
       // Define o status baseado no agendamento
       const hasSchedule = processedValues.scheduledAt && processedValues.scheduledAt !== null;
@@ -1774,6 +1821,58 @@ const CampaignModal = ({
                             disabled={!campaignEditable}
                           />
                         </Grid>
+                        {/* Recorrência — só aparece quando a campanha está agendada */}
+                        {values.scheduledAt && (
+                          <Grid xs={12} md={4} item>
+                            <FormControl
+                              variant="outlined"
+                              margin="dense"
+                              fullWidth
+                              className={classes.formControl}
+                            >
+                              <InputLabel id="recurrence-selection-label">
+                                {i18n.t("campaigns.recurrence.label")}
+                              </InputLabel>
+                              <Field
+                                as={Select}
+                                label={i18n.t("campaigns.recurrence.label")}
+                                labelId="recurrence-selection-label"
+                                id="recurrence"
+                                name="recurrence"
+                                disabled={!campaignEditable}
+                              >
+                                <MenuItem value="none">{i18n.t("campaigns.recurrence.none")}</MenuItem>
+                                <MenuItem value="daily">{i18n.t("campaigns.recurrence.daily")}</MenuItem>
+                                <MenuItem value="weekly">{i18n.t("campaigns.recurrence.weekly")}</MenuItem>
+                                <MenuItem value="monthly">{i18n.t("campaigns.recurrence.monthly")}</MenuItem>
+                              </Field>
+                            </FormControl>
+                          </Grid>
+                        )}
+                        {/* Fim da recorrência — opcional, só com recorrência ativa */}
+                        {values.scheduledAt && values.recurrence && values.recurrence !== "none" && (
+                          <Grid xs={12} md={4} item>
+                            <Field
+                              as={TextField}
+                              label={i18n.t("campaigns.recurrence.endAt")}
+                              name="recurrenceEndAt"
+                              error={touched.recurrenceEndAt && Boolean(errors.recurrenceEndAt)}
+                              helperText={
+                                (touched.recurrenceEndAt && errors.recurrenceEndAt) ||
+                                i18n.t("campaigns.recurrence.endAtHelper")
+                              }
+                              variant="outlined"
+                              margin="dense"
+                              type="datetime-local"
+                              InputLabelProps={{
+                                shrink: true,
+                              }}
+                              fullWidth
+                              className={classes.textField}
+                              disabled={!campaignEditable}
+                            />
+                          </Grid>
+                        )}
                         <Grid xs={12} md={4} item>
                           <FormControl
                             variant="outlined"

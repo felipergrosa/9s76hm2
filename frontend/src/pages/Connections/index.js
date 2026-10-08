@@ -57,6 +57,7 @@ import {
   LifeBuoy as SupportIcon,
   RotateCw as RestartIcon,
   Link2 as LinkIcon,
+  ArrowLeftRight as TransferIcon,
 } from "lucide-react";
 
 import MainContainer from "../../components/MainContainer";
@@ -68,6 +69,7 @@ import WhatsAppModal from "../../components/WhatsAppModal";
 import ConfirmationModal from "../../components/ConfirmationModal";
 import MetaSelectModal from "../../components/MetaSelectModal";
 import QrcodeModal from "../../components/QrcodeModal";
+import TransferTicketsModal from "../../components/TransferTicketsModal";
 import { i18n } from "../../translate/i18n";
 import { WhatsAppsContext } from "../../context/WhatsApp/WhatsAppsContext";
 import toastError from "../../errors/toastError";
@@ -508,6 +510,10 @@ const Connections = () => {
   };
   const [confirmModalInfo, setConfirmModalInfo] = useState(confirmationModalInitialState);
   const [planConfig, setPlanConfig] = useState(false);
+  const [transferModalOpen, setTransferModalOpen] = useState(false);
+  // Guarda de exclusão: conexão com tickets ativos abre modal de
+  // transferência antes de permitir apagar (evita tickets órfãos)
+  const [deleteGuard, setDeleteGuard] = useState({ open: false, whatsApp: null, count: 0 });
   const [clearAuthById, setClearAuthById] = useState({});
   const [syncingById, setSyncingById] = useState({}); // Rastreia sync em andamento por ID
 
@@ -678,6 +684,35 @@ const Connections = () => {
     setConfirmModalOpen(true);
   };
 
+  // Exclusão com guarda de tickets: se a conexão tem atendimentos ativos
+  // e existe outra conexão de destino, abre o modal de transferência;
+  // senão segue o fluxo normal de confirmação.
+  const handleDeleteConnection = async (whatsApp) => {
+    try {
+      const { data } = await api.get(`/whatsapp/${whatsApp.id}/active-tickets-count`);
+      const hasTarget = (whatsApps || []).some((w) => w.id !== whatsApp.id);
+      if (data.count > 0 && hasTarget) {
+        setDeleteGuard({ open: true, whatsApp, count: data.count });
+      } else {
+        handleOpenConfirmationModal("delete", whatsApp.id);
+      }
+    } catch (err) {
+      toastError(err);
+    }
+  };
+
+  const deleteConnectionById = async (whatsAppId) => {
+    try {
+      await api.delete(`/whatsapp/${whatsAppId}`);
+      toast.success(i18n.t("connections.toasts.deleted"));
+    } catch (err) {
+      // 403 = sem permissão connections.delete (admin)
+      if (err?.response?.status !== 403) {
+        toastError(err);
+      }
+    }
+  };
+
   // Sincronização completa de histórico (organizada, ticket a ticket)
   const handleSyncFullHistory = async (whatsAppId) => {
     if (syncingById[whatsAppId]) {
@@ -726,16 +761,7 @@ const Connections = () => {
     }
 
     if (confirmModalInfo.action === "delete") {
-      try {
-        await api.delete(`/whatsapp/${confirmModalInfo.whatsAppId}`);
-        toast.success(i18n.t("connections.toasts.deleted"));
-      } catch (err) {
-        // 403 = sem permissão connections.delete (admin)
-        // Silencia o erro
-        if (err?.response?.status !== 403) {
-          toastError(err);
-        }
-      }
+      await deleteConnectionById(confirmModalInfo.whatsAppId);
     }
     if (confirmModalInfo.action === "closedImported") {
       try {
@@ -800,8 +826,21 @@ const Connections = () => {
     }
   };
 
+  // Gera/recupera o token público da conexão webchat e copia a URL /webchat/:token
+  const handleCopyWebchatLink = async (whatsApp) => {
+    try {
+      const { data } = await api.post(`/whatsapp/${whatsApp.id}/webchat-token`);
+      const url = data.webchatUrl || `${window.location.origin}/webchat/${data.webchatToken}`;
+      await navigator.clipboard.writeText(url);
+      toast.success(i18n.t("publicWebchat.linkCopied"));
+    } catch (err) {
+      toastError(err);
+    }
+  };
+
   const renderActionButtons = (whatsApp) => {
     const isBaileys = !whatsApp.channelType || whatsApp.channelType === "baileys";
+    const isWebchat = whatsApp.channel === "webchat" || whatsApp.channelType === "webchat";
 
     return (
       <>
@@ -924,6 +963,20 @@ const Connections = () => {
             </span>
           </Tooltip>
         )}
+        {/* Conexões webchat não têm QR/sessão: ação é gerar e copiar o link público */}
+        {isWebchat && hasPermission("connections.edit") && (
+          <Tooltip title={i18n.t("publicWebchat.copyLink")}>
+            <span>
+              <IconButton
+                size="small"
+                color="primary"
+                onClick={() => handleCopyWebchatLink(whatsApp)}
+              >
+                <LinkIcon size={18} />
+              </IconButton>
+            </span>
+          </Tooltip>
+        )}
       </>
     );
   };
@@ -1000,6 +1053,30 @@ const Connections = () => {
           whatsAppId={!whatsAppModalOpen && selectedWhatsApp?.id}
         />
       )}
+      <TransferTicketsModal
+        open={transferModalOpen}
+        onClose={() => setTransferModalOpen(false)}
+        connections={whatsApps || []}
+        mode="transfer"
+      />
+      <TransferTicketsModal
+        open={deleteGuard.open}
+        onClose={() => setDeleteGuard({ open: false, whatsApp: null, count: 0 })}
+        connections={whatsApps || []}
+        initialSourceId={deleteGuard.whatsApp?.id}
+        mode="beforeDelete"
+        activeCount={deleteGuard.count}
+        onTransferAndDelete={async () => {
+          const id = deleteGuard.whatsApp?.id;
+          setDeleteGuard({ open: false, whatsApp: null, count: 0 });
+          if (id) await deleteConnectionById(id);
+        }}
+        onDeleteOnly={async () => {
+          const id = deleteGuard.whatsApp?.id;
+          setDeleteGuard({ open: false, whatsApp: null, count: 0 });
+          if (id) await deleteConnectionById(id);
+        }}
+      />
       {metaSelectKey && (
         <MetaSelectModal
           open
@@ -1113,6 +1190,20 @@ const Connections = () => {
               </span>
             </div>
             <div className={classes.headerActions}>
+              {hasPermission("connections.edit") && (whatsApps || []).length > 1 && (
+                <Tooltip title={i18n.t("connections.transferTickets")}>
+                  <Button
+                    variant="outlined"
+                    color="primary"
+                    size="small"
+                    onClick={() => setTransferModalOpen(true)}
+                    startIcon={<TransferIcon size={16} />}
+                    style={{ minHeight: 36 }}
+                  >
+                    {i18n.t("connections.transferTickets")}
+                  </Button>
+                </Tooltip>
+              )}
               <Tooltip title={i18n.t("connections.restartConnections")}>
                 <Button
                   variant="outlined"
@@ -1423,9 +1514,7 @@ const Connections = () => {
                             <IconButton
                               size="small"
                               className={classes.actionButton}
-                              onClick={() => {
-                                handleOpenConfirmationModal("delete", whatsApp.id);
-                              }}
+                              onClick={() => handleDeleteConnection(whatsApp)}
                             >
                               <DeleteIcon size={18} />
                             </IconButton>
@@ -1541,7 +1630,7 @@ const Connections = () => {
                                   )}
                                   <IconButton
                                     size="small"
-                                    onClick={() => handleOpenConfirmationModal("delete", whatsApp.id)}
+                                    onClick={() => handleDeleteConnection(whatsApp)}
                                   >
                                     <DeleteIcon size={18} />
                                   </IconButton>

@@ -43,6 +43,8 @@ interface TicketData {
   unreadMessages?: number;
   msgTransfer?: string;
   isTransfered?: boolean;
+  closingSubject?: string;
+  closingSummary?: string;
 }
 
 interface Request {
@@ -134,6 +136,8 @@ const UpdateTicketService = async ({
       unreadMessages,
       msgTransfer,
       isTransfered = false,
+      closingSubject,
+      closingSummary,
       status
     } = ticketData;
     let isBot: boolean | null = ticketData.isBot || false;
@@ -490,6 +494,9 @@ const UpdateTicketService = async ({
           lastFlowId: null,
           dataWebhook: null,
           hashFlowId: null,
+          // Assunto/resumo informados na tela de fechamento (quando habilitada)
+          ...(closingSubject !== undefined && { closingSubject }),
+          ...(closingSummary !== undefined && { closingSummary })
         });
 
         // Emitir evento IMEDIATAMENTE após o update para garantir real-time

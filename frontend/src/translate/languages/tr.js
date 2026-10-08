@@ -18,6 +18,35 @@ const messages = {
           submit: "Kaydol",
           login: "Zaten bir hesabınız var mı? Giriş yapın!",
         },
+        verification: {
+          title: "E-postanızı doğrulayın",
+          subtitle: "6 haneli bir kod gönderdik:",
+          codeLabel: "Doğrulama kodu",
+          codePlaceholder: "000000",
+          verify: "Doğrula ve kaydı tamamla",
+          resend: "Kodu yeniden gönder",
+          resendIn: "{{seconds}} sn sonra yeniden gönder",
+          back: "Geri dön ve bilgileri düzenle",
+          codeSent: "Kod gönderildi! E-postanızı kontrol edin.",
+          codeResent: "Yeni kod gönderildi.",
+          errors: {
+            ERR_VERIFICATION_INVALID_EMAIL: "Geçerli bir e-posta girin.",
+            ERR_VERIFICATION_CODE_INVALID:
+              "Geçersiz kod. Kontrol edip tekrar deneyin.",
+            ERR_VERIFICATION_CODE_EXPIRED:
+              "Kodun süresi doldu. Yeni bir kod isteyin.",
+            ERR_VERIFICATION_MAX_ATTEMPTS:
+              "Maksimum deneme sayısı aşıldı. Yeni bir kod isteyin.",
+            ERR_VERIFICATION_COOLDOWN:
+              "Kodu yeniden göndermeden önce birkaç saniye bekleyin.",
+            ERR_VERIFICATION_SEND_LIMIT:
+              "Gönderim limiti aşıldı. Lütfen daha sonra tekrar deneyin.",
+            ERR_EMAIL_SEND_FAILED:
+              "E-posta gönderilemedi. Lütfen tekrar deneyin.",
+            ERR_EMAIL_VERIFICATION_REQUIRED:
+              "E-posta doğrulaması zorunlu. Yeni bir kod isteyin.",
+          },
+        },
       },
       login: {
         title: "Giriş",
@@ -180,6 +209,97 @@ const messages = {
           exportTitle: "Yapılan Grup Görüşmeleri Listesi",
         },
       },
+      closingReport: {
+        title: "Kapanış Raporu",
+        subtitle: "Filtreleri seçin ve kapanış raporunu oluşturun",
+        foundSuffix: "kapatılan görüşme bulundu",
+        empty: "Dönemde kapatılan ticket yok",
+        filters: {
+          startDate: "Başlangıç Tarihi",
+          endDate: "Bitiş Tarihi",
+          user: "Temsilci",
+          queue: "Sıra",
+          subject: "Konu",
+          all: "Tümü",
+        },
+        cards: {
+          total: "Dönemdeki toplam",
+          closed: "Kapatılanlar",
+          pending: "Bekleyenler",
+          avgTime: "Ortalama süre",
+        },
+        table: {
+          protocol: "Protokol",
+          contact: "Kişi",
+          user: "Temsilci",
+          queue: "Sıra",
+          status: "Durum",
+          subject: "Konu",
+          summary: "Özet",
+          dateOpen: "Açılış",
+          dateClose: "Kapanış",
+          duration: "Süre",
+        },
+        buttons: {
+          filter: "Filtreyi Uygula",
+          exportCsv: "CSV Aktar",
+        },
+      },
+      metaWebhook: {
+        title: "Birleşik Meta Webhook",
+        subtitle:
+          "Meta uygulamanızın webhook'unu bu sunucuya yönlendirin",
+        toasts: {
+          copied: "Panoya kopyalandı",
+          copyError: "Kopyalanamadı",
+        },
+        status: {
+          configured: "Yapılandırıldı",
+          missing: "Yapılandırılmadı",
+        },
+        cards: {
+          verifyToken: "Verify token",
+          appSecret: "İmza (App Secret)",
+          perConnection: "Özel token'lı bağlantılar",
+          fields: "Abone olunan alanlar",
+        },
+        sections: {
+          endpoints: "Endpoint'ler ve verify token",
+          fields: "Abonelik alanları",
+          fieldsHint:
+            "Bu backend'in gerçekten tükettiği alanlar. * ile işaretlenenler Meta geliştirici panelinde uygulama webhook aboneliğinde manuel etkinleştirilmelidir; diğerleri sayfa/hesap bağlanırken otomatik abone edilir.",
+          steps: "Meta uygulamasında nasıl yapılandırılır",
+        },
+        labels: {
+          unifiedUrl: "Webhook URL'si (Facebook + Instagram)",
+          verifyToken: "Verify token (genel)",
+          verifyTokenHint:
+            "Güvenlik için maskelenmiş değer. Yapılandırılmadıysa backend'de VERIFY_TOKEN tanımlayın veya bağlantı başına token kullanın.",
+          wabaUrl: "Webhook URL'si (WhatsApp Business API)",
+          wabaVerifyToken: "Verify token (WhatsApp Business)",
+        },
+        fields: {
+          autoHint: "Bağlantıda otomatik abone edilir (subscribed_apps)",
+          dashboardHint:
+            "Meta panelinde uygulama webhook aboneliğinde etkinleştirin",
+          legend:
+            "* Meta panelinde manuel etkinleştirilmelidir. Diğerleri bağlantı sırasında otomatik abone edilir.",
+        },
+        steps: {
+          1: "developers.facebook.com adresine gidin, uygulamanızı açın ve Webhook ayarlarına girin (Facebook/Instagram için Messenger ürünü veya Resmi API için WhatsApp).",
+          2: "\"Aboneliği düzenle\" seçeneğine tıklayın ve yukarıdaki webhook URL'sini Callback URL alanına yapıştırın.",
+          3: "Verify token alanına backend'de yapılandırılan token'ı girin (VERIFY_TOKEN / WABA_WEBHOOK_VERIFY_TOKEN veya bağlantı token'ı).",
+          4: "Kaydedin ve doğrulayın — Meta, bu backend'in otomatik yanıtladığı bir GET doğrulaması gönderir.",
+          5: "Abonelik alanları listesinde yukarıda * ile işaretlenen alanları işaretleyin (diğerleri bağlantıda API ile abone edilir).",
+          6: "X-Hub-Signature-256 imza doğrulaması için App Secret'ın yapılandırıldığını doğrulayın (META_APP_SECRET veya bağlantı başına).",
+        },
+        buttons: {
+          copy: "Kopyala",
+        },
+        token: {
+          notSet: "yapılandırılmadı",
+        },
+      },
       todo: {
         newTask: "Yeni Görev",
         add: "Ekle",
@@ -213,6 +333,24 @@ const messages = {
           disconnectTitle: "Bağlantıyı Kes",
           disconnectMessage:
             "Emin misiniz? QR Kodu tekrar okutmanız gerekecek.",
+        },
+        transferTickets: "Ticketları Aktar",
+        transferModal: {
+          title: "Ticket Aktarımı",
+          description:
+            "Kaynak ve hedef bağlantıyı seçin. Tüm aktif ticketlar taşınacaktır.",
+          beforeDeleteDesc:
+            "Bu bağlantıda {{count}} aktif ticket var. Silmeden önce başka bir bağlantıya aktarın.",
+          source: "Kaynak",
+          target: "Hedef",
+          activeCount: "Kaynak bağlantıda {{count}} aktif ticket.",
+          deleteWarning:
+            "Aktarmadan silerseniz, ticketlar bağlantısız kalır ve bağlantı filtrelerinde görünmez.",
+          cancel: "İptal",
+          transfer: "Aktar",
+          transferAndDelete: "Aktar ve Sil",
+          deleteWithoutTransfer: "Aktarmadan sil",
+          transferredSuccess: "{{count}} ticket başarıyla aktarıldı!"
         },
         buttons: {
           add: "Bağlantı Ekle",
@@ -467,6 +605,7 @@ const messages = {
           name: "Ad",
           number: "WhatsApp Numarası",
           email: "E-posta",
+          verificationCode: "Doğrulama Kodu",
           extraName: "Alan Adı",
           extraValue: "Değer",
           chatBotContact: "Chatbot'u devre dışı bırak",
@@ -506,6 +645,8 @@ const messages = {
           orderQueue: "Sıra Sırası (Bot)",
           rotate: "Rotasyon",
           timeRotate: "Rotasyon Süresi",
+          slaMinutes: "SLA (dakika)",
+          slaMinutesHint: "Kanban'da ticket'ın SLA gecikmiş olarak işaretlenmesi için maksimum bekleme süresi",
           greetingMessage: "Karşılama Mesajı",
           complationMessage: "Tamamlama Mesajı",
           outOfHoursMessage: "Çalışma Saati Dışı Mesajı",
@@ -611,6 +752,7 @@ const messages = {
           startWork: "Çalışma Başlangıcı",
           endWork: "Çalışma Sonu",
           whatsapp: "Varsayılan Bağlantı",
+          ramal: "Dahili Hat",
           allTicketEnable: "Etkin",
           allTicketDisable: "Devre Dışı",
           allTicket: "Sırasız çağrıları görüntüle",
@@ -795,6 +937,7 @@ const messages = {
           },
           filterUsers: "Kullanıcıya Göre Filtrele",
           filterContacts: "Kişiye Göre Filtrele",
+          filterWallet: "Cüzdana Göre Filtrele",
           ticketsPerPage: "Sayfa Başına Ticket",
         },
         buttons: {
@@ -806,6 +949,15 @@ const messages = {
         closedTicket: {
           closedMessage: "Veda Mesajı ile Ticketı Kapat",
           closedNotMessage: "Veda Mesajı Olmadan Ticketı Kapat",
+        },
+        closing: {
+          title: "Görüşmeyi Sonlandır",
+          subject: "Görüşme konusu",
+          subjectRequired: "Sonlandırmak için görüşme konusunu girin",
+          summary: "Özet / notlar",
+          sendFarewell: "Veda mesajı gönder",
+          confirm: "Görüşmeyi Sonlandır",
+          cancel: "İptal",
         },
       },
       transferTicketModal: {
@@ -896,7 +1048,8 @@ const messages = {
           allConnections: "Bağlantıları yönet",
           reports: "Raporlar",
           management: "Yönetim",
-          metaTemplates: "Meta Şablonları"
+          metaTemplates: "Meta Şablonları",
+          whatsappHealth: "Numara Sağlığı"
         },
         appBar: {
           user: {
@@ -999,10 +1152,18 @@ const messages = {
           message: "Yanıt",
           save: "Kaydet",
           cancel: "İptal",
-          geral: "Düzenlemeye izin ver",
+          geral: "Başkalarının düzenlemesine izin ver",
           add: "Ekle",
           edit: "Düzenle",
-          visao: "Görünüm izni ver",
+          visao: "Herkese görünür",
+        },
+        scope: {
+          personal: "Kişisel",
+          global: "Genel",
+          sharedEdit: "Ortak düzenleme",
+          personalTip: "Yalnızca siz görebilirsiniz",
+          globalTip: "Tüm kullanıcılar görebilir",
+          sharedEditTip: "Herkes bu yanıtı düzenleyebilir",
         },
         table: {
           shortcode: "Kısayol",
@@ -1082,6 +1243,12 @@ const messages = {
           list: "Panel",
           tags: "Şeritler",
         },
+        slaFilter: "SLA gecikti",
+        slaFilterTooltip: "Yalnızca SLA'sı geçmiş kartları göster",
+        slaBadge: "SLA",
+        slaOverdueTooltip: "SLA gecikti",
+        compactMode: "Kompakt mod",
+        shortcutsHint: "← → sütunlar · ↑ ↓ kartlar · Enter aç · C kompakt · / ara",
       },
       campaigns: {
         title: "Kampanyalar",
@@ -1121,6 +1288,16 @@ const messages = {
           completedAt: "Tamamlandı",
           confirmation: "Onay",
           actions: "Eylemler",
+        },
+        recurrence: {
+          label: "Tekrar",
+          none: "Yok",
+          daily: "Günlük",
+          weekly: "Haftalık",
+          monthly: "Aylık",
+          endAt: "Bitiş tarihi",
+          endAtHelper: "İsteğe bağlı — tarih yoksa süresiz tekrarlanır",
+          help: "Her döngü sonunda gönderimi otomatik olarak tekrarlar (günlük, haftalık veya aylık).",
         },
         dialog: {
           new: "Yeni Kampanya",
@@ -1168,11 +1345,22 @@ const messages = {
           deleteTitle: "Sil",
           deleteMessage: "Bu işlem geri alınamaz.",
         },
+        bulk: {
+          selected: "{{count}} seçildi",
+          cancel: "İptal Et",
+          restart: "Yeniden Başlat",
+          delete: "Sil",
+          confirmTitle: "Toplu işlemi onayla",
+          confirmMessage: '{{count}} kampanyaya "{{action}}" uygulansın mı?',
+        },
         toasts: {
           success: "İşlem başarıyla gerçekleştirildi",
           cancel: "Kampanya iptal edildi",
           restart: "Kampanya yeniden başlatıldı",
           deleted: "Kayıt silindi",
+          duplicated: "Kampanya başarıyla kopyalandı!",
+          bulkProcessed: "{{processed}} kampanya işlendi",
+          bulkErrors: "{{count}} kampanyada hata oluştu",
         },
       },
       campaignReport: {
@@ -1254,6 +1442,7 @@ const messages = {
           color: "Renk",
           greeting: "Karşılama Mesajı",
           orderQueue: "Sıra Sırası (bot)",
+          sla: "SLA",
           actions: "Eylemler",
           ID: "ID",
         },
@@ -1395,6 +1584,63 @@ const messages = {
           deleted: "Etiket başarıyla silindi.",
         },
       },
+      whatsappHealth: {
+        title: "Numara Sağlığı",
+        subtitle:
+          "WhatsApp Resmi API (WABA) bağlantılarının kalitesi, gönderim limiti ve durumu — Meta'dan gerçek zamanlı sorgulanır.",
+        updatedAt: "Güncelleme",
+        empty: "WhatsApp Resmi API (WABA) bağlantısı bulunamadı.",
+        stats: {
+          total: "Resmi numaralar",
+          green: "Yeşil kalite",
+          attention: "Dikkat gerekli",
+          errors: "Sorgu hatası",
+        },
+        labels: {
+          queryError: "Sorgu hatası",
+        },
+        quality: {
+          GREEN: "Yeşil",
+          YELLOW: "Sarı",
+          RED: "Kırmızı",
+        },
+        status: {
+          connected: "Bağlı",
+        },
+        tiers: {
+          TIER_50: "50 müşteri/24s",
+          TIER_250: "250 müşteri/24s",
+          TIER_1K: "1 bin müşteri/24s",
+          TIER_10K: "10 bin müşteri/24s",
+          TIER_100K: "100 bin müşteri/24s",
+          TIER_UNLIMITED: "Sınırsız",
+          TIER_NOT_SET: "Tanımsız",
+        },
+        nameStatus: {
+          APPROVED: "Onaylandı",
+          AVAILABLE_WITHOUT_REVIEW: "İncelemesiz kullanılabilir",
+          DECLINED: "Reddedildi",
+          EXPIRED: "Süresi doldu",
+          PENDING_REVIEW: "İncelemede",
+          NONE: "Yok",
+        },
+        table: {
+          connection: "Bağlantı",
+          number: "Numara",
+          status: "Durum",
+          quality: "Kalite",
+          messagingLimit: "Gönderim limiti",
+          nameStatus: "Görünen ad",
+          lastSync: "Son senkron",
+        },
+        buttons: {
+          refresh: "Yenile",
+          syncing: "Yenileniyor...",
+        },
+        toasts: {
+          synced: "Numara sağlığı güncellendi.",
+        },
+      },
       tagsKanban: {
         title: "Şeritler",
         laneDefault: "Açık",
@@ -1488,6 +1734,7 @@ const messages = {
             enableLGPD: "LGPD işlemi etkinleştir",
             requiredTag: "Ticketı kapatmak için etiket zorunlu",
             closeTicketOnTransfer: "Başka bir sıraya aktarılırken ticketı kapat",
+            enableClosingForm: "Kapanış ekranı (sonlandırırken konu ve özet)",
             DirectTicketsToWallets: "Müşteriyi otomatik olarak cüzdanlara taşı",
             showNotificationPending: "Bekleyen ticketlar için bildirim göster"
           },
@@ -1496,6 +1743,16 @@ const messages = {
             AcceptCallWhatsappMessage: "Aramaları kabul etmediğini bildirmek için mesaj",
             greetingAcceptedMessage: "Ticket kabul edildiğinde karşılama mesajı",
             transferMessage: "Transfer mesajı hedef sıra",
+          },
+          birthday: {
+            sectionTitle: "Doğum Günü",
+            enabled: "Otomatik doğum günü mesajı gönder",
+            connection: "Gönderim bağlantısı",
+            defaultConnection: "Varsayılan bağlantı",
+            message: "Doğum günü mesajı",
+            variablesHint: "Değişkenler: {name} (ad), {firstName} (ilk ad), {ms} (günün selamı), {date} (güncel tarih)",
+            preview: "Önizleme",
+            previewEmpty: "Örneği görmek için mesajı yapılandırın",
           },
           LGPD: {
             title: "LGPD",
@@ -1506,6 +1763,49 @@ const messages = {
             obfuscatePhoneUser: "Kullanıcılar için telefon numarasını karart",
             enabled: "Etkin",
             disabled: "Devre Dışı",
+          },
+        },
+      },
+      messages: {
+        interactive: {
+          title: "Etkileşimli mesaj gönder",
+          menuItem: "Etkileşimli Mesaj",
+          typeLabel: "Tür",
+          types: {
+            buttons: "Düğmeler",
+            list: "Liste",
+            ctaUrl: "URL düğmesi",
+            pix: "PIX (kopyala-yapıştır)",
+          },
+          headerLabel: "Başlık (üstbilgi)",
+          bodyLabel: "Mesaj metni",
+          bodyPlaceholder: "Mesaj metnini yazın",
+          footerLabel: "Alt bilgi (isteğe bağlı)",
+          buttonsTitle: "Düğmeler (maks. 3)",
+          buttonLabel: "Düğme",
+          addButton: "Düğme ekle",
+          listButtonLabel: "Liste düğmesi metni",
+          listButtonDefault: "Seçenekleri gör",
+          sectionLabel: "Bölüm",
+          rowLabel: "Öğe",
+          rowDescriptionLabel: "Açıklama (isteğe bağlı)",
+          addRow: "Öğe ekle",
+          addSection: "Bölüm ekle",
+          urlButtonText: "Düğme metni",
+          urlLabel: "URL",
+          pixKeyLabel: "PIX anahtarı / kodu",
+          pixHint:
+            "Resmi API'de kopyalama düğmesi yoktur — anahtar, müşterinin kopyalaması için mesaj metninde gönderilir.",
+          preview: "Önizleme",
+          cancel: "İptal",
+          send: "Gönder",
+          success: "Etkileşimli mesaj başarıyla gönderildi!",
+          errors: {
+            bodyRequired: "Mesaj metnini girin.",
+            buttonsRequired: "En az 1 düğme girin.",
+            sectionsRequired: "Listeye en az 1 öğe girin.",
+            urlInvalid: "Düğme metni ve geçerli bir URL (http/https) girin.",
+            pixKeyRequired: "PIX anahtarını girin.",
           },
         },
       },
@@ -1590,6 +1890,20 @@ const messages = {
           delete: "Sil",
           cancel: "İptal",
         },
+      },
+      triggerFlowModal: {
+        menuItem: "Akış Başlat",
+        title: "Bu ticketta akış başlat",
+        selectLabel: "Akış",
+        selectRequired: "Başlatmak için bir akış seçin",
+        empty: "Bu şirket için kayıtlı aktif akış yok.",
+        alreadyInFlow:
+          "Bu ticket zaten {{flow}} akışını çalıştırıyor. Seçilen akışla değiştirmek için onaylayın.",
+        draft: "taslak",
+        confirm: "Başlat",
+        confirmOverwrite: "Değiştir ve başlat",
+        cancel: "İptal",
+        success: "Akış başarıyla başlatıldı",
       },
       confirmationModal: {
         buttons: {
@@ -1741,6 +2055,102 @@ const messages = {
         },
         empty: "Şablon bulunamadı.",
       },
+      apiDocs: {
+        title: "Harici API",
+        subtitle:
+          "Harici API tarafından sunulan endpoint'lerin dokümantasyonu ve playground'u (Bearer token kimlik doğrulaması).",
+        instructionsTitle: "Talimatlar",
+        instructionsBody:
+          "Tüm isteklerde şirket token'ını (COMPANY_TOKEN) Bearer olarak kullanın. Geliştirmede aynı token'ı 'Bağlantılar' > düzenle altındaki bağlantıya kaydedin. Numara maske veya özel karakter içermemelidir: Ülke Kodu + Alan Kodu + Numara (örn.: 5511999999999).",
+        tokenLabel: "API Token'ı (COMPANY_TOKEN)",
+        copyToken: "Token'ı kopyala",
+        copied: "Kopyalandı!",
+        tabs: {
+          messages: "Mesajlar",
+          contacts: "Kişiler",
+          admin: "Yönetim",
+          history: "Geçmiş",
+        },
+        labels: {
+          requestExample: "İstek Örneği",
+          testRequest: "Test Et",
+          sending: "Gönderiliyor...",
+          response: "Yanıt",
+          status: "Durum",
+          duration: "Süre",
+          required: "zorunlu",
+          bodyJson: "Body (JSON)",
+          invalidJson: "Body JSON'u geçersiz",
+          chooseFile: "Dosya seç",
+          emptyHistory: "Bu oturumda henüz istek çalıştırılmadı.",
+          clearHistory: "Geçmişi temizle",
+          adminWarning:
+            "Genel yönetim endpoint'leri (aynı COMPANY_TOKEN). Dikkatli kullanın: yazma işlemleri tüm şirketleri etkiler.",
+        },
+        history: {
+          time: "Saat",
+          method: "Metot",
+          path: "Rota",
+          status: "Durum",
+          duration: "Süre",
+        },
+        actions: {
+          list: "{{resource}} listele",
+          show: "{{resource}} detayı",
+          create: "{{resource}} oluştur",
+          update: "{{resource}} güncelle",
+          delete: "{{resource}} sil",
+        },
+        resources: {
+          plans: "planlar",
+          companies: "şirketler",
+          helps: "yardım",
+          partners: "ortaklar",
+          invoices: "faturalar",
+          users: "kullanıcılar",
+        },
+        endpoints: {
+          sendText: {
+            title: "Metin mesajı gönder",
+            description:
+              "Kişiyi oluşturur/günceller, ticket açar veya yeniden kullanır ve metin gönderir. Flag'ler: sendSignature (kullanıcı adını ekler), closeTicket (gönderimden sonra kapatır), noRegister (ticket oluşturmadan gönderir).",
+          },
+          sendMedia: {
+            title: "Medya mesajı gönder",
+            description:
+              "Metin ile aynı endpoint, multipart/form-data olarak. Dosya alanı: 'medias'. 'body' altyazı olur.",
+          },
+          sendLinkImage: {
+            title: "URL ile resim gönder",
+            description:
+              "Genel bir URL'den resim gönderir ('url' + 'caption') ve sonunda ticket'ı kapatır.",
+          },
+          checkNumber: {
+            title: "Numarayı WhatsApp'ta doğrula",
+            description:
+              "Numara WhatsApp'ta varsa existsInWhatsapp, number ve numberFormatted (JID) döndürür.",
+          },
+          whatsapps: {
+            title: "Bağlantıları listele",
+            description:
+              "Şirketin WhatsApp bağlantılarını döndürür: id, ad, durum, numara ve varsayılan bağlantı bilgisi.",
+          },
+          syncContact: {
+            title: "Kişi senkronize et",
+            description:
+              "Kişi oluşturur veya günceller (body'de companyId zorunlu). 'tagIds' (dizi) veya 'tags' (virgülle ayrılmış adlar) ve 'silentMode' kabul eder.",
+          },
+          deleteContact: {
+            title: "Kişi sil",
+            description:
+              "Kişiyi ID ile siler. companyId zorunludur (query veya body).",
+          },
+        },
+        toasts: {
+          success: "İstek başarıyla çalıştırıldı!",
+          error: "İstek başarısız. Aşağıdaki yanıtı kontrol edin.",
+        },
+      },
       backendErrors: {
         ERR_NO_OTHER_WHATSAPP: "En az bir varsayılan WhatsApp olmalıdır.",
         ERR_NO_DEF_WAPP_FOUND:
@@ -1777,7 +2187,31 @@ const messages = {
         ERR_WAPP_GREETING_REQUIRED:
           "Birden fazla sıra olduğunda karşılama mesajı zorunludur.",
         ERR_OUT_OF_HOURS: "Çalışma Saatleri Dışı!",
+        ERR_TICKET_CLOSED: "Bu ticket zaten kapalı.",
+        ERR_FLOW_INVALID_ID: "Geçersiz akış.",
+        ERR_FLOW_NOT_FOUND: "Akış bulunamadı.",
+        ERR_FLOW_INACTIVE: "Bu akış pasif durumda.",
+        ERR_FLOW_EMPTY: "Bu akışta hiç blok yok.",
+        ERR_TICKET_ALREADY_IN_FLOW:
+          "Bu ticket zaten bir akış çalıştırıyor.",
+        ERR_FLOW_NOT_ALLOWED_FOR_GROUP:
+          "Gruplarda akış başlatılamaz.",
+        ERR_FLOW_CHANNEL_NOT_SUPPORTED:
+          "Bu ticketın kanalı akış başlatmayı desteklemiyor.",
+        ERR_FLOW_TRIGGER_FAILED: "Bu ticketta akış çalıştırılamadı.",
       },
+    },
+    // Herkese açık webchat (/webchat/:token) — giriş gerektirmeyen ziyaretçi sayfası
+    publicWebchat: {
+      title: "Canlı destek",
+      subtitle: "Bizimle gerçek zamanlı konuşun",
+      askName: "Başlamak için adınızı girin:",
+      nameLabel: "Adınız",
+      start: "Sohbete başla",
+      inputPlaceholder: "Mesajınızı yazın...",
+      invalidLink: "Geçersiz veya süresi dolmuş destek bağlantısı.",
+      copyLink: "WebChat bağlantısını kopyala",
+      linkCopied: "WebChat bağlantısı kopyalandı!",
     },
   },
 };

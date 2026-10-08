@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import axios from "axios";
+import crypto from "crypto";
 import { getIO } from "../libs/socket";
 import { emitToCompanyNamespace } from "../libs/socketEmit";
 import cacheLayer from "../libs/cache";
@@ -20,6 +21,7 @@ import ShowWhatsAppService from "../services/WhatsappService/ShowWhatsAppService
 import UpdateWhatsAppService from "../services/WhatsappService/UpdateWhatsAppService";
 import { closeTicketsImported } from "../services/WhatsappService/ImportWhatsAppMessageService";
 import SyncFullHistoryService, { getSyncProgress } from "../services/MessageServices/SyncFullHistoryService";
+import TransferTicketsService, { countActiveTickets } from "../services/WhatsappService/TransferTicketsService";
 import ShowWhatsAppServiceAdmin from "../services/WhatsappService/ShowWhatsAppServiceAdmin";
 import UpdateWhatsAppServiceAdmin from "../services/WhatsappService/UpdateWhatsAppServiceAdmin";
 import ListAllWhatsAppsService from "../services/WhatsappService/ListAllWhatsAppService";
@@ -425,6 +427,53 @@ export const update = async (
 
 };
 
+/**
+ * POST /whatsapp/:whatsappId/webchat-token
+ * Gera (ou rotaciona com ?rotate=true) o token público do webchat e devolve a
+ * URL pronta para compartilhar: <FRONTEND_URL>/webchat/<token>.
+ * Restrito a conexões do canal "webchat". O token NÃO sai em listagens —
+ * sanitizeWhatsapp não o inclui; este endpoint é a única forma de obtê-lo.
+ */
+export const generateWebchatToken = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { whatsappId } = req.params;
+  const { companyId } = req.user;
+  const rotate = req.query.rotate === "true";
+
+  const whatsapp = await Whatsapp.findOne({
+    where: { id: whatsappId, companyId }
+  });
+
+  if (!whatsapp) {
+    throw new AppError("ERR_NO_WAPP_FOUND", 404);
+  }
+
+  const channel = whatsapp.channel || whatsapp.channelType;
+  if (channel !== "webchat") {
+    throw new AppError("ERR_WAPP_NOT_WEBCHAT", 400);
+  }
+
+  if (!whatsapp.webchatToken || rotate) {
+    whatsapp.webchatToken = crypto.randomBytes(24).toString("hex");
+    await whatsapp.save();
+    logger.info(
+      `[WebchatToken] Token ${rotate ? "rotacionado" : "gerado"} para whatsappId=${whatsapp.id} companyId=${companyId}`
+    );
+  }
+
+  // Monta a URL pública com a primeira origin configurada (frontend principal).
+  const frontendUrl = (process.env.FRONTEND_URL || "").split(",")[0].trim();
+
+  return res.status(200).json({
+    webchatToken: whatsapp.webchatToken,
+    webchatUrl: frontendUrl
+      ? `${frontendUrl}/webchat/${whatsapp.webchatToken}`
+      : `/webchat/${whatsapp.webchatToken}`
+  });
+};
+
 export const closedTickets = async (req: Request, res: Response) => {
   const { whatsappId } = req.params
   const { companyId } = req.user;
@@ -794,7 +843,7 @@ export const metaResubscribe = async (req: Request, res: Response): Promise<Resp
     attributes: [
       "id", "name", "channel", "channelType",
       "metaPageId", "metaPageAccessToken",
-      "facebookUserToken", "facebookPageUserId"
+      "facebookUserToken", "facebookPageUserId", "instagramAccountId"
     ]
   });
   if (!whatsapp) {
@@ -812,7 +861,13 @@ export const metaResubscribe = async (req: Request, res: Response): Promise<Resp
     return res.status(400).json({ error: "Conexão sem pageId/token — refaça via OAuth." });
   }
 
-  await subscribePageWebhook(pageId, token, channel);
+  // Para Instagram, facebookPageUserId já guarda o IG Business Account ID
+  // (connectionKey) — instagramAccountId pode estar nulo em conexões antigas.
+  const igAccountId =
+    channel === "instagram"
+      ? whatsapp.instagramAccountId || whatsapp.facebookPageUserId
+      : whatsapp.instagramAccountId || undefined;
+  await subscribePageWebhook(pageId, token, channel, igAccountId);
   logger.info(`[metaResubscribe] companyId=${companyId} whatsappId=${whatsappId} pageId=${pageId} channel=${channel}`);
 
   // Retorna o estado pós-assinatura (mesma consulta do meta-health)
@@ -842,5 +897,55 @@ export const metaResubscribe = async (req: Request, res: Response): Promise<Resp
       error: metaErr?.message || err.message
     });
   }
+};
+
+/**
+ * Quantidade de atendimentos ativos (não fechados) vinculados à conexão.
+ * Usado no frontend antes de excluir uma conexão — tickets órfãos ficam
+ * com whatsappId nulo (FK SET NULL) e somem dos filtros de atendimento.
+ * GET /whatsapp/:whatsappId/active-tickets-count
+ */
+export const activeTicketsCount = async (req: Request, res: Response): Promise<Response> => {
+  const { whatsappId } = req.params;
+  const { companyId } = req.user;
+
+  const whatsapp = await Whatsapp.findOne({
+    where: { id: whatsappId, companyId },
+    attributes: ["id"]
+  });
+  if (!whatsapp) {
+    throw new AppError("ERR_NO_WAPP_FOUND", 404);
+  }
+
+  const count = await countActiveTickets(whatsappId, companyId);
+
+  return res.status(200).json({ count });
+};
+
+/**
+ * Move todos os atendimentos ativos (status != closed) de uma conexão
+ * para outra da mesma empresa.
+ * POST /whatsapp/:whatsappId/transfer-tickets { targetWhatsappId }
+ */
+export const transferTickets = async (req: Request, res: Response): Promise<Response> => {
+  const { whatsappId } = req.params;
+  const { targetWhatsappId } = req.body;
+  const { companyId } = req.user;
+
+  if (!targetWhatsappId) {
+    throw new AppError("ERR_TARGET_CONNECTION_REQUIRED", 400);
+  }
+
+  const { transferred } = await TransferTicketsService({
+    sourceWhatsappId: whatsappId,
+    targetWhatsappId,
+    companyId
+  });
+
+  logger.info(
+    `[transferTickets] companyId=${companyId} ${whatsappId} -> ${targetWhatsappId} tickets=${transferred}`
+  );
+
+  return res.status(200).json({ transferred });
 };
 

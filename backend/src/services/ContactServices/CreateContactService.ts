@@ -49,6 +49,8 @@ interface Request {
   bzEmpresa?: string;
   clientCode?: string;
   channels?: string[];
+  birthdate?: Date | string | null; // data de nascimento (Config. Aniversário)
+  verificationCode?: string; // Código de Verificação (referência Fluxoo)
 }
 
 const shouldReplaceName = (currentName: string | null | undefined, fallbackNumber: string): boolean => {
@@ -97,10 +99,12 @@ const mergeContactData = (contact: Contact, canonicalNumber: string, payload: an
   mergeStringField("bzEmpresa");
   mergeStringField("cpfCnpj");
   mergeStringField("clientCode");
+  mergeStringField("verificationCode");
 
   mergeDirectField("foundationDate");
   mergeDirectField("dtUltCompra");
   mergeDirectField("vlUltCompra");
+  mergeDirectField("birthdate");
 
   if (payload.situation && !contact.situation) {
     updates.situation = payload.situation;
@@ -158,6 +162,8 @@ const CreateContactService = async ({
   bzEmpresa,
   clientCode,
   channels,
+  birthdate,
+  verificationCode,
 }: Request): Promise<Contact> => {
   const { canonical } = safeNormalizePhoneNumber(number);
 
@@ -315,6 +321,23 @@ const CreateContactService = async ({
     dtUltCompraValue = null;
   }
 
+  // Validação/normalização da data de nascimento (Config. Aniversário)
+  let birthdateValue: Date | null = null;
+  if (birthdate && typeof birthdate === 'string' && birthdate !== '') {
+    const d = new Date(birthdate);
+    if (isNaN(d.getTime())) {
+      throw new AppError("INVALID_BIRTHDATE");
+    } else {
+      birthdateValue = d;
+    }
+  }
+  if (typeof birthdate === 'string' && birthdate === '') {
+    birthdateValue = null;
+  }
+  if (birthdate instanceof Date) {
+    birthdateValue = birthdate;
+  }
+
   // Normalização do valor da última compra (aceita string BRL)
   const MAX_LAST_PURCHASE = 10000000000; // 10 bilhões (limite DECIMAL(12,2))
 
@@ -379,6 +402,8 @@ const CreateContactService = async ({
     bzEmpresa?: string | null;
     clientCode?: string | null;
     channels?: string[];
+    birthdate?: Date | null;
+    verificationCode?: string | null;
     canonicalNumber: string;
     isGroupParticipant: boolean;
   } = {
@@ -410,6 +435,8 @@ const CreateContactService = async ({
     contactName: typeof contactName === 'string' ? (contactName.trim() || null) : null,
     florder: !!florder,
     dtUltCompra: dtUltCompraValue,
+    birthdate: birthdateValue,
+    verificationCode: emptyToNull(verificationCode),
     vlUltCompra: vlUltCompraValue,
     bzEmpresa: emptyToNull(bzEmpresa),
     clientCode: emptyToNull(clientCode),

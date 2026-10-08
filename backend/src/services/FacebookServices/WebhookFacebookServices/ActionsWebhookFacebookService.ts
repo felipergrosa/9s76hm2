@@ -5,7 +5,7 @@ import Ticket from "../../../models/Ticket";
 import Whatsapp from "../../../models/Whatsapp";
 import ShowTicketService from "../../TicketServices/ShowTicketService";
 import { IConnections, INodes } from "../../WebhookService/DispatchWebHookService"
-import { getAccessToken, sendAttachmentFromUrl, sendText, showTypingIndicator } from "../graphAPI";
+import { getAccessToken, sendAttachmentFromUrl, sendGenericTemplate, sendQuickReplies, sendText, showTypingIndicator } from "../graphAPI";
 import formatBody from "../../../helpers/Mustache";
 import axios from "axios";
 import fs from "fs";
@@ -232,6 +232,30 @@ export const ActionsWebhookFacebookService = async (
             const otherNode = nodes.filter(node => node.id === next)[0];
             if (otherNode) {
                 nodeSelected = otherNode;
+            }
+        }
+
+        // Resume de "quickReplies": o nó suspenso guarda as opções e a
+        // resposta do botão chega como texto (título/payload) em pressKey.
+        // Converte para o índice da opção para reutilizar o desvio por
+        // sourceHandle "a{n}" do resume genérico (mesmo contrato do menu).
+        if (pressKey && pressKey !== "999" && pressKey !== "parar") {
+            const nodePress: any = nodes.filter(n => n.id === next)[0];
+            if (nodePress?.type === "quickReplies") {
+                const optsPress: any[] = Array.isArray(nodePress.data?.options)
+                    ? nodePress.data.options
+                    : [];
+                const pressedNorm = String(pressKey).trim().toLowerCase();
+                const idxPress = optsPress.findIndex((o: any) =>
+                    [o?.payload, o?.label]
+                        .filter(v => v !== undefined && v !== null)
+                        .some(
+                            v => String(v).trim().toLowerCase() === pressedNorm
+                        )
+                );
+                if (idxPress >= 0) {
+                    pressKey = String(idxPress + 1);
+                }
             }
         }
 
@@ -1297,7 +1321,8 @@ export const ActionsWebhookFacebookService = async (
                                 dripSequenceId: drip.id,
                                 contactId: contactDrip.id,
                                 companyId,
-                                status: "active"
+                                // waiting_window: inscrição segurada pela janela de 24h também sai
+                                status: { [Op.in]: ["active", "waiting_window"] }
                             }
                         }
                     );
@@ -1384,6 +1409,176 @@ export const ActionsWebhookFacebookService = async (
         if (nodeSelected.type === "sendTemplate") {
             logger.warn(
                 `[FlowBuilder][sendTemplate] node=${nodeSelected.id} canal não suporta template — nó ignorado`
+            );
+        }
+
+        // Nó "quickReplies": envia botões de resposta rápida (1–13,
+        // título máx 20 chars) e suspende o fluxo aguardando a escolha.
+        // A resposta volta como texto no listener → pressKey → desvio por
+        // sourceHandle "a{index+1}" (mesmo contrato do menu).
+        let suspendedByQuickReplies = false;
+        if (nodeSelected.type === "quickReplies") {
+            try {
+                await ensureTicket();
+
+                const dataQr = nodeSelected.data || {};
+                const varsQr: any = ticket?.dataWebhook?.variables || {};
+                const optionsQr: any[] = Array.isArray(dataQr.options)
+                    ? dataQr.options
+                    : [];
+                const contactQr = await resolveFlowContact();
+
+                if (!ticket || !contactQr || optionsQr.length === 0) {
+                    logger.warn(
+                        `[FlowBuilder][quickReplies] node=${nodeSelected.id} sem ticket, contato ou opções`
+                    );
+                } else {
+                    const bodyQr = formatBody(
+                        replaceFlowVars(varsQr, String(dataQr.message ?? "")),
+                        ticket
+                    );
+
+                    await sendQuickReplies(
+                        contactQr.number,
+                        bodyQr,
+                        optionsQr.slice(0, 13).map((o: any) => ({
+                            title: String(o?.label || "").slice(0, 20),
+                            payload: String(o?.payload || o?.label || "")
+                        })),
+                        getSession.facebookUserToken
+                    );
+
+                    const ticketDetailsQr = await ShowTicketService(
+                        ticket.id,
+                        companyId
+                    );
+                    await ticketDetailsQr.update({
+                        lastMessage: bodyQr
+                    });
+
+                    // Suspende igual ao menu: o listener retoma com pressKey
+                    await ticket.update({
+                        status: "pending",
+                        queueId: ticket.queueId ? ticket.queueId : null,
+                        userId: null,
+                        companyId: companyId,
+                        flowWebhook: true,
+                        lastFlowId: nodeSelected.id,
+                        dataWebhook: dataWebhook,
+                        hashFlowId: hashWebhookId,
+                        flowStopped: idFlowDb.toString()
+                    });
+                    suspendedByQuickReplies = true;
+                }
+            } catch (errQr) {
+                logger.warn(
+                    `[FlowBuilder][quickReplies] Falha no node ${nodeSelected.id}: ${errQr?.message || errQr}`
+                );
+            }
+        }
+        if (suspendedByQuickReplies) {
+            break;
+        }
+
+        // Nó "carousel": envia generic template (cards com imagem e até 3
+        // botões postback/web_url). Não suspende — clique em botão
+        // postback volta como mensagem comum no listener.
+        if (nodeSelected.type === "carousel") {
+            try {
+                await ensureTicket();
+
+                const dataCar = nodeSelected.data || {};
+                const varsCar: any = ticket?.dataWebhook?.variables || {};
+                const cardsCar: any[] = Array.isArray(dataCar.cards)
+                    ? dataCar.cards
+                    : [];
+                const contactCar = await resolveFlowContact();
+
+                if (cardsCar.length === 0) {
+                    logger.warn(
+                        `[FlowBuilder][carousel] node=${nodeSelected.id} sem cards — seguindo fluxo`
+                    );
+                } else if (!contactCar) {
+                    logger.warn(
+                        `[FlowBuilder][carousel] node=${nodeSelected.id} sem contato — seguindo fluxo`
+                    );
+                } else {
+                    const elementsCar = cardsCar.slice(0, 10).map((c: any) => {
+                        const elCar: any = {
+                            title: replaceFlowVars(
+                                varsCar,
+                                String(c?.title ?? "")
+                            ).slice(0, 80)
+                        };
+                        if (c?.subtitle) {
+                            elCar.subtitle = replaceFlowVars(
+                                varsCar,
+                                String(c.subtitle)
+                            ).slice(0, 80);
+                        }
+                        if (c?.imageUrl) {
+                            elCar.image_url = resolveFbMediaUrl(
+                                replaceFlowVars(varsCar, String(c.imageUrl)),
+                                companyId
+                            );
+                        }
+                        const buttonsCar: any[] = Array.isArray(c?.buttons)
+                            ? c.buttons
+                            : [];
+                        if (buttonsCar.length > 0) {
+                            elCar.buttons = buttonsCar.slice(0, 3).map(
+                                (b: any) => ({
+                                    type:
+                                        b?.type === "web_url"
+                                            ? "web_url"
+                                            : "postback",
+                                    title: String(b?.title || "").slice(0, 20),
+                                    url: b?.url
+                                        ? replaceFlowVars(
+                                              varsCar,
+                                              String(b.url)
+                                          )
+                                        : undefined,
+                                    payload: String(
+                                        b?.payload || b?.title || ""
+                                    )
+                                })
+                            );
+                        }
+                        return elCar;
+                    });
+
+                    await sendGenericTemplate(
+                        contactCar.number,
+                        elementsCar,
+                        getSession.facebookUserToken
+                    );
+
+                    if (ticket) {
+                        const ticketDetailsCar = await ShowTicketService(
+                            ticket.id,
+                            companyId
+                        );
+                        await ticketDetailsCar.update({
+                            lastMessage: formatBody(
+                                elementsCar[0]?.title || "[carrossel]",
+                                ticket.contact
+                            )
+                        });
+                    }
+                }
+            } catch (errCar) {
+                logger.warn(
+                    `[FlowBuilder][carousel] Falha no node ${nodeSelected.id}: ${errCar?.message || errCar}`
+                );
+            }
+        }
+
+        // Nó "sendEmail": canal Meta (Messenger/Instagram) não envia
+        // e-mail — apenas loga e segue o fluxo.
+        if (nodeSelected.type === "sendEmail") {
+            logger.warn(
+                `[FlowBuilder] sendEmail não suportado em canal Meta — node=${nodeSelected.id} ignorado`
             );
         }
 

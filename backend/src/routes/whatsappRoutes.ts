@@ -24,6 +24,7 @@ whatsappRoutes.post("/facebook/", isAuth, checkPermission("connections.create"),
 whatsappRoutes.get("/whatsapp/:whatsappId", isAuth, checkPermission("connections.view"), WhatsAppController.show);
 whatsappRoutes.get("/whatsapp/:whatsappId/meta-health", isAuth, checkPermission("connections.view"), WhatsAppController.metaHealth);
 whatsappRoutes.post("/whatsapp/:whatsappId/meta-resubscribe", isAuth, checkPermission("connections.edit"), WhatsAppController.metaResubscribe);
+whatsappRoutes.post("/whatsapp/:whatsappId/webchat-token", isAuth, checkPermission("connections.edit"), WhatsAppController.generateWebchatToken);
 whatsappRoutes.put("/whatsapp/:whatsappId", isAuth, checkPermission("connections.edit"), WhatsAppController.update);
 whatsappRoutes.delete("/whatsapp/:whatsappId", isAuth, checkPermission("connections.delete"), WhatsAppController.remove);
 whatsappRoutes.post("/closedimported/:whatsappId", isAuth, checkPermission("connections.edit"), WhatsAppController.closedTickets);
@@ -47,6 +48,8 @@ whatsappRoutes.get("/whatsapp/:whatsappId/session-window", isAuth, checkPermissi
 whatsappRoutes.post("/whatsapp/:whatsappId/send-template-to-contact", isAuth, checkPermission("tickets.create"), upload.single("headerFile"), MetaController.sendTemplateToContact);
 
 // Sync Full History - Sincronização organizada de histórico
+whatsappRoutes.get("/whatsapp/:whatsappId/active-tickets-count", isAuth, checkPermission("connections.view"), WhatsAppController.activeTicketsCount);
+whatsappRoutes.post("/whatsapp/:whatsappId/transfer-tickets", isAuth, checkPermission("connections.edit"), WhatsAppController.transferTickets);
 whatsappRoutes.post("/whatsapp/:whatsappId/sync-full-history", isAuth, checkPermission("connections.edit"), WhatsAppController.syncFullHistory);
 whatsappRoutes.get("/whatsapp/:whatsappId/sync-progress", isAuth, checkPermission("connections.view"), WhatsAppController.getSyncProgressStatus);
 

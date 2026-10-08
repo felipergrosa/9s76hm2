@@ -108,6 +108,7 @@ const ContactImport = () => {
     { id: "email", label: "E-mail", required: false },
     { id: "tags", label: "Tags", required: false },
     { id: "cpfCnpj", label: "CPF/CNPJ", required: false },
+    { id: "verificationCode", label: "Código de Verificação", required: false },
     { id: "representativeCode", label: "Código do Representante", required: false },
     { id: "city", label: "Cidade", required: false },
     { id: "instagram", label: "Instagram", required: false },
@@ -166,7 +167,7 @@ const ContactImport = () => {
               }
 
               // Ensure fields that should be strings are converted to strings
-              const stringFields = ['cpfCnpj', 'representativeCode', 'creditLimit'];
+              const stringFields = ['cpfCnpj', 'representativeCode', 'creditLimit', 'verificationCode'];
               if (stringFields.includes(selectedField) && cellValue !== null && cellValue !== undefined) {
                 cellValue = String(cellValue);
               }

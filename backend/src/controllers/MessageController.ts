@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import * as Yup from "yup";
 import AppError from "../errors/AppError";
 import fs from "fs";
 import GetTicketWbot from "../helpers/GetTicketWbot";
@@ -47,6 +48,7 @@ import ClearTicketMessagesService from "../services/MessageServices/ClearTicketM
 import ResyncTicketMessagesService from "../services/MessageServices/ResyncTicketMessagesService";
 import { baileysChatQueue, officialChatQueue } from "../queues";
 import EnsureOfficialSessionWindow from "../services/MetaServices/EnsureOfficialSessionWindow";
+import SendInteractiveMessageService from "../services/WbotServices/SendInteractiveMessageService";
 
 type IndexQuery = {
   pageNumber: string;
@@ -657,6 +659,103 @@ export const sendPIXMessage = async (req: Request, res: Response): Promise<Respo
   }
 };
 
+// Enviar mensagem interativa (API Oficial / WABA)
+const interactiveMessageSchema = Yup.object().shape({
+  type: Yup.string()
+    .oneOf(["buttons", "list", "cta_url", "pix"])
+    .required("Tipo de mensagem interativa obrigatório"),
+  body: Yup.string().required("Texto da mensagem obrigatório").max(1024),
+  footer: Yup.string().max(60),
+  header: Yup.string().max(60),
+  buttons: Yup.array()
+    .of(
+      Yup.object().shape({
+        title: Yup.string().required("Texto do botão obrigatório").max(20)
+      })
+    )
+    .max(3)
+    .when("type", {
+      is: "buttons",
+      then: schema => schema.min(1, "Informe ao menos 1 botão").required()
+    }),
+  listButtonText: Yup.string().max(20),
+  sections: Yup.array()
+    .of(
+      Yup.object().shape({
+        title: Yup.string().max(24),
+        rows: Yup.array()
+          .of(
+            Yup.object().shape({
+              title: Yup.string().required("Texto do item obrigatório").max(24),
+              description: Yup.string().max(72)
+            })
+          )
+          .min(1, "Cada seção requer ao menos 1 item")
+          .max(10)
+          .required()
+      })
+    )
+    .min(1)
+    .max(10)
+    .when("type", {
+      is: "list",
+      then: schema => schema.required("Seções são obrigatórias para lista")
+    }),
+  urlButton: Yup.object()
+    .shape({
+      displayText: Yup.string().required("Texto do botão obrigatório").max(20),
+      url: Yup.string().required("URL obrigatória").max(2000)
+    })
+    .when("type", {
+      is: "cta_url",
+      then: schema => schema.required("Botão de URL obrigatório")
+    }),
+  pixKey: Yup.string()
+    .max(200)
+    .when("type", {
+      is: "pix",
+      then: schema => schema.required("Chave PIX obrigatória")
+    })
+});
+
+export const sendInteractiveMessage = async (req: Request, res: Response): Promise<Response> => {
+  const { ticketId } = req.params;
+  const { companyId } = req.user;
+
+  // Validação de tenant ANTES de qualquer envio
+  const ticket = await Ticket.findOne({ where: { id: ticketId, companyId } });
+  if (!ticket) {
+    throw new AppError("Ticket not found", 404);
+  }
+
+  try {
+    await interactiveMessageSchema.validate(req.body, { abortEarly: false });
+  } catch (err) {
+    if (err instanceof Yup.ValidationError) {
+      throw new AppError(err.errors.join("; "), 400);
+    }
+    throw err;
+  }
+
+  const sentMessage = await SendInteractiveMessageService({
+    ticket,
+    type: req.body.type,
+    body: req.body.body,
+    footer: req.body.footer,
+    header: req.body.header,
+    buttons: req.body.buttons,
+    listButtonText: req.body.listButtonText,
+    sections: req.body.sections,
+    urlButton: req.body.urlButton,
+    pixKey: req.body.pixKey
+  });
+
+  return res.status(200).json({
+    message: "Interactive message sent successfully",
+    wid: sentMessage.id
+  });
+};
+
 // Transcrição de áudio
 
 export const transcribeAudioMessage = async (req: Request, res: Response): Promise<Response> => {
@@ -978,6 +1077,26 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
         if (ticket.channel === "facebook") {
           await verifyMessageFace(sendText, body, ticket, ticket.contact, true);
         }
+      } else if (ticket.channel === "webchat") {
+        // Webchat não tem push externo: o visitante recebe a resposta via poll
+        // em GET /public/webchat/:token/messages. Basta persistir a mensagem
+        // (ack=2 = entregue; leitura real não é rastreada no canal webchat).
+        const messageData = {
+          wid: `wc_out_${ticket.id}_${Date.now()}_${Math.random()
+            .toString(36)
+            .slice(2, 8)}`,
+          ticketId: ticket.id,
+          contactId: ticket.contactId,
+          body,
+          fromMe: true,
+          mediaType: "extendedTextMessage",
+          read: true,
+          quotedMsgId: quotedMsg?.id || null,
+          ack: 2,
+          isPrivate: isPrivate === "true",
+          channel: "webchat"
+        };
+        await CreateMessageService({ messageData, companyId: ticket.companyId });
       }
     }
     return res.status(200).json({ message: "Mensagem enviada com sucesso" });

@@ -63,3 +63,17 @@ export const signupRateLimit = rateLimit({
   standardHeaders: true,
   legacyHeaders: false
 });
+
+// Rate limit por IP para verificação de e-mail no signup (envio e checagem
+// do código de 6 dígitos). O limite fino por e-mail (cooldown 60s e máx.
+// envios/hora) fica no EmailVerificationService.
+export const verifyEmailRateLimit = rateLimit({
+  windowMs: 60 * 1000, // 1 minuto
+  max: 10, // máximo 10 requisições por minuto por IP
+  message: {
+    error: 'Muitas solicitações de verificação. Tente novamente em instantes.',
+    code: 'VERIFY_EMAIL_RATE_LIMIT'
+  },
+  standardHeaders: true,
+  legacyHeaders: false
+});

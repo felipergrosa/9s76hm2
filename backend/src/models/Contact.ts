@@ -290,6 +290,21 @@ class Contact extends Model<Contact> {
   })
   dtUltCompra: Date;
 
+  // Data de nascimento — alimenta o envio automático de parabéns (Config. Aniversário)
+  @Column({
+    type: 'DATEONLY',
+    allowNull: true
+  })
+  birthdate: Date;
+
+  // Dia (fuso America/Sao_Paulo) do último envio de parabéns — dedupe contato+dia,
+  // impede duplicar a mensagem se o job rodar mais de uma vez no mesmo dia
+  @Column({
+    type: 'DATEONLY',
+    allowNull: true
+  })
+  lastBirthdayGreetingAt: Date;
+
   @Column({
     type: DataType.DECIMAL(12, 2),
     allowNull: true
@@ -305,6 +320,12 @@ class Contact extends Model<Contact> {
     allowNull: true
   })
   region: string;
+
+  // Código de Verificação do contato (referência Fluxoo) — campo texto livre
+  @Column({
+    allowNull: true
+  })
+  verificationCode: string;
 
   @CreatedAt
   createdAt: Date;

@@ -21,6 +21,7 @@ const PERMISSION_LABELS = {
 	"users.view": "Usuários",
 	"roles.view": "Perfis de Acesso",
 	"meta-templates.view": "Templates Meta",
+	"meta-automations.view": "Automações Meta",
 	"helps.view": "Base de Conhecimento",
 	"external-api.view": "API Externa",
 	"settings.view": "Configurações",
@@ -45,6 +46,9 @@ const PERMISSION_LABELS = {
 	"drip-sequences.view": "Follow-ups",
 	"drip-sequences.create": "Follow-ups",
 	"drip-sequences.edit": "Follow-ups",
+	"meta-automations.view": "Automações Meta",
+	"meta-automations.create": "Automações Meta",
+	"meta-automations.edit": "Automações Meta",
 	"email-campaigns.view": "Campanhas de E-mail",
 };
 

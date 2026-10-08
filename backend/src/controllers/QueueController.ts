@@ -82,7 +82,8 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     autoSendStrategy,
     confirmationTemplate,
     maxFilesPerSession,
-    ragCollection
+    ragCollection,
+    slaMinutes
   } = req.body;
   const { companyId } = req.user;
 
@@ -105,7 +106,9 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     autoSendStrategy: autoSendStrategy || "none",
     confirmationTemplate: confirmationTemplate || null,
     maxFilesPerSession: maxFilesPerSession || 3,
-    ragCollection: ragCollection || null
+    ragCollection: ragCollection || null,
+    // "" ou ausente = sem SLA por fila (fallback heurístico do Kanban)
+    slaMinutes: slaMinutes === "" || slaMinutes == null ? null : Number(slaMinutes)
   });
 
   const io = getIO();
@@ -152,7 +155,8 @@ export const update = async (
     autoSendStrategy,
     confirmationTemplate,
     maxFilesPerSession,
-    ragCollection
+    ragCollection,
+    slaMinutes
   } = req.body;
 
   const queue = await UpdateQueueService(queueId,
@@ -174,7 +178,9 @@ export const update = async (
       autoSendStrategy: autoSendStrategy || "none",
       confirmationTemplate: confirmationTemplate || null,
       maxFilesPerSession: maxFilesPerSession || 3,
-      ragCollection: ragCollection || null
+      ragCollection: ragCollection || null,
+      // "" ou ausente = sem SLA por fila (fallback heurístico do Kanban)
+      slaMinutes: slaMinutes === "" || slaMinutes == null ? null : Number(slaMinutes)
     },
     companyId);
 

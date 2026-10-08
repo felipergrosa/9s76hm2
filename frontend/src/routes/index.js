@@ -45,6 +45,7 @@ const Login = lazy(() => import("../pages/Login"));
 const Signup = lazy(() => import("../pages/Signup"));
 const ForgotPassword = lazy(() => import("../pages/ForgetPassWord"));
 const ResetPassword = lazy(() => import("../pages/ResetPassword"));
+const PublicWebchat = lazy(() => import("../pages/PublicWebchat"));
 
 // Páginas secundárias
 const Connections = lazy(() => import("../pages/Connections"));
@@ -61,6 +62,10 @@ const Schedules = lazy(() => import("../pages/Schedules"));
 const Annoucements = lazy(() => import("../pages/Annoucements"));
 const Admin = lazy(() => import("../pages/Admin"));
 const Reports = lazy(() => import("../pages/Reports"));
+const ClosingReport = lazy(() => import("../pages/ClosingReport"));
+const Wallets = lazy(() => import("../pages/Wallets"));
+const MetaWebhook = lazy(() => import("../pages/MetaWebhook"));
+const WhatsappHealth = lazy(() => import("../pages/WhatsappHealth"));
 const QueueIntegration = lazy(() => import("../pages/QueueIntegration"));
 const LibraryManager = lazy(() => import("../pages/LibraryManager"));
 const ToDoList = lazy(() => import("../pages/ToDoList"));
@@ -81,6 +86,7 @@ const LeadScraper = lazy(() => import("../pages/LeadScraper"));
 const KnowledgeBase = lazy(() => import("../pages/KnowledgeBase"));
 const AdminCustomFields = lazy(() => import("../pages/AdminCustomFields"));
 const MetaTemplates = lazy(() => import("../pages/MetaTemplates"));
+const MetaAutomations = lazy(() => import("../pages/MetaAutomations"));
 const FollowUps = lazy(() => import("../pages/FollowUps"));
 const FollowUpForm = lazy(() => import("../pages/FollowUps/FollowUpForm"));
 
@@ -142,6 +148,7 @@ const Routes = () => {
               <Route exact path="/signup" component={Signup} />
               <Route exact path="/forgot-password" component={ForgotPassword} />
               <Route exact path="/reset-password" component={ResetPassword} />
+              <Route exact path="/webchat/:token" component={PublicWebchat} />
               <WhatsAppsProvider>
                 {/* CommandPalette renderizado como irmão: KBarProvider só é
                     necessário para o portal do kbar (nenhum filho usa useKBar),
@@ -198,6 +205,7 @@ const Routes = () => {
                 {/* /roles virou aba dentro de /users — redirect para bookmarks antigos */}
                 <Route exact path="/roles" render={() => <Redirect to="/users" />} isPrivate />
                 <PrivateRoute exact path="/meta-templates" component={MetaTemplates} permission="meta-templates.view" />
+                <PrivateRoute exact path="/meta-automations" component={MetaAutomations} permission="meta-automations.view" />
                 <PrivateRoute exact path="/lead-scraper" component={LeadScraper} permission="contacts.import" />
                 <PrivateRoute exact path="/knowledge-base" component={KnowledgeBase} permission="helps.view" />
                 <PrivateRoute exact path="/admin-custom-fields" component={AdminCustomFields} permission="settings.edit" />
@@ -206,6 +214,10 @@ const Routes = () => {
                 <PrivateRoute exact path="/settings" component={SettingsCustom} permission="settings.view" />
                 <PrivateRoute exact path="/queues" component={Queues} permission="queues.view" />
                 <PrivateRoute exact path="/reports" component={Reports} permission="reports.view" />
+                <PrivateRoute exact path="/closing-report" component={ClosingReport} permission="reports.view" />
+                <PrivateRoute exact path="/wallets" component={Wallets} permission="contacts.view" />
+                <PrivateRoute exact path="/meta-unified-webhook" component={MetaWebhook} permission="settings.view" />
+                <PrivateRoute exact path="/whatsapp-health" component={WhatsappHealth} permission="connections.view" />
                 <PrivateRoute exact path="/queue-integration" component={QueueIntegration} permission="integrations.view" />
                 <PrivateRoute exact path="/announcements" component={Annoucements} permission="announcements.view" />
                 <PrivateRoute

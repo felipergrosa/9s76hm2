@@ -20,6 +20,6 @@ ApiRoutes.post("/checkNumber", isAuthCompany, ApiController.checkNumber)
 // ApiRoutes.post("/send/toManyImage", isAuthCompany, ApiController.indexToManyImage);
 
 // retornar os whatsapp e seus status
-// ApiRoutes.get("/getWhatsappsId", isAuthCompany, ApiController.indexWhatsappsId);
+ApiRoutes.get("/getWhatsappsId", isAuthCompany, ApiController.indexWhatsappsId);
 
 export default ApiRoutes;

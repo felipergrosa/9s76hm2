@@ -45,7 +45,8 @@ import {
   Braces, 
   Paperclip, 
   MoreHorizontal, 
-  SpellCheck2 
+  SpellCheck2,
+  MousePointerClick 
 } from "lucide-react";
 import clsx from "clsx";
 import { ReplyMessageContext } from "../../context/ReplyingMessage/ReplyingMessageContext";
@@ -62,6 +63,7 @@ import { isString, isEmpty } from "lodash";
 const ContactSendModal = lazy(() => import("../ContactSendModal"));
 const CameraModal = lazy(() => import("../CameraModal"));
 const ButtonModal = lazy(() => import("../ButtonModal"));
+const InteractiveMessageModal = lazy(() => import("../InteractiveMessageModal"));
 const MessageUploadMedias = lazy(() => import("../MessageUploadMedias"));
 const ScheduleModal = lazy(() => import("../ScheduleModal"));
 const ChatAssistantPanel = lazy(() => import("../ChatAssistantPanel"));
@@ -798,6 +800,7 @@ const MessageInput = ({
   const [mediasUpload, setMediasUpload] = useState([]);
   const isMounted = useRef(true);
   const [buttonModalOpen, setButtonModalOpen] = useState(false);
+  const [interactiveModalOpen, setInteractiveModalOpen] = useState(false);
   const [inputMessage, setInputMessage] = useState("");
   const [linkPreview, setLinkPreview] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -1366,6 +1369,14 @@ const MessageInput = ({
   const handleButtonModalOpen = () => {
     handleMenuItemClick();
     setButtonModalOpen(true); // Define o estado como true para abrir o modal
+  };
+
+  // Mensagem interativa só existe na API Oficial (WABA/Cloud API)
+  const isOfficialChannel = ticketData?.whatsapp?.channelType === "official";
+
+  const handleInteractiveModalOpen = () => {
+    handleMenuItemClick();
+    setInteractiveModalOpen(true);
   };
 
   const buildQuickMessageMediaUrl = (mediaValue) => {
@@ -2468,12 +2479,30 @@ const MessageInput = ({
                   />
                 </Suspense>
               )}
-              <MenuItem onClick={handleButtonModalOpen}>
-                <Fab className={classes.invertedFabMenuCont} size="small">
-                  <MoreHorizontal size={20} />
-                </Fab>
-                Botões
-              </MenuItem>
+              {interactiveModalOpen && (
+                <Suspense fallback={<CircularProgress />}>
+                  <InteractiveMessageModal
+                    modalOpen={interactiveModalOpen}
+                    onClose={() => setInteractiveModalOpen(false)}
+                    ticketId={ticketId}
+                  />
+                </Suspense>
+              )}
+              {isOfficialChannel ? (
+                <MenuItem onClick={handleInteractiveModalOpen}>
+                  <Fab className={classes.invertedFabMenuCont} size="small">
+                    <MousePointerClick size={20} />
+                  </Fab>
+                  {i18n.t("messages.interactive.menuItem")}
+                </MenuItem>
+              ) : (
+                <MenuItem onClick={handleButtonModalOpen}>
+                  <Fab className={classes.invertedFabMenuCont} size="small">
+                    <MoreHorizontal size={20} />
+                  </Fab>
+                  Botões
+                </MenuItem>
+              )}
               <Divider />
               <MenuItem onClick={(e) => { handleMenuItemClick(); handleOpenVarsMenu(e); }}>
                 <Fab className={classes.invertedFabMenuCont} size="small">

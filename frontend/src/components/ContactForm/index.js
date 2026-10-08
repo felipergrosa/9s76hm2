@@ -73,12 +73,14 @@ const ContactSchema = Yup.object().shape({
             }
             return false;
         }),
+    verificationCode: Yup.string().nullable(), // Código de Verificação (referência Fluxoo)
     representativeCode: Yup.string().nullable(),
     city: Yup.string().nullable(),
     instagram: Yup.string().nullable(),
     situation: Yup.string().nullable(),
     fantasyName: Yup.string().nullable(),
     foundationDate: Yup.date().nullable(),
+    birthdate: Yup.date().nullable(),
     creditLimit: Yup.string().nullable(),
     segment: Yup.string().nullable(),
     bzEmpresa: Yup.string().nullable(),
@@ -302,6 +304,19 @@ export function ContactForm ({ initialContact, onSave, onCancel }) {
                                 }}
                             </Field>
                         </Grid>
+                        {/* Código de Verificação (referência Fluxoo) — texto livre */}
+                        <Grid item xs={12} md={6}>
+                            <Field
+                                as={TextField}
+                                label={i18n.t("contactModal.form.verificationCode")}
+                                name="verificationCode"
+                                variant="outlined"
+                                margin="dense"
+                                fullWidth
+                                error={touched.verificationCode && Boolean(errors.verificationCode)}
+                                helperText={touched.verificationCode && errors.verificationCode}
+                            />
+                        </Grid>
                         <Grid item xs={12} md={6}>
                             <Field
                                 as={TextField}
@@ -370,6 +385,20 @@ export function ContactForm ({ initialContact, onSave, onCancel }) {
                                 as={TextField}
                                 label="Data de Fundação"
                                 name="foundationDate"
+                                type="date"
+                                InputLabelProps={{
+                                    shrink: true,
+                                }}
+                                variant="outlined"
+                                margin="dense"
+                                fullWidth
+                            />
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                            <Field
+                                as={TextField}
+                                label="Data de Nascimento"
+                                name="birthdate"
                                 type="date"
                                 InputLabelProps={{
                                     shrink: true,

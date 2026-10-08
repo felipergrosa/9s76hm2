@@ -44,6 +44,9 @@ import setStatusNode from "./nodes/setStatusNode";
 import aiAgentNode from "./nodes/aiAgentNode";
 import smartDelayNode from "./nodes/smartDelayNode";
 import waitReplyNode from "./nodes/waitReplyNode";
+import quickRepliesNode from "./nodes/quickRepliesNode";
+import carouselNode from "./nodes/carouselNode";
+import sendEmailNode from "./nodes/sendEmailNode";
 
 import api from "../../services/api";
 
@@ -101,6 +104,10 @@ import {
   SmartToy,
   HourglassTop,
   QuestionAnswer,
+  Bolt,
+  ViewCarousel,
+  Email,
+  AutoFixHigh,
 } from "@mui/icons-material";
 import RemoveEdge from "./nodes/removeEdge";
 import FlowBuilderAddImgModal from "../../components/FlowBuilderAddImgModal";
@@ -135,6 +142,9 @@ import FlowBuilderSetStatusModal from "../../components/FlowBuilderSetStatusModa
 import FlowBuilderAiAgentModal from "../../components/FlowBuilderAiAgentModal";
 import FlowBuilderSmartDelayModal from "../../components/FlowBuilderSmartDelayModal";
 import FlowBuilderWaitReplyModal from "../../components/FlowBuilderWaitReplyModal";
+import FlowBuilderQuickRepliesModal from "../../components/FlowBuilderQuickRepliesModal";
+import FlowBuilderCarouselModal from "../../components/FlowBuilderCarouselModal";
+import FlowBuilderSendEmailModal from "../../components/FlowBuilderSendEmailModal";
 import FlowValidationDialog from "../../components/FlowValidationDialog";
 import GetAppIcon from "@mui/icons-material/GetApp";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
@@ -291,6 +301,9 @@ const nodeTypes = {
   aiAgent: aiAgentNode,
   smartDelay: smartDelayNode,
   waitReply: waitReplyNode,
+  quickReplies: quickRepliesNode,
+  carousel: carouselNode,
+  sendEmail: sendEmailNode,
 };
 
 const edgeTypes = {
@@ -357,6 +370,9 @@ export const FlowBuilderConfig = () => {
   const [modalAddAiAgent, setModalAddAiAgent] = useState(null);
   const [modalAddSmartDelay, setModalAddSmartDelay] = useState(null);
   const [modalAddWaitReply, setModalAddWaitReply] = useState(null);
+  const [modalAddQuickReplies, setModalAddQuickReplies] = useState(null);
+  const [modalAddCarousel, setModalAddCarousel] = useState(null);
+  const [modalAddSendEmail, setModalAddSendEmail] = useState(null);
   const [validationIssues, setValidationIssues] = useState(null);
   const [importModal, setImportModal] = useState(false);
   const [flowStatus, setFlowStatus] = useState("published"); // item 9 do plano: draft/published
@@ -722,6 +738,18 @@ export const FlowBuilderConfig = () => {
     addAndResetDrop("waitReply", data);
   };
 
+  const quickRepliesAdd = (data) => {
+    addAndResetDrop("quickReplies", data);
+  };
+
+  const carouselAdd = (data) => {
+    addAndResetDrop("carousel", data);
+  };
+
+  const sendEmailAdd = (data) => {
+    addAndResetDrop("sendEmail", data);
+  };
+
   useEffect(() => {
     setLoading(true);
     const delayDebounceFn = setTimeout(() => {
@@ -981,6 +1009,15 @@ export const FlowBuilderConfig = () => {
     if (node.type === "waitReply") {
       setModalAddWaitReply("edit");
     }
+    if (node.type === "quickReplies") {
+      setModalAddQuickReplies("edit");
+    }
+    if (node.type === "carousel") {
+      setModalAddCarousel("edit");
+    }
+    if (node.type === "sendEmail") {
+      setModalAddSendEmail("edit");
+    }
   };
 
   // Seleção de nó usa a classe .selected do react-flow (estilizada no CSS),
@@ -1028,6 +1065,9 @@ export const FlowBuilderConfig = () => {
     setModalAddWebhook(null);
     setModalAddEnd(null);
     setModalAddGotoFlow(null);
+    setModalAddQuickReplies(null);
+    setModalAddCarousel(null);
+    setModalAddSendEmail(null);
   };
 
   // Validação pré-publish no estilo ManyChat: blocos órfãos, início sem
@@ -1068,6 +1108,9 @@ export const FlowBuilderConfig = () => {
         aiAgent: "Agente IA",
         smartDelay: "Espera inteligente",
         waitReply: "Aguardar resposta",
+        quickReplies: "Respostas rápidas",
+        carousel: "Carrossel",
+        sendEmail: "Enviar e-mail",
       };
       const base = names[n.type] || n.type;
       const detail =
@@ -1107,6 +1150,23 @@ export const FlowBuilderConfig = () => {
           ) {
             issues.push(
               `Menu “${String(n.data?.message || "").slice(0, 30)}”: a opção [${opt.number}] não tem destino.`
+            );
+          }
+        });
+      });
+
+    nodes
+      .filter((n) => n.type === "quickReplies")
+      .forEach((n) => {
+        (n.data?.options || []).forEach((opt, index) => {
+          const handle = `a${index + 1}`;
+          if (
+            !edges.some(
+              (e) => e.source === n.id && e.sourceHandle === handle
+            )
+          ) {
+            issues.push(
+              `Respostas rápidas “${String(n.data?.message || "").slice(0, 30)}”: a opção [${index + 1}] não tem destino.`
             );
           }
         });
@@ -1164,6 +1224,48 @@ export const FlowBuilderConfig = () => {
       return;
     }
     saveFlow("published");
+  };
+
+  // Organiza o canvas em colunas por profundidade: BFS a partir do(s)
+  // bloco(s) de Início seguindo as edges; cada nível vira uma coluna
+  // (x = depth*280) e os nós empilham na coluna (y = índice*160).
+  // Nós desconectados vão para uma coluna à direita da mais profunda.
+  const autoArrange = () => {
+    const depth = {};
+    const queue = [];
+    nodes
+      .filter((n) => n.type === "start")
+      .forEach((n) => {
+        depth[n.id] = 0;
+        queue.push(n.id);
+      });
+    while (queue.length > 0) {
+      const current = queue.shift();
+      edges
+        .filter((e) => e.source === current)
+        .forEach((e) => {
+          if (depth[e.target] === undefined) {
+            depth[e.target] = depth[current] + 1;
+            queue.push(e.target);
+          }
+        });
+    }
+    const maxDepth = Math.max(0, ...Object.values(depth));
+    nodes.forEach((n) => {
+      if (depth[n.id] === undefined) {
+        depth[n.id] = maxDepth + 1;
+      }
+    });
+    const columnIndex = {};
+    setNodes((old) =>
+      old.map((n) => {
+        const d = depth[n.id] || 0;
+        const idx = columnIndex[d] || 0;
+        columnIndex[d] = idx + 1;
+        return { ...n, position: { x: d * 280, y: idx * 160 } };
+      })
+    );
+    setDirty(true);
   };
 
   // Paleta de blocos no estilo ManyChat: categorias + nome + descrição,
@@ -1253,6 +1355,20 @@ export const FlowBuilderConfig = () => {
           name: "Template WhatsApp",
           desc: "Modelo aprovado da API oficial",
           type: "sendTemplate",
+        },
+        {
+          icon: <Bolt sx={{ color: "#F59E0B" }} />,
+          color: "#F59E0B",
+          name: "Respostas rápidas",
+          desc: "Botões com uma saída para cada opção",
+          type: "quickReplies",
+        },
+        {
+          icon: <ViewCarousel sx={{ color: "#8B5CF6" }} />,
+          color: "#8B5CF6",
+          name: "Carrossel",
+          desc: "Cards com imagem, texto e botão de link",
+          type: "carousel",
         },
       ],
     },
@@ -1382,6 +1498,13 @@ export const FlowBuilderConfig = () => {
           type: "webhook",
         },
         {
+          icon: <Email sx={{ color: "#0EA5E9" }} />,
+          color: "#0EA5E9",
+          name: "Enviar e-mail",
+          desc: "Dispara e-mail para o contato",
+          type: "sendEmail",
+        },
+        {
           icon: (
             <Box
               component="img"
@@ -1484,6 +1607,15 @@ export const FlowBuilderConfig = () => {
         break;
       case "waitReply":
         setModalAddWaitReply("create");
+        break;
+      case "quickReplies":
+        setModalAddQuickReplies("create");
+        break;
+      case "carousel":
+        setModalAddCarousel("create");
+        break;
+      case "sendEmail":
+        setModalAddSendEmail("create");
         break;
       default:
     }
@@ -1732,6 +1864,30 @@ export const FlowBuilderConfig = () => {
         close={setModalAddWaitReply}
       />
 
+      <FlowBuilderQuickRepliesModal
+        open={modalAddQuickReplies}
+        onSave={quickRepliesAdd}
+        data={dataNode}
+        onUpdate={updateNode}
+        close={setModalAddQuickReplies}
+      />
+
+      <FlowBuilderCarouselModal
+        open={modalAddCarousel}
+        onSave={carouselAdd}
+        data={dataNode}
+        onUpdate={updateNode}
+        close={setModalAddCarousel}
+      />
+
+      <FlowBuilderSendEmailModal
+        open={modalAddSendEmail}
+        onSave={sendEmailAdd}
+        data={dataNode}
+        onUpdate={updateNode}
+        close={setModalAddSendEmail}
+      />
+
       <FlowValidationDialog
         issues={validationIssues}
         onClose={() => setValidationIssues(null)}
@@ -1824,6 +1980,17 @@ export const FlowBuilderConfig = () => {
                   >
                     <UploadFileIcon fontSize="small" sx={{ mr: 1 }} />
                     Importar fluxo
+                  </MenuItem>
+                )}
+                {canEdit && (
+                  <MenuItem
+                    onClick={() => {
+                      setMenuAnchor(null);
+                      autoArrange();
+                    }}
+                  >
+                    <AutoFixHigh fontSize="small" sx={{ mr: 1 }} />
+                    Organizar blocos
                   </MenuItem>
                 )}
                 <MenuItem

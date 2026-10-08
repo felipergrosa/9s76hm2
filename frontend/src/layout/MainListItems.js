@@ -54,6 +54,9 @@ import {
   Repeat as FollowUpIcon,
   BookOpen as KnowledgeBaseIcon,
   Sliders as CustomFieldsIcon,
+  Zap as MetaAutomationsIcon,
+  Wallet as WalletIcon,
+  HeartPulse as HealthIcon,
 } from "lucide-react";
 
 import { WhatsAppsContext } from "../context/WhatsApp/WhatsAppsContext";
@@ -513,12 +516,34 @@ const MainListItems = ({ collapsed, drawerClose }) => {
         />
       )}
 
+      {/* 5b. CARTEIRAS */}
+      {hasPermission("contacts.view") && (
+        <ListItemLink
+          to="/wallets"
+          primary={i18n.t("wallets.title")}
+          icon={<WalletIcon />}
+          viewMode={viewMode}
+          tooltip={collapsed}
+        />
+      )}
+
       {/* 6. PAINEL (MOMENTS) */}
       {hasPermission("realtime.view") && (
         <ListItemLink
           to="/moments"
           primary={i18n.t("mainDrawer.listItems.chatsTempoReal")}
           icon={<GridOn />}
+          viewMode={viewMode}
+          tooltip={collapsed}
+        />
+      )}
+
+      {/* 6b. RELATÓRIO DE FECHAMENTO */}
+      {hasPermission("reports.view") && (
+        <ListItemLink
+          to="/closing-report"
+          primary={i18n.t("closingReport.title")}
+          icon={<Description />}
           viewMode={viewMode}
           tooltip={collapsed}
         />
@@ -618,12 +643,34 @@ const MainListItems = ({ collapsed, drawerClose }) => {
         />
       )}
 
+      {/* 2.0b SAÚDE DOS NÚMEROS */}
+      {hasPermission("connections.view") && (
+        <ListItemLink
+          to="/whatsapp-health"
+          primary={i18n.t("mainDrawer.listItems.whatsappHealth")}
+          icon={<HealthIcon />}
+          viewMode={viewMode}
+          tooltip={collapsed}
+        />
+      )}
+
       {/* 2.1 TEMPLATES META */}
       {hasPermission("meta-templates.view") && (
         <ListItemLink
           to="/meta-templates"
           primary={i18n.t("mainDrawer.listItems.metaTemplates")}
           icon={<Description />}
+          viewMode={viewMode}
+          tooltip={collapsed}
+        />
+      )}
+
+      {/* 2.2 AUTOMAÇÕES META */}
+      {hasPermission("meta-automations.view") && (
+        <ListItemLink
+          to="/meta-automations"
+          primary="Automações Meta"
+          icon={<MetaAutomationsIcon />}
           viewMode={viewMode}
           tooltip={collapsed}
         />
@@ -951,6 +998,17 @@ const MainListItems = ({ collapsed, drawerClose }) => {
           to="/admin"
           primary={i18n.t("mainDrawer.listItems.administration") || "Administração"}
           icon={<AdminIcon size={20} />}
+          viewMode={viewMode}
+          tooltip={collapsed}
+        />
+      )}
+
+      {/* 11b. WEBHOOK META */}
+      {hasPermission("settings.view") && (
+        <ListItemLink
+          to="/meta-unified-webhook"
+          primary={i18n.t("metaWebhook.title")}
+          icon={<Webhook />}
           viewMode={viewMode}
           tooltip={collapsed}
         />

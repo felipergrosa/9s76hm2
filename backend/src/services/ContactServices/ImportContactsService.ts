@@ -165,6 +165,8 @@ export async function ImportContactsService(
       let foundationDate = null;
       let creditLimit = "";
       let clientCode = "";
+      let birthdate = null;
+      let verificationCode = ""; // Código de Verificação (referência Fluxoo)
       let dtUltCompra = null;
       let vlUltCompra = null;
 
@@ -206,6 +208,16 @@ export async function ImportContactsService(
 
       if (has(row, "creditLimit") || has(row, "Limite de Crédito")) {
         creditLimit = row["creditLimit"] || row["Limite de Crédito"];
+      }
+
+      // Data de nascimento — alimenta a Config. Aniversário
+      if (has(row, "birthdate") || has(row, "Data de Nascimento") || has(row, "Aniversário") || has(row, "Aniversario")) {
+        birthdate = row["birthdate"] || row["Data de Nascimento"] || row["Aniversário"] || row["Aniversario"];
+      }
+
+      // Código de Verificação — campo texto livre (referência Fluxoo)
+      if (has(row, "verificationCode") || has(row, "Código de Verificação") || has(row, "Codigo de Verificacao") || has(row, "Código de Verificacao")) {
+        verificationCode = row["verificationCode"] || row["Código de Verificação"] || row["Codigo de Verificacao"] || row["Código de Verificacao"];
       }
 
       if (has(row, "dtUltCompra") || has(row, "Última Compra") || has(row, "Ultima Compra")) {
@@ -253,6 +265,8 @@ export async function ImportContactsService(
         foundationDate,
         creditLimit,
         clientCode,
+        birthdate,
+        verificationCode,
         dtUltCompra,
         vlUltCompra,
         companyId
@@ -412,6 +426,8 @@ export async function ImportContactsService(
         keepIfEmpty('foundationDate');
         keepIfEmpty('creditLimit');
         keepIfEmpty('segment');
+        keepIfEmpty('birthdate');
+        keepIfEmpty('verificationCode');
 
         if (Object.keys(updatePayload).length > 0) {
           if (dryRun) {

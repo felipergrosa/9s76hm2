@@ -50,6 +50,13 @@ export interface ISendMessageOptions {
       description?: string;
     }>;
   }>;
+  // Rodapé de mensagens interativas (buttons/list/cta_url)
+  footer?: string;
+  // Botão de ação CTA URL (apenas API Oficial — interactive.type = "cta_url")
+  ctaUrlButton?: {
+    displayText: string;
+    url: string;
+  };
   mentionedJidList?: string[];
   vcard?: string;
   filename?: string;

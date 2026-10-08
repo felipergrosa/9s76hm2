@@ -336,6 +336,14 @@ class Whatsapp extends Model<Whatsapp> {
   @AllowNull(true)
   @Column(DataType.TEXT)
   proxyUrl: string;
+
+  // Token opaco do webchat público (/public/webchat/:token).
+  // Gerado sob demanda via POST /whatsapp/:id/webchat-token (crypto random).
+  // Não entra no sanitizeWhatsapp: só é entregue pelo endpoint autenticado.
+  @AllowNull(true)
+  @Unique
+  @Column(DataType.TEXT)
+  webchatToken: string;
 }
 
 export default Whatsapp;

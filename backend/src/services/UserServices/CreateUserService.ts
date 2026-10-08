@@ -44,6 +44,7 @@ interface Request {
   isPrivate?: boolean;
   superUser?: boolean;
   color?: string;
+  ramal?: string; // Ramal interno (cadastro; futuramente SIP)
   // Flag do requisitante (vinda do DB) — controla concessão de admin/super
   // e permissões do grupo super
   requestUserIsSuper?: boolean;
@@ -85,6 +86,7 @@ const CreateUserService = async ({
   isPrivate = false,
   superUser = false,
   color = "",
+  ramal,
   requestUserIsSuper = false
 }: Request): Promise<Response> => {
   // SEGURANÇA (N2): profile "admin" e flag super só podem ser concedidos por
@@ -188,11 +190,12 @@ const CreateUserService = async ({
           return !emailExists;
         }
       ),
-    password: Yup.string().required().min(5)
+    password: Yup.string().required().min(5),
+    ramal: Yup.string().nullable().max(50, "Ramal muito longo")
   });
 
   try {
-    await schema.validate({ email, password, name });
+    await schema.validate({ email, password, name, ramal });
   } catch (err) {
     throw new AppError(err.message);
   }
@@ -225,7 +228,9 @@ const CreateUserService = async ({
       allowedConnectionIds,
       isPrivate,
       super: superUser,
-      color
+      color,
+      // Ramal interno: string vazia vira null para não poluir a coluna
+      ramal: typeof ramal === "string" && ramal.trim() !== "" ? ramal.trim() : null
     },
     { include: ["queues", "company"] }
   );

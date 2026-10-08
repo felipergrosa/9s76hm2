@@ -15,7 +15,10 @@ const SECRET_FIELDS = [
   "metaAccessToken",
   "metaPageAccessToken",
   "metaWebhookVerifyToken",
-  "proxyUrl"
+  "proxyUrl",
+  // Token do webchat público: bearer credential da URL /webchat/:token.
+  // Só é entregue via POST /whatsapp/:id/webchat-token (connections.edit).
+  "webchatToken"
 ] as const;
 
 /**

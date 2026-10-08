@@ -60,6 +60,11 @@ class Queue extends Model<Queue> {
   @Column
   tempoRoteador: number;
 
+  // SLA de resposta da fila em minutos (NULL/0 = sem SLA por fila;
+  // o Kanban cai no fallback heurístico de 24h/janela do WhatsApp)
+  @Column
+  slaMinutes: number;
+
   @Default("")
   @Column
   outOfHoursMessage: string;

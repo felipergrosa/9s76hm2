@@ -43,7 +43,8 @@ const ShowUserService = async (id: string | number, companyId: string | number):
         "supervisorViewMode",
         "permissions",
         "allowedConnectionIds",
-        "isPrivate"
+        "isPrivate",
+        "ramal"
       ],
       include: [
         { model: Queue, as: "queues", attributes: ["id", "name", "color"] },

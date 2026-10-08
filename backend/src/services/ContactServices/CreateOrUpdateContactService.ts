@@ -84,6 +84,8 @@ interface Request {
   creditLimit?: string;
   segment?: string;
   clientCode?: string;
+  birthdate?: Date | string | null; // data de nascimento (Config. Aniversário)
+  verificationCode?: string; // Código de Verificação (referência Fluxoo)
   dtUltCompra?: Date | string | null;
   vlUltCompra?: number | string | null;
   verifiedName?: string;
@@ -172,6 +174,8 @@ const CreateOrUpdateContactService = async ({
   creditLimit,
   segment,
   clientCode,
+  birthdate,
+  verificationCode,
   dtUltCompra,
   vlUltCompra,
   verifiedName,
@@ -313,6 +317,19 @@ const CreateOrUpdateContactService = async ({
       dtUltCompraValue = dtUltCompra;
     }
 
+    // Validação e normalização para birthdate (Config. Aniversário)
+    let birthdateValue: Date | null | undefined = undefined;
+    if (birthdate && typeof birthdate === 'string' && birthdate !== '') {
+      const d = new Date(birthdate);
+      if (isNaN(d.getTime())) {
+        logger.warn("[CreateOrUpdateContactService] birthdate inválido, ignorando", { birthdate });
+      } else {
+        birthdateValue = d;
+      }
+    } else if (birthdate instanceof Date) {
+      birthdateValue = birthdate;
+    }
+
     // Normalização para vlUltCompra
     let vlUltCompraValue: number | null = null;
     if (vlUltCompra !== null && vlUltCompra !== undefined && vlUltCompra !== '') {
@@ -368,6 +385,8 @@ const CreateOrUpdateContactService = async ({
       creditLimit: sanitizedCreditLimit,
       segment: normalizedSegment,
       clientCode: clientCode || undefined,
+      birthdate: birthdateValue,
+      verificationCode: verificationCode || undefined,
       dtUltCompra: dtUltCompraValue,
       vlUltCompra: vlUltCompraValue,
       verifiedName: verifiedName || undefined,
@@ -456,6 +475,17 @@ const CreateOrUpdateContactService = async ({
       contact.segment = normalizedSegment !== undefined ? (normalizedSegment as any) : (contact as any).segment;
       contact.region = normalizedRegion !== undefined ? (normalizedRegion as any) : (contact as any).region;
       contact.clientCode = clientCode || contact.clientCode;
+      // Atualizar birthdate se fornecida
+      if (birthdateValue !== undefined) {
+        (contact as any).birthdate = birthdateValue;
+      }
+      // Atualizar verificationCode se fornecido (string vazia limpa → null)
+      if (verificationCode !== undefined) {
+        (contact as any).verificationCode =
+          verificationCode === null || String(verificationCode).trim() === ""
+            ? null
+            : String(verificationCode).trim();
+      }
       // Atualizar dtUltCompra e vlUltCompra se fornecidos
       if (dtUltCompraValue !== undefined) {
         (contact as any).dtUltCompra = dtUltCompraValue;

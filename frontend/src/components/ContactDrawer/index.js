@@ -455,6 +455,12 @@ const ContactDrawer = ({ open, handleDrawerClose, contact, ticket, loading, acti
                                                 {`CPF/CNPJ: ${contact.cpfCnpj}`}
                                             </Typography>
                                         )}
+                                        {/* Código de Verificação do contato (referência Fluxoo) */}
+                                        {contact.verificationCode && (
+                                            <Typography style={{ color: "primary", fontSize: 12 }}>
+                                                {`${i18n.t("contactModal.form.verificationCode")}: ${contact.verificationCode}`}
+                                            </Typography>
+                                        )}
                                         {contact.bzEmpresa && (
                                             <Typography style={{ color: "primary", fontSize: 12 }}>
                                                 {`Empresa: ${contact.bzEmpresa}`}
@@ -493,6 +499,12 @@ const ContactDrawer = ({ open, handleDrawerClose, contact, ticket, loading, acti
                                         {contact.foundationDate && (
                                             <Typography style={{ color: "primary", fontSize: 12 }}>
                                                 {`Data de Fundação: ${new Date(contact.foundationDate).toLocaleDateString()}`}
+                                            </Typography>
+                                        )}
+                                        {/* Data de nascimento — usada pela Config. Aniversário */}
+                                        {contact.birthdate && (
+                                            <Typography style={{ color: "primary", fontSize: 12 }}>
+                                                {`Data de Nascimento: ${new Date(String(contact.birthdate).substring(0, 10) + "T12:00:00").toLocaleDateString()}`}
                                             </Typography>
                                         )}
                                         {contact.creditLimit && contact.creditLimit !== '' && (

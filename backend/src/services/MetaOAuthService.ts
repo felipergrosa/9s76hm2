@@ -135,7 +135,8 @@ export const exchangeCodeForPages = async (code: string, channel: string, appId:
 export const subscribePageWebhook = async (
   pageId: string,
   pageToken: string,
-  channel: string = "facebook"
+  channel: string = "facebook",
+  instagramAccountId?: string
 ): Promise<void> => {
   // subscribed_apps da Page só aceita campos de Page — os campos
   // exclusivos de Instagram (comments, mentions, messaging_seen) são
@@ -182,6 +183,21 @@ export const subscribePageWebhook = async (
           `${JSON.stringify(err3?.response?.data?.error ?? err3?.message)}`
         );
       }
+    }
+  }
+
+  // Campos do objeto Instagram (comments, mentions) vivem em outro nó do
+  // grafo — subscribed_apps do IG Business Account, não da Page.
+  if (channel === "instagram" && instagramAccountId) {
+    try {
+      const { subscribeInstagramObject } = await import("./FacebookServices/graphAPI");
+      await subscribeInstagramObject(instagramAccountId, ["comments", "mentions"], pageToken);
+      logger.info(`[MetaOAuth] Instagram ${instagramAccountId} assinado em comments/mentions`);
+    } catch (err4: any) {
+      logger.warn(
+        `[MetaOAuth] assinatura IG comments/mentions falhou p/ ${instagramAccountId}: ` +
+        `${JSON.stringify(err4?.response?.data?.error ?? err4?.message)}`
+      );
     }
   }
 };

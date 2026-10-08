@@ -65,6 +65,7 @@ import FunnelStage from "../../models/FunnelStage";
 import TicketFunnelState from "../../models/TicketFunnelState";
 import { emitToCompanyRoom } from "../../libs/socketEmit";
 import { scheduleFlowResume } from "../../queues/FlowResumeQueue";
+import { SendMail } from "../../helpers/SendMail";
 
 interface IAddContact {
   companyId: number;
@@ -337,6 +338,13 @@ export const ActionsWebhookService = async (
       }
       return contactFlow;
     };
+
+    // Pré-carrega o ticket quando o disparo é vinculado a um atendimento:
+    // nós de entrada (ex.: "start") não chamam ensureTicket e a atualização
+    // de estado ao fim da iteração acessa `ticket` diretamente.
+    if (idTicket) {
+      await ensureTicket();
+    }
 
     // Loop usa nodes.length direto: gotoFlow anexa novos nós ao array
     // durante a execução e eles precisam ser alcançáveis pelo `next`.
@@ -1389,7 +1397,8 @@ export const ActionsWebhookService = async (
                   dripSequenceId: drip.id,
                   contactId: contactDrip.id,
                   companyId,
-                  status: "active"
+                  // waiting_window: inscrição segurada pela janela de 24h também sai
+                  status: { [Op.in]: ["active", "waiting_window"] }
                 }
               }
             );
@@ -1833,6 +1842,288 @@ export const ActionsWebhookService = async (
           );
         }
         break;
+      }
+
+      // Nó "quickReplies": WhatsApp (Baileys e Cloud API) não tem
+      // quick-replies nativos — degrada para texto numerado no mesmo
+      // formato do "menu" (`[n] label`) e suspende o fluxo igual a ele
+      // (lastFlowId = este nó, flowWebhook = true). Na resposta do usuário
+      // o ramo pressKey do nó sintético "menu" resolve a edge por
+      // sourceHandle "a{numero}" — logo as saídas deste nó usam a1..aN,
+      // uma por opção, no mesmo contrato do menu.
+      if (nodeSelected.type === "quickReplies") {
+        try {
+          await ensureTicket();
+
+          const dataQr = nodeSelected.data || {};
+          const optionsQr: any[] = Array.isArray(dataQr.options)
+            ? dataQr.options
+            : [];
+
+          let optionsTextQr = "";
+          optionsQr.forEach((itemQr: any, idxQr: number) => {
+            optionsTextQr += `[${idxQr + 1}] ${itemQr?.label ?? ""}\n`;
+          });
+
+          const qrCreate = `${dataQr.message || ""}\n\n${optionsTextQr}`;
+
+          // Interpola {{var}} — aceita chaves no topo do dataWebhook e em
+          // dataWebhook.variables (superset do comportamento do "menu")
+          const dwQr: any = ticket?.dataWebhook || {};
+          const varsQr: any = { ...dwQr, ...(dwQr?.variables || {}) };
+          const bodyQr = replaceMessages(varsQr, qrCreate);
+
+          if (ticket) {
+            const ticketDetailsQr = await ShowTicketService(
+              ticket.id,
+              companyId
+            );
+
+            try {
+              await typeSimulation(ticket, "composing");
+            } catch {
+              // canal oficial não tem wbot — presença é best-effort
+            }
+
+            await SendWhatsAppMessage({
+              body: bodyQr,
+              ticket: ticketDetailsQr,
+              quotedMsg: null
+            });
+
+            SetTicketMessagesAsRead(ticketDetailsQr);
+
+            await ticketDetailsQr.update({
+              lastMessage: formatBody(bodyQr, ticket)
+            });
+          } else {
+            // Sem ticket: mesmo fallback do nó "message" (por número)
+            await SendMessage(whatsapp, {
+              number: numberClient,
+              body: bodyQr
+            });
+          }
+          await intervalWhats("1");
+
+          // Sem opções não há escolha a aguardar — segue o fluxo sem
+          // suspender (cai no roteamento padrão do final do loop)
+          if (optionsQr.length > 0) {
+            if (ticket) {
+              ticket = await Ticket.findOne({
+                where: {
+                  id: ticket.id,
+                  whatsappId: whatsappId,
+                  companyId: companyId
+                }
+              });
+            } else {
+              ticket = await Ticket.findOne({
+                where: {
+                  id: idTicket,
+                  whatsappId: whatsappId,
+                  companyId: companyId
+                }
+              });
+            }
+
+            if (ticket) {
+              await ticket.update({
+                queueId: ticket.queueId ? ticket.queueId : null,
+                userId: null,
+                companyId: companyId,
+                flowWebhook: true,
+                lastFlowId: nodeSelected.id,
+                // Preserva dataWebhook atual quando o caller não envia um
+                // (evita apagar variables capturadas em nós anteriores)
+                dataWebhook: dataWebhook || ticket.dataWebhook,
+                hashFlowId: hashWebhookId,
+                flowStopped: idFlowDb.toString()
+              });
+              // Emitir update do ticket
+              await emitTicketUpdateSimple(ticket, companyId);
+            }
+
+            break;
+          }
+        } catch (errQr) {
+          logger.warn(
+            `[FlowBuilder][quickReplies] Falha no node ${nodeSelected.id}: ${errQr?.message || errQr}`
+          );
+        }
+      }
+
+      // Nó "carousel": WhatsApp não tem carrossel nativo — degrada para
+      // uma sequência de mensagens. Cada card envia a imagem (se imageUrl,
+      // resolvida como o nó "file") com caption "title\nsubtitle" +
+      // botões como lista numerada de opções/links. Sem interação
+      // estruturada: segue o fluxo após o envio de todos os cards.
+      if (nodeSelected.type === "carousel") {
+        try {
+          await ensureTicket();
+
+          const cardsCar: any[] = Array.isArray(nodeSelected.data?.cards)
+            ? nodeSelected.data.cards
+            : [];
+          const varsCar: any = {
+            ...(ticket?.dataWebhook || {}),
+            ...(ticket?.dataWebhook?.variables || {})
+          };
+
+          if (cardsCar.length === 0) {
+            logger.warn(
+              `[FlowBuilder][carousel] node=${nodeSelected.id} sem cards — nada enviado`
+            );
+          }
+
+          for (const cardCar of cardsCar) {
+            try {
+              let captionCar = replaceMessages(
+                varsCar,
+                String(cardCar?.title ?? "")
+              );
+              const subtitleCar = replaceMessages(
+                varsCar,
+                String(cardCar?.subtitle ?? "")
+              ).trim();
+              if (subtitleCar) {
+                captionCar += `\n${subtitleCar}`;
+              }
+
+              const buttonsCar: any[] = Array.isArray(cardCar?.buttons)
+                ? cardCar.buttons
+                : [];
+              if (buttonsCar.length > 0) {
+                let optionsCar = "";
+                buttonsCar.forEach((btnCar: any, idxCar: number) => {
+                  const labelCar = replaceMessages(
+                    varsCar,
+                    String(btnCar?.label ?? "")
+                  );
+                  const urlCar = replaceMessages(
+                    varsCar,
+                    String(btnCar?.url || "")
+                  ).trim();
+                  optionsCar += `[${idxCar + 1}] ${labelCar}${
+                    urlCar ? ` — ${urlCar}` : ""
+                  }\n`;
+                });
+                captionCar += `\n\n${optionsCar}`;
+              }
+
+              const imageUrlCar = replaceMessages(
+                varsCar,
+                String(cardCar?.imageUrl || "")
+              ).trim();
+
+              if (ticket && imageUrlCar) {
+                // Mesmo caminho do nó "file": resolve mídia (URL externa,
+                // /public ou arquivo local) e envia via Baileys ou Oficial
+                const localPathCar = await resolveFlowMediaPath(
+                  imageUrlCar,
+                  companyId
+                );
+                await sendFlowFile(
+                  ticket,
+                  whatsapp,
+                  localPathCar,
+                  captionCar || undefined
+                );
+              } else if (ticket) {
+                if (captionCar.trim()) {
+                  const ticketDetailsCar = await ShowTicketService(
+                    ticket.id,
+                    companyId
+                  );
+                  await SendWhatsAppMessage({
+                    body: captionCar,
+                    ticket: ticketDetailsCar,
+                    quotedMsg: null
+                  });
+                  SetTicketMessagesAsRead(ticketDetailsCar);
+                  await ticketDetailsCar.update({
+                    lastMessage: captionCar
+                  });
+                }
+              } else {
+                // Sem ticket: mesmo fallback do nó "message" (por número)
+                if (imageUrlCar) {
+                  const localPathCar = await resolveFlowMediaPath(
+                    imageUrlCar,
+                    companyId
+                  );
+                  await SendMessage(whatsapp, {
+                    number: numberClient,
+                    body: captionCar,
+                    mediaPath: localPathCar
+                  });
+                } else if (captionCar.trim()) {
+                  await SendMessage(whatsapp, {
+                    number: numberClient,
+                    body: captionCar
+                  });
+                }
+              }
+            } catch (errCard) {
+              logger.warn(
+                `[FlowBuilder][carousel] Falha ao enviar card do node ${nodeSelected.id}: ${errCard?.message || errCard}`
+              );
+            }
+            await intervalWhats("1");
+          }
+        } catch (errCar) {
+          logger.warn(
+            `[FlowBuilder][carousel] Falha no node ${nodeSelected.id}: ${errCar?.message || errCar}`
+          );
+        }
+      }
+
+      // Nó "sendEmail": e-mail transacional com interpolação {{var}} em
+      // to/subject/body. "to" vazio usa o e-mail do contato. Falha → warn
+      // e segue o fluxo (nunca derruba a execução).
+      if (nodeSelected.type === "sendEmail") {
+        try {
+          await ensureTicket();
+
+          const dataMail = nodeSelected.data || {};
+          const varsMail: any = {
+            ...(ticket?.dataWebhook || {}),
+            ...(ticket?.dataWebhook?.variables || {})
+          };
+
+          let toMail = replaceMessages(
+            varsMail,
+            String(dataMail.to || "")
+          ).trim();
+          const subjectMail = replaceMessages(
+            varsMail,
+            String(dataMail.subject || "")
+          );
+          const bodyMail = replaceMessages(
+            varsMail,
+            String(dataMail.body || "")
+          );
+
+          if (!toMail) {
+            const contactMail = await resolveFlowContact();
+            toMail = (contactMail?.email || "").trim();
+          }
+
+          if (!toMail) {
+            logger.warn(
+              `[FlowBuilder][sendEmail] node=${nodeSelected.id} sem destinatário (to vazio e contato sem email)`
+            );
+          } else {
+            await SendMail({
+              to: toMail,
+              subject: subjectMail,
+              text: bodyMail
+            });
+          }
+        } catch (errMail) {
+          logger.warn(
+            `[FlowBuilder][sendEmail] Falha no node ${nodeSelected.id}: ${errMail?.message || errMail}`
+          );
+        }
       }
 
       let isMenu: boolean;

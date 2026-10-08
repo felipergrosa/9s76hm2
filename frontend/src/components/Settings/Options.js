@@ -8,6 +8,7 @@ import Select from "@material-ui/core/Select";
 import FormHelperText from "@material-ui/core/FormHelperText";
 
 import useSettings from "../../hooks/useSettings";
+import useWhatsApps from "../../hooks/useWhatsApps";
 
 import { makeStyles } from "@material-ui/core/styles";
 import { grey, blue, orange } from "@material-ui/core/colors";
@@ -63,6 +64,22 @@ const useStyles = makeStyles((theme) => ({
     }
   },
 }));
+
+// Renderiza o template de aniversário com valores de exemplo para o preview.
+// Aceita {var} e {{var}} — o backend normaliza para Mustache antes de enviar.
+const renderBirthdayPreview = (template) => {
+  const sample = {
+    name: "Maria Silva",
+    firstName: "Maria",
+    ms: "Bom dia",
+    saudacao: "Bom dia",
+    date: new Date().toLocaleDateString("pt-BR"),
+  };
+  return (template || "").replace(
+    /\{\{?\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}?\}/g,
+    (match, key) => (sample[key] !== undefined ? sample[key] : match)
+  );
+};
 
 export default function Options(props) {
   const { oldSettings, settings, scheduleTypeChanged, user } = props;
@@ -132,6 +149,19 @@ export default function Options(props) {
   const [closeTicketOnTransfer, setCloseTicketOnTransfer] = useState(false)
   const [loadingCloseTicketOnTransfer, setLoadingCloseTicketOnTransfer] = useState(false)
 
+  // Tela de fechamento (exige assunto e permite resumo ao finalizar ticket)
+  const [enableClosingForm, setEnableClosingForm] = useState(false)
+  const [loadingEnableClosingForm, setLoadingEnableClosingForm] = useState(false)
+
+  // Config. Aniversário — envio automático de parabéns via WhatsApp
+  const [birthdayMessageEnabled, setBirthdayMessageEnabled] = useState("disabled");
+  const [loadingBirthdayMessageEnabled, setLoadingBirthdayMessageEnabled] = useState(false);
+  const [birthdayMessage, setBirthdayMessage] = useState("");
+  const [loadingBirthdayMessage, setLoadingBirthdayMessage] = useState(false);
+  const [birthdayWhatsappId, setBirthdayWhatsappId] = useState("");
+  const [loadingBirthdayWhatsappId, setLoadingBirthdayWhatsappId] = useState(false);
+  const { whatsApps } = useWhatsApps();
+
 
   //MENSAGENS CUSTOMIZADAS
   const [transferMessage, setTransferMessage] = useState("Seu Atendimento foi Transferido para o setor ${queue.name},Aguarde atendimento por favor...");
@@ -196,11 +226,16 @@ export default function Options(props) {
       if (key === "sendMsgTransfTicket") setSettingsTransfTicket(value);
       if (key === "lgpdLink") setLGPDLink(value);
       if (key === "closeTicketOnTransfer") setCloseTicketOnTransfer(value);
+      if (key === "enableClosingForm") setEnableClosingForm(value);
       if (key === "transferMessage") setTransferMessage(value);
       if (key === "greetingAcceptedMessage") setGreetingAcceptedMessage(value);
       if (key === "AcceptCallWhatsappMessage") setAcceptCallWhatsappMessage(value);
       if (key === "sendQueuePositionMessage") setSendQueuePositionMessage(value);
       if (key === "showNotificationPending") setShowNotificationPending(value);
+      // Config. Aniversário
+      if (key === "birthdayMessageEnabled") setBirthdayMessageEnabled(value);
+      if (key === "birthdayMessage") setBirthdayMessage(value);
+      if (key === "birthdayWhatsappId") setBirthdayWhatsappId(value || "");
 
     }
   }, [settings]);
@@ -468,6 +503,47 @@ export default function Options(props) {
       data: value,
     });
     setLoadingCloseTicketOnTransfer(false);
+  }
+
+  async function handleEnableClosingForm(value) {
+    setEnableClosingForm(value);
+    setLoadingEnableClosingForm(true);
+    await update({
+      column: "enableClosingForm",
+      data: value,
+    });
+    setLoadingEnableClosingForm(false);
+  }
+
+  // ── Config. Aniversário ──────────────────────────────────────────────
+  async function handleBirthdayMessageEnabled(value) {
+    setBirthdayMessageEnabled(value);
+    setLoadingBirthdayMessageEnabled(true);
+    await update({
+      column: "birthdayMessageEnabled",
+      data: value,
+    });
+    setLoadingBirthdayMessageEnabled(false);
+  }
+
+  async function handleBirthdayMessage(value) {
+    setBirthdayMessage(value);
+    setLoadingBirthdayMessage(true);
+    await update({
+      column: "birthdayMessage",
+      data: value,
+    });
+    setLoadingBirthdayMessage(false);
+  }
+
+  async function handleBirthdayWhatsappId(value) {
+    setBirthdayWhatsappId(value);
+    setLoadingBirthdayWhatsappId(true);
+    await update({
+      column: "birthdayWhatsappId",
+      data: value === null || value === undefined ? "" : String(value),
+    });
+    setLoadingBirthdayWhatsappId(false);
   }
 
   return (
@@ -906,6 +982,26 @@ export default function Options(props) {
           </FormControl>
         </Grid>
 
+        {/* TELA DE FECHAMENTO - exige assunto e permite resumo ao finalizar */}
+        <Grid xs={12} sm={6} md={4} item>
+          <FormControl className={classes.selectContainer}>
+            <InputLabel id="enableClosingForm-label"> {i18n.t("settings.settings.options.enableClosingForm")}</InputLabel>
+            <Select
+              labelId="enableClosingForm-label"
+              value={enableClosingForm}
+              onChange={async (e) => {
+                handleEnableClosingForm(e.target.value);
+              }}
+            >
+              <MenuItem value={false}>{i18n.t("settings.settings.options.disabled")}</MenuItem>
+              <MenuItem value={true}>{i18n.t("settings.settings.options.enabled")}</MenuItem>
+            </Select>
+            <FormHelperText>
+              {loadingEnableClosingForm && i18n.t("settings.settings.options.updating")}
+            </FormHelperText>
+          </FormControl>
+        </Grid>
+
         <Grid xs={12} sm={6} md={4} item>
           <FormControl className={classes.selectContainer}>
             <InputLabel id="showNotificationPending-label"> {i18n.t("settings.settings.options.showNotificationPending")}</InputLabel>
@@ -921,6 +1017,63 @@ export default function Options(props) {
             </Select>
             <FormHelperText>
               {loadingShowNotificationPending && i18n.t("settings.settings.options.updating")}
+            </FormHelperText>
+          </FormControl>
+        </Grid>
+
+        {/* ── SEÇÃO: ANIVERSÁRIO (envio automático de parabéns) ── */}
+        <Grid xs={12} item>
+          <div style={{ borderBottom: "2px solid var(--primaryColor, #065183)", paddingBottom: 6, marginTop: 12, marginBottom: 4 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "1.2px", textTransform: "uppercase", color: "var(--primaryColor, #065183)" }}>
+              {i18n.t("settings.settings.birthday.sectionTitle")}
+            </span>
+          </div>
+        </Grid>
+
+        <Grid xs={12} sm={6} md={4} item>
+          <FormControl className={classes.selectContainer}>
+            <InputLabel id="birthdayMessageEnabled-label">
+              {i18n.t("settings.settings.birthday.enabled")}
+            </InputLabel>
+            <Select
+              labelId="birthdayMessageEnabled-label"
+              value={birthdayMessageEnabled}
+              onChange={async (e) => {
+                handleBirthdayMessageEnabled(e.target.value);
+              }}
+            >
+              <MenuItem value={"disabled"}>{i18n.t("settings.settings.options.disabled")}</MenuItem>
+              <MenuItem value={"enabled"}>{i18n.t("settings.settings.options.enabled")}</MenuItem>
+            </Select>
+            <FormHelperText>
+              {loadingBirthdayMessageEnabled && i18n.t("settings.settings.options.updating")}
+            </FormHelperText>
+          </FormControl>
+        </Grid>
+
+        <Grid xs={12} sm={6} md={4} item>
+          <FormControl className={classes.selectContainer}>
+            <InputLabel id="birthdayWhatsappId-label">
+              {i18n.t("settings.settings.birthday.connection")}
+            </InputLabel>
+            <Select
+              labelId="birthdayWhatsappId-label"
+              value={birthdayWhatsappId}
+              disabled={birthdayMessageEnabled !== "enabled"}
+              onChange={async (e) => {
+                handleBirthdayWhatsappId(e.target.value);
+              }}
+            >
+              <MenuItem value={""}>{i18n.t("settings.settings.birthday.defaultConnection")}</MenuItem>
+              {/* Apenas conexões WhatsApp (Baileys ou API Oficial) podem enviar parabéns */}
+              {whatsApps
+                .filter((w) => !w.channel || w.channel === "whatsapp")
+                .map((w) => (
+                  <MenuItem key={w.id} value={String(w.id)}>{w.name}</MenuItem>
+                ))}
+            </Select>
+            <FormHelperText>
+              {loadingBirthdayWhatsappId && i18n.t("settings.settings.options.updating")}
             </FormHelperText>
           </FormControl>
         </Grid>
@@ -1078,6 +1231,72 @@ export default function Options(props) {
                 <FormHelperText>
                   {loadingLGPDHideNumber && i18n.t("settings.settings.options.updating")}
                 </FormHelperText>
+              </FormControl>
+            </Grid>
+          </Grid>
+        </>
+      )}
+      {/*-----------------CONFIG. ANIVERSÁRIO (mensagem + preview)-----------------*/}
+      {birthdayMessageEnabled === "enabled" && (
+        <>
+          <Grid spacing={3} container style={{ marginTop: 8, marginBottom: 4 }}>
+            <Grid xs={12} item>
+              <Tabs
+                value={0}
+                indicatorColor="primary"
+                textColor="primary"
+                scrollButtons="on"
+                variant="scrollable"
+                className={classes.tab}
+              >
+                <Tab label={i18n.t("settings.settings.birthday.sectionTitle")} />
+              </Tabs>
+            </Grid>
+          </Grid>
+          <Grid spacing={1} container>
+            <Grid xs={12} sm={6} md={6} item>
+              <FormControl className={classes.selectContainer}>
+                <TextField
+                  id="birthdayMessage"
+                  name="birthdayMessage"
+                  margin="dense"
+                  multiline
+                  minRows={3}
+                  label={i18n.t("settings.settings.birthday.message")}
+                  variant="outlined"
+                  value={birthdayMessage}
+                  onChange={async (e) => {
+                    handleBirthdayMessage(e.target.value);
+                  }}
+                >
+                </TextField>
+                <FormHelperText>
+                  {loadingBirthdayMessage
+                    ? i18n.t("settings.settings.options.updating")
+                    : i18n.t("settings.settings.birthday.variablesHint")}
+                </FormHelperText>
+              </FormControl>
+            </Grid>
+            <Grid xs={12} sm={6} md={6} item>
+              <FormControl className={classes.selectContainer}>
+                <InputLabel shrink style={{ position: "relative", marginBottom: 4 }}>
+                  {i18n.t("settings.settings.birthday.preview")}
+                </InputLabel>
+                <div
+                  style={{
+                    border: "1px solid #ccc",
+                    borderRadius: 4,
+                    padding: 12,
+                    minHeight: 80,
+                    whiteSpace: "pre-wrap",
+                    fontSize: 14,
+                    backgroundColor: "rgba(0,0,0,0.02)"
+                  }}
+                >
+                  {birthdayMessage
+                    ? renderBirthdayPreview(birthdayMessage)
+                    : i18n.t("settings.settings.birthday.previewEmpty")}
+                </div>
               </FormControl>
             </Grid>
           </Grid>

@@ -17,6 +17,7 @@ import {
     Search as SearchIcon,
     Download as DownloadIcon,
     RefreshCw,
+    Workflow as WorkflowIcon,
 } from "lucide-react";
 
 import { v4 as uuidv4 } from "uuid";
@@ -35,6 +36,10 @@ import * as Yup from "yup";
 import { Formik, Form } from "formik";
 import Dialog from '@material-ui/core/Dialog';
 import DialogActions from '@material-ui/core/DialogActions';
+import DialogTitle from '@material-ui/core/DialogTitle';
+import DialogContent from '@material-ui/core/DialogContent';
+import TextField from '@material-ui/core/TextField';
+import FormControlLabel from '@material-ui/core/FormControlLabel';
 
 import Button from '@material-ui/core/Button';
 import TransferTicketModalCustom from "../TransferTicketModalCustom";
@@ -50,6 +55,7 @@ import ShowTicketLogModal from "../ShowTicketLogModal";
 import { useTheme } from "@material-ui/styles";
 import ImportHistoryModal from "../ImportHistoryModal";
 import ClearConversationDialog from "../ClearConversationDialog";
+import TriggerFlowModal from "../TriggerFlowModal";
 
 // Lazy: TicketMessagesDialog (e a cadeia de deps da exportação PDF) só carrega ao abrir o diálogo
 const TicketMessagesDialog = lazy(() => import("../TicketMessagesDialog"));
@@ -115,8 +121,16 @@ const TicketActionButtonsCustom = ({ ticket, onSearchClick
     const [acceptTicketWithouSelectQueueOpen, setAcceptTicketWithouSelectQueueOpen] = useState(false);
     const [showTicketLogOpen, setShowTicketLogOpen] = useState(false);
     const [openTicketMessageDialog, setOpenTicketMessageDialog] = useState(false);
+
+    // Estado do modal "Tela de fechamento" (assunto obrigatório + resumo opcional)
+    const [closingFormOpen, setClosingFormOpen] = useState(false);
+    const [closingSubject, setClosingSubject] = useState("");
+    const [closingSummary, setClosingSummary] = useState("");
+    const [sendFarewellOnClose, setSendFarewellOnClose] = useState(true);
     const [disableBot, setDisableBot] = useState(ticket?.contact?.disableBot || false);
     const [resyncConversationOpen, setResyncConversationOpen] = useState(false);
+    // Modal "Disparar Fluxo": executa um fluxo do FlowBuilder no ticket
+    const [triggerFlowModalOpen, setTriggerFlowModalOpen] = useState(false);
 
     const [showSchedules, setShowSchedules] = useState(false);
     const [enableIntegration, setEnableIntegration] = useState(ticket.useIntegration);
@@ -160,20 +174,30 @@ const TicketActionButtonsCustom = ({ ticket, onSearchClick
         });
 
         if (setting?.requiredTag === "enabled") {
-            //verificar se tem uma tag   
+            //verificar se tem uma tag
             try {
                 const contactTags = await api.get(`/contactTags/${ticket.contact.id}`);
                 if (!contactTags.data.tags) {
                     toast.warning(i18n.t("messagesList.header.buttons.requiredTag"))
-                } else {
-                    setOpen(true);
-                    // handleUpdateTicketStatus(e, "closed", user?.id);
+                    return;
                 }
             } catch (err) {
                 toastError(err);
+                return;
             }
-        } else {
+        }
 
+        // Se a "Tela de fechamento" estiver ativa na empresa, abre o modal de
+        // assunto/resumo; caso contrário mantém o diálogo simples de despedida
+        const closingSetting = await getSetting({
+            "column": "enableClosingForm"
+        });
+        if (closingSetting?.enableClosingForm === true || closingSetting?.enableClosingForm === "true") {
+            setClosingSubject("");
+            setClosingSummary("");
+            setSendFarewellOnClose(true);
+            setClosingFormOpen(true);
+        } else {
             setOpen(true);
             // handleUpdateTicketStatus(e, "closed", user?.id);
         }
@@ -226,6 +250,35 @@ const TicketActionButtonsCustom = ({ ticket, onSearchClick
             });
 
             setLoading(false);
+            history.push("/tickets");
+        } catch (err) {
+            setLoading(false);
+            toastError(err);
+        }
+    };
+
+    // Fecha o ticket via "Tela de fechamento", persistindo assunto (obrigatório)
+    // e resumo (opcional) usados no Relatório de Fechamento (/closing-report)
+    const handleCloseTicketWithForm = async () => {
+        const subject = closingSubject.trim();
+        if (!subject) {
+            toast.warning(i18n.t("tickets.closing.subjectRequired"));
+            return;
+        }
+        setLoading(true);
+        try {
+            await api.put(`/tickets/${ticket.id}`, {
+                status: "closed",
+                userId: user?.id || null,
+                sendFarewellMessage: sendFarewellOnClose,
+                amountUsedBotQueues: 0,
+                closingSubject: subject,
+                closingSummary: closingSummary.trim() || null
+            });
+
+            setClosingFormOpen(false);
+            setLoading(false);
+            setCurrentTicket({ id: null, code: null });
             history.push("/tickets");
         } catch (err) {
             setLoading(false);
@@ -621,6 +674,13 @@ const TicketActionButtonsCustom = ({ ticket, onSearchClick
                             Ressincronizar Histórico
                         </MenuItem>
                     )}
+                    {/* Disparar Fluxo: ticket entra em modo bot executando o fluxo escolhido */}
+                    {!ticket.isGroup && ticket.status !== "closed" && (
+                        <MenuItem onClick={() => { handleCloseMenu(); setTriggerFlowModalOpen(true); }}>
+                            <WorkflowIcon style={{ color: '#7c3aed', marginRight: 10 }} />
+                            {i18n.t("triggerFlowModal.menuItem")}
+                        </MenuItem>
+                    )}
                 </Menu>
             </div>
             <>
@@ -663,6 +723,69 @@ const TicketActionButtonsCustom = ({ ticket, onSearchClick
                     )}
                 </Formik>
             </>
+            {/* Modal "Tela de fechamento": assunto obrigatório + resumo opcional + escolha de despedida */}
+            <Dialog
+                open={closingFormOpen}
+                onClose={() => setClosingFormOpen(false)}
+                fullWidth
+                maxWidth="sm"
+                aria-labelledby="closing-form-dialog-title"
+            >
+                <DialogTitle id="closing-form-dialog-title">
+                    {i18n.t("tickets.closing.title")}
+                </DialogTitle>
+                <DialogContent dividers>
+                    <TextField
+                        autoFocus
+                        margin="dense"
+                        fullWidth
+                        variant="outlined"
+                        required
+                        label={i18n.t("tickets.closing.subject")}
+                        value={closingSubject}
+                        onChange={e => setClosingSubject(e.target.value)}
+                    />
+                    <TextField
+                        margin="dense"
+                        fullWidth
+                        variant="outlined"
+                        multiline
+                        minRows={3}
+                        label={i18n.t("tickets.closing.summary")}
+                        value={closingSummary}
+                        onChange={e => setClosingSummary(e.target.value)}
+                    />
+                    <FormControlLabel
+                        control={
+                            <Switch
+                                checked={sendFarewellOnClose}
+                                onChange={e => setSendFarewellOnClose(e.target.checked)}
+                                color="primary"
+                            />
+                        }
+                        label={i18n.t("tickets.closing.sendFarewell")}
+                    />
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setClosingFormOpen(false)}>
+                        {i18n.t("tickets.closing.cancel")}
+                    </Button>
+                    <Button
+                        onClick={handleCloseTicketWithForm}
+                        disabled={loading || !closingSubject.trim()}
+                        style={{ background: theme.palette.primary.main, color: "white" }}
+                    >
+                        {i18n.t("tickets.closing.confirm")}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+            {triggerFlowModalOpen && (
+                <TriggerFlowModal
+                    open={triggerFlowModalOpen}
+                    onClose={() => setTriggerFlowModalOpen(false)}
+                    ticket={ticket}
+                />
+            )}
             <ClearConversationDialog
                 open={resyncConversationOpen}
                 onClose={() => setResyncConversationOpen(false)}

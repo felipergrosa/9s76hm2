@@ -436,6 +436,17 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
     onClose();
   };
 
+  // Regra de edição alinhada ao backend (UpdateService):
+  // admin/super editam tudo; o dono edita a própria; "geral" = permitir edição
+  // libera o conteúdo para qualquer usuário que visualize a resposta.
+  const isAdminUser = user?.profile === "admin" || user?.super === true;
+  const isReadOnly = (values) =>
+    Boolean(quickemessageId) && !isAdminUser && values.userId !== user.id && values.geral !== true;
+  // As flags de visão/edição só podem ser alteradas pelo dono ou pelo admin —
+  // editor convidado (geral=true) altera conteúdo, mas não o compartilhamento.
+  const areFlagsLocked = (values) =>
+    Boolean(quickemessageId) && !isAdminUser && values.userId !== user.id;
+
   const handleAttachmentFile = (e) => {
     const files = Array.from(e.target.files);
     if (files.length > 0) {
@@ -917,7 +928,7 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
                       autoFocus
                       label="Nome"
                       name="shortcode"
-                      disabled={quickemessageId && values.visao && !values.geral && values.userId !== user.id}
+                      disabled={isReadOnly(values)}
                       error={touched.shortcode && Boolean(errors.shortcode)}
                       helperText={touched.shortcode && errors.shortcode}
                       variant="outlined"
@@ -925,59 +936,39 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
                       fullWidth
                     />
                   </Grid>
+                  {/* Flags de compartilhamento (padrão da referência):
+                      "visao" = visível a todos; "geral" = edição por outros */}
                   <Grid xs={3} item>
-                    <FormControl variant="outlined" margin="dense" fullWidth>
-                      <InputLabel id="geral-selection-label">
-                        {i18n.t("quickMessages.dialog.visao")}
-                      </InputLabel>
+                    <Box display="flex" alignItems="center" mt={1}>
                       <Field
-                        as={Select}
-                        label={i18n.t("quickMessages.dialog.visao")}
-                        placeholder={i18n.t("quickMessages.dialog.visao")}
-                        labelId="visao-selection-label"
-                        id="visao"
-                        disabled={quickemessageId && values.visao && !values.geral && values.userId !== user.id}
+                        type="checkbox"
                         name="visao"
-                        onChange={(e) => {
-                          setFieldValue("visao", e.target.value === "true");
-                        }}
-                        error={touched.visao && Boolean(errors.visao)}
-                        value={values.visao ? "true" : "false"}
-                      >
-                        <MenuItem value={"true"}>{i18n.t("announcements.active")}</MenuItem>
-                        <MenuItem value={"false"}>{i18n.t("announcements.inactive")}</MenuItem>
-                      </Field>
-                    </FormControl>
+                        id="visao"
+                        disabled={areFlagsLocked(values)}
+                      />
+                      <label htmlFor="visao" style={{ cursor: 'pointer', fontSize: 12, opacity: 0.85 }}>
+                        {i18n.t("quickMessages.dialog.visao")}
+                      </label>
+                    </Box>
                   </Grid>
                   <Grid xs={3} item>
-                    <FormControl variant="outlined" margin="dense" fullWidth>
-                      <InputLabel id="geral-selection-label">
-                        {i18n.t("quickMessages.dialog.geral")}
-                      </InputLabel>
+                    <Box display="flex" alignItems="center" mt={1}>
                       <Field
-                        as={Select}
-                        label={i18n.t("quickMessages.dialog.geral")}
-                        placeholder={i18n.t("quickMessages.dialog.geral")}
-                        labelId="novo-item-selection-label"
-                        id="geral"
+                        type="checkbox"
                         name="geral"
-                        disabled={quickemessageId && values.visao && !values.geral && values.userId !== user.id}
-                        value={values.geral ? "true" : "false"}
-                        error={touched.geral && Boolean(errors.geral)}
-                        onChange={(e) => {
-                          setFieldValue("geral", e.target.value === "true");
-                        }}
-                      >
-                        <MenuItem value={"true"}>{i18n.t("announcements.active")}</MenuItem>
-                        <MenuItem value={"false"}>{i18n.t("announcements.inactive")}</MenuItem>
-                      </Field>
-                    </FormControl>
+                        id="geral"
+                        disabled={areFlagsLocked(values)}
+                      />
+                      <label htmlFor="geral" style={{ cursor: 'pointer', fontSize: 12, opacity: 0.85 }}>
+                        {i18n.t("quickMessages.dialog.geral")}
+                      </label>
+                    </Box>
                   </Grid>
                   <Grid xs={6} item>
                     <Autocomplete
                       freeSolo
                       options={optionsGroups}
-                      disabled={quickemessageId && values.visao && !values.geral && values.userId !== user.id}
+                      disabled={isReadOnly(values)}
                       value={values.groupName || ""}
                        onChange={(e, newValue) => {
                          setFieldValue("groupName", newValue);
@@ -1005,7 +996,7 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
                     />
                   </Grid>
                   <Grid xs={6} item>
-                    <FormControl variant="outlined" margin="dense" fullWidth disabled={quickemessageId && values.visao && !values.geral && values.userId !== user.id}>
+                    <FormControl variant="outlined" margin="dense" fullWidth disabled={isReadOnly(values)}>
                       <InputLabel id="color-label">Cor</InputLabel>
                       <Field
                         as={Select}
@@ -1413,7 +1404,7 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
                   <Button
                     color="primary"
                     onClick={() => attachmentFile.current.click()}
-                    disabled={isSubmitting || uploadingFiles || (quickemessageId && values.visao && !values.geral && values.userId !== user.id)}
+                    disabled={isSubmitting || uploadingFiles || isReadOnly(values)}
                     variant="outlined"
                   >
                     {i18n.t("quickMessages.buttons.attach")}
@@ -1429,7 +1420,7 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
                   <Button
                     type="submit"
                     color="primary"
-                    disabled={isSubmitting || uploadingFiles || (quickemessageId && values.visao && !values.geral && values.userId !== user.id)}
+                    disabled={isSubmitting || uploadingFiles || isReadOnly(values)}
                     variant="contained"
                     className={classes.btnWrapper}
                   >

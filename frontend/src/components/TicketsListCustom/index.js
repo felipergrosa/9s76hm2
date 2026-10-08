@@ -259,6 +259,7 @@ const InternalTicketsList = (props) => {
         searchOnMessages,
         tags,
         users,
+        walletUserIds,
         showAll,
         updateCount,
         style,
@@ -275,6 +276,7 @@ const InternalTicketsList = (props) => {
 
     const tagsKey = JSON.stringify(tags);
     const usersKey = JSON.stringify(users);
+    const walletUserIdsKey = JSON.stringify(walletUserIds);
     const queueIdsKey = JSON.stringify(selectedQueueIds);
     const whatsappIdsKey = JSON.stringify(whatsappIds);
     const statusFilterKey = JSON.stringify(statusFilter);
@@ -287,6 +289,7 @@ const InternalTicketsList = (props) => {
         searchOnMessages,
         tagsKey,
         usersKey,
+        walletUserIdsKey,
         queueIdsKey,
         whatsappIdsKey,
         statusFilterKey,
@@ -295,7 +298,7 @@ const InternalTicketsList = (props) => {
     useEffect(() => {
         dispatch({ type: "RESET" });
         setPageNumber(1);
-    }, [forceSearch, queueIdsKey, searchOnMessages, searchParam, showAll, sortTickets, status, statusFilterKey, tagsKey, usersKey, whatsappIdsKey]);
+    }, [forceSearch, queueIdsKey, searchOnMessages, searchParam, showAll, sortTickets, status, statusFilterKey, tagsKey, usersKey, walletUserIdsKey, whatsappIdsKey]);
 
     const { tickets, hasMore, loading } = useTickets({
         pageNumber,
@@ -305,6 +308,7 @@ const InternalTicketsList = (props) => {
         searchOnMessages: searchOnMessages ? "true" : "false",
         tags: JSON.stringify(tags),
         users: JSON.stringify(users),
+        walletUserIds: JSON.stringify(walletUserIds),
         queueIds: JSON.stringify(selectedQueueIds),
         whatsappIds: JSON.stringify(whatsappIds),
         statusFilter: JSON.stringify(statusFilter),

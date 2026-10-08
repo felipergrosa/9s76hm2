@@ -94,6 +94,7 @@ interface ContactData {
   dtUltCompra?: Date | string | null;
   vlUltCompra?: number | string | null;
   contactName?: string; // ✅ Adicionado campo faltante
+  verificationCode?: string; // Código de Verificação (referência Fluxoo)
 }
 
 export const show = async (req: Request, res: Response): Promise<Response> => {
@@ -182,6 +183,12 @@ export const sync = async (req: Request, res: Response): Promise<Response> => {
     clientCode: Yup.string().nullable(),
     tagIds: Yup.array().of(Yup.number()).nullable(),
     contactName: Yup.string().nullable(), // ✅ Adicionado validação do campo faltante
+    verificationCode: Yup.string()
+      .transform((value, originalValue) => {
+        const v = typeof originalValue === 'string' ? originalValue.trim() : originalValue;
+        return v === '' || v === undefined ? null : v;
+      })
+      .nullable(),
   });
 
   try {
@@ -235,6 +242,14 @@ export const sync = async (req: Request, res: Response): Promise<Response> => {
   if (Object.prototype.hasOwnProperty.call(contactData, 'clientCode')) {
     if (typeof contactData.clientCode === 'string' && contactData.clientCode.trim() === '') {
       contactData.clientCode = null as any;
+    }
+  }
+
+  // verificationCode: string vazia/whitespace → null
+  if (Object.prototype.hasOwnProperty.call(contactData, 'verificationCode')) {
+    const vc = (contactData as any).verificationCode;
+    if (vc === null || vc === undefined || (typeof vc === 'string' && vc.trim() === '')) {
+      (contactData as any).verificationCode = null;
     }
   }
 

@@ -18,6 +18,35 @@ const messages = {
           submit: "Cadastrar",
           login: "Já tem uma conta? Entre!",
         },
+        verification: {
+          title: "Verifique seu e-mail",
+          subtitle: "Enviamos um código de 6 dígitos para",
+          codeLabel: "Código de verificação",
+          codePlaceholder: "000000",
+          verify: "Verificar e concluir cadastro",
+          resend: "Reenviar código",
+          resendIn: "Reenviar em {{seconds}}s",
+          back: "Voltar e editar dados",
+          codeSent: "Código enviado! Verifique seu e-mail.",
+          codeResent: "Novo código enviado.",
+          errors: {
+            ERR_VERIFICATION_INVALID_EMAIL: "Informe um e-mail válido.",
+            ERR_VERIFICATION_CODE_INVALID:
+              "Código inválido. Verifique e tente novamente.",
+            ERR_VERIFICATION_CODE_EXPIRED:
+              "Código expirado. Solicite um novo código.",
+            ERR_VERIFICATION_MAX_ATTEMPTS:
+              "Número máximo de tentativas excedido. Solicite um novo código.",
+            ERR_VERIFICATION_COOLDOWN:
+              "Aguarde alguns segundos antes de reenviar o código.",
+            ERR_VERIFICATION_SEND_LIMIT:
+              "Limite de envios atingido. Tente novamente mais tarde.",
+            ERR_EMAIL_SEND_FAILED:
+              "Não foi possível enviar o e-mail. Tente novamente.",
+            ERR_EMAIL_VERIFICATION_REQUIRED:
+              "Verificação de e-mail obrigatória. Solicite um novo código.",
+          },
+        },
       },
       login: {
         title: "Login",
@@ -226,6 +255,26 @@ const messages = {
           disconnectTitle: "Desconectar",
           disconnectMessage:
             "Tem certeza? Você precisará ler o QR Code novamente.",
+        },
+        transferTickets: "Transferir Tickets",
+        transferModal: {
+          title: "Transferência de Tickets",
+          description:
+            "Selecione a conexão de origem e a de destino. Todos os atendimentos ativos serão movidos.",
+          beforeDeleteDesc:
+            "Esta conexão possui {{count}} atendimento(s) ativo(s). Transfira-os para outra conexão antes de excluir.",
+          source: "Origem",
+          target: "Destino",
+          activeCount:
+            "{{count}} atendimento(s) ativo(s) na conexão de origem.",
+          deleteWarning:
+            "Se excluir sem transferir, os atendimentos ficarão sem conexão vinculada e não aparecerão nos filtros por conexão.",
+          cancel: "Cancelar",
+          transfer: "Transferir",
+          transferAndDelete: "Transferir e Excluir",
+          deleteWithoutTransfer: "Excluir sem transferir",
+          transferredSuccess:
+            "{{count}} atendimento(s) transferido(s) com sucesso!",
         },
         buttons: {
           add: "Adicionar Conexão",
@@ -500,6 +549,7 @@ const messages = {
           number: "Número do Whatsapp",
           email: "Email",
           contactName: "Nome do Contato",
+          verificationCode: "Código de Verificação",
           florder: "Encomenda",
           extraName: "Nome do campo",
           extraValue: "Valor",
@@ -540,6 +590,8 @@ const messages = {
           orderQueue: "Ordem da fila (Bot)",
           rotate: "Rodízio",
           timeRotate: "Tempo de Rodízio",
+          slaMinutes: "SLA (minutos)",
+          slaMinutesHint: "Tempo máximo de espera antes do ticket ser marcado como SLA atrasado no Kanban",
           greetingMessage: "Mensagem de saudação",
           complationMessage: "Mensagem de conclusão",
           outOfHoursMessage: "Mensagem de fora de expediente",
@@ -647,6 +699,7 @@ const messages = {
           startWork: "Inicio de trabalho",
           endWork: "Fim de trabalho",
           whatsapp: "Conexão Padrão",
+          ramal: "Ramal interno",
           allTicketEnable: "Habilitado",
           allTicketDisable: "Desabilitado",
           allTicket: "Visualizar chamados sem fila",
@@ -836,6 +889,7 @@ const messages = {
           },
           filterUsers: "Filtro por Usuarios",
           filterContacts: "Filtro por Contatos",
+          filterWallet: "Filtro por Carteira",
           ticketsPerPage: "Tickets por página",
         },
         buttons: {
@@ -847,6 +901,15 @@ const messages = {
         closedTicket: {
           closedMessage: "Fechar Ticket Com Mensagem de Despedida",
           closedNotMessage: "Fechar Ticket Sem Mensagem de Despedida",
+        },
+        closing: {
+          title: "Finalizar atendimento",
+          subject: "Assunto do atendimento",
+          subjectRequired: "Informe o assunto do atendimento para finalizar",
+          summary: "Resumo / observações",
+          sendFarewell: "Enviar mensagem de despedida",
+          confirm: "Finalizar atendimento",
+          cancel: "Cancelar",
         },
       },
       transferTicketModal: {
@@ -937,7 +1000,8 @@ const messages = {
           allConnections: "Gerenciar conexões",
           reports: "Relatórios",
           management: "Gerência",
-          metaTemplates: "Templates Meta"
+          metaTemplates: "Templates Meta",
+          whatsappHealth: "Saúde dos Números"
         },
         appBar: {
           user: {
@@ -1040,10 +1104,18 @@ const messages = {
           message: "Resposta",
           save: "Salvar",
           cancel: "Cancelar",
-          geral: "Permitir editar",
+          geral: "Permitir edição por outros",
           add: "Adicionar",
           edit: "Editar",
-          visao: "Permitir visão",
+          visao: "Visível para todos",
+        },
+        scope: {
+          personal: "Pessoal",
+          global: "Global",
+          sharedEdit: "Edição aberta",
+          personalTip: "Visível apenas para você",
+          globalTip: "Visível para todos os usuários",
+          sharedEditTip: "Qualquer usuário pode editar esta resposta",
         },
         table: {
           shortcode: "Atalho",
@@ -1184,6 +1256,16 @@ const messages = {
           confirmation: "Confirmação",
           actions: "Ações",
         },
+        recurrence: {
+          label: "Recorrência",
+          none: "Nenhuma",
+          daily: "Diária",
+          weekly: "Semanal",
+          monthly: "Mensal",
+          endAt: "Repetir até",
+          endAtHelper: "Opcional — sem data, repete indefinidamente",
+          help: "Repete o disparo automaticamente ao fim de cada ciclo (diário, semanal ou mensal).",
+        },
         dialog: {
           new: "Nova Campanha",
           update: "Editar Campanha",
@@ -1230,11 +1312,22 @@ const messages = {
           deleteTitle: "Excluir",
           deleteMessage: "Esta ação não pode ser revertida.",
         },
+        bulk: {
+          selected: "{{count}} selecionada(s)",
+          cancel: "Cancelar",
+          restart: "Reiniciar",
+          delete: "Excluir",
+          confirmTitle: "Confirmar ação em lote",
+          confirmMessage: 'Aplicar "{{action}}" em {{count}} campanha(s)?',
+        },
         toasts: {
           success: "Operação realizada com sucesso",
           cancel: "Campanha cancelada",
           restart: "Campanha reiniciada",
           deleted: "Registro excluído",
+          duplicated: "Campanha duplicada com sucesso!",
+          bulkProcessed: "{{processed}} campanha(s) processada(s)",
+          bulkErrors: "{{count}} campanha(s) com erro",
         },
       },
       campaignReport: {
@@ -1316,6 +1409,7 @@ const messages = {
           color: "Cor",
           greeting: "Mensagem de saudação",
           orderQueue: "Ordenação da fila (bot)",
+          sla: "SLA",
           actions: "Ações",
           ID: "ID",
         },
@@ -1364,6 +1458,97 @@ const messages = {
         },
         searchPlaceholder: "Pesquisar...",
 
+      },
+      closingReport: {
+        title: "Relatório de Fechamento",
+        subtitle: "Selecione os filtros e gere o relatório de fechamento",
+        foundSuffix: "atendimentos fechados encontrados",
+        empty: "Nenhum ticket fechado no período",
+        filters: {
+          startDate: "Data Inicial",
+          endDate: "Data Final",
+          user: "Atendente",
+          queue: "Fila",
+          subject: "Assunto",
+          all: "Todos",
+        },
+        cards: {
+          total: "Total no período",
+          closed: "Fechados",
+          pending: "Pendentes",
+          avgTime: "Tempo médio",
+        },
+        table: {
+          protocol: "Protocolo",
+          contact: "Contato",
+          user: "Atendente",
+          queue: "Fila",
+          status: "Status",
+          subject: "Assunto",
+          summary: "Resumo",
+          dateOpen: "Abertura",
+          dateClose: "Fechamento",
+          duration: "Duração",
+        },
+        buttons: {
+          filter: "Aplicar Filtro",
+          exportCsv: "Exportar CSV",
+        },
+      },
+      metaWebhook: {
+        title: "Webhook Unificado Meta",
+        subtitle:
+          "Configure o webhook do seu app Meta apontando para este servidor",
+        toasts: {
+          copied: "Copiado para a área de transferência",
+          copyError: "Não foi possível copiar",
+        },
+        status: {
+          configured: "Configurado",
+          missing: "Não configurado",
+        },
+        cards: {
+          verifyToken: "Verify token",
+          appSecret: "Assinatura (App Secret)",
+          perConnection: "Conexões c/ token próprio",
+          fields: "Campos assinados",
+        },
+        sections: {
+          endpoints: "Endpoints e verify token",
+          fields: "Campos de assinatura",
+          fieldsHint:
+            "Campos que este backend realmente consome. Os marcados com * precisam ser habilitados manualmente na assinatura de webhook do app no painel da Meta; os demais são assinados automaticamente ao conectar a página/conta.",
+          steps: "Como configurar no app Meta",
+        },
+        labels: {
+          unifiedUrl: "URL do webhook (Facebook + Instagram)",
+          verifyToken: "Verify token (global)",
+          verifyTokenHint:
+            "Valor mascarado por segurança. Se não estiver configurado, defina VERIFY_TOKEN no backend ou um token por conexão.",
+          wabaUrl: "URL do webhook (WhatsApp Business API)",
+          wabaVerifyToken: "Verify token (WhatsApp Business)",
+        },
+        fields: {
+          autoHint: "Assinado automaticamente na conexão (subscribed_apps)",
+          dashboardHint:
+            "Habilite na assinatura de webhook do app no painel da Meta",
+          legend:
+            "* precisa ser habilitado manualmente no painel da Meta. Os demais são assinados automaticamente ao conectar.",
+        },
+        steps: {
+          1: "Acesse developers.facebook.com, abra seu app e vá em Configuração de Webhooks (produto Messenger para Facebook/Instagram ou WhatsApp para a API Oficial).",
+          2: "Clique em \"Editar assinatura\" e cole a URL do webhook exibida acima no campo Callback URL.",
+          3: "No campo Verify token, informe o mesmo token configurado no backend (VERIFY_TOKEN / WABA_WEBHOOK_VERIFY_TOKEN ou o token da conexão).",
+          4: "Salve e verifique — a Meta envia um GET de validação que este backend responde automaticamente.",
+          5: "Na lista de campos de assinatura, marque os campos indicados com * acima (os demais são assinados pela API ao conectar).",
+          6: "Confirme que o App Secret está configurado (META_APP_SECRET ou por conexão) para validação da assinatura X-Hub-Signature-256.",
+        },
+        buttons: {
+          copy: "Copiar",
+        },
+        token: {
+          notSet: "não configurado",
+        },
       },
       queueIntegration: {
         title: "Integrações",
@@ -1535,6 +1720,91 @@ const messages = {
           deleted: "Tag excluído com sucesso.",
         },
       },
+      wallets: {
+        title: "Carteiras de Contatos",
+        subtitle:
+          "Contatos atribuídos a usuários via tag pessoal (#). A carteira define quem vê e atende cada contato.",
+        searchPlaceholder: "Buscar por nome, número ou email...",
+        empty: "Nenhum contato com carteira encontrado.",
+        stats: {
+          contacts: "Contatos com carteira",
+          users: "Usuários com carteira",
+          queues: "Filas envolvidas",
+          withEmail: "Com e-mail",
+        },
+        filters: {
+          allUsers: "Todos os usuários",
+          allQueues: "Todas as filas",
+        },
+        table: {
+          contact: "Contato",
+          user: "Usuário",
+          queue: "Fila",
+          phone: "Telefone",
+          email: "Email",
+          actions: "Ações",
+        },
+        buttons: {
+          view: "Ver contato",
+        },
+      },
+      whatsappHealth: {
+        title: "Saúde dos Números",
+        subtitle:
+          "Qualidade, limite de envio e status das conexões WhatsApp API Oficial (WABA), consultados em tempo real na Meta.",
+        updatedAt: "Atualizado em",
+        empty: "Nenhuma conexão WhatsApp API Oficial (WABA) encontrada.",
+        stats: {
+          total: "Números oficiais",
+          green: "Qualidade verde",
+          attention: "Requer atenção",
+          errors: "Falha na consulta",
+        },
+        labels: {
+          queryError: "Erro na consulta",
+        },
+        quality: {
+          GREEN: "Verde",
+          YELLOW: "Amarelo",
+          RED: "Vermelho",
+        },
+        status: {
+          connected: "Conectado",
+        },
+        tiers: {
+          TIER_50: "50 clientes/24h",
+          TIER_250: "250 clientes/24h",
+          TIER_1K: "1 mil clientes/24h",
+          TIER_10K: "10 mil clientes/24h",
+          TIER_100K: "100 mil clientes/24h",
+          TIER_UNLIMITED: "Ilimitado",
+          TIER_NOT_SET: "Não definido",
+        },
+        nameStatus: {
+          APPROVED: "Aprovado",
+          AVAILABLE_WITHOUT_REVIEW: "Disponível sem revisão",
+          DECLINED: "Recusado",
+          EXPIRED: "Expirado",
+          PENDING_REVIEW: "Em revisão",
+          NONE: "Nenhum",
+        },
+        table: {
+          connection: "Conexão",
+          number: "Número",
+          status: "Status",
+          quality: "Qualidade",
+          messagingLimit: "Limite de envio",
+          nameStatus: "Nome exibido",
+          lastSync: "Última sync",
+        },
+        buttons: {
+          refresh: "Atualizar",
+          syncing: "Atualizando...",
+        },
+        toasts: {
+          synced: "Saúde dos números atualizada.",
+        },
+      },
       tagsKanban: {
         title: "Lanes",
         laneDefault: "Em aberto",
@@ -1571,6 +1841,12 @@ const messages = {
         searchContact: "Buscar contato...",
         addColumns: "+ Adicionar colunas",
         resetColumns: "Redefinir colunas",
+        slaFilter: "SLA atrasado",
+        slaFilterTooltip: "Exibir apenas cards com SLA vencido (janela de 24h expirada ou sem resposta há mais de 24h)",
+        slaBadge: "SLA",
+        slaOverdueTooltip: "SLA vencido",
+        compactMode: "Modo compacto",
+        shortcutsHint: "← → colunas · ↑ ↓ cards · Enter abre · C compacto · / busca",
         dateStart: "Data de início",
         dateEnd: "Data de fim",
         search: "Buscar",
@@ -1681,6 +1957,7 @@ const messages = {
             enableLGPD: "Habilitar tratamento LGPD",
             requiredTag: "Tag obrigatoria para fechar ticket",
             closeTicketOnTransfer: "Fechar ticket ao transferir para outra fila",
+            enableClosingForm: "Tela de fechamento (assunto e resumo ao finalizar)",
             DirectTicketsToWallets: "Mover automaticamente cliente para carteira",
             showNotificationPending: "Mostrar notificação para tickets pendentes"
           },
@@ -1689,6 +1966,16 @@ const messages = {
             AcceptCallWhatsappMessage: "Mensagem para informar que não aceita ligações",
             greetingAcceptedMessage: "Mensagem de Saudação ao aceitar ticket",
             transferMessage: "Mensagem de transferência fila destino",
+          },
+          birthday: {
+            sectionTitle: "Aniversário",
+            enabled: "Enviar mensagem de aniversário automática",
+            connection: "Conexão de envio",
+            defaultConnection: "Conexão padrão",
+            message: "Mensagem de aniversário",
+            variablesHint: "Variáveis: {name} (nome), {firstName} (primeiro nome), {ms} (saudação do dia), {date} (data atual)",
+            preview: "Pré-visualização",
+            previewEmpty: "Configure a mensagem para ver o exemplo aqui",
           },
           LGPD: {
             title: "LGPD",
@@ -1699,6 +1986,49 @@ const messages = {
             obfuscatePhoneUser: "Ofuscar número telefone para usuários",
             enabled: "Habilitado",
             disabled: "Desabilitado",
+          },
+        },
+      },
+      messages: {
+        interactive: {
+          title: "Enviar mensagem interativa",
+          menuItem: "Mensagem Interativa",
+          typeLabel: "Tipo",
+          types: {
+            buttons: "Botões",
+            list: "Lista",
+            ctaUrl: "Botão de URL",
+            pix: "PIX (copia e cola)",
+          },
+          headerLabel: "Título (cabeçalho)",
+          bodyLabel: "Texto da mensagem",
+          bodyPlaceholder: "Digite o texto da mensagem",
+          footerLabel: "Rodapé (opcional)",
+          buttonsTitle: "Botões (máx. 3)",
+          buttonLabel: "Botão",
+          addButton: "Adicionar botão",
+          listButtonLabel: "Texto do botão da lista",
+          listButtonDefault: "Ver opções",
+          sectionLabel: "Seção",
+          rowLabel: "Item",
+          rowDescriptionLabel: "Descrição (opcional)",
+          addRow: "Adicionar item",
+          addSection: "Adicionar seção",
+          urlButtonText: "Texto do botão",
+          urlLabel: "URL",
+          pixKeyLabel: "Chave / código PIX",
+          pixHint:
+            "A API Oficial não possui botão de copiar — a chave será enviada no texto da mensagem para o cliente copiar.",
+          preview: "Pré-visualização",
+          cancel: "Cancelar",
+          send: "Enviar",
+          success: "Mensagem interativa enviada com sucesso!",
+          errors: {
+            bodyRequired: "Informe o texto da mensagem.",
+            buttonsRequired: "Informe ao menos 1 botão.",
+            sectionsRequired: "Informe ao menos 1 item na lista.",
+            urlInvalid: "Informe texto do botão e uma URL válida (http/https).",
+            pixKeyRequired: "Informe a chave PIX.",
           },
         },
       },
@@ -1783,6 +2113,20 @@ const messages = {
           delete: "Excluir",
           cancel: "Cancelar",
         },
+      },
+      triggerFlowModal: {
+        menuItem: "Disparar Fluxo",
+        title: "Disparar fluxo neste atendimento",
+        selectLabel: "Fluxo",
+        selectRequired: "Selecione um fluxo para disparar",
+        empty: "Nenhum fluxo ativo cadastrado para esta empresa.",
+        alreadyInFlow:
+          "Este ticket já está executando o fluxo {{flow}}. Confirme para substituir pelo fluxo selecionado.",
+        draft: "rascunho",
+        confirm: "Disparar",
+        confirmOverwrite: "Substituir e disparar",
+        cancel: "Cancelar",
+        success: "Fluxo disparado com sucesso",
       },
       confirmationModal: {
         buttons: {
@@ -1934,6 +2278,102 @@ const messages = {
         },
         empty: "Nenhum template encontrado.",
       },
+      apiDocs: {
+        title: "API Externa",
+        subtitle:
+          "Documentação e playground dos endpoints expostos pela API externa (autenticação por token Bearer).",
+        instructionsTitle: "Instruções",
+        instructionsBody:
+          "Utilize o token da empresa (COMPANY_TOKEN) como Bearer em todas as chamadas. Em desenvolvimento, cadastre o mesmo token na conexão em 'Conexões' > editar. O número não deve ter máscara ou caracteres especiais: Código do País + DDD + Número (ex.: 5511999999999).",
+        tokenLabel: "Token da API (COMPANY_TOKEN)",
+        copyToken: "Copiar token",
+        copied: "Copiado!",
+        tabs: {
+          messages: "Mensagens",
+          contacts: "Contatos",
+          admin: "Administração",
+          history: "Histórico",
+        },
+        labels: {
+          requestExample: "Exemplo de Requisição",
+          testRequest: "Testar",
+          sending: "Enviando...",
+          response: "Resposta",
+          status: "Status",
+          duration: "Tempo",
+          required: "obrigatório",
+          bodyJson: "Body (JSON)",
+          invalidJson: "JSON do body inválido",
+          chooseFile: "Escolher arquivo",
+          emptyHistory: "Nenhuma requisição executada nesta sessão.",
+          clearHistory: "Limpar histórico",
+          adminWarning:
+            "Endpoints administrativos globais (mesmo COMPANY_TOKEN). Use com cautela: ações de escrita afetam todas as empresas.",
+        },
+        history: {
+          time: "Hora",
+          method: "Método",
+          path: "Rota",
+          status: "Status",
+          duration: "Duração",
+        },
+        actions: {
+          list: "Listar {{resource}}",
+          show: "Detalhar {{resource}}",
+          create: "Criar {{resource}}",
+          update: "Atualizar {{resource}}",
+          delete: "Excluir {{resource}}",
+        },
+        resources: {
+          plans: "planos",
+          companies: "empresas",
+          helps: "ajuda",
+          partners: "parceiros",
+          invoices: "faturas",
+          users: "usuários",
+        },
+        endpoints: {
+          sendText: {
+            title: "Enviar mensagem de texto",
+            description:
+              "Cria/atualiza o contato, abre ou reutiliza o ticket e envia texto. Flags: sendSignature (prefixa nome do usuário), closeTicket (fecha após envio), noRegister (envia sem criar ticket).",
+          },
+          sendMedia: {
+            title: "Enviar mensagem com mídia",
+            description:
+              "Mesmo endpoint de texto, em multipart/form-data. Campo de arquivo: 'medias'. 'body' vira a legenda.",
+          },
+          sendLinkImage: {
+            title: "Enviar imagem por URL",
+            description:
+              "Envia imagem a partir de uma URL pública ('url' + 'caption') e fecha o ticket ao final.",
+          },
+          checkNumber: {
+            title: "Verificar número no WhatsApp",
+            description:
+              "Retorna existsInWhatsapp, number e numberFormatted (JID) se o número existir no WhatsApp.",
+          },
+          whatsapps: {
+            title: "Listar conexões",
+            description:
+              "Retorna as conexões WhatsApp da empresa: id, nome, status, número e se é a conexão padrão.",
+          },
+          syncContact: {
+            title: "Sincronizar contato",
+            description:
+              "Cria ou atualiza contato (companyId obrigatório no body). Aceita 'tagIds' (array) ou 'tags' (nomes separados por vírgula) e 'silentMode'.",
+          },
+          deleteContact: {
+            title: "Excluir contato",
+            description:
+              "Remove o contato pelo ID. companyId obrigatório (query ou body).",
+          },
+        },
+        toasts: {
+          success: "Requisição executada com sucesso!",
+          error: "Falha na requisição. Verifique a resposta abaixo.",
+        },
+      },
       backendErrors: {
         ERR_NO_OTHER_WHATSAPP: "Deve haver pelo menos um WhatsApp padrão.",
         ERR_NO_DEF_WAPP_FOUND:
@@ -1970,7 +2410,31 @@ const messages = {
         ERR_WAPP_GREETING_REQUIRED:
           "A mensagem de saudação é obrigatório quando há mais de uma fila.",
         ERR_OUT_OF_HOURS: "Fora do Horário de Expediente!",
+        ERR_TICKET_CLOSED: "Este ticket já está fechado.",
+        ERR_FLOW_INVALID_ID: "Fluxo inválido.",
+        ERR_FLOW_NOT_FOUND: "Fluxo não encontrado.",
+        ERR_FLOW_INACTIVE: "Este fluxo está inativo.",
+        ERR_FLOW_EMPTY: "Este fluxo não possui blocos.",
+        ERR_TICKET_ALREADY_IN_FLOW:
+          "Este ticket já está executando um fluxo.",
+        ERR_FLOW_NOT_ALLOWED_FOR_GROUP:
+          "Não é possível disparar fluxo em grupos.",
+        ERR_FLOW_CHANNEL_NOT_SUPPORTED:
+          "O canal deste ticket não suporta disparo de fluxo.",
+        ERR_FLOW_TRIGGER_FAILED: "Falha ao executar o fluxo neste ticket.",
       },
+    },
+    // Webchat público (/webchat/:token) — página sem login para visitantes
+    publicWebchat: {
+      title: "Atendimento online",
+      subtitle: "Converse conosco em tempo real",
+      askName: "Para começar, informe seu nome:",
+      nameLabel: "Seu nome",
+      start: "Iniciar conversa",
+      inputPlaceholder: "Digite sua mensagem...",
+      invalidLink: "Link de atendimento inválido ou expirado.",
+      copyLink: "Copiar link do WebChat",
+      linkCopied: "Link do WebChat copiado!",
     },
   },
 };

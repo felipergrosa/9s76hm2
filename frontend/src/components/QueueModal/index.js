@@ -131,6 +131,12 @@ const QueueSchema = Yup.object().shape({
   greetingMessage: Yup.string(),
   orderQueue: Yup.number().min(1, "Ordem deve ser maior que 0").required("Ordem da fila é obrigatória"),
   tempoRoteador: Yup.number().min(0, "Tempo deve ser positivo"),
+  // SLA opcional: vazio = fila sem SLA ("" vira null antes da validação)
+  slaMinutes: Yup.number()
+    .transform((value, originalValue) => (originalValue === "" ? null : value))
+    .integer("SLA deve ser um número inteiro")
+    .min(0, "SLA deve ser positivo")
+    .nullable(),
   maxFilesPerSession: Yup.number().min(1, "Mínimo 1 arquivo").max(10, "Máximo 10 arquivos"),
   autoSendStrategy: Yup.string().oneOf(["none", "on_enter", "on_request", "manual"], "Estratégia inválida"),
   confirmationTemplate: Yup.string(),
@@ -179,7 +185,8 @@ const QueueModal = ({ open, onClose, queueId, onEdit }) => {
     autoSendStrategy: "none",
     confirmationTemplate: "",
     maxFilesPerSession: 3,
-    ragCollection: ""
+    ragCollection: "",
+    slaMinutes: ""
   };
 
   // Estados
@@ -308,7 +315,9 @@ const QueueModal = ({ open, onClose, queueId, onEdit }) => {
           maxFilesPerSession: data.maxFilesPerSession || 3,
           autoSendStrategy: data.autoSendStrategy || "none",
           confirmationTemplate: data.confirmationTemplate || "",
-          ragCollection: data.ragCollection || ""
+          ragCollection: data.ragCollection || "",
+          // null/0 => campo vazio (sem SLA por fila)
+          slaMinutes: data.slaMinutes ?? ""
         }));
 
         if (isArray(data.schedules) && data.schedules.length > 0) {
@@ -809,6 +818,26 @@ const QueueModal = ({ open, onClose, queueId, onEdit }) => {
                           <MenuItem value="30">30 minutos</MenuItem>
                         </Field>
                       </FormControl>
+                    </Grid>
+
+                    {/* SLA da fila em minutos — usado pelo badge "SLA atrasado" do Kanban */}
+                    <Grid item xs={12} md={4}>
+                      <Field
+                        as={TextField}
+                        label={i18n.t("queueModal.form.slaMinutes")}
+                        name="slaMinutes"
+                        type="number"
+                        error={touched.slaMinutes && Boolean(errors.slaMinutes)}
+                        helperText={
+                          touched.slaMinutes && errors.slaMinutes
+                            ? errors.slaMinutes
+                            : i18n.t("queueModal.form.slaMinutesHint")
+                        }
+                        variant="outlined"
+                        margin="dense"
+                        fullWidth
+                        inputProps={{ min: 0 }}
+                      />
                     </Grid>
 
                     {showIntegrations && (

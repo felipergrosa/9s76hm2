@@ -112,6 +112,7 @@ const ContactSchema = Yup.object().shape({
 			if (cleanValue.length === 14) return isValidCNPJ(cleanValue);
 			return false;
 		}),
+	verificationCode: Yup.string().nullable(), // Código de Verificação (referência Fluxoo)
 	representativeCode: Yup.string().nullable(),
 	city: Yup.string().nullable(),
 	instagram: Yup.string().nullable(),
@@ -123,6 +124,7 @@ const ContactSchema = Yup.object().shape({
 	segment: Yup.string().nullable(),
 	channels: Yup.array().of(Yup.string()).nullable(),
 	dtUltCompra: Yup.date().nullable().transform((value, originalValue) => originalValue === "" ? null : value),
+	birthdate: Yup.date().nullable().transform((value, originalValue) => originalValue === "" ? null : value),
 	vlUltCompra: Yup.mixed().nullable(),
 	bzEmpresa: Yup.string().nullable(),
 	region: Yup.string().nullable(),
@@ -295,6 +297,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 		disableBot: false,
 		lgpdAcceptedAt: "",
 		cpfCnpj: "",
+		verificationCode: "", // Código de Verificação (referência Fluxoo)
 		representativeCode: "",
 		city: "",
 		instagram: "",
@@ -308,6 +311,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 		contactName: "",
 		florder: false,
 		dtUltCompra: "",
+		birthdate: "",
 		vlUltCompra: "",
 		bzEmpresa: "",
 		region: "",
@@ -577,7 +581,8 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 			segment: values.segment?.trim?.() || values.segment || null,
 			channel: values.channel?.trim?.() || values.channel || null,
 			contactName: values.contactName?.trim?.() || values.contactName || null,
-			bzEmpresa: values.bzEmpresa?.trim?.() || values.bzEmpresa || null
+			bzEmpresa: values.bzEmpresa?.trim?.() || values.bzEmpresa || null,
+			verificationCode: values.verificationCode?.trim?.() || null
 		};
 
 		try {
@@ -798,6 +803,23 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 												);
 											}}
 										</Field>
+									</Grid>
+									{/* Código de Verificação do contato (referência Fluxoo) — texto livre */}
+									<Grid item xs={12} md={6}>
+										<Field
+											as={TextField}
+											label={i18n.t("contactModal.form.verificationCode")}
+											name="verificationCode"
+											variant="outlined"
+											margin="dense"
+											fullWidth
+											InputLabelProps={{
+												shrink: true,
+											}}
+											disabled={!canEditFields}
+											error={touched.verificationCode && Boolean(errors.verificationCode)}
+											helperText={touched.verificationCode && errors.verificationCode}
+										/>
 									</Grid>
 									<Grid item xs={12} md={6}>
 										<Autocomplete
@@ -1055,6 +1077,22 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 											as={TextField}
 											label="Última Compra"
 											name="dtUltCompra"
+											type="date"
+											InputLabelProps={{
+												shrink: true,
+											}}
+											variant="outlined"
+											margin="dense"
+											disabled={!canEditFields}
+											fullWidth
+										/>
+									</Grid>
+									{/* Data de nascimento — alimenta a Config. Aniversário (parabéns automático) */}
+									<Grid item xs={12} md={6}>
+										<Field
+											as={TextField}
+											label="Data de Nascimento"
+											name="birthdate"
 											type="date"
 											InputLabelProps={{
 												shrink: true,

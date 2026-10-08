@@ -44,6 +44,7 @@ import TabPanel from "../TabPanel";
 import TicketsQueueSelect from "../TicketsQueueSelect";
 import { TagsFilter } from "../TagsFilter";
 import { UsersFilter } from "../UsersFilter";
+import { WalletsFilter } from "../WalletsFilter";
 import { StatusFilter } from "../StatusFilter";
 import { WhatsappsFilter } from "../WhatsappsFilter";
 import { Button, Snackbar } from "@material-ui/core";
@@ -835,6 +836,8 @@ const TicketsManagerTabs = () => {
   const [selectedQueueIds, setSelectedQueueIds] = useState(userQueueIds || []);
   const [selectedTags, setSelectedTags] = useState([]);
   const [selectedUsers, setSelectedUsers] = useState([]);
+  // IDs de usuários selecionados no filtro "Carteira" (dono da tag pessoal do contato)
+  const [selectedWallets, setSelectedWallets] = useState([]);
   const [selectedWhatsapp, setSelectedWhatsapp] = useState([]);
   const [forceSearch, setForceSearch] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState([]);
@@ -1040,6 +1043,25 @@ const TicketsManagerTabs = () => {
     }, 500);
   };
 
+  const handleSelectedWallets = (selecteds) => {
+    const wallets = selecteds.map((t) => t.id);
+
+    if (filterTimeoutRef.current) {
+      clearTimeout(filterTimeoutRef.current);
+    }
+
+    if (wallets.length === 0) {
+      setSelectedWallets([]);
+      setForceSearch(prev => !prev);
+    } else if (tab !== "search") {
+      setTab("search");
+    }
+    filterTimeoutRef.current = setTimeout(() => {
+      setSelectedWallets(wallets);
+      setForceSearch(prev => !prev);
+    }, 500);
+  };
+
   const handleSelectedWhatsapps = (selecteds) => {
     const whatsapp = selecteds.map((t) => t.id);
 
@@ -1179,6 +1201,8 @@ const TicketsManagerTabs = () => {
             {profile === "admin" && (
               <>
                 <UsersFilter onFiltered={handleSelectedUsers} />
+                {/* Filtro por carteira segue o mesmo gate do filtro de usuários */}
+                <WalletsFilter onFiltered={handleSelectedWallets} />
               </>
             )}
           </>
@@ -1550,6 +1574,7 @@ const TicketsManagerTabs = () => {
                 showAll={showAllTickets}
                 tags={selectedTags}
                 users={selectedUsers}
+                walletUserIds={selectedWallets}
                 selectedQueueIds={selectedQueueIds}
                 whatsappIds={selectedWhatsapp}
                 forceSearch={forceSearch}

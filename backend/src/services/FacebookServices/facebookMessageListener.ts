@@ -36,6 +36,7 @@ import { IConnections, INodes } from "../WebhookService/DispatchWebHookService";
 
 import { differenceInMilliseconds } from "date-fns";
 import { ActionsWebhookFacebookService } from "./WebhookFacebookServices/ActionsWebhookFacebookService";
+import { processMetaAutomationEvent } from "./MetaAutomationService";
 import { get } from "http";
 import { WebhookModel } from "../../models/Webhook";
 import { is } from "bluebird";
@@ -575,6 +576,18 @@ export const handleMessage = async (
   channel: string,
   companyId: any
 ): Promise<any> => {
+  // Referral de link m.me?ref= : chega em messaging[].referral (thread já
+  // existente — evento sem `message`) ou em postback.referral (botão
+  // "Começar"). A automação dispara no finally, cobrindo todos os caminhos.
+  const referralRef: string | null =
+    webhookEvent.referral?.ref ||
+    webhookEvent.postback?.referral?.ref ||
+    null;
+
+  // Sessão Meta resolvida dentro do bloco de mensagem — precisa ficar
+  // acessível no finally (referral puro não tem `message`).
+  let getSession: Whatsapp | null = null;
+
   try {
     // Postbacks (cliques em botões/quick replies) chegam sem `message` —
     // normaliza para seguir o mesmo fluxo de mensagem de texto.
@@ -641,7 +654,7 @@ export const handleMessage = async (
         await cacheLayer.set(`contacts:${contact.id}:unreads`, `${unreadCount}`);
       }
 
-      const getSession = await Whatsapp.findOne({
+      getSession = await Whatsapp.findOne({
         where: {
           facebookPageUserId: token.facebookPageUserId
         },
@@ -756,6 +769,36 @@ export const handleMessage = async (
       await ticket.update({
         lastMessage: message.text
       });
+
+      // Contexto Meta do evento (reply de story, menção em story via
+      // attachment, referral m.me) — merge em dataWebhook sem sobrescrever
+      // o restante; fica disponível para o fluxo/automação consumirem.
+      const storyReplyCtx = webhookEvent.message?.reply_to?.story;
+      const hasStoryMention =
+        Array.isArray(webhookEvent.message?.attachments) &&
+        webhookEvent.message.attachments.some(
+          (att: any) => att?.type === "story_mention"
+        );
+      let metaContext: Record<string, any> | null = null;
+      if (storyReplyCtx) {
+        metaContext = {
+          type: "story_reply",
+          storyId: storyReplyCtx.id,
+          ...(storyReplyCtx.url ? { storyUrl: storyReplyCtx.url } : {})
+        };
+      } else if (hasStoryMention) {
+        metaContext = { type: "story_mention" };
+      }
+      if (referralRef) {
+        metaContext = metaContext
+          ? { ...metaContext, ref: referralRef }
+          : { type: "referral", ref: referralRef };
+      }
+      if (metaContext) {
+        await ticket.update({
+          dataWebhook: { ...(ticket.dataWebhook || {}), metaContext }
+        });
+      }
 
       try {
         if (!fromMe) {
@@ -959,11 +1002,15 @@ export const handleMessage = async (
       let isMenu = false;
       let isWaitReply = false;
       let nodeWaitReply: any = null;
+      let nodeAwaitOption: any = null;
       if (flow) {
         const lastNode = flow.flow["nodes"].find((node: any) => node.id === ticket.lastFlowId);
         isMenu = lastNode?.type === "menu";
         isWaitReply = lastNode?.type === "waitReply";
         if (isWaitReply) nodeWaitReply = lastNode;
+        // Nó "quickReplies" (botões Meta) ou "menu" aguardando escolha:
+        // payload de postback/quick_reply casa com data.options[i].
+        if (lastNode?.type === "quickReplies" || isMenu) nodeAwaitOption = lastNode;
       }
 
 
@@ -1053,6 +1100,90 @@ export const handleMessage = async (
         return;
       }
 
+      // Payload estruturado (postback ou quick_reply) com o fluxo aguardando
+      // num nó "quickReplies"/"menu": casa data.options[i] (ou arrayOption do
+      // menu) por payload/label/value/number e retoma pela edge "a{i+1}" —
+      // mesmo contrato do resume do waitReply/menu numérico. Sem match ou sem
+      // edge → cai no fluxo normal de mensagem abaixo.
+      const payloadOption =
+        webhookEvent.postback?.payload ||
+        webhookEvent.message?.quick_reply?.payload ||
+        null;
+
+      if (!fromMe && nodeAwaitOption && payloadOption) {
+        const nodesPl: INodes[] = flow.flow["nodes"];
+        const connectionsPl: IConnections[] = flow.flow["connections"];
+        const dataPl = nodeAwaitOption.data || {};
+        const optionsPl: any[] = Array.isArray(dataPl.options)
+          ? dataPl.options
+          : Array.isArray(dataPl.arrayOption)
+            ? dataPl.arrayOption
+            : [];
+
+        const optIdx = optionsPl.findIndex((opt: any) =>
+          [opt?.payload, opt?.label, opt?.value, opt?.number]
+            .filter(v => v !== undefined && v !== null)
+            .map(String)
+            .includes(String(payloadOption))
+        );
+
+        if (optIdx >= 0) {
+          const edgePl = connectionsPl.find(
+            (c: any) =>
+              c.source === nodeAwaitOption.id &&
+              c.sourceHandle === `a${optIdx + 1}`
+          );
+          const resumeTargetPl = edgePl?.target;
+
+          if (resumeTargetPl) {
+            const dwPl: any = { ...(ticket.dataWebhook || {}) };
+            dwPl.resumeToken = null;
+            dwPl.resumeNodeId = null;
+            dwPl.resumeTimeoutMessage = null;
+
+            // Espelha o waitReply: guarda a escolha em variável do fluxo
+            const varKeyPl = dataPl.variable || dataPl.answerKey;
+            if (varKeyPl) {
+              dwPl.variables = {
+                ...(dwPl.variables || {}),
+                [varKeyPl]:
+                  optionsPl[optIdx]?.label ||
+                  optionsPl[optIdx]?.value ||
+                  String(payloadOption)
+              };
+            }
+
+            await ticket.update({
+              lastFlowId: resumeTargetPl,
+              dataWebhook: dwPl
+            });
+
+            const mountDataContact = {
+              number: contact.number,
+              name: contact.name,
+              email: contact.email
+            };
+
+            await ActionsWebhookFacebookService(
+              getSession,
+              parseInt(ticket.flowStopped),
+              ticket.companyId,
+              nodesPl,
+              connectionsPl,
+              resumeTargetPl,
+              dwPl,
+              "",
+              "",
+              "",
+              ticket.id,
+              mountDataContact
+            );
+
+            return;
+          }
+        }
+      }
+
       if (
         !ticket.fromMe &&
         isMenu &&
@@ -1135,6 +1266,27 @@ export const handleMessage = async (
     // unhandled rejection (ERR_HTTP_HEADERS_SENT no Express). Logar e
     // engolir é o comportamento correto aqui.
     logger.error(`[facebookMessageListener] handleMessage falhou: ${error?.message || error}`);
+  } finally {
+    // Automação Meta por referral (m.me?ref=): dispara DEPOIS do
+    // processamento normal — o finally cobre os early returns (resume de
+    // fluxo, LGPD, NPS) e o evento de referral puro (sem `message`).
+    // Best-effort: falha vira warn, nunca derruba o handler.
+    if (referralRef) {
+      try {
+        await processMetaAutomationEvent({
+          companyId,
+          whatsappId: getSession?.id || token.id,
+          channel: getSession?.channel || token.channel || channel,
+          trigger: "referral_ref",
+          ref: referralRef,
+          senderId: webhookEvent.sender?.id
+        });
+      } catch (errRef: any) {
+        logger.warn(
+          `[facebookMessageListener] Automação referral_ref falhou (ref=${referralRef}): ${errRef?.message || errRef}`
+        );
+      }
+    }
   }
 };
 

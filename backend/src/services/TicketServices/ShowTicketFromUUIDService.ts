@@ -67,7 +67,8 @@ const ShowTicketUUIDService = async (uuid: string,
           "fantasyName",
           "foundationDate",
           "creditLimit",
-          "remoteJid"
+          "remoteJid",
+          "verificationCode"
         ],
         include: [
           "extraInfo",

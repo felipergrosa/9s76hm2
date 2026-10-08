@@ -11,7 +11,8 @@ import {
   Menu,
   MenuItem,
   Divider,
-  Box
+  Box,
+  Chip
 } from "@material-ui/core";
 import SearchIcon from "@material-ui/icons/Search";
 import FilterListIcon from "@material-ui/icons/FilterList";
@@ -206,10 +207,10 @@ const useStyles = makeStyles((theme) => ({
   }
 }));
 
-const MessageItem = ({ 
-  msg, index, classes, expanded, onToggle, onSend, onCopy, 
-  onEdit, onClone, canEdit, onSendMessage, setDeletingMessage, 
-  setConfirmModalOpen, contact, ticket, user 
+const MessageItem = ({
+  msg, index, classes, expanded, onToggle, onSend, onCopy,
+  onEdit, onClone, canEdit, canDelete, onSendMessage, setDeletingMessage,
+  setConfirmModalOpen, contact, ticket, user
 }) => {
   const itemColor = msg.color || "#6B7280";
   const bgColor = hexToAlpha(itemColor, 0.08);
@@ -243,27 +244,58 @@ const MessageItem = ({
               <AttachFileIcon style={{ fontSize: 14, color: '#10B981', transform: 'rotate(45deg)' }} />
             </Tooltip>
           )}
+          {/* Indicadores de compartilhamento: visão define Pessoal/Global;
+              "geral" indica que outros usuários podem editar o conteúdo */}
+          <Tooltip title={msg.visao ? i18n.t("quickMessages.scope.globalTip") : i18n.t("quickMessages.scope.personalTip")}>
+            <Chip
+              size="small"
+              label={msg.visao ? i18n.t("quickMessages.scope.global") : i18n.t("quickMessages.scope.personal")}
+              style={{
+                height: 18,
+                fontSize: 10,
+                fontWeight: 700,
+                backgroundColor: msg.visao ? 'rgba(59, 130, 246, 0.12)' : 'rgba(107, 114, 128, 0.12)',
+                color: msg.visao ? '#3B82F6' : '#6B7280'
+              }}
+            />
+          </Tooltip>
+          {msg.geral && (
+            <Tooltip title={i18n.t("quickMessages.scope.sharedEditTip")}>
+              <Chip
+                size="small"
+                label={i18n.t("quickMessages.scope.sharedEdit")}
+                style={{
+                  height: 18,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                  color: '#10B981'
+                }}
+              />
+            </Tooltip>
+          )}
         </div>
         <div className={classes.actionsArea}>
+          {/* Edição segue a flag "geral"; exclusão continua restrita a dono/admin */}
           {canEdit && (
-            <>
-              <Tooltip title="Editar">
-                <IconButton className={classes.actionIcon} onClick={onEdit}>
-                  <EditIcon />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Excluir">
-                <IconButton 
-                  className={classes.actionIcon} 
-                  onClick={() => {
-                    setDeletingMessage(msg);
-                    setConfirmModalOpen(true);
-                  }}
-                >
-                  <DeleteOutlineIcon style={{ color: '#d33' }} />
-                </IconButton>
-              </Tooltip>
-            </>
+            <Tooltip title="Editar">
+              <IconButton className={classes.actionIcon} onClick={onEdit}>
+                <EditIcon />
+              </IconButton>
+            </Tooltip>
+          )}
+          {canDelete && (
+            <Tooltip title="Excluir">
+              <IconButton
+                className={classes.actionIcon}
+                onClick={() => {
+                  setDeletingMessage(msg);
+                  setConfirmModalOpen(true);
+                }}
+              >
+                <DeleteOutlineIcon style={{ color: '#d33' }} />
+              </IconButton>
+            </Tooltip>
           )}
           <Tooltip title="Clonar">
             <IconButton className={classes.actionIcon} onClick={onClone}>
@@ -519,7 +551,14 @@ const QuickMessagesPanel = ({ onSendMessage, onEditMessage, showHeader = false, 
     }
   };
 
+  // Edição: admin/super, dono ou resposta com edição compartilhada (geral=true)
   const canEdit = (message) => {
+    const isAdmin = user.profile === "admin" || user.super === true;
+    return isAdmin || message.userId === user.id || message.geral === true;
+  };
+
+  // Exclusão é mais restrita que edição: apenas dono ou admin
+  const canDelete = (message) => {
     const isAdmin = user.profile === "admin" || user.super === true;
     return isAdmin || message.userId === user.id;
   };
@@ -651,6 +690,7 @@ const QuickMessagesPanel = ({ onSendMessage, onEditMessage, showHeader = false, 
               onCopy={() => handleCopy(msg.message)}
               onEdit={() => handleEdit(msg)}
               canEdit={canEdit(msg)}
+              canDelete={canDelete(msg)}
               onSendMessage={onSendMessage}
               setDeletingMessage={setDeletingMessage}
               setConfirmModalOpen={setConfirmModalOpen}
@@ -759,6 +799,7 @@ const QuickMessagesPanel = ({ onSendMessage, onEditMessage, showHeader = false, 
                                   onEdit={() => handleEdit(msg)}
                                   onClone={() => handleClone(msg)}
                                   canEdit={canEdit(msg)}
+                                  canDelete={canDelete(msg)}
                                   onSendMessage={onSendMessage}
                                   setDeletingMessage={setDeletingMessage}
                                   setConfirmModalOpen={setConfirmModalOpen}

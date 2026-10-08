@@ -25,6 +25,7 @@ interface QueueData {
   maxFilesPerSession?: number;
   ragCollection?: string;
   folderId?: number | null;
+  slaMinutes?: number | null;
 }
 
 const UpdateQueueService = async (
@@ -32,7 +33,7 @@ const UpdateQueueService = async (
   queueData: QueueData,
   companyId: number
 ): Promise<Queue> => {
-  const { color, name, chatbots } = queueData;
+  const { color, name, chatbots, slaMinutes } = queueData;
 
   const queueSchema = Yup.object().shape({
     name: Yup.string()
@@ -72,11 +73,16 @@ const UpdateQueueService = async (
           }
           return true;
         }
-      )
+      ),
+    // SLA em minutos: inteiro >= 0 ou nulo (0/null = fila sem SLA)
+    slaMinutes: Yup.number()
+      .integer("ERR_QUEUE_INVALID_SLA")
+      .min(0, "ERR_QUEUE_INVALID_SLA")
+      .nullable()
   });
 
   try {
-    await queueSchema.validate({ color, name });
+    await queueSchema.validate({ color, name, slaMinutes });
   } catch (err: any) {
     throw new AppError(err.message);
   }

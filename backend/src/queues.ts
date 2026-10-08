@@ -63,6 +63,7 @@ import { buildOfficialPreviewData } from "./utils/officialMessagePreview";
 import { setupEmailCampaignProcessors, scheduleEmailCampaignVerification } from "./queues/EmailCampaignQueue";
 import { setupDripSequenceProcessors, scheduleDripSequenceVerification } from "./queues/DripSequenceQueue";
 import { setupFlowResumeProcessors } from "./queues/FlowResumeQueue";
+import { setupMetaAutomationProcessors } from "./queues/MetaAutomationQueue";
 import { startOfficialWebhookQueue } from "./queues/OfficialWebhookQueue";
 import runMetaTokenHealthCheck from "./jobs/MetaTokenHealthCheckJob";
 
@@ -192,6 +193,9 @@ interface CampaignData {
   userId: number | null;
   userIds: string | null;
   status: string;
+  scheduledAt: Date | string | null;
+  recurrence: string | null;
+  recurrenceEndAt: Date | string | null;
   confirmation: boolean;
   dispatchStrategy: string | null;
   allowedWhatsappIds: string | null;
@@ -825,6 +829,9 @@ function serializeCampaign(campaign: any): CampaignData {
     userId: campaign.userId,
     userIds: campaign.userIds,
     status: campaign.status,
+    scheduledAt: campaign.scheduledAt,
+    recurrence: campaign.recurrence,
+    recurrenceEndAt: campaign.recurrenceEndAt,
     confirmation: campaign.confirmation,
     dispatchStrategy: campaign.dispatchStrategy,
     allowedWhatsappIds: campaign.allowedWhatsappIds,
@@ -1188,6 +1195,7 @@ function getProcessedMessage(msg: string, variables: any[], contact: any) {
       "segmento": "segment",
       "cnpj-cpf": "cpfCnpj",
       "codigo-representante": "representativeCode",
+      "codigo-verificacao": "verificationCode",
     };
     if (contact && typeof contact === 'object') {
       Object.entries(aliasMap).forEach(([alias, key]) => {
@@ -1632,6 +1640,100 @@ function resetBackoffOnSuccess(whatsappId: number) {
   }
 }
 
+// =============================================================================
+// Recorrência de campanhas (referência Fluxoo): none | daily | weekly | monthly
+// Ao final de um ciclo completo, a campanha recorrente volta a PROGRAMADA com
+// scheduledAt no próximo slot — o cron handleVerifyCampaigns faz o resto.
+// =============================================================================
+
+// Avança `base` em um ciclo de recorrência preservando o horário do dia.
+// Se o slot calculado já passou (ex.: campanha disparou com dias de atraso),
+// continua avançando até o próximo slot futuro. Retorna null se a
+// recorrência for inválida/"none".
+function getNextRecurrenceSlot(
+  recurrence: string,
+  base: Date | string | null
+): Date | null {
+  const unitMap: Record<string, moment.unitOfTime.DurationConstructor> = {
+    daily: "day",
+    weekly: "week",
+    monthly: "month"
+  };
+  const unit = unitMap[recurrence];
+  if (!unit) return null;
+
+  const baseMoment = moment(base);
+  const next = (baseMoment.isValid() ? baseMoment : moment()).clone();
+  // Guard de segurança contra loop infinito em dados corrompidos
+  let guard = 0;
+  do {
+    next.add(1, unit);
+    guard += 1;
+  } while (!next.isAfter(moment()) && guard < 5000);
+  return next.toDate();
+}
+
+// Decide o desfecho de um ciclo de disparo:
+// - recorrente dentro do limite → volta a PROGRAMADA no próximo slot
+// - caso contrário → FINALIZADA
+// A mudança de status é condicionada a status='EM_ANDAMENTO' (claim atômico)
+// para não sobrescrever cancelamento manual feito durante o disparo e para
+// tolerar chamadas concorrentes de verifyAndFinalizeCampaign.
+async function finalizeCampaignRun(campaign: any): Promise<void> {
+  const campaignId = Number(campaign?.id);
+  if (!campaignId) return;
+
+  // Recarrega campos mínimos: `campaign` pode ser o objeto serializado do
+  // job (campaignData), que pode estar desatualizado em relação ao banco.
+  const fresh = await Campaign.findByPk(campaignId, {
+    attributes: ["id", "status", "scheduledAt", "recurrence", "recurrenceEndAt"]
+  });
+  if (!fresh || fresh.status !== "EM_ANDAMENTO") {
+    // Já cancelada/finalizada/reagendada por outro caminho — não mexe
+    if (fresh) campaign.status = fresh.status;
+    return;
+  }
+
+  const nextSlot = getNextRecurrenceSlot(fresh.recurrence, fresh.scheduledAt);
+  // recurrenceEndAt passado/em igualdade ao próximo slot → encerra a série
+  const hasNextCycle =
+    !!nextSlot &&
+    (!fresh.recurrenceEndAt ||
+      !moment(nextSlot).isAfter(moment(fresh.recurrenceEndAt)));
+
+  if (hasNextCycle) {
+    const [affected] = await Campaign.update(
+      { status: "PROGRAMADA", scheduledAt: nextSlot, completedAt: null },
+      { where: { id: campaignId, status: "EM_ANDAMENTO" } }
+    );
+    if (affected === 0) return; // outro fluxo alterou o status primeiro
+
+    // Remove os disparos do ciclo encerrado para que o próximo ciclo reenvie
+    // a todos os contatos — o findOrCreate em PrepareContact pularia os
+    // registros já entregues e o ciclo novo finalizaria sem enviar nada.
+    // Obs.: o relatório detalhado passa a refletir apenas o último ciclo.
+    await CampaignShipping.destroy({ where: { campaignId } });
+
+    invalidateCampaignCache(campaignId);
+    campaign.status = "PROGRAMADA";
+    campaign.scheduledAt = nextSlot;
+    campaign.completedAt = null;
+    logger.info(
+      `[verifyAndFinalizeCampaign] Campanha recorrente ${campaignId} reagendada (${fresh.recurrence}) para ${moment(nextSlot).format("YYYY-MM-DD HH:mm")}`
+    );
+    return;
+  }
+
+  const [affected] = await Campaign.update(
+    { status: "FINALIZADA", completedAt: moment().toDate() },
+    { where: { id: campaignId, status: "EM_ANDAMENTO" } }
+  );
+  if (affected === 0) return;
+  invalidateCampaignCache(campaignId);
+  campaign.status = "FINALIZADA";
+  campaign.completedAt = new Date();
+}
+
 async function verifyAndFinalizeCampaign(campaign) {
   const companyId = campaign.companyId;
   const campaignId = campaign.id;
@@ -1674,16 +1776,8 @@ async function verifyAndFinalizeCampaign(campaign) {
 
   if (totalToSend > 0 && totalToSend === terminalCount) {
     logger.info(`[verifyAndFinalizeCampaign] Finalizando campanha ${campaignId} - todos ${totalToSend} contatos processados`);
-    if (typeof campaign.update === "function") {
-      await campaign.update({ status: "FINALIZADA", completedAt: moment() });
-    } else {
-      await Campaign.update(
-        { status: "FINALIZADA", completedAt: moment() },
-        { where: { id: campaignId } }
-      );
-      campaign.status = "FINALIZADA";
-      campaign.completedAt = moment();
-    }
+    // Centraliza o desfecho: reagenda se for recorrente, senão FINALIZADA
+    await finalizeCampaignRun(campaign);
   } else if (totalToSend === 0) {
     // Fallback: se não há registros em CampaignShipping, verifica se a lista tem contatos
     const listTotal = listIds.length > 0 ? await ContactListItem.count({ where: { contactListId: listIds, companyId } }) : 0;
@@ -1691,16 +1785,7 @@ async function verifyAndFinalizeCampaign(campaign) {
     // Se a lista tem contatos mas nenhum foi pra CampaignShipping = todos filtrados
     if (listTotal > 0) {
       logger.info(`[verifyAndFinalizeCampaign] Finalizando campanha ${campaignId} - todos ${listTotal} contatos foram filtrados por tags`);
-      if (typeof campaign.update === "function") {
-        await campaign.update({ status: "FINALIZADA", completedAt: moment() });
-      } else {
-        await Campaign.update(
-          { status: "FINALIZADA", completedAt: moment() },
-          { where: { id: campaignId } }
-      );
-        campaign.status = "FINALIZADA";
-        campaign.completedAt = moment();
-      }
+      await finalizeCampaignRun(campaign);
     }
   }
 
@@ -1761,12 +1846,9 @@ async function handleProcessCampaign(job) {
 
       if (!isArray(contacts) || contacts.length === 0) {
         logger.warn(`[ProcessCampaign] Campanha ${id} não tem contatos na lista. Verifique se a lista tem contatos válidos.`);
-        // Lista vazia/todos filtrados: finaliza para não ficar EM_ANDAMENTO eterno
-        await Campaign.update(
-          { status: "FINALIZADA", completedAt: moment() },
-          { where: { id } }
-        );
-        campaign.status = "FINALIZADA";
+        // Lista vazia/todos filtrados: encerra o ciclo para não ficar
+        // EM_ANDAMENTO eterno — campanha recorrente é reagendada aqui também
+        await finalizeCampaignRun(campaign);
         emitCampaignUpdateThrottled(campaign.companyId, campaign);
         return;
       }
@@ -3516,6 +3598,28 @@ async function handleMetaTokenHealthCheck() {
   }, null, false, 'America/Sao_Paulo');
   job.start();
 }
+
+// Config. Aniversário: envio diário de parabéns para contatos com
+// Contacts.birthdate == hoje. Só roda para empresas com
+// CompaniesSettings.birthdayMessageEnabled = "enabled" e mensagem configurada.
+// Horário padrão 08:00 (configurável via env BIRTHDAY_GREETING_CRON).
+async function handleBirthdayGreetings() {
+  const cronExpression = process.env.BIRTHDAY_GREETING_CRON || '0 0 8 * * *';
+  const job = new CronJob(cronExpression, async () => {
+    try {
+      const { default: SendBirthdayGreetingsService } = await import(
+        "./services/BirthdayGreetingService/SendBirthdayGreetingsService"
+      );
+      const result = await SendBirthdayGreetingsService();
+      logger.info(
+        `[BirthdayGreeting] Execução diária concluída: ${result.companies} empresas, ${result.sent} enviadas, ${result.skipped} puladas, ${result.errors} erros`
+      );
+    } catch (e: any) {
+      logger.error(`[BirthdayGreeting] Falha na execução diária: ${e.message}`);
+    }
+  }, null, false, 'America/Sao_Paulo');
+  job.start();
+}
 async function handleInvoiceCreate() {
   const job = new CronJob('0 * * * * *', async () => {
 
@@ -3598,6 +3702,7 @@ handleProcessLanes();
 handleCloseTicketsAutomatic();
 handleWabaPricingSync();
 handleMetaTokenHealthCheck();
+handleBirthdayGreetings();
 
 export async function startQueueProcess() {
   logger.info("Iniciando processamento de filas");
@@ -3727,6 +3832,9 @@ export async function startQueueProcess() {
   // Drip sequences (fila própria, não interfere nas filas acima)
   setupDripSequenceProcessors();
   await scheduleDripSequenceVerification();
+
+  // Automações Meta (comentário→DM, menção, referral) — fila própria
+  setupMetaAutomationProcessors();
 
   // Retomada assíncrona de fluxos do FlowBuilder (smartDelay/waitReply)
   setupFlowResumeProcessors();

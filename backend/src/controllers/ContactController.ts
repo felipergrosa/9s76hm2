@@ -146,6 +146,7 @@ interface ContactData {
   dtUltCompra?: Date | string | null;
   vlUltCompra?: number | string | null;
   clientCode?: string;
+  verificationCode?: string; // Código de Verificação (referência Fluxoo)
 }
 
 export const listDuplicates = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
@@ -301,7 +302,8 @@ export const importXls = async (req: Request, res: Response): Promise<Response> 
     silentMode,
     clientCode,
     dtUltCompra,
-    vlUltCompra
+    vlUltCompra,
+    verificationCode
   } = req.body;
   const simpleNumber = String(number).replace(/[^\d.-]+/g, '');
   let validNumber = simpleNumber;
@@ -336,6 +338,7 @@ export const importXls = async (req: Request, res: Response): Promise<Response> 
     creditLimit: creditLimit ? String(creditLimit) : null,
     segment,
     clientCode: clientCode ? String(clientCode) : null,
+    verificationCode: verificationCode ? String(verificationCode) : null,
     dtUltCompra,
     vlUltCompra
   };
@@ -820,6 +823,12 @@ export const store = async (req: AuthenticatedRequest, res: Response): Promise<R
         const v = typeof originalValue === "string" ? originalValue.trim() : originalValue;
         return v === "" || v === undefined ? null : v;
       })
+      .nullable(),
+    verificationCode: Yup.string()
+      .transform((value, originalValue) => {
+        const v = typeof originalValue === "string" ? originalValue.trim() : originalValue;
+        return v === "" || v === undefined ? null : v;
+      })
       .nullable()
   });
 
@@ -903,6 +912,16 @@ export const store = async (req: AuthenticatedRequest, res: Response): Promise<R
   if (Object.prototype.hasOwnProperty.call(newContact, 'clientCode')) {
     if (typeof newContact.clientCode === "string" && newContact.clientCode.trim() === "") {
       newContact.clientCode = null as any;
+    }
+  }
+
+  // Normaliza verificationCode: converte vazio/whitespace para null
+  if (Object.prototype.hasOwnProperty.call(newContact, 'verificationCode')) {
+    const vc = (newContact as any).verificationCode;
+    if (vc === null || vc === undefined || (typeof vc === 'string' && vc.trim() === '')) {
+      (newContact as any).verificationCode = null;
+    } else if (typeof vc === 'string') {
+      (newContact as any).verificationCode = vc.trim();
     }
   }
 
@@ -1063,7 +1082,13 @@ export const update = async (
         return v === "" || v === undefined ? null : v;
       })
       .nullable(),
-    clientCode: Yup.string().nullable()
+    clientCode: Yup.string().nullable(),
+    verificationCode: Yup.string()
+      .transform((value, originalValue) => {
+        const v = typeof originalValue === "string" ? originalValue.trim() : originalValue;
+        return v === "" || v === undefined ? null : v;
+      })
+      .nullable()
   });
 
   try {
@@ -1139,6 +1164,16 @@ export const update = async (
   if (Object.prototype.hasOwnProperty.call(contactData, 'clientCode')) {
     if (typeof contactData.clientCode === "string" && contactData.clientCode.trim() === "") {
       contactData.clientCode = null as any;
+    }
+  }
+
+  // Normaliza verificationCode: converte vazio/whitespace para null
+  if (Object.prototype.hasOwnProperty.call(contactData, 'verificationCode')) {
+    const vc = (contactData as any).verificationCode;
+    if (vc === null || vc === undefined || (typeof vc === 'string' && vc.trim() === '')) {
+      (contactData as any).verificationCode = null;
+    } else if (typeof vc === 'string') {
+      (contactData as any).verificationCode = vc.trim();
     }
   }
 
