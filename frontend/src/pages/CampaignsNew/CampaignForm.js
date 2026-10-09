@@ -745,7 +745,7 @@ const CampaignForm = () => {
     status: "INATIVA", confirmation: false, scheduledAt: "",
     // Recorrência do disparo (none | daily | weekly | monthly) + fim opcional
     recurrence: "none", recurrenceEndAt: "",
-    contactListId: "", contactListIds: [], tagListId: "Nenhuma", negativeTagListIds: [], companyId,
+    contactListId: "", contactListIds: [], tagListId: "Nenhuma", negativeTagListIds: [], campaignTagId: "", companyId,
     statusTicket: "closed", openTicket: "disabled", dispatchStrategy: "single",
     allowedWhatsappIds: [], metaTemplateName: null, metaTemplateLanguage: null,
     metaTemplateVariables: {}, sendMediaSeparately: false,
@@ -949,7 +949,11 @@ const CampaignForm = () => {
           api.get("/tags/list", { params: { companyId, kanban: 0 } }),
         ]);
         setContactLists(clRes || []);
-        setWhatsapps((waRes.data || []).map(w => ({ ...w, selected: false })));
+        // Somente conexões WhatsApp (baileys/official/legado null) suportam
+        // disparo em massa — instagram/facebook/telegram/webchat ficam de fora
+        setWhatsapps((waRes.data || [])
+          .filter(w => !w.channelType || ["baileys", "official"].includes(w.channelType))
+          .map(w => ({ ...w, selected: false })));
         setTagLists((tagRes.data || []).map(formatTagOption));
 
         if (campaignId) {
@@ -991,10 +995,12 @@ const CampaignForm = () => {
             prev.tagListId = String(data.tagListId);
           }
           prev.negativeTagListIds = parseStoredIdArray(data?.negativeTagListIds);
-          
+          // Tag de controle: Select compara string com string
+          prev.campaignTagId = data?.campaignTagId ? String(data.campaignTagId) : "";
+
           // Copiar demais campos, mas NÃO sobrescrever campos normalizados acima
           Object.entries(data).forEach(([k,v]) => {
-            if (k !== "tagListId" && k !== "negativeTagListIds") {
+            if (k !== "tagListId" && k !== "negativeTagListIds" && k !== "campaignTagId") {
               prev[k] = (k === "scheduledAt" || k === "recurrenceEndAt") && v ? moment(v).format("YYYY-MM-DDTHH:mm") : (v === null ? "" : v);
             }
           });
@@ -1551,6 +1557,24 @@ const CampaignForm = () => {
                                />
                              </Box>
                            </Grid>
+
+                           <Grid item xs={12} md={6}>
+                             <Box display="flex" alignItems="center" mb={1} gap={0.5}>
+                               <label className={classes.label} style={{ marginBottom: 0 }}>Tag de controle</label>
+                               <Tooltip title="Opcional: marca o contato com esta tag ao disparar e remove automaticamente quando ele responde (ou quando a campanha finaliza). Diferente das tags de filtro, que só definem o público."><InfoOutlinedIcon style={{ fontSize: 16, color: "#64748b", cursor: "pointer" }} /></Tooltip>
+                             </Box>
+                             <FormControl variant="outlined" fullWidth className={classes.formField}>
+                               <Select name="campaignTagId" value={values.campaignTagId||""} onChange={e => setFieldValue("campaignTagId", e.target.value)} disabled={!campaignEditable}>
+                                 <MenuItem value="">Nenhuma</MenuItem>
+                                 {tagLists.map(t => <MenuItem key={t.id} value={String(t.id)}>{t.name}</MenuItem>)}
+                               </Select>
+                               {values.campaignTagId && (
+                                 <Typography variant="caption" style={{ color: "#64748b", marginTop: 4, display: "block" }}>
+                                   Marca o contato no disparo e remove quando ele responde
+                                 </Typography>
+                               )}
+                             </FormControl>
+                           </Grid>
                          </Grid>
 
                          <Box className={classes.tagExplainGrid}>
@@ -1915,6 +1939,7 @@ const CampaignForm = () => {
                           ? getTagNameById(tagLists, values.tagListId)
                           : "";
                         const negativeTagNames = getTagNamesByIds(tagLists, values.negativeTagListIds);
+                        const campaignTagName = values.campaignTagId ? getTagNameById(tagLists, values.campaignTagId) : "";
                         const deliveryEstimate = buildCampaignDeliveryEstimate(values);
                         const frequencyLabel = deliveryEstimate.hourlyRate > 0
                           ? `~${Math.max(1, Math.round(deliveryEstimate.hourlyRate))} msg/h`
@@ -1942,6 +1967,7 @@ const CampaignForm = () => {
                               </Typography>
                               {positiveTagName && <Typography variant="caption" style={{ display: "block", marginTop: 2, color: "#0369a1" }}>Tag positiva: {positiveTagName}</Typography>}
                               {negativeTagNames.length > 0 && <Typography variant="caption" style={{ display: "block", marginTop: 2, color: "#be123c" }}>Tags negativas: {negativeTagNames.join(", ")}</Typography>}
+                              {campaignTagName && <Typography variant="caption" style={{ display: "block", marginTop: 2, color: "#047857" }}>Tag de controle: {campaignTagName} (remove ao responder)</Typography>}
                             </Box>
 
                             <Box mb={2}>

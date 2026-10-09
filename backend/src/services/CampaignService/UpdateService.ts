@@ -1,3 +1,4 @@
+import { Op } from "sequelize";
 import AppError from "../../errors/AppError";
 import Campaign from "../../models/Campaign";
 import ContactList from "../../models/ContactList";
@@ -87,6 +88,33 @@ const assertSameCompany = async (
   }
 };
 
+// Canais que suportam disparo em massa (channelType null = baileys legado)
+const WHATSAPP_CHANNEL_TYPES = ["baileys", "official"];
+
+// N2: impede apontar campanha para instagram/facebook/telegram/webchat —
+// esses canais falhariam silenciosamente no dispatch
+const assertWhatsappChannel = async (
+  ids: number[],
+  companyId: number
+): Promise<void> => {
+  const unique = [...new Set(ids)];
+  if (unique.length === 0) return;
+  // NOT IN não casa NULL — legados sem channelType passam como baileys
+  const nonWhatsapp = await Whatsapp.count({
+    where: {
+      id: unique,
+      companyId,
+      channelType: { [Op.notIn]: WHATSAPP_CHANNEL_TYPES }
+    }
+  });
+  if (nonWhatsapp > 0) {
+    throw new AppError(
+      "Campanhas só podem usar conexões WhatsApp (Baileys ou API Oficial)",
+      400
+    );
+  }
+};
+
 // N2 (mass assignment): whitelist explícita de campos editáveis da campanha.
 // Nunca aceita id, companyId, mediaPath/mediaName (somente via upload) ou timestamps.
 const EDITABLE_FIELDS = [
@@ -150,6 +178,10 @@ const UpdateService = async (data: Data): Promise<Campaign> => {
   await assertSameCompany(Tag, toIdList(data.campaignTagId), companyId, "Tag de controle");
   await assertSameCompany(Whatsapp, toIdList(data.whatsappId), companyId, "Conexão WhatsApp");
   await assertSameCompany(Whatsapp, toIdList(data.allowedWhatsappIds), companyId, "Conexões permitidas");
+  await assertWhatsappChannel(
+    [...toIdList(data.whatsappId), ...toIdList(data.allowedWhatsappIds)],
+    companyId
+  );
   await assertSameCompany(Queue, toIdList(data.queueId), companyId, "Fila");
   await assertSameCompany(User, toIdList(data.userId), companyId, "Usuário");
   await assertSameCompany(User, toIdList(data.userIds), companyId, "Usuários");

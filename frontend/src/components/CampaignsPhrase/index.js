@@ -32,7 +32,6 @@ import Title from "../Title";
 import api from "../../services/api";
 import { i18n } from "../../translate/i18n";
 import TableRowSkeleton from "../TableRowSkeleton";
-import CampaignModal from "../CampaignModal";
 import ConfirmationModal from "../ConfirmationModal";
 import toastError from "../../errors/toastError";
 import { isArray } from "lodash";
@@ -113,7 +112,6 @@ const CampaignsPhrase = () => {
   const [hasMore, setHasMore] = useState(false);
   const [selectedCampaign, setSelectedCampaign] = useState(null);
   const [deletingCampaign, setDeletingCampaign] = useState(null);
-  const [campaignModalOpen, setCampaignModalOpen] = useState(false);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [searchParam, setSearchParam] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
