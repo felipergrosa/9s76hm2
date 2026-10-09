@@ -56,6 +56,42 @@ const mergeTicketsById = (current, tickets) => {
   return next;
 };
 
+// Payloads realtime "pobres" podem omitir associações (contact.tags, user.color,
+// queue etc.). A substituição total apagava badges/cores até o F5 — preserva o
+// que já estava em memória quando o campo não veio no evento. Valor presente
+// (inclusive [] em tags) sempre prevalece: é assim que remoções propagam.
+const TICKET_ASSOC_KEYS = [
+  "contact",
+  "user",
+  "queue",
+  "whatsapp",
+  "tags",
+  "ticketTags",
+  "company",
+  "queueIntegration",
+];
+
+const mergeTicketPreservingAssociations = (prev, incoming) => {
+  const merged = { ...prev, ...incoming };
+  TICKET_ASSOC_KEYS.forEach(key => {
+    if (incoming[key] === undefined || incoming[key] === null) {
+      merged[key] = prev[key];
+    }
+  });
+  // contact pode vir sem tags/extraInfo mesmo quando o objeto veio no payload
+  if (incoming.contact && prev.contact) {
+    const mergedContact = { ...prev.contact, ...incoming.contact };
+    if (incoming.contact.tags === undefined) {
+      mergedContact.tags = prev.contact.tags;
+    }
+    if (incoming.contact.extraInfo === undefined) {
+      mergedContact.extraInfo = prev.contact.extraInfo;
+    }
+    merged.contact = mergedContact;
+  }
+  return merged;
+};
+
 const reducer = (state, action) => {
   switch (action.type) {
     case "RESET_STATUS": {
@@ -133,7 +169,10 @@ const reducer = (state, action) => {
       action.payload.forEach(({ ticket, statusDecisions, sortDir, adjustCount }) => {
         // Pré-calcula timestamp
         ticket._updatedAtTimestamp = new Date(ticket.updatedAt).getTime();
-        nextTicketsById[ticket.id] = ticket;
+        const prevTicket = nextTicketsById[ticket.id];
+        nextTicketsById[ticket.id] = prevTicket
+          ? mergeTicketPreservingAssociations(prevTicket, ticket)
+          : ticket;
 
         ALL_STATUS_KEYS.forEach(statusKey => {
           const slice = metaByStatus[statusKey];

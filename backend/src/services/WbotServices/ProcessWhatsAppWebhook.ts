@@ -7,6 +7,14 @@ import Whatsapp from "../../models/Whatsapp";
 import Contact from "../../models/Contact";
 import Ticket from "../../models/Ticket";
 import Message from "../../models/Message";
+import Tag from "../../models/Tag";
+import User from "../../models/User";
+import Queue from "../../models/Queue";
+import Company from "../../models/Company";
+import Plan from "../../models/Plan";
+import QueueIntegrations from "../../models/QueueIntegrations";
+import TicketTag from "../../models/TicketTag";
+import ContactCustomField from "../../models/ContactCustomField";
 import CreateOrUpdateContactService from "../ContactServices/CreateOrUpdateContactService";
 import FindOrCreateTicketService from "../TicketServices/FindOrCreateTicketService";
 import CreateMessageService from "../MessageServices/CreateMessageService";
@@ -48,11 +56,42 @@ const nextUnreadCount = async (contactId: number): Promise<number> => {
   return next;
 };
 
+// Payload realtime do ticket: mesmas associações do ShowTicketService
+// (contact.tags com cor, user.color, queue etc.) para que o evento
+// `company-N-ticket` action=update não apague badges/cores no frontend,
+// que substitui o ticket inteiro ao receber o evento.
 const loadRealtimeTicketPayload = async (ticketId: number) => {
   return Ticket.findByPk(ticketId, {
     include: [
-      { model: Contact, as: "contact" },
-      { model: Whatsapp, as: "whatsapp" }
+      {
+        model: Contact,
+        as: "contact",
+        include: [
+          { model: ContactCustomField, as: "extraInfo" },
+          { model: Tag, as: "tags", attributes: ["id", "name", "color"] }
+        ]
+      },
+      {
+        model: Queue,
+        as: "queue",
+        attributes: ["id", "name", "color", "slaMinutes"],
+        include: ["chatbots"]
+      },
+      { model: User, as: "user", attributes: ["id", "name", "profileImage", "color"] },
+      { model: Tag, as: "tags", attributes: ["id", "name", "color", "kanban"] },
+      {
+        model: Whatsapp,
+        as: "whatsapp",
+        attributes: ["id", "name", "color", "groupAsTicket", "status", "channelType"]
+      },
+      {
+        model: Company,
+        as: "company",
+        attributes: ["id", "name"],
+        include: [{ model: Plan, as: "plan", attributes: ["id", "name", "useKanban"] }]
+      },
+      { model: QueueIntegrations, as: "queueIntegration", attributes: ["id", "name"] },
+      { model: TicketTag, as: "ticketTags", attributes: ["tagId"] }
     ]
   });
 };
