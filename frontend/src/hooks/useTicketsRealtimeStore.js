@@ -56,38 +56,44 @@ const mergeTicketsById = (current, tickets) => {
   return next;
 };
 
-// Payloads realtime "pobres" podem omitir associações (contact.tags, user.color,
-// queue etc.). A substituição total apagava badges/cores até o F5 — preserva o
-// que já estava em memória quando o campo não veio no evento. Valor presente
-// (inclusive [] em tags) sempre prevalece: é assim que remoções propagam.
-const TICKET_ASSOC_KEYS = [
+// Payloads realtime "pobres" podem omitir associações inteiras (contact.tags,
+// queue) ou campos dentro delas (user.color, queue.color). A substituição
+// total apagava badges/cores até o F5. Associações-objeto fazem merge raso de
+// campos (campo ausente preserva o anterior); arrays só são preservados quando
+// ausentes — um [] presente substitui, propagando remoções em tempo real.
+const TICKET_OBJECT_ASSOC_KEYS = [
   "contact",
   "user",
   "queue",
   "whatsapp",
-  "tags",
-  "ticketTags",
   "company",
   "queueIntegration",
 ];
 
+const TICKET_ARRAY_ASSOC_KEYS = ["tags", "ticketTags"];
+
 const mergeTicketPreservingAssociations = (prev, incoming) => {
   const merged = { ...prev, ...incoming };
-  TICKET_ASSOC_KEYS.forEach(key => {
-    if (incoming[key] === undefined || incoming[key] === null) {
+  TICKET_OBJECT_ASSOC_KEYS.forEach(key => {
+    if (incoming[key] === undefined) {
+      merged[key] = prev[key];
+    } else if (incoming[key] && prev[key]) {
+      merged[key] = { ...prev[key], ...incoming[key] };
+    }
+  });
+  TICKET_ARRAY_ASSOC_KEYS.forEach(key => {
+    if (incoming[key] === undefined) {
       merged[key] = prev[key];
     }
   });
-  // contact pode vir sem tags/extraInfo mesmo quando o objeto veio no payload
+  // contact.tags/extraInfo aninhados: mesma regra de "ausente preserva"
   if (incoming.contact && prev.contact) {
-    const mergedContact = { ...prev.contact, ...incoming.contact };
     if (incoming.contact.tags === undefined) {
-      mergedContact.tags = prev.contact.tags;
+      merged.contact.tags = prev.contact.tags;
     }
     if (incoming.contact.extraInfo === undefined) {
-      mergedContact.extraInfo = prev.contact.extraInfo;
+      merged.contact.extraInfo = prev.contact.extraInfo;
     }
-    merged.contact = mergedContact;
   }
   return merged;
 };
