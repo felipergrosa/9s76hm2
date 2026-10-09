@@ -201,6 +201,7 @@ interface CampaignData {
   allowedWhatsappIds: string | null;
   tagListId: number | null;
   negativeTagListIds: string | null;
+  campaignTagId: number | null;
   statusTicket: string | null;
   // Mensagens
   message1: string | null;
@@ -807,7 +808,7 @@ async function getCampaignLight(id) {
       'mediaPath', 'mediaName',
       'mediaUrl1', 'mediaUrl2', 'mediaUrl3', 'mediaUrl4', 'mediaUrl5',
       'mediaName1', 'mediaName2', 'mediaName3', 'mediaName4', 'mediaName5',
-      'sendMediaSeparately', 'confirmation', 'statusTicket'
+      'sendMediaSeparately', 'confirmation', 'statusTicket', 'campaignTagId'
     ]
   });
   return campaign;
@@ -837,6 +838,7 @@ function serializeCampaign(campaign: any): CampaignData {
     allowedWhatsappIds: campaign.allowedWhatsappIds,
     tagListId: campaign.tagListId,
     negativeTagListIds: campaign.negativeTagListIds,
+    campaignTagId: campaign.campaignTagId,
     statusTicket: campaign.statusTicket,
     // Mensagens
     message1: campaign.message1,
