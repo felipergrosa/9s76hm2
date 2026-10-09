@@ -53,6 +53,7 @@ import Tag from "./models/Tag";
 import ContactTag from "./models/ContactTag";
 import Plan from "./models/Plan";
 import GetWhatsAppAdapter from "./helpers/GetWhatsAppAdapter";
+import { clearCampaignMarkerTags } from "./helpers/removeCampaignMarkerTags";
 import SendTemplateToContact from "./services/MetaServices/SendTemplateToContact";
 import WhatsappTemplate from "./models/WhatsappTemplate";
 import GetTemplateDefinition from "./services/MetaServices/GetTemplateDefinition";
@@ -1737,29 +1738,7 @@ async function finalizeCampaignRun(campaign: any): Promise<void> {
 
   // Tag de controle da campanha: limpa em massa a marcação residual de todos
   // os contatos disparados (a resposta já remove individualmente no listener)
-  if (fresh.campaignTagId) {
-    try {
-      const shippings = await CampaignShipping.findAll({
-        where: { campaignId, contactId: { [Op.ne]: null } },
-        attributes: ["contactId"],
-        raw: true
-      });
-      const contactIds = Array.from(
-        new Set(shippings.map((s: any) => Number(s.contactId)).filter(Number.isInteger))
-      );
-      if (contactIds.length) {
-        await ContactTag.destroy({
-          where: {
-            companyId: fresh.companyId,
-            tagId: fresh.campaignTagId,
-            contactId: { [Op.in]: contactIds }
-          }
-        });
-      }
-    } catch (e) {
-      logger.warn(`[finalizeCampaignRun] Falha ao limpar tag ${fresh.campaignTagId} da campanha ${campaignId}: ${e}`);
-    }
-  }
+  await clearCampaignMarkerTags(campaignId, fresh.companyId, fresh.campaignTagId);
 }
 
 async function verifyAndFinalizeCampaign(campaign) {
