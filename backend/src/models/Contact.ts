@@ -16,6 +16,10 @@ import {
   DataType,
   AfterCreate,
   AfterUpdate,
+  AfterBulkCreate,
+  BeforeBulkUpdate,
+  AfterDestroy,
+  BeforeBulkDestroy,
   BeforeSave
 } from "sequelize-typescript";
 import ContactCustomField from "./ContactCustomField";
@@ -565,9 +569,39 @@ class Contact extends Model<Contact> {
     }
   }
 
+  // Agenda re-sincronização das ContactLists com savedFilter da empresa
+  // (timer coalescente ~60s — ver helpers/scheduleSavedFilterSync)
+  private static scheduleListSync(companyId?: number | null) {
+    if (!companyId) return;
+    setImmediate(async () => {
+      try {
+        const schedule = (await import("../helpers/scheduleSavedFilterSync")).default;
+        schedule(companyId);
+      } catch (err) {
+        console.error("[Hook] Erro ao agendar sync de listas com savedFilter:", err);
+      }
+    });
+  }
+
+  private static async resolveCompanyIdsFromWhere(options: any): Promise<number[]> {
+    const { extractCompanyIdsFromWhere } = await import("../helpers/scheduleSavedFilterSync");
+    let ids = extractCompanyIdsFromWhere(options?.where);
+    if (!ids.length && options?.where) {
+      const rows = await Contact.findAll({
+        where: options.where,
+        attributes: ["companyId"],
+        group: ["companyId"],
+        raw: true
+      });
+      ids = rows.map((r: any) => r.companyId).filter(Boolean);
+    }
+    return ids;
+  }
+
   // Hook para aplicar regras de tags automaticamente após criar contato
   @AfterCreate
   static async applyTagRulesAfterCreate(contact: Contact) {
+    Contact.scheduleListSync(contact.companyId);
     // Executa de forma assíncrona sem bloquear
     setImmediate(async () => {
       try {
@@ -585,6 +619,7 @@ class Contact extends Model<Contact> {
   // Hook para aplicar regras de tags automaticamente após atualizar contato
   @AfterUpdate
   static async applyTagRulesAfterUpdate(contact: Contact) {
+    Contact.scheduleListSync(contact.companyId);
     // Executa de forma assíncrona sem bloquear
     setImmediate(async () => {
       try {
@@ -597,6 +632,42 @@ class Contact extends Model<Contact> {
         console.error(`[Hook] Erro ao aplicar regras de tags no contato ${contact.id}:`, err);
       }
     });
+  }
+
+  // Bulk ops também alteram membros de listas com filtro (imports, edição em
+  // massa, verificação de WhatsApp) — o hook de instância não cobre esses caminhos
+  @AfterBulkCreate
+  static async scheduleListSyncAfterBulkCreate(contacts: Contact[]) {
+    const companyIds = new Set(contacts.map(c => c.companyId).filter(Boolean));
+    companyIds.forEach(id => Contact.scheduleListSync(id));
+  }
+
+  // BeforeBulkUpdate: resolve companyId ANTES do update — depois as linhas
+  // podem não casar mais com o where (ex.: update na própria coluna filtrada)
+  @BeforeBulkUpdate
+  static async scheduleListSyncBeforeBulkUpdate(options: any) {
+    try {
+      const ids = await Contact.resolveCompanyIdsFromWhere(options);
+      ids.forEach(id => Contact.scheduleListSync(id));
+    } catch (err) {
+      console.error("[Hook] Erro ao resolver companyId em bulkUpdate de contatos:", err);
+    }
+  }
+
+  @AfterDestroy
+  static async scheduleListSyncAfterDestroy(contact: Contact) {
+    Contact.scheduleListSync(contact.companyId);
+  }
+
+  // BeforeBulkDestroy: resolve companyId ANTES de as linhas sumirem
+  @BeforeBulkDestroy
+  static async scheduleListSyncBeforeBulkDestroy(options: any) {
+    try {
+      const ids = await Contact.resolveCompanyIdsFromWhere(options);
+      ids.forEach(id => Contact.scheduleListSync(id));
+    } catch (err) {
+      console.error("[Hook] Erro ao resolver companyId em bulkDestroy de contatos:", err);
+    }
   }
 
   @BeforeSave

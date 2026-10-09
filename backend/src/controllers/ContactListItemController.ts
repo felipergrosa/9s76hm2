@@ -9,6 +9,7 @@ import UpdateService from "../services/ContactListItemService/UpdateService";
 import DeleteService from "../services/ContactListItemService/DeleteService";
 import FindService from "../services/ContactListItemService/FindService";
 import AddFilteredContactsToListService from "../services/ContactListItemService/AddFilteredContactsToListService";
+import SyncContactListBySavedFilterService from "../services/ContactListService/SyncContactListBySavedFilterService";
 import ContactList from "../models/ContactList";
 
 import ContactListItem from "../models/ContactListItem";
@@ -204,6 +205,14 @@ export const addFilteredContacts = async (
         if (list) {
           list.set("savedFilter", filters);
           await list.save();
+
+          // Aplica o filtro completo na hora: o add acima só insere novos —
+          // o sync também remove itens que não atendem mais ao critério
+          const syncResult = await SyncContactListBySavedFilterService({
+            contactListId: list.id,
+            companyId
+          });
+          (result as any).removed = syncResult.removed;
         }
       } catch (err: any) {
         logger.warn("Falha ao salvar savedFilter na lista", {

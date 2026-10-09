@@ -123,6 +123,18 @@ export const update = async (
     companyId
   });
 
+  // Filtro salvo criado/alterado → aplica na hora, sem esperar o cron diário
+  if (data.savedFilter !== undefined && data.savedFilter !== null) {
+    setImmediate(() => {
+      SyncContactListBySavedFilterService({
+        contactListId: Number(id),
+        companyId: Number(companyId)
+      }).catch((err: any) =>
+        logger.error(`Erro ao sincronizar lista ${id} após salvar filtro: ${err?.message}`)
+      );
+    });
+  }
+
   const io = getIO();
   await emitToCompanyNamespace(
     companyId,
