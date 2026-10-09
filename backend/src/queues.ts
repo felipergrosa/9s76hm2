@@ -2228,7 +2228,7 @@ async function handleDispatchCampaign(job) {
 
     // Verificar status atualizado da campanha (consulta leve, apenas status)
     const campaignStatus = await Campaign.findByPk(campaignId, {
-      attributes: ["id", "status"]
+      attributes: ["id", "status", "campaignTagId"]
     });
 
     // Se não tem campaignData, buscar campanha completa (compatibilidade com jobs antigos)
@@ -2237,6 +2237,9 @@ async function handleDispatchCampaign(job) {
     } else if (campaignStatus) {
       // Atualizar status no campaignData para respeitar pause/cancel
       campaign.status = campaignStatus.status;
+      // Reidrata a tag de controle do banco: snapshots serializados antes do
+      // campo existir chegam sem campaignTagId e a marcação seria pulada
+      campaign.campaignTagId = campaignStatus.campaignTagId;
     }
 
     // Se a campanha foi pausada/cancelada/finalizada, não deve continuar tentando enviar.
@@ -2625,13 +2628,16 @@ async function handleDispatchCampaign(job) {
           // (removida quando ele responde ou quando a campanha finaliza)
           if (campaign.campaignTagId && contact?.id) {
             try {
-              await ContactTag.findOrCreate({
+              const [, created] = await ContactTag.findOrCreate({
                 where: {
                   contactId: contact.id,
                   tagId: campaign.campaignTagId,
                   companyId: campaign.companyId
                 }
               });
+              if (created) {
+                logger.info(`[DispatchCampaign][Official] Tag de controle ${campaign.campaignTagId} aplicada ao contato ${contact.id}`);
+              }
             } catch (e) {
               logger.warn(`[DispatchCampaign][Official] Falha ao aplicar tag ${campaign.campaignTagId} no contato ${contact.id}: ${e}`);
             }
@@ -2810,13 +2816,16 @@ async function handleDispatchCampaign(job) {
       // (removida quando ele responde ou quando a campanha finaliza)
       if (campaign.campaignTagId && contact?.id) {
         try {
-          await ContactTag.findOrCreate({
+          const [, created] = await ContactTag.findOrCreate({
             where: {
               contactId: contact.id,
               tagId: campaign.campaignTagId,
               companyId: campaign.companyId
             }
           });
+          if (created) {
+            logger.info(`[DispatchCampaign][Baileys] Tag de controle ${campaign.campaignTagId} aplicada ao contato ${contact.id}`);
+          }
         } catch (e) {
           logger.warn(`[DispatchCampaign][Baileys] Falha ao aplicar tag ${campaign.campaignTagId} no contato ${contact.id}: ${e}`);
         }
