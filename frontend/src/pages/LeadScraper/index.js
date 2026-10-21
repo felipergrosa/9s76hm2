@@ -142,6 +142,14 @@ const GLOBAL_PRESETS = {
       "design de iluminação", "consultoria luminotécnica",
     ],
     cnae: ["7111100", "7490102"], // serviços de arquitetura + design de interiores
+    // whitelist de categorias do Google Maps (enum do actor Apify) — corta
+    // na fonte tudo que não é escritório/profissional do segmento
+    includeCategories: [
+      "architect", "architecture firm", "architectural designer", "architects association",
+      "interior designer", "interior architect office", "interior decorator",
+      "lighting consultant", "landscape lighting designer", "lighting contractor",
+      "design agency", "industrial design company", "landscape designer", "building designer",
+    ],
     conselhoTipo: "ambos",
     defaultSources: ["google_maps", "cnpj_search", "conselho"],
   },
@@ -153,11 +161,54 @@ const GLOBAL_PRESETS = {
       "loja de lustres", "distribuidora de lustres", "materiais de construção",
     ],
     cnae: ["4742300", "4744001", "4744099"], // mat. elétrico + ferragens + mat. construção
+    includeCategories: [
+      "lighting store", "lighting products wholesaler", "light bulb supplier",
+      "lighting manufacturer", "lighting contractor", "electrical supply store",
+      "electrical products wholesaler", "electrical appliance wholesaler",
+      "home improvement store", "building materials store", "building materials supplier",
+      "home goods store", "electronics store", "furniture store",
+      "stage lighting equipment supplier", "skylight contractor",
+    ],
     // MEI excluído: público-alvo são lojas com escala para comprar no atacado
     porte: ["MICRO EMPRESA", "PEQUENO PORTE", "DEMAIS"],
     conselhoTipo: "ambos",
     defaultSources: ["google_maps", "cnpj_search"],
   },
+};
+
+// Categorias do Google Maps (enum do actor Apify — ~5.600 valores). Este é
+// um subset curado de sugestões p/ o autocomplete; o campo é freeSolo e o
+// backend valida tamanho/tipo — o actor valida o valor exato no run.
+const APIFY_CATEGORY_SUGGESTIONS = [
+  "architect", "architecture firm", "architectural designer", "architects association",
+  "interior designer", "interior architect office", "interior decorator",
+  "lighting consultant", "landscape lighting designer", "lighting contractor",
+  "lighting store", "lighting manufacturer", "lighting products wholesaler", "light bulb supplier",
+  "electrical supply store", "electrical products wholesaler", "electrical appliance wholesaler",
+  "home improvement store", "building materials store", "building materials supplier",
+  "home goods store", "electronics store", "furniture store", "furniture manufacturer",
+  "design agency", "industrial design company", "landscape architect", "landscape designer",
+  "construction company", "engineer", "consultant", "real estate agency", "real estate developer",
+  "stage lighting equipment supplier", "skylight contractor", "home automation company",
+  "clinic", "medical clinic", "restaurant", "doctor", "dentist", "gas station", "pharmacy",
+];
+
+// Departamentos válidos do add-on leads enrichment (enum do actor Apify)
+const LEAD_DEPARTMENT_LABELS = {
+  c_suite: "C-Level (sócios/diretores)",
+  sales: "Vendas",
+  marketing: "Marketing",
+  operations: "Operações",
+  finance: "Financeiro",
+  product: "Produto",
+  engineering_technical: "Engenharia/Técnico",
+  design: "Design",
+  human_resources: "RH",
+  information_technology: "TI",
+  legal: "Jurídico",
+  education: "Educação",
+  medical_health: "Saúde",
+  consulting: "Consultoria",
 };
 
 // Somente CAU habilitado por ora; demais conselhos entram como "em breve"
@@ -793,6 +844,16 @@ const buildAdvFilters = (v) => ({
   capitalSocialMin: v.capitalMin !== "" ? Number(v.capitalMin) : undefined,
   dataAberturaMin: v.aberturaMin || undefined,
   dataAberturaMax: v.aberturaMax || undefined,
+  // filtros internos do actor Apify (só Google Maps)
+  includeCategories: v.includeCats?.length ? v.includeCats : undefined,
+  excludeCategories: v.excludeCats?.length ? v.excludeCats : undefined,
+  exactMatch: v.exactMatch || undefined,
+  allPlacesMode: v.allPlaces || undefined,
+  scrapeDetails: v.details || undefined,
+  enrichLeads: v.enrichLeads || undefined,
+  leadsMaxPerPlace: v.enrichLeads && v.leadsMax !== "" ? Number(v.leadsMax) : undefined,
+  leadsDepartments: v.enrichLeads && v.leadsDeps?.length ? v.leadsDeps : undefined,
+  enrichSocialProfiles: v.enrichSocial || undefined,
 });
 
 // filters do job → valores do painel de refinamento. Usada por "Repetir busca"
@@ -810,6 +871,15 @@ const refineFromJobFilters = (f = {}) => ({
   excludeKw: Array.isArray(f.excludeKeywords) ? f.excludeKeywords.filter(Boolean) : [],
   aberturaMin: f.dataAberturaMin || "",
   aberturaMax: f.dataAberturaMax || "",
+  includeCats: Array.isArray(f.includeCategories) ? f.includeCategories : (f.includeCategories ? [f.includeCategories] : []),
+  excludeCats: Array.isArray(f.excludeCategories) ? f.excludeCategories : (f.excludeCategories ? [f.excludeCategories] : []),
+  exactMatch: !!f.exactMatch,
+  allPlaces: !!f.allPlacesMode,
+  details: !!f.scrapeDetails,
+  enrichLeads: !!f.enrichLeads,
+  leadsMax: f.leadsMaxPerPlace != null ? String(f.leadsMaxPerPlace) : "3",
+  leadsDeps: Array.isArray(f.leadsDepartments) ? f.leadsDepartments : (f.leadsDepartments ? [f.leadsDepartments] : ["c_suite"]),
+  enrichSocial: !!f.enrichSocialProfiles,
 });
 
 // Controles de refinamento da Busca Global — compartilhados entre o accordion
@@ -943,6 +1013,111 @@ function GlobalRefineFields({ v, set }) {
           )}
         />
       </div>
+
+      {/* ── Filtros internos do actor Apify (Google Maps) ── */}
+      <div className={classes.fullRow}>
+        <Typography variant="caption" style={{ color: "#888", fontWeight: 700, letterSpacing: 0.4 }}>
+          EXTRAS DO GOOGLE MAPS (APIFY)
+        </Typography>
+      </div>
+      <div className={classes.fullRow}>
+        <Autocomplete
+          multiple freeSolo
+          options={APIFY_CATEGORY_SUGGESTIONS}
+          value={v.includeCats}
+          onChange={(_, val) => set("includeCats", val)}
+          renderTags={(val, getTagProps) => val.map((opt, i) => (
+            <Chip variant="outlined" size="small" label={opt} {...getTagProps({ index: i })} key={opt} />
+          ))}
+          renderInput={params => (
+            <TextField
+              {...params} variant="outlined" size="small"
+              label={<>Categorias permitidas no Maps<span className={classes.srcTag}>Maps · custo único</span></>}
+              placeholder="ex.: lighting store — vazio = todas"
+            />
+          )}
+        />
+      </div>
+      <div className={classes.fullRow}>
+        <Autocomplete
+          multiple freeSolo
+          options={APIFY_CATEGORY_SUGGESTIONS}
+          value={v.excludeCats}
+          onChange={(_, val) => set("excludeCats", val)}
+          renderTags={(val, getTagProps) => val.map((opt, i) => (
+            <Chip variant="outlined" size="small" label={opt} {...getTagProps({ index: i })} key={opt} />
+          ))}
+          renderInput={params => (
+            <TextField
+              {...params} variant="outlined" size="small"
+              label={<>Categorias excluídas<span className={classes.srcTag}>Maps · grátis</span></>}
+              placeholder="ex.: clinic, restaurant"
+            />
+          )}
+        />
+      </div>
+      <div>
+        <FormControlLabel
+          style={{ marginLeft: 0 }}
+          control={<Switch size="small" color="primary" checked={v.exactMatch} onChange={e => set("exactMatch", e.target.checked)} />}
+          label={<Typography variant="body2">Match exato do termo<span className={classes.srcTag}>Maps</span></Typography>}
+        />
+      </div>
+      <div>
+        <FormControlLabel
+          style={{ marginLeft: 0 }}
+          control={<Switch size="small" color="primary" checked={v.allPlaces} onChange={e => set("allPlaces", e.target.checked)} />}
+          label={<Typography variant="body2">Varrer toda a área (ignora termos)<span className={classes.srcTag}>Maps</span></Typography>}
+        />
+      </div>
+      <div>
+        <FormControlLabel
+          style={{ marginLeft: 0 }}
+          control={<Switch size="small" color="primary" checked={v.details} onChange={e => set("details", e.target.checked)} />}
+          label={<Typography variant="body2">Detalhes do lugar (horários, movimento, lojas em galerias)<span className={classes.srcTag}>Maps · $0.002/local</span></Typography>}
+        />
+      </div>
+      <div>
+        <FormControlLabel
+          style={{ marginLeft: 0 }}
+          control={<Switch size="small" color="primary" checked={v.enrichLeads} onChange={e => set("enrichLeads", e.target.checked)} />}
+          label={<Typography variant="body2">Decisores (nome/cargo/email do site)<span className={classes.srcTag}>Maps · $0.005/decisor</span></Typography>}
+        />
+      </div>
+      {v.enrichLeads && (
+        <>
+          <div>
+            <span className={classes.advLabel}>Máx. decisores por empresa<span className={classes.srcTag}>Maps</span></span>
+            <Select
+              variant="outlined"
+              value={v.leadsMax} onChange={e => set("leadsMax", e.target.value)}
+              style={{ fontSize: 13, width: "100%" }}
+            >
+              {[1, 2, 3, 5, 10].map(n => <MenuItem key={n} value={String(n)}>{n}</MenuItem>)}
+            </Select>
+          </div>
+          <div>
+            <span className={classes.advLabel}>Departamentos<span className={classes.srcTag}>Maps</span></span>
+            <Select
+              multiple variant="outlined"
+              value={v.leadsDeps} onChange={e => set("leadsDeps", e.target.value)}
+              renderValue={sel => sel.map(d => LEAD_DEPARTMENT_LABELS[d] || d).join(", ")}
+              style={{ fontSize: 13, width: "100%" }}
+            >
+              {Object.entries(LEAD_DEPARTMENT_LABELS).map(([k, lbl]) => (
+                <MenuItem key={k} value={k}>{lbl}</MenuItem>
+              ))}
+            </Select>
+          </div>
+        </>
+      )}
+      <div>
+        <FormControlLabel
+          style={{ marginLeft: 0 }}
+          control={<Switch size="small" color="primary" checked={v.enrichSocial} onChange={e => set("enrichSocial", e.target.checked)} />}
+          label={<Typography variant="body2">Enriquecer redes sociais (seguidores, bio)<span className={classes.srcTag}>Maps · $/perfil — caro</span></Typography>}
+        />
+      </div>
     </div>
   );
 }
@@ -1017,6 +1192,16 @@ export default function LeadScraper() {
   const [gfExcludeKw, setGfExcludeKw] = useState([]);       // string[] → excludeKeywords
   const [gfAberturaMin, setGfAberturaMin] = useState("");   // YYYY-MM-DD
   const [gfAberturaMax, setGfAberturaMax] = useState("");
+  // Filtros internos do actor Apify (Google Maps) — opt-in
+  const [gfIncludeCats, setGfIncludeCats] = useState([]);   // whitelist de categorias Maps
+  const [gfExcludeCats, setGfExcludeCats] = useState([]);   // blacklist de categorias Maps
+  const [gfExactMatch, setGfExactMatch] = useState(false);  // searchMatching "only_exact"
+  const [gfAllPlaces, setGfAllPlaces] = useState(false);    // varrer todos os pins da área
+  const [gfDetails, setGfDetails] = useState(false);        // add-on: detail page (horários, popularidade, galerias)
+  const [gfEnrichLeads, setGfEnrichLeads] = useState(false);// add-on: decisores do site
+  const [gfLeadsMax, setGfLeadsMax] = useState("3");        // decisores por lugar (1-10)
+  const [gfLeadsDeps, setGfLeadsDeps] = useState(["c_suite"]); // departamentos dos decisores
+  const [gfEnrichSocial, setGfEnrichSocial] = useState(false); // add-on: perfis sociais enriquecidos
   const [segGlobal, setSegGlobal] = useState(null);         // atalho de segmento — só preenche keyword
   const [xrayLead, setXrayLead] = useState(null);           // lead aberto no modal Raio-X
 
@@ -1034,6 +1219,10 @@ export default function LeadScraper() {
     site: gfSite, onlyCell: gfOnlyCell, situacao: gfSituacao, situacaoInc: gfSituacaoInc,
     excludeMei: gfExcludeMei, capitalMin: gfCapitalMin, excludeKw: gfExcludeKw,
     aberturaMin: gfAberturaMin, aberturaMax: gfAberturaMax,
+    includeCats: gfIncludeCats, excludeCats: gfExcludeCats,
+    exactMatch: gfExactMatch, allPlaces: gfAllPlaces, details: gfDetails,
+    enrichLeads: gfEnrichLeads, leadsMax: gfLeadsMax, leadsDeps: gfLeadsDeps,
+    enrichSocial: gfEnrichSocial,
   };
   const setGfField = (key, val) => {
     switch (key) {
@@ -1049,6 +1238,15 @@ export default function LeadScraper() {
       case "excludeKw": setGfExcludeKw(val); break;
       case "aberturaMin": setGfAberturaMin(val); break;
       case "aberturaMax": setGfAberturaMax(val); break;
+      case "includeCats": setGfIncludeCats(val); break;
+      case "excludeCats": setGfExcludeCats(val); break;
+      case "exactMatch": setGfExactMatch(val); break;
+      case "allPlaces": setGfAllPlaces(val); break;
+      case "details": setGfDetails(val); break;
+      case "enrichLeads": setGfEnrichLeads(val); break;
+      case "leadsMax": setGfLeadsMax(val); break;
+      case "leadsDeps": setGfLeadsDeps(val); break;
+      case "enrichSocial": setGfEnrichSocial(val); break;
       default: break;
     }
   };
@@ -1279,6 +1477,7 @@ export default function LeadScraper() {
             mapQueries: preset.mapQueries,
             cnae: preset.cnae,
             porte: preset.porte,
+            includeCategories: preset.includeCategories,
             city, state, maxResults,
             sources: globalSources,
             conselho: "cau",
@@ -1683,6 +1882,16 @@ export default function LeadScraper() {
               </Box>
             </DialogTitle>
             <DialogContent dividers>
+              {xrayLead.imageUrl && (
+                <Box style={{ marginBottom: 12, borderRadius: 8, overflow: "hidden" }}>
+                  <img
+                    src={xrayLead.imageUrl}
+                    alt={xrayLead.name || "Estabelecimento"}
+                    style={{ width: "100%", maxHeight: 180, objectFit: "cover", display: "block" }}
+                    onError={e => { e.currentTarget.style.display = "none"; }}
+                  />
+                </Box>
+              )}
               <XraySection title="Empresa">
                 <XrayItem label="Nome fantasia">{xrayLead.nomeFantasia || xrayLead.name}</XrayItem>
                 <XrayItem label="Razão social">{xrayLead.razaoSocial}</XrayItem>
@@ -1742,11 +1951,61 @@ export default function LeadScraper() {
                 </XrayItem>
               </XraySection>
 
+              {(xrayLead.openingHours || xrayLead.hasPopularTimes || xrayLead.temporarilyClosed || xrayLead.categories?.length || xrayLead.reviewsTags?.length) && (
+                <XraySection title="Operação (Google Maps)">
+                  <XrayItem label="Horário de funcionamento">{xrayLead.openingHours}</XrayItem>
+                  <XrayItem label="Movimento">
+                    {xrayLead.hasPopularTimes ? "Com fluxo registrado no Maps" : null}
+                  </XrayItem>
+                  <XrayItem label="Status no Maps">
+                    {xrayLead.temporarilyClosed ? "Temporariamente fechado" : null}
+                  </XrayItem>
+                  <XrayItem label="Categorias">
+                    {xrayLead.categories?.length ? (
+                      <Box display="flex" style={{ gap: 3, flexWrap: "wrap" }}>
+                        {xrayLead.categories.map(c => (
+                          <Chip key={c} size="small" variant="outlined" label={c} style={{ fontSize: 10 }} />
+                        ))}
+                      </Box>
+                    ) : null}
+                  </XrayItem>
+                  <XrayItem label="Termos nas avaliações">
+                    {xrayLead.reviewsTags?.length ? xrayLead.reviewsTags.join(" · ") : null}
+                  </XrayItem>
+                </XraySection>
+              )}
+
+              {xrayLead.decisionMakers?.length > 0 && (
+                <XraySection title="Decisores">
+                  {xrayLead.decisionMakers.map((d, i) => (
+                    <Box key={i} style={{ marginBottom: 8, paddingBottom: 8, borderBottom: "1px dashed #e5e7eb" }}>
+                      <Typography variant="body2" style={{ fontWeight: 600 }}>
+                        {d.name || "—"}{d.jobTitle ? ` · ${d.jobTitle}` : ""}
+                      </Typography>
+                      <Typography variant="caption" color="textSecondary">
+                        {[d.department && (LEAD_DEPARTMENT_LABELS[d.department] || d.department),
+                          d.email,
+                          d.phone && formatPhoneBR(d.phone),
+                          d.linkedin && "LinkedIn"].filter(Boolean).join(" · ")}
+                      </Typography>
+                      {d.linkedin && (
+                        <Typography variant="caption">
+                          <a href={d.linkedin} target="_blank" rel="noopener noreferrer">{d.linkedin}</a>
+                        </Typography>
+                      )}
+                    </Box>
+                  ))}
+                </XraySection>
+              )}
+
               <XraySection title="Localização">
                 <XrayItem label="Endereço">{xrayLead.address}</XrayItem>
                 <XrayItem label="Município">{xrayLead.municipio}</XrayItem>
                 <XrayItem label="UF">{xrayLead.uf}</XrayItem>
                 <XrayItem label="CEP">{xrayLead.cep}</XrayItem>
+                <XrayItem label="Coordenadas">
+                  {xrayLead.lat && xrayLead.lng ? `${xrayLead.lat}, ${xrayLead.lng}` : null}
+                </XrayItem>
               </XraySection>
 
               <XraySection title="Origem">
@@ -2585,7 +2844,14 @@ export default function LeadScraper() {
                       className={`${classes.presetTile} ${on ? classes.presetTileOn : ""}`}
                       onClick={() => {
                         setGlobalPreset(p.key);
-                        if (p.key && GLOBAL_PRESETS[p.key]) setGlobalSources(GLOBAL_PRESETS[p.key].defaultSources);
+                        if (p.key && GLOBAL_PRESETS[p.key]) {
+                          setGlobalSources(GLOBAL_PRESETS[p.key].defaultSources);
+                          // semeia a whitelist de categorias do preset — editável
+                          // no accordion "Extras do Google Maps" abaixo
+                          setGfIncludeCats([...(GLOBAL_PRESETS[p.key].includeCategories || [])]);
+                        } else {
+                          setGfIncludeCats([]);
+                        }
                       }}
                     >
                       <Box display="flex" alignItems="center" style={{ gap: 6 }}>

@@ -140,6 +140,27 @@ export const startJob = async (req: Request, res: Response): Promise<Response> =
       }
     }
 
+    // Categorias do Maps (whitelist/blacklist): lista de strings curtas —
+    // o actor valida os valores do enum dele no run
+    for (const key of ["includeCategories", "excludeCategories", "leadsDepartments"] as const) {
+      const v = filters[key];
+      if (v === undefined) continue;
+      const arr = (Array.isArray(v) ? v : [v]).map(s => String(s).trim().toLowerCase()).filter(Boolean);
+      if (!arr.every(s => s.length <= 60)) return res.status(400).json({ error: `${key}: item excede 60 caracteres` });
+      if (arr.length > 100) return res.status(400).json({ error: `${key}: máximo de 100 itens` });
+      filters[key] = arr;
+    }
+    if (filters.countryCode !== undefined) {
+      const cc = String(filters.countryCode).trim().toUpperCase();
+      if (!/^[A-Z]{2}$/.test(cc)) return res.status(400).json({ error: "countryCode inválido (ISO-3166, ex.: BR)" });
+      filters.countryCode = cc;
+    }
+    if (filters.leadsMaxPerPlace !== undefined) {
+      const n = Number(filters.leadsMaxPerPlace);
+      if (!Number.isFinite(n)) return res.status(400).json({ error: "leadsMaxPerPlace deve ser um inteiro" });
+      filters.leadsMaxPerPlace = Math.min(Math.max(Math.trunc(n), 1), 10);
+    }
+
     // Geo (busca por área no mapa): lat/lng obrigatórios juntos, radiusKm opcional
     if (filters.lat !== undefined || filters.lng !== undefined) {
       const lat = Number(filters.lat);
@@ -454,6 +475,8 @@ const REFILTER_FIELDS = [
   "minRating", "minReviews", "skipClosedPlaces", "onlyWithWebsite",
   "onlyWithoutWebsite", "onlyCellPhone", "excludeKeywords", "excludeMei",
   "situacao", "situacaoStrict", "capitalSocialMin", "dataAberturaMin", "dataAberturaMax",
+  // categorias rodam local no QualityFilters — dá p/ refilter sem re-scrape
+  "excludeCategories", "includeCategories",
 ] as const;
 
 // Reaplica os pós-filtros de qualidade sobre os results já capturados (sem

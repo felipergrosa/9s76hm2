@@ -25,6 +25,7 @@ interface SeenSets {
   cnpjs: Set<string>;
   phones: Set<string>;
   instagrams: Set<string>;
+  places: Set<string>;
 }
 
 // Origem mais forte em que a chave já foi vista. A prioridade entre origens
@@ -39,6 +40,7 @@ interface SeenKeyMaps {
   cnpjs: Map<string, SeenOrigin>;
   phones: Map<string, SeenOrigin>;
   instagrams: Map<string, SeenOrigin>;
+  places: Map<string, SeenOrigin>;
 }
 
 interface SeenData {
@@ -63,12 +65,14 @@ async function loadSeenKeys(companyId: number): Promise<SeenData> {
   const seen: SeenKeyMaps = {
     cnpjs: new Map(),
     phones: new Map(),
-    instagrams: new Map()
+    instagrams: new Map(),
+    places: new Map()
   };
   const rejected: SeenSets = {
     cnpjs: new Set(),
     phones: new Set(),
-    instagrams: new Set()
+    instagrams: new Set(),
+    places: new Set()
   };
 
   const priorJobs = await LeadScraperJob.findAll({
@@ -81,13 +85,16 @@ async function loadSeenKeys(companyId: number): Promise<SeenData> {
       const cnpj = r.cnpj ? r.cnpj.replace(/\D/g, "") : "";
       const p = normPhone(r.phone);
       const h = normHandle(r.instagram);
+      const place = r.placeId?.trim() || "";
       if (cnpj) seen.cnpjs.set(cnpj, origin);
       if (p) seen.phones.set(p, origin);
       if (h) seen.instagrams.set(h, origin);
+      if (place) seen.places.set(place, origin);
       if (r.verdict === "bad") {
         if (cnpj) rejected.cnpjs.add(cnpj);
         if (p) rejected.phones.add(p);
         if (h) rejected.instagrams.add(h);
+        if (place) rejected.places.add(place);
       }
     }
   }
@@ -140,23 +147,27 @@ function dedupeWithinBatch(results: ScraperResult[], seen: SeenSets): ScraperRes
   const localCnpjs = new Set<string>();
   const localPhones = new Set<string>();
   const localHandles = new Set<string>();
+  const localPlaces = new Set<string>();
   const out: ScraperResult[] = [];
 
   for (const r of results) {
     const cnpj = r.cnpj ? r.cnpj.replace(/\D/g, "") : null;
     const phone = normPhone(r.phone);
     const handle = normHandle(r.instagram);
+    const place = r.placeId?.trim() || null;
 
     const isDup =
       (cnpj && (seen.cnpjs.has(cnpj) || localCnpjs.has(cnpj))) ||
       (phone && (seen.phones.has(phone) || localPhones.has(phone))) ||
-      (handle && (seen.instagrams.has(handle) || localHandles.has(handle)));
+      (handle && (seen.instagrams.has(handle) || localHandles.has(handle))) ||
+      (place && (seen.places.has(place) || localPlaces.has(place)));
 
     if (isDup) continue;
 
     if (cnpj) localCnpjs.add(cnpj);
     if (phone) localPhones.add(phone);
     if (handle) localHandles.add(handle);
+    if (place) localPlaces.add(place);
     out.push(r);
   }
 
@@ -179,7 +190,8 @@ export const filterOutDuplicates = async (
     const seen: SeenSets = {
       cnpjs: new Set(maps.cnpjs.keys()),
       phones: new Set(maps.phones.keys()),
-      instagrams: new Set(maps.instagrams.keys())
+      instagrams: new Set(maps.instagrams.keys()),
+      places: new Set(maps.places.keys())
     };
     const before = results.length;
     const filtered = dedupeWithinBatch(results, seen);
@@ -223,6 +235,7 @@ export const classifyResults = async (
       const cnpj = r.cnpj ? r.cnpj.replace(/\D/g, "") : null;
       const phone = normPhone(r.phone);
       const handle = normHandle(r.instagram);
+      const place = r.placeId?.trim() || null;
 
       // Rejeição manual tem precedência máxima: casou por qualquer chave,
       // o lead novo herda verdict "bad" + seen_job — o classifyAndPrune já o
@@ -230,7 +243,8 @@ export const classifyResults = async (
       const isRejected =
         (cnpj && rejected.cnpjs.has(cnpj)) ||
         (phone && rejected.phones.has(phone)) ||
-        (handle && rejected.instagrams.has(handle));
+        (handle && rejected.instagrams.has(handle)) ||
+        (place && rejected.places.has(place));
       if (isRejected) {
         r.verdict = "bad";
         r.dedupeStatus = "seen_job";
@@ -253,6 +267,14 @@ export const classifyResults = async (
       if (handle) {
         const origin = seen.instagrams.get(handle);
         if (origin) candidates.push({ origin, keyRank: 2 });
+      }
+
+      // placeId do Maps: identidade estável — mesmo lugar reaparece com
+      // nome/telefone diferentes em buscas distintas; rank baixo (fallback
+      // de quem não tem CNPJ/telefone/IG)
+      if (place) {
+        const origin = seen.places.get(place);
+        if (origin) candidates.push({ origin, keyRank: 3 });
       }
 
       if (!candidates.length) {

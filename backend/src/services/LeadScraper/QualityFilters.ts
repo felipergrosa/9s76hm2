@@ -46,6 +46,16 @@ export const applyQualityPostFilters = (
   // regra do excludeKeywords do usuário, mesclados server-side
   const blacklistTerms = (blacklist?.terms || []).map(normKey).filter(Boolean);
   const blacklistCats = new Set((blacklist?.categories || []).map(normKey).filter(Boolean));
+  // blacklist manual de categorias (excludeCategories) — casa contra todos
+  // os categories[] do Maps, não só o primário
+  const excludeCats = toArray(f.excludeCategories).map(normKey).filter(Boolean);
+  // whitelist de categorias — no refilter roda local (no job o actor já
+  // filtrou server-side, mas o merge pode trazer leads de outras fontes)
+  const includeCats = toArray(f.includeCategories).map(normKey).filter(Boolean);
+  const leadCats = (r: ScraperResult): string[] =>
+    [r.category, ...(r.categories || [])].map(c => normKey(c || "")).filter(Boolean);
+  const catBlocked = (r: ScraperResult, terms: string[], strictSet?: Set<string>): boolean =>
+    leadCats(r).some(c => strictSet?.has(c) || terms.some(t => c.includes(t) || t.includes(c)));
   const situacoes = toArray(f.situacao).map(normUpper).filter(Boolean);
   const minAbertura = toIsoDate(f.dataAberturaMin);
   const maxAbertura = toIsoDate(f.dataAberturaMax);
@@ -71,8 +81,31 @@ export const applyQualityPostFilters = (
     }
 
     // categoria aprendida por rejeição — fail-open sem category no lead
-    if (blacklistCats.size && r.category && blacklistCats.has(normKey(r.category))) {
+    if (blacklistCats.size && catBlocked(r, [], blacklistCats)) {
       drop("blacklistCategory");
+      return false;
+    }
+
+    // blacklist manual de categorias — mesmo fail-open
+    if (excludeCats.length && catBlocked(r, excludeCats)) {
+      drop("excludeCategory");
+      return false;
+    }
+
+    // whitelist de categorias — FAIL-CLOSED só para leads do Maps (têm
+    // categories/placeId): lead de outra fonte sem categoria não é cortado,
+    // pois pode ser o mesmo negócio ainda não mergeado
+    if (includeCats.length && leadCats(r).length) {
+      if (!leadCats(r).some(c => includeCats.some(t => c.includes(t) || t.includes(c)))) {
+        drop("includeCategories");
+        return false;
+      }
+    }
+
+    // lugar marcado como temporariamente fechado no Maps (skipClosedPlaces
+    // default true também cobre isso no lado do actor)
+    if (f.skipClosedPlaces !== false && r.temporarilyClosed === true) {
+      drop("temporarilyClosed");
       return false;
     }
 

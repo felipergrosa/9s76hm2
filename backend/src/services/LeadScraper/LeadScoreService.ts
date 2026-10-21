@@ -31,6 +31,14 @@ export const scoreLead = (r: ScraperResult): void => {
   if (r.website) score += 10;
   if (r.instagram) score += 10;
 
+  // sinais de negócio ativo vindos do detail page do Maps (add-on)
+  if (r.hasPopularTimes) score += 8;     // histograma de movimento = loja com fluxo
+  else if (r.openingHours) score += 4;   // horário cadastrado = perfil mantido
+
+  // decisores extraídos do site (add-on leads enrichment) — contato direto
+  // com quem decide, vale quase tanto quanto WhatsApp confirmado
+  if (r.decisionMakers?.length) score += 15;
+
   // nota alta só conta com massa de avaliações — 5.0 com 2 reviews é ruído
   const rating = parseRating(r.rating);
   if (rating !== null) {

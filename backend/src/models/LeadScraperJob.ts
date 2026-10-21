@@ -46,6 +46,26 @@ export interface ScraperResult {
   // busca global: fontes de origem do lead (ex.: ["google_maps","cnpj_search"])
   sources?: string[];
   reviewsCount?: number;       // total de avaliações no Maps (só Apify fornece)
+  // dados extra do Google Maps (Apify compass~crawler-google-places)
+  placeId?: string;            // Google place_id — chave de dedupe estável
+  categories?: string[];       // todas as categorias do Maps (whitelist/blacklist)
+  cep?: string;                // postalCode do endereço
+  lat?: number;
+  lng?: number;
+  temporarilyClosed?: boolean; // cortado junto com permanentlyClosed quando skipClosedPlaces
+  openingHours?: string;       // resumo do horário de funcionamento (detail page)
+  hasPopularTimes?: boolean;   // tem histograma de movimento = negócio com fluxo real
+  imageUrl?: string;           // foto principal do estabelecimento
+  reviewsTags?: string[];      // termos frequentes nas avaliações (detail page)
+  // decisores extraídos do site da empresa (add-on leads enrichment)
+  decisionMakers?: {
+    name?: string;
+    jobTitle?: string;
+    email?: string;
+    phone?: string;
+    linkedin?: string;
+    department?: string;
+  }[];
   leadScore?: number;          // 0-100 — calculado ao fim do pipeline
   leadTier?: "gold" | "silver" | "bronze";
   imported?: boolean;
@@ -127,6 +147,18 @@ export interface ScraperFilters {
   excludeMei?: boolean;        // excluir MEI / Empresário Individual
   dataAberturaMin?: string;    // YYYY-MM-DD — abertas a partir de
   dataAberturaMax?: string;    // YYYY-MM-DD — abertas até
+  // google maps (apify) — filtros extras do actor
+  includeCategories?: MultiValue; // whitelist de categorias do Maps (categoryFilterWords — servidor)
+  excludeCategories?: MultiValue; // blacklist de categorias — pós-filtro local (grátis)
+  countryCode?: string;           // default "BR" — trava resultados no país
+  exactMatch?: boolean;           // searchMatching "only_exact" (mais estrito que only_includes)
+  allPlacesMode?: boolean;        // varrer TODOS os estabelecimentos da área (ignora queries)
+  // add-ons pagos do actor (opt-in; custo por lugar/decisor)
+  scrapeDetails?: boolean;        // detail page + diretórios + web results (flat $0.002/place)
+  enrichLeads?: boolean;          // decisores do site (nome/cargo/email) — $0.005/lead
+  leadsMaxPerPlace?: number;      // máx. decisores por lugar (1-10, default 3)
+  leadsDepartments?: MultiValue;  // departamentos: c_suite|sales|marketing|operations|...
+  enrichSocialProfiles?: boolean; // perfis sociais enriquecidos (seguidores/bio) — caro
 }
 
 @Table

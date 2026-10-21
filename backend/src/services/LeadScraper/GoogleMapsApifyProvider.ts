@@ -166,6 +166,30 @@ const toPlaceMinimumStars = (min: number): string | undefined => {
   return undefined;
 };
 
+// O actor ignora raio em Point — convertemos radiusKm num polígono circular
+// (GeoJSON, [lng, lat]) de 24 vértices, então a busca por área respeita o raio
+// de verdade em vez de expandir pelo viewport do Google.
+const circlePolygon = (lat: number, lng: number, radiusKm: number, vertices = 24) => {
+  const ring: [number, number][] = [];
+  const latDeg = radiusKm / 111.32;
+  const lngDeg = radiusKm / (111.32 * Math.max(Math.cos((lat * Math.PI) / 180), 0.01));
+  for (let i = 0; i <= vertices; i++) {
+    const a = (2 * Math.PI * i) / vertices;
+    ring.push([
+      +(lng + lngDeg * Math.cos(a)).toFixed(6),
+      +(lat + latDeg * Math.sin(a)).toFixed(6),
+    ]);
+  }
+  return { type: "Polygon", coordinates: [ring] };
+};
+
+// Deptos válidos do enum leadsEnrichmentDepartments do actor
+const VALID_LEAD_DEPARTMENTS = new Set([
+  "c_suite", "product", "engineering_technical", "design", "education",
+  "finance", "human_resources", "information_technology", "legal",
+  "marketing", "medical_health", "operations", "sales", "consulting",
+]);
+
 export const scrapeGoogleMapsViaApify = async (
   keyword: string | string[],
   cityQuery: string,
@@ -187,12 +211,71 @@ export const scrapeGoogleMapsViaApify = async (
     // impede a expansão semântica/geográfica do Google: sem "only_includes" o
     // Maps retorna resultados correlatos fora do nicho ("engenharia civil"
     // numa busca de "projeto luminotécnico" numa UF inteira)
-    searchMatching: "only_includes",
+    searchMatching: filters?.exactMatch ? "only_exact" : "only_includes",
+    // trava os resultados no Brasil — sem isso o Google pode expandir para
+    // países de língua portuguesa ou cidades homônimas fora do BR
+    countryCode: filters?.countryCode || "BR",
     // extrai email/telefone/socials (IG/X/LinkedIn/Facebook) da página de contato
     // do site do lugar — scrapeSocialMediaProfiles é add-on pago por perfil,
     // scrapeContacts já cobre os links sociais
     scrapeContacts: true,
   };
+
+  // whitelist de categorias do Maps (categoryFilterWords): taxa única por
+  // campo, restritiva — só entram places cuja categoria esteja na lista.
+  // Categorias são strings do enum do actor (5.630 valores) — passamos cru;
+  // o actor valida.
+  const includeCats = (Array.isArray(filters?.includeCategories)
+    ? filters.includeCategories
+    : filters?.includeCategories ? [filters.includeCategories] : [])
+    .map(s => String(s).trim().toLowerCase()).filter(Boolean).slice(0, 100);
+  if (includeCats.length) input.categoryFilterWords = includeCats;
+
+  // varrer tudo do mapa: ignora os search terms e extrai todos os pins da
+  // área — útil p/ mapear um polígono sem depender de termos de busca
+  if (filters?.allPlacesMode) {
+    input.allPlacesNoSearchAction = "all_places_no_search_ocr";
+    delete input.searchStringsArray;
+    delete input.maxCrawledPlacesPerSearch;
+    if (maxResults) input.maxCrawledPlacesPerSearch = Math.min(maxResults, 300);
+  }
+
+  // Add-on de detalhes ($0.002/place flat): detail page abre horários,
+  // popularTimes, peopleAlsoSearch, reviewsTags; scrapeDirectories varre
+  // estabelecimentos dentro de shoppings/galerias; includeWebResults traz a
+  // seção "Web results" (só aparece para usuários logados — melhor esforço)
+  if (filters?.scrapeDetails) {
+    input.scrapePlaceDetailPage = true;
+    input.scrapeDirectories = true;
+    input.includeWebResults = true;
+  }
+
+  // Add-on de decisores ($0.005/lead): extrai pessoas-chave do site da empresa
+  // (nome, cargo, email, telefone, LinkedIn) — leadsEnrichmentDepartments
+  // restringe por departamento (enum do actor)
+  if (filters?.enrichLeads) {
+    input.maximumLeadsEnrichmentRecords = Math.min(
+      Math.max(Math.trunc(filters.leadsMaxPerPlace || 3), 1), 10
+    );
+    const deps = (Array.isArray(filters.leadsDepartments)
+      ? filters.leadsDepartments
+      : filters.leadsDepartments ? [filters.leadsDepartments] : [])
+      .map(d => String(d).trim()).filter(d => VALID_LEAD_DEPARTMENTS.has(d));
+    if (deps.length) input.leadsEnrichmentDepartments = deps;
+    // enriquecimento só roda em places com website — o filtro "com site"
+    // do actor já garante isso sem custo extra de crawl
+  }
+
+  // Add-on de perfis sociais enriquecidos (seguidores, bio, verified) — caro
+  // por perfil ($0.10 no free tier); opt-in explícito
+  if (filters?.enrichSocialProfiles) {
+    input.instagrams = true;
+    input.facebooks = true;
+    input.linkedins = true;
+    input.twitters = true;
+    input.youtubes = true;
+    input.tiktoks = true;
+  }
 
   // skipClosedPlaces já vem ligado por padrão no actor — reforçamos no input e
   // só desligamos via opt-out explícito (filters.skipClosedPlaces === false).
@@ -208,10 +291,8 @@ export const scrapeGoogleMapsViaApify = async (
   else if (filters?.onlyWithoutWebsite) input.website = "withoutWebsiteOnly";
 
   if (geo) {
-    input.customGeolocation = {
-      type: "Point",
-      coordinates: [geo.lng, geo.lat],
-    };
+    // radiusKm vira polígono circular — Point não respeita raio no actor
+    input.customGeolocation = circlePolygon(geo.lat, geo.lng, geo.radiusKm || 5);
     input.locationQuery = undefined;
   } else {
     input.locationQuery = cityQuery;
@@ -232,17 +313,36 @@ export const scrapeGoogleMapsViaApify = async (
     : filters?.excludeKeywords ? [filters.excludeKeywords] : [])
     .map(s => normKey(String(s))).filter(Boolean);
 
+  // blacklist de categorias local (grátis — roda sobre os categories[] do
+  // item, não só o categoryName primário)
+  const excludeCats = (Array.isArray(filters?.excludeCategories)
+    ? filters.excludeCategories
+    : filters?.excludeCategories ? [filters.excludeCategories] : [])
+    .map(s => normKey(String(s))).filter(Boolean);
+  const catsMatch = (item: any): boolean => {
+    if (!excludeCats.length) return false;
+    const cats = [
+      item.categoryName,
+      ...(Array.isArray(item.categories) ? item.categories : []),
+    ].map(c => normKey(String(c || "")));
+    return cats.some(c => c && excludeCats.some(x => c.includes(x) || x.includes(c)));
+  };
+
   const results: ScraperResult[] = [];
   for (const item of items) {
     if (results.length >= maxResults) break;
     const name = item.title || item.name;
     if (!name) continue;
+    // anúncios promovidos são ruído puro pra geração de lead — sempre corta
+    if (item.isAdvertisement === true) continue;
     // defesa local: mesmo com skipClosedPlaces no input, garante o corte
-    if (skipClosed && item.permanentlyClosed === true) continue;
+    // (temporarilyClosed entra no mesmo espírito — negócio não está operando)
+    if (skipClosed && (item.permanentlyClosed === true || item.temporarilyClosed === true)) continue;
     if (excludeTerms.length) {
       const hay = `${normKey(String(item.title || ""))}|${normKey(String(item.categoryName || ""))}`;
       if (excludeTerms.some(t => hay.includes(t))) continue;
     }
+    if (catsMatch(item)) continue;
 
     const address = [item.address, item.city, item.state].filter(Boolean).join(", ") || item.address || "";
 
@@ -260,6 +360,35 @@ export const scrapeGoogleMapsViaApify = async (
       return m ? m[1].replace(/[?/].*$/, "") : s.replace(/^@/, "");
     };
 
+    // detail page: openingHours vem como array de {day, hours} — vira resumo
+    const hours = Array.isArray(item.openingHours)
+      ? item.openingHours
+          .map((d: any) => `${d.day || ""}: ${d.hours || ""}`.trim())
+          .filter((s: string) => s.length > 2)
+          .join(" | ")
+      : "";
+    const popular = Boolean(
+      item.popularTimesHistogram && Object.keys(item.popularTimesHistogram || {}).length
+    ) || Boolean(item.popularTimesLiveText);
+    const img = Array.isArray(item.imageUrls) ? item.imageUrls[0] : "";
+    const tags = Array.isArray(item.reviewsTags)
+      ? item.reviewsTags.map((t: any) => t?.title || t).filter(Boolean).slice(0, 10)
+      : undefined;
+
+    // leads enrichment (add-on): decisores vêm em scrapedLeads — tolera
+    // variações de nome do campo entre versões do actor
+    const rawLeads = item.scrapedLeads || item.leads || item.businessLeads;
+    const decisionMakers = Array.isArray(rawLeads)
+      ? rawLeads.slice(0, 10).map((l: any) => ({
+          name: l.name || `${l.firstName || ""} ${l.lastName || ""}`.trim() || undefined,
+          jobTitle: l.jobTitle || l.title || undefined,
+          email: l.email || l.workEmail || undefined,
+          phone: l.phone || l.phoneNumber || undefined,
+          linkedin: l.linkedin || l.linkedinUrl || undefined,
+          department: l.department || undefined,
+        })).filter((d: any) => d.name || d.email || d.jobTitle)
+      : undefined;
+
     results.push({
       name,
       phone: item.phone || item.phoneUnformatted || sitePhone || "",
@@ -276,6 +405,17 @@ export const scrapeGoogleMapsViaApify = async (
       ...(typeof item.reviewsCount === "number" ? { reviewsCount: item.reviewsCount } : {}),
       category: item.categoryName || (Array.isArray(item.categories) ? item.categories[0] : "") || "",
       googleMapsUrl: item.url || "",
+      // campos extras do actor — dedupe, geo e sinais de negócio ativo
+      ...(item.placeId ? { placeId: item.placeId } : {}),
+      ...(Array.isArray(item.categories) && item.categories.length ? { categories: item.categories.slice(0, 10) } : {}),
+      ...(item.postalCode || item.cep ? { cep: item.postalCode || item.cep } : {}),
+      ...(item.location?.lat && item.location?.lng ? { lat: item.location.lat, lng: item.location.lng } : {}),
+      ...(item.temporarilyClosed === true ? { temporarilyClosed: true } : {}),
+      ...(hours ? { openingHours: hours } : {}),
+      ...(popular ? { hasPopularTimes: true } : {}),
+      ...(img ? { imageUrl: img } : {}),
+      ...(tags?.length ? { reviewsTags: tags } : {}),
+      ...(decisionMakers?.length ? { decisionMakers } : {}),
     } as ScraperResult);
   }
 

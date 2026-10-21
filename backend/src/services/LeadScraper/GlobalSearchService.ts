@@ -61,11 +61,13 @@ async function scrapeMapsBranch(
       ? (states.length ? cities.flatMap(c => states.map(s => `${c} ${s}`)) : cities)
       : states.length ? states : [""];
 
-  // presets de público enviam mapQueries[] — sem eles, usa a keyword única
+  // presets de público enviam mapQueries[] — sem eles, usa a keyword única.
+  // allPlacesMode varre todos os estabelecimentos da área sem termo.
   const queries = toArray(filters.mapQueries).length
     ? toArray(filters.mapQueries)
     : [keyword].filter(Boolean);
-  if (!queries.length) return [];
+  if (!queries.length && !filters.allPlacesMode) return [];
+  if (filters.allPlacesMode && !queries.length) queries.push("");
 
   const cap = Math.min(filters.maxResults || 200, 1000);
   const perQueryCap = Math.max(1, Math.ceil(cap / cityQueries.length));
@@ -233,6 +235,9 @@ const identityKeys = (r: ScraperResult): string[] => {
     if (canonical) keys.push(`tel:${canonical}`);
   }
   if (r.instagram) keys.push(`ig:${r.instagram.trim().toLowerCase().replace(/^@+/, "")}`);
+  // placeId é a chave mais estável do Maps — mesmo estabelecimento uniria
+  // leads de queries diferentes mesmo com nome/telefone divergentes
+  if (r.placeId) keys.push(`place:${r.placeId.trim()}`);
   const nome = normText(r.razaoSocial || r.nomeFantasia || r.name || "");
   const uf = (r.uf || "").toUpperCase().trim();
   if (nome.length >= 4 && uf) keys.push(`nome:${nome}|${uf}`);
@@ -249,7 +254,40 @@ const MERGE_SCALAR_FIELDS: (keyof ScraperResult)[] = [
   "instagram", "twitter", "linkedin", "instagramPhone", "googleMapsUrl",
   "capitalSocial", "dataAbertura", "registro", "registroTipo",
   "reviewsCount", // só o Maps traz — preserva no merge p/ filtros e score
+  "placeId", "cep", "lat", "lng", "openingHours", "imageUrl",
+  "hasPopularTimes", "temporarilyClosed",
 ];
+
+// Campos array de strings — merge por união (dedup por item) em vez de
+// primeiro-vence; decisionMakers é tratado separado (dedup por email+nome)
+const MERGE_ARRAY_FIELDS: ("categories" | "reviewsTags")[] = [
+  "categories", "reviewsTags",
+];
+
+const mergeArrays = (target: ScraperResult, src: ScraperResult): void => {
+  for (const f of MERGE_ARRAY_FIELDS) {
+    const tv = (target as any)[f] as any[] | undefined;
+    const sv = (src as any)[f] as any[] | undefined;
+    if (!sv?.length) continue;
+    const merged = [...new Set([...(tv || []), ...sv])];
+    (target as any)[f] = merged.slice(0, 12);
+  }
+  // decisionMakers: união por email+name (objetos — não dedup por Set)
+  const dm = [
+    ...(target.decisionMakers || []),
+    ...(src.decisionMakers || []),
+  ];
+  if (dm.length) {
+    const seen = new Set<string>();
+    target.decisionMakers = dm.filter(d => {
+      const k = `${(d.email || "").toLowerCase()}|${(d.name || "").toLowerCase()}`;
+      if (!k.replace("|", "")) return false;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    }).slice(0, 10);
+  }
+};
 
 const mergeInto = (target: ScraperResult, src: ScraperResult): void => {
   for (const f of MERGE_SCALAR_FIELDS) {
@@ -258,6 +296,7 @@ const mergeInto = (target: ScraperResult, src: ScraperResult): void => {
       (target as any)[f] = v;
     }
   }
+  mergeArrays(target, src);
   const origins = new Set([...(target.sources || []), ...(src.sources || [])]);
   target.sources = [...origins];
   const enriched = new Set([...(target.enrichedFrom || []), ...(src.enrichedFrom || [])]);
