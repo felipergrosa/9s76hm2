@@ -15,6 +15,7 @@ import { safeNormalizePhoneNumber } from "../../utils/phone";
 import { toArray, resolveMaxResults } from "./ScraperFilterUtils";
 import { filterOutDuplicates, classifyResults } from "./DedupeService";
 import { applyQualityPostFilters } from "./QualityFilters";
+import { getCompanyBlacklist } from "./LeadBlacklistService";
 import { scoreResults } from "./LeadScoreService";
 import logger from "../../utils/logger";
 
@@ -326,8 +327,10 @@ export const runScraperJob = async (jobId: number) => {
         results.push(...queryResults);
       }
 
-      // pós-filtros baratos de qualidade antes do enrich/dedupe (opt-in)
-      results = applyQualityPostFilters(results, job.filters);
+      // pós-filtros baratos de qualidade antes do enrich/dedupe (opt-in);
+      // blacklist aprendida por rejeições é mesclada aos excludeKeywords
+      const blacklist = await getCompanyBlacklist(job.companyId);
+      results = applyQualityPostFilters(results, job.filters, blacklist);
       normalizePhonesInPlace(results);
       const classified = await classifyAndPrune(job.companyId, results);
       // Dedup intra-lote/histórico só nos "new" — seen_list/seen_contact ficam

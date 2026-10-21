@@ -56,6 +56,9 @@ export interface ScraperResult {
   dedupeStatus?: "new" | "seen_job" | "seen_list" | "seen_contact";
   dedupeInfo?: { jobId?: number; contactId?: number; contactListId?: number };
   existsInContacts?: boolean;
+  // feedback manual do usuário sobre o lead (ver POST .../results/:index/feedback)
+  verdict?: "good" | "bad";
+  verdictAt?: string;
   // Carimbados no import do job
   importedAt?: string;
   contactId?: number;
@@ -115,6 +118,8 @@ export interface ScraperFilters {
   onlyWithoutWebsite?: boolean;// inverso (ex.: prospectar p/ vender site)
   onlyCellPhone?: boolean;     // só celular BR (canonical 55DDD9XXXXXXXX) — fail-closed
   excludeKeywords?: MultiValue;// blacklist de termos no nome/razão social
+  // termos/categorias aprendidos por rejeição — mesclados à blacklist da empresa
+  // (preenchido server-side; o frontend pode enviar excludeKeywords normal)
   // receita federal
   excludeMei?: boolean;        // excluir MEI / Empresário Individual
   dataAberturaMin?: string;    // YYYY-MM-DD — abertas a partir de

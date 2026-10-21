@@ -44,6 +44,8 @@ import {
   SlidersHorizontal as SlidersIcon,
   Database as DatabaseIcon,
   Star as StarIcon,
+  ThumbsUp as ThumbUpIcon,
+  ThumbsDown as ThumbDownIcon,
   X as XIcon,
 } from "lucide-react";
 import { toast } from "react-toastify";
@@ -289,6 +291,14 @@ const useStyles = makeStyles(theme => ({
     "&:hover": {
       backgroundColor: theme.palette.action.hover,
     },
+    transition: "background-color 120ms ease",
+  },
+  // Linha de lead rejeitado (👎): fundo avermelhado + texto esmaecido.
+  // A última célula (avaliação 👍/👎) mantém opacidade total.
+  rowBad: {
+    backgroundColor: "rgba(231,80,90,0.09)",
+    "&:hover": { backgroundColor: "rgba(231,80,90,0.16)" },
+    "& td:not(:last-child)": { opacity: 0.65 },
     transition: "background-color 120ms ease",
   },
   emptyState: {
@@ -750,6 +760,160 @@ const GLOBAL_SOURCE_CARDS = [
   { key: "conselho", label: "CAU — Arquitetura", hint: "Registro profissional e empresarial", Icon: ConselhoIcon },
 ];
 
+// Converte os valores do painel de refinamento (gf*/rf*) no payload de filtros
+// entendido pelo backend — mesmo mapeamento na criação do job e no refilter.
+const buildAdvFilters = (v) => ({
+  minRating: v.minRating !== "" ? Number(v.minRating) : undefined,
+  minReviews: v.minReviews !== "" ? Number(v.minReviews) : undefined,
+  ...(v.skipClosed ? {} : { skipClosedPlaces: false }),
+  ...(v.site === "with" ? { onlyWithWebsite: true } : v.site === "without" ? { onlyWithoutWebsite : true } : {}),
+  onlyCellPhone: v.onlyCell || undefined,
+  excludeKeywords: v.excludeKw.length ? v.excludeKw : undefined,
+  excludeMei: v.excludeMei || undefined,
+  situacao: v.onlyActive ? ["ATIVA"] : undefined,
+  capitalSocialMin: v.capitalMin !== "" ? Number(v.capitalMin) : undefined,
+  dataAberturaMin: v.aberturaMin || undefined,
+  dataAberturaMax: v.aberturaMax || undefined,
+});
+
+// filters do job → valores do painel de refinamento. Usada por "Repetir busca"
+// e pelo dialog "Refinar resultados" — mesma hidratação nos dois fluxos.
+const refineFromJobFilters = (f = {}) => ({
+  skipClosed: f.skipClosedPlaces !== false,
+  minRating: f.minRating != null ? String(f.minRating) : "",
+  minReviews: f.minReviews != null ? String(f.minReviews) : "",
+  site: f.onlyWithWebsite ? "with" : f.onlyWithoutWebsite ? "without" : "any",
+  onlyCell: !!f.onlyCellPhone,
+  onlyActive: Array.isArray(f.situacao) ? f.situacao.includes("ATIVA") : false,
+  excludeMei: !!f.excludeMei,
+  capitalMin: f.capitalSocialMin != null ? String(f.capitalSocialMin) : "",
+  excludeKw: Array.isArray(f.excludeKeywords) ? f.excludeKeywords.filter(Boolean) : [],
+  aberturaMin: f.dataAberturaMin || "",
+  aberturaMax: f.dataAberturaMax || "",
+});
+
+// Controles de refinamento da Busca Global — compartilhados entre o accordion
+// da aba (estados gf*) e o dialog "Refinar resultados" (refilter server-side).
+// `v` = objeto com os valores; `set` = (campo, valor) => void.
+function GlobalRefineFields({ v, set }) {
+  const classes = useStyles();
+  return (
+    <div className={classes.advGrid}>
+      <div>
+        <FormControlLabel
+          style={{ marginLeft: 0 }}
+          control={<Switch size="small" color="primary" checked={v.skipClosed} onChange={e => set("skipClosed", e.target.checked)} />}
+          label={<Typography variant="body2">Pular estabelecimentos fechados<span className={classes.srcTag}>Maps</span></Typography>}
+        />
+      </div>
+      <div>
+        <span className={classes.advLabel}>Nota mínima<span className={classes.srcTag}>Maps</span></span>
+        <Select
+          variant="outlined" displayEmpty
+          value={v.minRating} onChange={e => set("minRating", e.target.value)}
+          style={{ fontSize: 13, width: "100%" }}
+        >
+          <MenuItem value="">Qualquer</MenuItem>
+          <MenuItem value="3">3.0+</MenuItem>
+          <MenuItem value="3.5">3.5+</MenuItem>
+          <MenuItem value="4">4.0+</MenuItem>
+          <MenuItem value="4.5">4.5+</MenuItem>
+        </Select>
+      </div>
+      <div>
+        <span className={classes.advLabel}>Mín. de avaliações<span className={classes.srcTag}>Maps</span></span>
+        <Select
+          variant="outlined" displayEmpty
+          value={v.minReviews} onChange={e => set("minReviews", e.target.value)}
+          style={{ fontSize: 13, width: "100%" }}
+        >
+          <MenuItem value="">Qualquer</MenuItem>
+          <MenuItem value="5">5+</MenuItem>
+          <MenuItem value="10">10+</MenuItem>
+          <MenuItem value="25">25+</MenuItem>
+          <MenuItem value="50">50+</MenuItem>
+        </Select>
+      </div>
+      <div>
+        <span className={classes.advLabel}>Site próprio<span className={classes.srcTag}>Todas</span></span>
+        <Select
+          variant="outlined"
+          value={v.site} onChange={e => set("site", e.target.value)}
+          style={{ fontSize: 13, width: "100%" }}
+        >
+          <MenuItem value="any">Qualquer</MenuItem>
+          <MenuItem value="with">Só com site</MenuItem>
+          <MenuItem value="without">Só sem site</MenuItem>
+        </Select>
+      </div>
+      <div>
+        <FormControlLabel
+          style={{ marginLeft: 0 }}
+          control={<Switch size="small" color="primary" checked={v.onlyCell} onChange={e => set("onlyCell", e.target.checked)} />}
+          label={<Typography variant="body2">Apenas celular (WhatsApp-ready)<span className={classes.srcTag}>Todas</span></Typography>}
+        />
+      </div>
+      <div>
+        <FormControlLabel
+          style={{ marginLeft: 0 }}
+          control={<Switch size="small" color="primary" checked={v.onlyActive} onChange={e => set("onlyActive", e.target.checked)} />}
+          label={<Typography variant="body2">Apenas empresas ativas<span className={classes.srcTag}>Receita</span></Typography>}
+        />
+      </div>
+      <div>
+        <FormControlLabel
+          style={{ marginLeft: 0 }}
+          control={<Switch size="small" color="primary" checked={v.excludeMei} onChange={e => set("excludeMei", e.target.checked)} />}
+          label={<Typography variant="body2">Excluir MEI<span className={classes.srcTag}>Receita</span></Typography>}
+        />
+      </div>
+      <div>
+        <span className={classes.advLabel}>Capital social mínimo (R$)<span className={classes.srcTag}>Receita</span></span>
+        <TextField
+          type="number" variant="outlined" size="small" fullWidth
+          placeholder="ex: 50000"
+          value={v.capitalMin} onChange={e => set("capitalMin", e.target.value)}
+          inputProps={{ min: 0 }}
+        />
+      </div>
+      <div>
+        <span className={classes.advLabel}>Abertas a partir de<span className={classes.srcTag}>Receita</span></span>
+        <TextField
+          type="date" variant="outlined" size="small" fullWidth
+          value={v.aberturaMin} onChange={e => set("aberturaMin", e.target.value)}
+          InputLabelProps={{ shrink: true }}
+        />
+      </div>
+      <div>
+        <span className={classes.advLabel}>Abertas até<span className={classes.srcTag}>Receita</span></span>
+        <TextField
+          type="date" variant="outlined" size="small" fullWidth
+          value={v.aberturaMax} onChange={e => set("aberturaMax", e.target.value)}
+          InputLabelProps={{ shrink: true }}
+        />
+      </div>
+      <div className={classes.fullRow}>
+        <Autocomplete
+          multiple freeSolo
+          options={[]}
+          value={v.excludeKw}
+          onChange={(_, val) => set("excludeKw", val)}
+          renderTags={(val, getTagProps) => val.map((opt, i) => (
+            <Chip variant="outlined" size="small" label={opt} {...getTagProps({ index: i })} key={opt} />
+          ))}
+          renderInput={params => (
+            <TextField
+              {...params} variant="outlined" size="small"
+              label={<>Excluir termos do nome<span className={classes.srcTag}>Todas</span></>}
+              placeholder="ex.: distribuidora"
+            />
+          )}
+        />
+      </div>
+    </div>
+  );
+}
+
 export default function LeadScraper() {
   const classes = useStyles();
   const [tab, setTab] = useState(0);
@@ -821,6 +985,38 @@ export default function LeadScraper() {
   const [gfAberturaMax, setGfAberturaMax] = useState("");
   const [segGlobal, setSegGlobal] = useState(null);         // atalho de segmento — só preenche keyword
   const [xrayLead, setXrayLead] = useState(null);           // lead aberto no modal Raio-X
+
+  // Classificação manual 👍/❌ — índice do lead aguardando resposta do endpoint
+  const [verdictBusy, setVerdictBusy] = useState(null);
+  // Dialog "Refinar resultados" — rf = valores temporários hidratados do job
+  const [refineOpen, setRefineOpen] = useState(false);
+  const [rf, setRf] = useState(null);
+  const [refiltering, setRefiltering] = useState(false);
+
+  // Objeto de valores + setter unificado p/ o painel de refinamento (gf*),
+  // compartilhado com o dialog de refino via GlobalRefineFields
+  const gfVals = {
+    skipClosed: gfSkipClosed, minRating: gfMinRating, minReviews: gfMinReviews,
+    site: gfSite, onlyCell: gfOnlyCell, onlyActive: gfOnlyActive,
+    excludeMei: gfExcludeMei, capitalMin: gfCapitalMin, excludeKw: gfExcludeKw,
+    aberturaMin: gfAberturaMin, aberturaMax: gfAberturaMax,
+  };
+  const setGfField = (key, val) => {
+    switch (key) {
+      case "skipClosed": setGfSkipClosed(val); break;
+      case "minRating": setGfMinRating(val); break;
+      case "minReviews": setGfMinReviews(val); break;
+      case "site": setGfSite(val); break;
+      case "onlyCell": setGfOnlyCell(val); break;
+      case "onlyActive": setGfOnlyActive(val); break;
+      case "excludeMei": setGfExcludeMei(val); break;
+      case "capitalMin": setGfCapitalMin(val); break;
+      case "excludeKw": setGfExcludeKw(val); break;
+      case "aberturaMin": setGfAberturaMin(val); break;
+      case "aberturaMax": setGfAberturaMax(val); break;
+      default: break;
+    }
+  };
 
   // atalhos de segmento (Maps preenche keyword, RF preenche CNAE)
   const [segMaps, setSegMaps] = useState(null);
@@ -1039,19 +1235,7 @@ export default function LeadScraper() {
       // Refinamento avançado — merge nos DOIS modos (preset e custom).
       // skipClosedPlaces: default do backend é true, só enviamos false.
       // onlyWith/onlyWithout são mutuamente exclusivos (seletor "Site próprio").
-      const adv = {
-        minRating: gfMinRating !== "" ? Number(gfMinRating) : undefined,
-        minReviews: gfMinReviews !== "" ? Number(gfMinReviews) : undefined,
-        ...(gfSkipClosed ? {} : { skipClosedPlaces: false }),
-        ...(gfSite === "with" ? { onlyWithWebsite: true } : gfSite === "without" ? { onlyWithoutWebsite: true } : {}),
-        onlyCellPhone: gfOnlyCell || undefined,
-        excludeKeywords: gfExcludeKw.length ? gfExcludeKw : undefined,
-        excludeMei: gfExcludeMei || undefined,
-        situacao: gfOnlyActive ? ["ATIVA"] : undefined,
-        capitalSocialMin: gfCapitalMin !== "" ? Number(gfCapitalMin) : undefined,
-        dataAberturaMin: gfAberturaMin || undefined,
-        dataAberturaMax: gfAberturaMax || undefined,
-      };
+      const adv = buildAdvFilters(gfVals);
       const filters = preset
         ? {
             preset: globalPreset,
@@ -1090,9 +1274,11 @@ export default function LeadScraper() {
   // já existem nos contatos; =true importa mesmo os já existentes (atualiza/mescla).
   const importSelected = async (includeExisting = false) => {
     if (!activeJob?.id) return;
-    const indices = selectedIndices.length
+    // Defesa no client: leads rejeitados (verdict "bad") nunca são importados
+    const indices = (selectedIndices.length
       ? selectedIndices
-      : (activeJob.results || []).map((_, i) => i);
+      : (activeJob.results || []).map((_, i) => i)
+    ).filter(i => (activeJob.results || [])[i]?.verdict !== "bad");
     if (!indices.length) { toast.warning("Nenhum lead para importar."); return; }
     setLoading(true);
     try {
@@ -1117,11 +1303,135 @@ export default function LeadScraper() {
     finally { setLoading(false); }
   };
 
+  // Classificação manual do lead — "good" aprova, "bad" descarta (o backend
+  // aprende blacklist na empresa). Reclicar no mesmo verdict limpa (null).
+  const setLeadVerdict = async (index, verdict) => {
+    if (!activeJob?.id || verdictBusy !== null) return;
+    const lead = results[index];
+    if (!lead) return;
+    const next = lead.verdict === verdict ? null : verdict;
+    setVerdictBusy(index);
+    try {
+      const { data } = await api.post(
+        `/lead-scraper/jobs/${activeJob.id}/results/${index}/feedback`,
+        { verdict: next }
+      );
+      const updated = { ...(data?.lead || data || {}), verdict: next };
+      setActiveJob(prev => {
+        if (!prev?.results) return prev;
+        const list = prev.results.slice();
+        list[index] = { ...list[index], ...updated };
+        return { ...prev, results: list };
+      });
+      // se o Raio-X estiver aberto neste lead, reflete o novo verdict
+      setXrayLead(prev => (prev && prev === lead ? { ...prev, ...updated } : prev));
+      if (next === "bad") {
+        // rejeitado sai da seleção — nunca é importado nem conta como novo
+        setSelectedIndices(prev => prev.filter(x => x !== index));
+        toast.info("Lead descartado — o sistema aprende e evita similares nas próximas buscas");
+      }
+    } catch (err) {
+      toast.error(err?.response?.data?.error || "Erro ao salvar avaliação do lead.");
+    } finally {
+      setVerdictBusy(null);
+    }
+  };
+
+  // Botões 👍/❌ por linha/card — stopPropagation p/ não abrir o Raio-X
+  const renderVerdictButtons = (r, i) => (
+    <Box display="flex" alignItems="center" style={{ gap: 0 }} onClick={e => e.stopPropagation()}>
+      <Tooltip title={r.verdict === "good" ? "Aprovado — clique para limpar" : "Aprovar lead"}>
+        <span>
+          <IconButton
+            size="small"
+            disabled={verdictBusy !== null}
+            onClick={() => setLeadVerdict(i, "good")}
+            aria-label="Aprovar lead"
+          >
+            <ThumbUpIcon
+              size={14}
+              color={r.verdict === "good" ? "#26c281" : "currentColor"}
+              fill={r.verdict === "good" ? "#26c281" : "none"}
+            />
+          </IconButton>
+        </span>
+      </Tooltip>
+      <Tooltip title={r.verdict === "bad" ? "Rejeitado — clique para limpar" : "Rejeitar lead (aprende a evitar similares)"}>
+        <span>
+          <IconButton
+            size="small"
+            disabled={verdictBusy !== null}
+            onClick={() => setLeadVerdict(i, "bad")}
+            aria-label="Rejeitar lead"
+          >
+            <ThumbDownIcon
+              size={14}
+              color={r.verdict === "bad" ? "#e7505a" : "currentColor"}
+              fill={r.verdict === "bad" ? "#e7505a" : "none"}
+            />
+          </IconButton>
+        </span>
+      </Tooltip>
+    </Box>
+  );
+
+  // "Repetir busca" — hidrata o form da aba Busca Global com os filters do
+  // job ativo (sources não-global preenchem o que der) e NÃO dispara o job.
+  const repeatSearch = () => {
+    const f = activeJob?.filters || {};
+    const toArr = v => (Array.isArray(v) ? v.filter(Boolean) : v ? [v] : []);
+    const cities = toArr(f.city).length ? toArr(f.city) : toArr(f.municipio);
+    const ufs = toArr(f.state).length ? toArr(f.state) : toArr(f.uf);
+    setKeyword(f.keyword || "");
+    setCity(cities);
+    setState(ufs.length ? ufs : ["SP"]);
+    if (typeof f.maxResults === "number") setMaxResults(f.maxResults);
+    const srcs = toArr(f.sources);
+    setGlobalSources(srcs.length ? srcs : ["google_maps", "cnpj_search", "conselho"]);
+    // preset do job original é mantido selecionado (se ainda existir)
+    setGlobalPreset(f.preset && GLOBAL_PRESETS[f.preset] ? f.preset : "");
+    // filtros finos (gf*) — mesma hidratação do dialog de refino
+    const v = refineFromJobFilters(f);
+    Object.keys(v).forEach(k => setGfField(k, v[k]));
+    setTab(4);        // aba Busca Global
+    setAdvOpen(true); // mostra os filtros carregados
+    toast.info("Parâmetros carregados — ajuste e busque novamente");
+  };
+
+  // "Refinar resultados" — abre o painel de filtros finos hidratado do job
+  const openRefine = () => {
+    setRf(refineFromJobFilters(activeJob?.filters));
+    setRefineOpen(true);
+  };
+
+  // Aplica o refilter server-side sobre os leads já capturados (sem re-scrapar)
+  const applyRefilter = async () => {
+    if (!activeJob?.id || !rf) return;
+    setRefiltering(true);
+    try {
+      const before = results.length;
+      const { data } = await api.post(`/lead-scraper/jobs/${activeJob.id}/refilter`, {
+        filters: buildAdvFilters(rf),
+      });
+      setActiveJob(data);
+      setSelectedIndices([]);
+      lastPollRef.current = { jobId: data.id, status: data.status };
+      const after = (data?.results || []).length;
+      toast.success(`${after} leads após refinamento (${Math.max(0, before - after)} removidos)`);
+      setRefineOpen(false);
+    } catch (err) {
+      toast.error(err?.response?.data?.error || "Erro ao refinar resultados.");
+    } finally {
+      setRefiltering(false);
+    }
+  };
+
   const toggleSelect = (i) =>
     setSelectedIndices(prev => prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i]);
 
   const toggleAll = () => {
-    const visibleIndices = displayRows.map(({ i }) => i);
+    // rejeitados não são selecionáveis — "selecionar tudo" só pega os válidos
+    const visibleIndices = displayRows.filter(({ r }) => r.verdict !== "bad").map(({ i }) => i);
     const allVisibleSelected = visibleIndices.length > 0 && visibleIndices.every(i => selectedIndices.includes(i));
     setSelectedIndices(allVisibleSelected ? [] : visibleIndices);
   };
@@ -1168,7 +1478,9 @@ export default function LeadScraper() {
   };
 
   const results = activeJob?.results || [];
-  const allSelected = results.length > 0 && selectedIndices.length === results.length;
+  // rejeitados não são selecionáveis — "todos selecionados" conta só os válidos
+  const selectableCount = results.filter(r => r.verdict !== "bad").length;
+  const allSelected = selectableCount > 0 && selectedIndices.length === selectableCount;
   const someSelected = selectedIndices.length > 0;
   const isRunning = activeJob?.status === "running" || activeJob?.status === "pending";
 
@@ -1209,13 +1521,17 @@ export default function LeadScraper() {
   const displayRows = results
     .map((r, i) => ({ r, i }))
     .filter(({ r }) => {
+      // Rejeitados (👎) só aparecem no chip "Rejeitados" — saem de todos os
+      // demais filtros (all/new/existing/imported/gold)
+      const bad = r.verdict === "bad";
+      if (dedupeFilter === "rejected" ? !bad : bad) return false;
       if (quickFilters.hasPhone && !r.phone) return false;
       if (quickFilters.hasCnpj && !r.cnpj) return false;
       if (quickFilters.hasWhatsapp && !(r.whatsappChecked && r.hasWhatsapp)) return false;
       if (quickFilters.hasReceita && !(r.enrichedFrom || []).includes("receita") && !r.cnaeDescricao) return false;
       // Filtro por status de dedupe (client-side): "Já tenho" agrupa contatos,
       // outra lista e capturado em busca anterior
-      if (dedupeFilter !== "all") {
+      if (dedupeFilter !== "all" && dedupeFilter !== "rejected") {
         const cat = leadDedupeCategory(r);
         if (dedupeFilter === "new" && cat !== "new") return false;
         if (dedupeFilter === "imported" && cat !== "imported") return false;
@@ -1242,8 +1558,10 @@ export default function LeadScraper() {
   // Contagens por status de dedupe — calculadas no cliente sobre results[]
   // ("existing" = já nos contatos + em outra lista + capturado em busca anterior)
   const leadStatusCounts = useMemo(() => {
-    const c = { new: 0, contact: 0, list: 0, job: 0, imported: 0, existing: 0, gold: 0 };
+    const c = { new: 0, contact: 0, list: 0, job: 0, imported: 0, existing: 0, gold: 0, rejected: 0 };
     results.forEach(r => {
+      // rejeitado (👎) não entra em nenhum outro contador — nem em "novos"
+      if (r.verdict === "bad") { c.rejected += 1; return; }
       c[leadDedupeCategory(r)] += 1;
       if (r.leadTier === "gold") c.gold += 1;
     });
@@ -1439,6 +1757,53 @@ export default function LeadScraper() {
             </DialogContent>
           </>
         )}
+      </Dialog>
+
+      {/* ── Refinar resultados — reaplica filtros finos no backend, sem nova busca ── */}
+      <Dialog open={refineOpen} onClose={() => setRefineOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle disableTypography>
+          <Typography variant="h6" style={{ fontWeight: 700 }}>Refinar resultados</Typography>
+        </DialogTitle>
+        <DialogContent dividers>
+          <Box
+            mb={1.5} p={1.25}
+            style={{
+              borderRadius: 8,
+              fontSize: 12,
+              background: "rgba(243,156,18,0.08)",
+              border: "1px solid rgba(243,156,18,0.35)",
+              color: "#92600a",
+            }}
+          >
+            Reaplica os filtros sobre os leads já capturados — sem gastar créditos
+          </Box>
+          {rf && (
+            <GlobalRefineFields
+              v={rf}
+              set={(k, val) => setRf(prev => ({ ...prev, [k]: val }))}
+            />
+          )}
+          <Box mt={2} display="flex" justifyContent="flex-end" style={{ gap: 8 }}>
+            <Button
+              size="small"
+              onClick={() => setRefineOpen(false)}
+              style={{ textTransform: "none" }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              size="small"
+              variant="contained"
+              color="primary"
+              onClick={applyRefilter}
+              disabled={refiltering}
+              startIcon={refiltering ? <CircularProgress size={15} color="inherit" /> : <SlidersIcon size={15} />}
+              style={{ textTransform: "none", fontWeight: 600 }}
+            >
+              Aplicar filtros
+            </Button>
+          </Box>
+        </DialogContent>
       </Dialog>
 
       <motion.div
@@ -2321,119 +2686,7 @@ export default function LeadScraper() {
                 />
               </Box>
               <Collapse in={advOpen}>
-                <div className={classes.advGrid}>
-                  <div>
-                    <FormControlLabel
-                      style={{ marginLeft: 0 }}
-                      control={<Switch size="small" color="primary" checked={gfSkipClosed} onChange={e => setGfSkipClosed(e.target.checked)} />}
-                      label={<Typography variant="body2">Pular estabelecimentos fechados<span className={classes.srcTag}>Maps</span></Typography>}
-                    />
-                  </div>
-                  <div>
-                    <span className={classes.advLabel}>Nota mínima<span className={classes.srcTag}>Maps</span></span>
-                    <Select
-                      variant="outlined" displayEmpty
-                      value={gfMinRating} onChange={e => setGfMinRating(e.target.value)}
-                      style={{ fontSize: 13, width: "100%" }}
-                    >
-                      <MenuItem value="">Qualquer</MenuItem>
-                      <MenuItem value="3">3.0+</MenuItem>
-                      <MenuItem value="3.5">3.5+</MenuItem>
-                      <MenuItem value="4">4.0+</MenuItem>
-                      <MenuItem value="4.5">4.5+</MenuItem>
-                    </Select>
-                  </div>
-                  <div>
-                    <span className={classes.advLabel}>Mín. de avaliações<span className={classes.srcTag}>Maps</span></span>
-                    <Select
-                      variant="outlined" displayEmpty
-                      value={gfMinReviews} onChange={e => setGfMinReviews(e.target.value)}
-                      style={{ fontSize: 13, width: "100%" }}
-                    >
-                      <MenuItem value="">Qualquer</MenuItem>
-                      <MenuItem value="5">5+</MenuItem>
-                      <MenuItem value="10">10+</MenuItem>
-                      <MenuItem value="25">25+</MenuItem>
-                      <MenuItem value="50">50+</MenuItem>
-                    </Select>
-                  </div>
-                  <div>
-                    <span className={classes.advLabel}>Site próprio<span className={classes.srcTag}>Todas</span></span>
-                    <Select
-                      variant="outlined"
-                      value={gfSite} onChange={e => setGfSite(e.target.value)}
-                      style={{ fontSize: 13, width: "100%" }}
-                    >
-                      <MenuItem value="any">Qualquer</MenuItem>
-                      <MenuItem value="with">Só com site</MenuItem>
-                      <MenuItem value="without">Só sem site</MenuItem>
-                    </Select>
-                  </div>
-                  <div>
-                    <FormControlLabel
-                      style={{ marginLeft: 0 }}
-                      control={<Switch size="small" color="primary" checked={gfOnlyCell} onChange={e => setGfOnlyCell(e.target.checked)} />}
-                      label={<Typography variant="body2">Apenas celular (WhatsApp-ready)<span className={classes.srcTag}>Todas</span></Typography>}
-                    />
-                  </div>
-                  <div>
-                    <FormControlLabel
-                      style={{ marginLeft: 0 }}
-                      control={<Switch size="small" color="primary" checked={gfOnlyActive} onChange={e => setGfOnlyActive(e.target.checked)} />}
-                      label={<Typography variant="body2">Apenas empresas ativas<span className={classes.srcTag}>Receita</span></Typography>}
-                    />
-                  </div>
-                  <div>
-                    <FormControlLabel
-                      style={{ marginLeft: 0 }}
-                      control={<Switch size="small" color="primary" checked={gfExcludeMei} onChange={e => setGfExcludeMei(e.target.checked)} />}
-                      label={<Typography variant="body2">Excluir MEI<span className={classes.srcTag}>Receita</span></Typography>}
-                    />
-                  </div>
-                  <div>
-                    <span className={classes.advLabel}>Capital social mínimo (R$)<span className={classes.srcTag}>Receita</span></span>
-                    <TextField
-                      type="number" variant="outlined" size="small" fullWidth
-                      placeholder="ex: 50000"
-                      value={gfCapitalMin} onChange={e => setGfCapitalMin(e.target.value)}
-                      inputProps={{ min: 0 }}
-                    />
-                  </div>
-                  <div>
-                    <span className={classes.advLabel}>Abertas a partir de<span className={classes.srcTag}>Receita</span></span>
-                    <TextField
-                      type="date" variant="outlined" size="small" fullWidth
-                      value={gfAberturaMin} onChange={e => setGfAberturaMin(e.target.value)}
-                      InputLabelProps={{ shrink: true }}
-                    />
-                  </div>
-                  <div>
-                    <span className={classes.advLabel}>Abertas até<span className={classes.srcTag}>Receita</span></span>
-                    <TextField
-                      type="date" variant="outlined" size="small" fullWidth
-                      value={gfAberturaMax} onChange={e => setGfAberturaMax(e.target.value)}
-                      InputLabelProps={{ shrink: true }}
-                    />
-                  </div>
-                  <div className={classes.fullRow}>
-                    <Autocomplete
-                      multiple freeSolo
-                      options={[]}
-                      value={gfExcludeKw}
-                      onChange={(_, val) => setGfExcludeKw(val)}
-                      renderTags={(val, getTagProps) => val.map((opt, i) => (
-                        <Chip variant="outlined" size="small" label={opt} {...getTagProps({ index: i })} key={opt} />
-                      ))}
-                      renderInput={params => (
-                        <TextField
-                          {...params} variant="outlined" size="small"
-                          label={<>Excluir termos do nome<span className={classes.srcTag}>Todas</span></>}
-                          placeholder="ex.: distribuidora"
-                        />
-                      )}
-                    />
-                  </div>
-                </div>
+                <GlobalRefineFields v={gfVals} set={setGfField} />
               </Collapse>
 
               {/* 5 — Limite + CTA */}
@@ -2647,9 +2900,23 @@ export default function LeadScraper() {
                 </Tooltip>
               )}
             </Box>
-            <Typography variant="body2" color="textSecondary" style={{ fontWeight: 600 }}>
-              {activeJob.totalFound || 0} leads encontrados
-            </Typography>
+            <Box display="flex" alignItems="center" style={{ gap: 10 }}>
+              {/* Recarrega os parâmetros desta busca no form (aba Busca Global) */}
+              <Tooltip title="Recarrega os parâmetros desta busca no formulário — não inicia automaticamente">
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<RefreshIcon size={14} />}
+                  onClick={repeatSearch}
+                  style={{ fontSize: 11, textTransform: "none", fontWeight: 600, whiteSpace: "nowrap" }}
+                >
+                  Repetir busca
+                </Button>
+              </Tooltip>
+              <Typography variant="body2" color="textSecondary" style={{ fontWeight: 600 }}>
+                {activeJob.totalFound || 0} leads encontrados
+              </Typography>
+            </Box>
           </Box>
 
           {isRunning && (
@@ -2694,14 +2961,18 @@ export default function LeadScraper() {
                   {leadStatusCounts.job > 0 && (
                     <span className={classes.summaryStat}><i style={{ background: "#757575" }} />{leadStatusCounts.job} já capturados</span>
                   )}
+                  {leadStatusCounts.rejected > 0 && (
+                    <span className={classes.summaryStat}><i style={{ background: "#e7505a" }} />{leadStatusCounts.rejected} rejeitados</span>
+                  )}
                 </div>
                 <Box display="flex" alignItems="center" style={{ gap: 6, flexWrap: "wrap" }}>
                   {[
-                    { key: "all",      label: "Todos",      count: results.length },
-                    { key: "new",      label: "Novos",      count: leadStatusCounts.new },
-                    { key: "existing", label: "Já tenho",   count: leadStatusCounts.existing },
-                    { key: "imported", label: "Importados", count: leadStatusCounts.imported },
-                    { key: "gold",     label: "🏆 Ouro",    count: leadStatusCounts.gold },
+                    { key: "all",      label: "Todos",         count: results.length - leadStatusCounts.rejected },
+                    { key: "new",      label: "Novos",         count: leadStatusCounts.new },
+                    { key: "existing", label: "Já tenho",      count: leadStatusCounts.existing },
+                    { key: "imported", label: "Importados",    count: leadStatusCounts.imported },
+                    { key: "gold",     label: "🏆 Ouro",       count: leadStatusCounts.gold },
+                    { key: "rejected", label: "❌ Rejeitados", count: leadStatusCounts.rejected },
                   ].map(f => (
                     <Chip
                       key={f.key}
@@ -2760,26 +3031,46 @@ export default function LeadScraper() {
                     {displayRows.length} de {results.length} exibidos
                   </Typography>
                 )}
+                {/* Refilter server-side: reaplica os filtros finos sem nova busca */}
+                {activeJob?.results?.length > 0 && (
+                  <Tooltip title="Reaplica os filtros finos sobre os leads já capturados — sem gastar créditos">
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<SlidersIcon size={14} />}
+                      onClick={openRefine}
+                      style={{ fontSize: 11, textTransform: "none", fontWeight: 600, marginLeft: "auto", whiteSpace: "nowrap" }}
+                    >
+                      Refinar resultados
+                    </Button>
+                  </Tooltip>
+                )}
               </div>
 
               {/* Cards — mobile */}
               <div className={classes.mobileList}>
-                {displayRows.map(({ r, i }) => (
+                {displayRows.map(({ r, i }) => {
+                  const bad = r.verdict === "bad";
+                  return (
                   <div
                     key={i}
                     className={classes.card}
-                    style={{ cursor: "pointer" }}
+                    style={{
+                      cursor: "pointer",
+                      ...(bad ? { background: "rgba(231,80,90,0.09)", borderColor: "rgba(231,80,90,0.35)" } : {}),
+                    }}
                     onClick={() => setXrayLead(r)}
                   >
                     <div className={classes.cardHeader}>
                       <div className={classes.cardTitle}>
                         <Checkbox
-                          checked={selectedIndices.includes(i)}
+                          checked={!bad && selectedIndices.includes(i)}
+                          disabled={bad}
                           onChange={() => toggleSelect(i)}
                           onClick={e => e.stopPropagation()}
                           size="small"
                         />
-                        <div style={{ minWidth: 0 }}>
+                        <div style={{ minWidth: 0, ...(bad ? { opacity: 0.65 } : {}) }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                             <div className={classes.cardName}>{r.nomeFantasia || r.name || "—"}</div>
                             <LeadTierBadge lead={r} />
@@ -2798,7 +3089,7 @@ export default function LeadScraper() {
                       </Box>
                     </div>
 
-                    <div className={classes.cardMeta}>
+                    <div className={classes.cardMeta} style={bad ? { opacity: 0.65 } : undefined}>
                       <div>
                         <div className={classes.metaLabel}>Telefone</div>
                         <div className={classes.metaValue}>
@@ -2912,9 +3203,14 @@ export default function LeadScraper() {
                           {r.email}
                         </Typography>
                       )}
+                      {/* Classificação manual 👍/❌ — alinhada à direita */}
+                      <Box style={{ marginLeft: "auto" }}>
+                        {renderVerdictButtons(r, i)}
+                      </Box>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Tabela — desktop */}
@@ -2944,19 +3240,23 @@ export default function LeadScraper() {
                         <TableCell className={`${classes.stickyHead} ${classes.headCell}`}>STATUS</TableCell>
                       )}
                       <SortableHeader className={`${classes.stickyHead} ${classes.headCell}`} label="AVALIAÇÃO" sortKey="rating" sortConfig={sortConfig} onSort={requestSort} />
+                      <TableCell className={`${classes.stickyHead} ${classes.headCell}`}>AVALIAR</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {displayRows.map(({ r, i }) => (
+                    {displayRows.map(({ r, i }) => {
+                      const bad = r.verdict === "bad";
+                      return (
                       <TableRow
-                        key={i} hover selected={selectedIndices.includes(i)}
-                        className={classes.rowHover}
+                        key={i} hover selected={!bad && selectedIndices.includes(i)}
+                        className={bad ? classes.rowBad : classes.rowHover}
                         style={{ cursor: "pointer" }}
                         onClick={() => setXrayLead(r)}
                       >
                         <TableCell padding="checkbox" onClick={e => e.stopPropagation()}>
                           <Checkbox
-                            checked={selectedIndices.includes(i)}
+                            checked={!bad && selectedIndices.includes(i)}
+                            disabled={bad}
                             onChange={() => toggleSelect(i)}
                             size="small"
                           />
@@ -3111,8 +3411,12 @@ export default function LeadScraper() {
                             )}
                           </span>
                         </TableCell>
+                        <TableCell padding="checkbox" onClick={e => e.stopPropagation()}>
+                          {renderVerdictButtons(r, i)}
+                        </TableCell>
                       </TableRow>
-                    ))}
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </Box>

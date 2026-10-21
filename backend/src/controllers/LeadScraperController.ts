@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { Op } from "sequelize";
-import LeadScraperJob from "../models/LeadScraperJob";
+import LeadScraperJob, { ScraperFilters } from "../models/LeadScraperJob";
 import User from "../models/User";
 import { createScraperJob, runScraperJob, requestJobCancel } from "../services/LeadScraper/LeadScraperJobService";
 import ImportLeadsService from "../services/ContactServices/ImportLeadsService";
@@ -13,6 +13,8 @@ import {
   setCompanyApifyToken,
   clearCompanyApifyToken
 } from "../services/LeadScraper/ApifyTokenService";
+import { applyQualityPostFilters } from "../services/LeadScraper/QualityFilters";
+import { getCompanyBlacklist, learnFromRejection } from "../services/LeadScraper/LeadBlacklistService";
 import logger from "../utils/logger";
 
 const VALID_SOURCES = ["google_maps", "cnpj", "cnpj_search", "ig_followers", "conselho", "global"];
@@ -320,6 +322,8 @@ export const importJobResults = async (req: Request, res: Response): Promise<Res
     const selected = allResults.filter((r: any, i: number) => {
       if (indexSet && !indexSet.has(i)) return false;
       if (r.imported) return false;
+      // lead rejeitado pelo usuário NUNCA é elegível ao import
+      if (r.verdict === "bad") return false;
       const status = r.dedupeStatus;
       if (!status || status === "new") {
         selectedIdx.push(i);
@@ -398,5 +402,119 @@ export const importJobResults = async (req: Request, res: Response): Promise<Res
     return res.json(result);
   } catch (err: any) {
     return res.status(500).json({ error: err.message || "Erro ao importar leads" });
+  }
+};
+
+// Feedback manual sobre um lead do job: "good"/"bad" carimbam verdict +
+// verdictAt (null limpa a marca). "bad" alimenta a blacklist da empresa
+// (learnFromRejection) — o lead rejeitado não volta em buscas futuras
+// (DedupeService) e nunca é elegível ao import.
+export const setResultFeedback = async (req: Request, res: Response): Promise<Response> => {
+  try {
+    const { companyId } = req.user;
+    const job = await LeadScraperJob.findOne({ where: { id: req.params.id, companyId } });
+    if (!job) return res.status(404).json({ error: "Job não encontrado" });
+
+    const results = [...(job.results || [])];
+    const index = Number(req.params.index);
+    if (!/^\d+$/.test(String(req.params.index)) || index >= results.length) {
+      return res.status(400).json({ error: "index fora do intervalo de results" });
+    }
+
+    const verdict = req.body?.verdict;
+    if (verdict !== "good" && verdict !== "bad" && verdict !== null) {
+      return res.status(400).json({ error: 'verdict deve ser "good", "bad" ou null' });
+    }
+
+    const updated = { ...results[index] };
+    if (verdict === null) {
+      delete updated.verdict;
+      delete updated.verdictAt;
+    } else {
+      updated.verdict = verdict;
+      updated.verdictAt = new Date().toISOString();
+    }
+    results[index] = updated;
+    await job.update({ results });
+
+    if (verdict === "bad") {
+      // best-effort por contrato — nunca lança, não derruba o feedback
+      await learnFromRejection(companyId, updated, job.filters);
+    }
+
+    return res.json(updated);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || "Erro ao registrar feedback" });
+  }
+};
+
+// Campos de filtro aceitos no refilter — subconjunto manipulado pelo
+// QualityFilters (não re-scrapa, então campos de busca não fazem sentido)
+const REFILTER_FIELDS = [
+  "minRating", "minReviews", "skipClosedPlaces", "onlyWithWebsite",
+  "onlyWithoutWebsite", "onlyCellPhone", "excludeKeywords", "excludeMei",
+  "situacao", "capitalSocialMin", "dataAberturaMin", "dataAberturaMax",
+] as const;
+
+// Reaplica os pós-filtros de qualidade sobre os results já capturados (sem
+// re-scrape). Mescla os filtros novos em job.filters e o array pode encolher
+// — EXCETO leads com verdict "bad" ou imported, que ficam para o front
+// continuar exibindo a marca. Responde o job atualizado.
+export const refilterJob = async (req: Request, res: Response): Promise<Response> => {
+  try {
+    const { companyId } = req.user;
+    const job = await LeadScraperJob.findOne({ where: { id: req.params.id, companyId } });
+    if (!job) return res.status(404).json({ error: "Job não encontrado" });
+    if (job.status !== "done" && job.status !== "cancelled") {
+      return res.status(409).json({ error: "job ainda não concluído" });
+    }
+
+    const body = req.body?.filters;
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return res.status(400).json({ error: "filters deve ser um objeto" });
+    }
+
+    const partial: ScraperFilters = {};
+    for (const key of REFILTER_FIELDS) {
+      if (body[key] !== undefined) (partial as any)[key] = body[key];
+    }
+
+    // mesma validação do startJob para os campos de qualidade
+    if (partial.minRating !== undefined) {
+      const n = Number(partial.minRating);
+      if (!Number.isFinite(n) || n < 0 || n > 5) {
+        return res.status(400).json({ error: "minRating deve estar entre 0 e 5" });
+      }
+      partial.minRating = n;
+    }
+    for (const key of ["minReviews", "capitalSocialMin"] as const) {
+      if (partial[key] !== undefined) {
+        const n = Number(partial[key]);
+        if (!Number.isFinite(n) || n < 0) {
+          return res.status(400).json({ error: `${key} deve ser >= 0` });
+        }
+        partial[key] = n;
+      }
+    }
+    for (const key of ["dataAberturaMin", "dataAberturaMax"] as const) {
+      if (partial[key] !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(String(partial[key]))) {
+        return res.status(400).json({ error: `${key} deve estar no formato YYYY-MM-DD` });
+      }
+    }
+
+    const mergedFilters: ScraperFilters = { ...(job.filters || {}), ...partial };
+    const blacklist = await getCompanyBlacklist(companyId);
+    const filtered = applyQualityPostFilters(job.results || [], mergedFilters, blacklist);
+    const keptSet = new Set(filtered);
+    // leads marcados (bad/imported) são preservados no array — o front segue
+    // exibindo o carimbo mesmo que o filtro novo os cortaria
+    const results = (job.results || []).filter(
+      r => keptSet.has(r) || r.verdict === "bad" || r.imported === true
+    );
+
+    await job.update({ filters: mergedFilters, results, totalFound: results.length });
+    return res.json(job);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || "Erro ao refiltrar job" });
   }
 };

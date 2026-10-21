@@ -41,6 +41,13 @@ interface SeenKeyMaps {
   instagrams: Map<string, SeenOrigin>;
 }
 
+interface SeenData {
+  maps: SeenKeyMaps;
+  // chaves de leads marcados como "bad" pelo usuário — match no classifyResults
+  // vira rejeição automática (lead rejeitado nunca reaparece numa busca nova)
+  rejected: SeenSets;
+}
+
 // Varre as fontes de "já visto" da empresa e monta mapas chave → origem:
 // 1) results de jobs anteriores done/cancelled (cancelado conta: os leads
 //    parciais capturados até o cancelamento são válidos);
@@ -48,13 +55,20 @@ interface SeenKeyMaps {
 //    empresa) — leads já importados para uma lista;
 // 3) Contacts da empresa (cpfCnpj / canonicalNumber / instagram) — cobre
 //    leads trazidos por fora do scraper e é a origem mais forte.
+// 4) resultados com verdict "bad" em jobs anteriores alimentam o mapa
+//    `rejected` paralelo — rejeitado pelo usuário tem precedência máxima.
 // O job em execução não entra: seu status é "running"/"pending" e seus
 // results ainda estão vazios neste ponto do pipeline.
-async function loadSeenKeys(companyId: number): Promise<SeenKeyMaps> {
+async function loadSeenKeys(companyId: number): Promise<SeenData> {
   const seen: SeenKeyMaps = {
     cnpjs: new Map(),
     phones: new Map(),
     instagrams: new Map()
+  };
+  const rejected: SeenSets = {
+    cnpjs: new Set(),
+    phones: new Set(),
+    instagrams: new Set()
   };
 
   const priorJobs = await LeadScraperJob.findAll({
@@ -64,11 +78,17 @@ async function loadSeenKeys(companyId: number): Promise<SeenKeyMaps> {
   for (const job of priorJobs) {
     for (const r of job.results || []) {
       const origin: SeenOrigin = { status: "seen_job", jobId: job.id };
-      if (r.cnpj) seen.cnpjs.set(r.cnpj.replace(/\D/g, ""), origin);
+      const cnpj = r.cnpj ? r.cnpj.replace(/\D/g, "") : "";
       const p = normPhone(r.phone);
-      if (p) seen.phones.set(p, origin);
       const h = normHandle(r.instagram);
+      if (cnpj) seen.cnpjs.set(cnpj, origin);
+      if (p) seen.phones.set(p, origin);
       if (h) seen.instagrams.set(h, origin);
+      if (r.verdict === "bad") {
+        if (cnpj) rejected.cnpjs.add(cnpj);
+        if (p) rejected.phones.add(p);
+        if (h) rejected.instagrams.add(h);
+      }
     }
   }
 
@@ -111,7 +131,7 @@ async function loadSeenKeys(companyId: number): Promise<SeenKeyMaps> {
     if (h) seen.instagrams.set(h, origin);
   }
 
-  return seen;
+  return { maps: seen, rejected };
 }
 
 // Marca duplicatas DENTRO do próprio lote (evita reintroduzir o mesmo lead
@@ -153,7 +173,7 @@ export const filterOutDuplicates = async (
   if (skipDuplicates === false || !results.length) return results;
 
   try {
-    const maps = await loadSeenKeys(companyId);
+    const { maps } = await loadSeenKeys(companyId);
     // dedupeWithinBatch só precisa saber SE a chave já foi vista — a origem
     // (job/list/contact) é usada apenas pela classificação
     const seen: SeenSets = {
@@ -197,25 +217,39 @@ export const classifyResults = async (
   if (!results.length) return;
 
   try {
-    const seen = await loadSeenKeys(companyId);
+    const { maps: seen, rejected } = await loadSeenKeys(companyId);
 
     for (const r of results) {
+      const cnpj = r.cnpj ? r.cnpj.replace(/\D/g, "") : null;
+      const phone = normPhone(r.phone);
+      const handle = normHandle(r.instagram);
+
+      // Rejeição manual tem precedência máxima: casou por qualquer chave,
+      // o lead novo herda verdict "bad" + seen_job — o classifyAndPrune já o
+      // remove do array sem custo extra (e o front/import nunca o vê).
+      const isRejected =
+        (cnpj && rejected.cnpjs.has(cnpj)) ||
+        (phone && rejected.phones.has(phone)) ||
+        (handle && rejected.instagrams.has(handle));
+      if (isRejected) {
+        r.verdict = "bad";
+        r.dedupeStatus = "seen_job";
+        continue;
+      }
+
       // Cada entrada é (origem, prioridade da chave que casou)
       const candidates: Array<{ origin: SeenOrigin; keyRank: number }> = [];
 
-      const cnpj = r.cnpj ? r.cnpj.replace(/\D/g, "") : null;
       if (cnpj) {
         const origin = seen.cnpjs.get(cnpj);
         if (origin) candidates.push({ origin, keyRank: 0 });
       }
 
-      const phone = normPhone(r.phone);
       if (phone) {
         const origin = seen.phones.get(phone);
         if (origin) candidates.push({ origin, keyRank: 1 });
       }
 
-      const handle = normHandle(r.instagram);
       if (handle) {
         const origin = seen.instagrams.get(handle);
         if (origin) candidates.push({ origin, keyRank: 2 });

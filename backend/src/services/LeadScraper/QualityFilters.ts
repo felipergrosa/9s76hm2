@@ -37,10 +37,15 @@ const CELL_BR_REGEX = /^55\d{2}9\d{8}$/;
 
 export const applyQualityPostFilters = (
   results: ScraperResult[],
-  filters: ScraperFilters
+  filters: ScraperFilters,
+  blacklist?: { terms: string[]; categories: string[] }
 ): ScraperResult[] => {
   const f = filters || {};
   const keywords = toArray(f.excludeKeywords).map(normKey).filter(Boolean);
+  // termos/categorias aprendidos por rejeição (LeadBlacklistService) — mesma
+  // regra do excludeKeywords do usuário, mesclados server-side
+  const blacklistTerms = (blacklist?.terms || []).map(normKey).filter(Boolean);
+  const blacklistCats = new Set((blacklist?.categories || []).map(normKey).filter(Boolean));
   const situacoes = toArray(f.situacao).map(normUpper).filter(Boolean);
   const minAbertura = toIsoDate(f.dataAberturaMin);
   const maxAbertura = toIsoDate(f.dataAberturaMax);
@@ -59,9 +64,16 @@ export const applyQualityPostFilters = (
     }
 
     // blacklist de nome: fail-closed (todo lead tem algum nome/razão/fantasia)
-    if (keywords.length) {
+    if (keywords.length || blacklistTerms.length) {
       const names = [r.name, r.razaoSocial, r.nomeFantasia].map(v => normKey(v || ""));
       if (names.some(n => n && keywords.some(k => n.includes(k)))) { drop("excludeKeywords"); return false; }
+      if (names.some(n => n && blacklistTerms.some(k => n.includes(k)))) { drop("blacklistTerm"); return false; }
+    }
+
+    // categoria aprendida por rejeição — fail-open sem category no lead
+    if (blacklistCats.size && r.category && blacklistCats.has(normKey(r.category))) {
+      drop("blacklistCategory");
+      return false;
     }
 
     // sem celular BR não serve p/ campanha de WhatsApp — fail-closed

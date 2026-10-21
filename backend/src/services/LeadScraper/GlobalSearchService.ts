@@ -4,6 +4,7 @@ import { scrapeViaSidecar, isSidecarAvailable } from "./GmapsSidecarService";
 import { isGmapsApifyConfigured, scrapeGoogleMapsViaApify } from "./GoogleMapsApifyProvider";
 import { searchCnpjsByFilters } from "./CnpjSearchService";
 import { applyQualityPostFilters } from "./QualityFilters";
+import { getCompanyBlacklist } from "./LeadBlacklistService";
 import { scrapeConselho } from "./ConselhoScraperService";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
 import logger from "../../utils/logger";
@@ -129,6 +130,22 @@ async function scrapeReceitaBranch(
   ];
   if (!groups.length) groups.push({});
 
+  // Trava de nicho para o grupo CNAE-only: a minhareceita devolve QUALQUER
+  // empresa do CNAE pedido, e CNAEs guarda-chuva ("...não especificadas",
+  // ex.: 7490102) trazem leads fora do segmento (clínica de estética numa
+  // busca de arquitetos). Os tokens (≥4 chars) das keywords/mapQueries viram
+  // exigência de match no nome quando o lead cai nesse caso suspeito.
+  // Sem nicheTerms (busca puramente por CNAE) → comportamento antigo.
+  const nicheTerms = [...new Set(
+    [...keywords, ...toArray(filters.mapQueries)]
+      .flatMap(q => q.split(/[^a-zA-Z0-9À-ÿ]+/))
+      .map(w => normText(w))
+      .filter(w => w.length >= 4)
+  )];
+  const wantedCnaes = new Set(
+    cnaes.map(c => c.replace(/\D/g, "").padStart(7, "0")).filter(Boolean)
+  );
+
   const cap = Math.min(filters.maxResults || 200, 1000);
   const perGroup = Math.max(1, Math.ceil(cap / groups.length));
   const results: ScraperResult[] = [];
@@ -137,7 +154,7 @@ async function scrapeReceitaBranch(
     checkCancelled();
     if (results.length >= cap) break;
     const gShare = 100 / groups.length;
-    const batch = await searchCnpjsByFilters(
+    let batch = await searchCnpjsByFilters(
       {
         ...groups[gi],
         uf: filters.state || filters.uf,
@@ -157,6 +174,26 @@ async function scrapeReceitaBranch(
         await onProgress(Math.round(gi * gShare + (cur / Math.max(total, 1)) * gShare), 100);
       }
     );
+
+    // Grupo CNAE-only: lead com CNAE genérico ("não especificad*") ou com
+    // cnaeId fora dos pedidos (casou só por CNAE secundário) precisa bater
+    // algum token de nicho no nome/razão/fantasia — senão é cortado.
+    if ((groups[gi] as any).forceMinhaReceita && nicheTerms.length) {
+      const before = batch.length;
+      batch = batch.filter(r => {
+        const generic = normText(r.cnaeDescricao || "").includes("naoespecificad");
+        const leadCnae = String(r.cnaeId || "").replace(/\D/g, "").padStart(7, "0");
+        const offCnae = !wantedCnaes.has(leadCnae);
+        if (!generic && !offCnae) return true;
+        const names = [r.name, r.razaoSocial, r.nomeFantasia].map(v => normText(v || ""));
+        return names.some(n => n && nicheTerms.some(t => n.includes(t)));
+      });
+      const cut = before - batch.length;
+      if (cut > 0) {
+        logger.info(`[GlobalSearch] trava de nicho CNAE-only: ${cut}/${before} leads sem match de nicho cortados`);
+      }
+    }
+
     results.push(...batch);
   }
   return results;
@@ -337,8 +374,10 @@ export const runGlobalSearch = async (opts: GlobalSearchOpts): Promise<ScraperRe
   }
 
   const merged = mergeByIdentity(all);
-  // pós-filtros de qualidade sobre o merged — roda uma vez, antes do enrich
-  const qualified = applyQualityPostFilters(merged, filters);
+  // pós-filtros de qualidade sobre o merged — roda uma vez, antes do enrich;
+  // blacklist aprendida por rejeições é mesclada aos excludeKeywords do usuário
+  const blacklist = await getCompanyBlacklist(companyId);
+  const qualified = applyQualityPostFilters(merged, filters, blacklist);
   const multi = qualified.filter(m => (m.sources?.length || 0) > 1).length;
   logger.info(`[GlobalSearch] ${all.length} brutos → ${merged.length} únicos → ${qualified.length} qualificados (${multi} multi-fonte, ${failures.length} fonte(s) falharam)`);
 

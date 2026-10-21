@@ -184,6 +184,10 @@ export const scrapeGoogleMapsViaApify = async (
     searchStringsArray: queries,
     maxCrawledPlacesPerSearch: Math.min(Math.ceil(maxResults / Math.max(queries.length, 1)), 200),
     language: "pt-BR",
+    // impede a expansão semântica/geográfica do Google: sem "only_includes" o
+    // Maps retorna resultados correlatos fora do nicho ("engenharia civil"
+    // numa busca de "projeto luminotécnico" numa UF inteira)
+    searchMatching: "only_includes",
     // extrai email/telefone/socials (IG/X/LinkedIn/Facebook) da página de contato
     // do site do lugar — scrapeSocialMediaProfiles é add-on pago por perfil,
     // scrapeContacts já cobre os links sociais
@@ -219,6 +223,15 @@ export const scrapeGoogleMapsViaApify = async (
   const done = await waitForRun(run.id, run.defaultDatasetId, maxResults, onProgress, companyId);
   const items = await getDatasetItems(done.defaultDatasetId, companyId);
 
+  // defesa local além do pós-filtro global: title/categoryName casando algum
+  // excludeKeyword é cortado aqui (normKey local — mesma regra do QualityFilters)
+  const normKey = (s: string) =>
+    s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, "");
+  const excludeTerms = (Array.isArray(filters?.excludeKeywords)
+    ? filters.excludeKeywords
+    : filters?.excludeKeywords ? [filters.excludeKeywords] : [])
+    .map(s => normKey(String(s))).filter(Boolean);
+
   const results: ScraperResult[] = [];
   for (const item of items) {
     if (results.length >= maxResults) break;
@@ -226,6 +239,10 @@ export const scrapeGoogleMapsViaApify = async (
     if (!name) continue;
     // defesa local: mesmo com skipClosedPlaces no input, garante o corte
     if (skipClosed && item.permanentlyClosed === true) continue;
+    if (excludeTerms.length) {
+      const hay = `${normKey(String(item.title || ""))}|${normKey(String(item.categoryName || ""))}`;
+      if (excludeTerms.some(t => hay.includes(t))) continue;
+    }
 
     const address = [item.address, item.city, item.state].filter(Boolean).join(", ") || item.address || "";
 
