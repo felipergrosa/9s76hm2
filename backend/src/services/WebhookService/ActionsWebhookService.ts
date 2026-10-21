@@ -379,6 +379,23 @@ export const ActionsWebhookService = async (
       await ensureTicket();
     }
 
+    // Gate de supressão (opt-out): contato com disableBot=true (optOut de
+    // fluxo, DNC, bloqueio manual) não pode receber NENHUM envio de
+    // automação — aborta a execução inteira antes do primeiro nó.
+    try {
+      const contactGate = await resolveFlowContact();
+      if (contactGate?.disableBot) {
+        logger.info(
+          `[FlowBuilder] Execução abortada por opt-out — contact=${contactGate.id} flow=${idFlowDb} ticket=${idTicket}`
+        );
+        return;
+      }
+    } catch (errGate) {
+      logger.warn(
+        `[FlowBuilder] Falha no gate de opt-out (seguindo execução): ${errGate?.message || errGate}`
+      );
+    }
+
     // Loop usa nodes.length direto: gotoFlow anexa novos nós ao array
     // durante a execução e eles precisam ser alcançáveis pelo `next`.
     for (var i = 0; i < nodes.length; i++) {
@@ -1047,6 +1064,28 @@ export const ActionsWebhookService = async (
           dwWh.variables = varsUpd;
           await ticket.update({ dataWebhook: dwWh });
         }
+
+        // Dynamic block (estilo ManyChat): com sendResponseAsMessage a
+        // resposta da API vira mensagem ao cliente — além de seguir sendo
+        // salva na variável, quando configurada.
+        if (dataWh.sendResponseAsMessage && responseWh !== null) {
+          try {
+            const textWh =
+              typeof responseWh === "object"
+                ? JSON.stringify(responseWh)
+                : String(responseWh);
+            if (textWh.trim()) {
+              await SendMessage(whatsapp, {
+                number: numberClient,
+                body: textWh.substring(0, 3500)
+              });
+            }
+          } catch (errSendWh) {
+            logger.warn(
+              `[FlowBuilder][webhook] node=${nodeSelected.id} falha ao enviar resposta como mensagem: ${errSendWh?.message || errSendWh}`
+            );
+          }
+        }
       }
 
       // Nó "end": encerra o fluxo; opcionalmente fecha o ticket.
@@ -1167,7 +1206,12 @@ export const ActionsWebhookService = async (
           .map(Number);
         const minIniBh = (hIniBh || 0) * 60 + (mIniBh || 0);
         const minFimBh = (hFimBh || 0) * 60 + (mFimBh || 0);
-        const horaOkBh = minAgoraBh >= minIniBh && minAgoraBh <= minFimBh;
+        // Janela overnight (ex.: 22:00–06:00): quando início > fim, "dentro"
+        // é depois do início OU antes do fim — cobre o turno da madrugada.
+        const horaOkBh =
+          minIniBh <= minFimBh
+            ? minAgoraBh >= minIniBh && minAgoraBh <= minFimBh
+            : minAgoraBh >= minIniBh || minAgoraBh <= minFimBh;
 
         const edgeBh = connects.filter(
           c =>
@@ -1484,6 +1528,79 @@ export const ActionsWebhookService = async (
             `[FlowBuilder][optOut] Falha no node ${nodeSelected.id}: ${errOo?.message || errOo}`
           );
         }
+
+        // Opt-out encerra a automação: nenhum nó posterior deve executar
+        // (garante que não haja envio após o descadastro).
+        break;
+      }
+
+      // Nó "waitHuman": pausa a automação até um atendente assumir.
+      // Envia mensagem opcional, move o ticket para "pending" (fila e/ou
+      // usuário opcionais) e grava o ponto de retomada em
+      // dataWebhook.waitHuman. O fluxo retoma na próxima mensagem do
+      // cliente APÓS um atendente falar no ticket (flag humanSpoke,
+      // marcada no CreateMessageService).
+      if (nodeSelected.type === "waitHuman") {
+        await ensureTicket();
+
+        if (!ticket) {
+          logger.warn(
+            `[FlowBuilder][waitHuman] node=${nodeSelected.id} sem ticket`
+          );
+          break;
+        }
+
+        const dataWhu = nodeSelected.data || {};
+        const varsWhu: any = ticket.dataWebhook?.variables || {};
+
+        if (dataWhu.message) {
+          try {
+            await SendMessage(whatsapp, {
+              number: numberClient,
+              body: replaceMessages(varsWhu, String(dataWhu.message))
+            });
+          } catch (errMsgWhu) {
+            logger.warn(
+              `[FlowBuilder][waitHuman] node=${nodeSelected.id} falha ao enviar mensagem: ${errMsgWhu?.message || errMsgWhu}`
+            );
+          }
+        }
+
+        const edgeWhu = connects.find(c => c.source === nodeSelected.id);
+        const dwWhu: any = { ...(ticket.dataWebhook || {}) };
+        dwWhu.waitHuman = {
+          nodeId: nodeSelected.id,
+          nextNodeId: edgeWhu?.target || null,
+          humanSpoke: false
+        };
+
+        const updateWhu: any = {
+          status: "pending",
+          lastFlowId: nodeSelected.id,
+          dataWebhook: dwWhu
+        };
+        if (dataWhu.queueId) updateWhu.queueId = Number(dataWhu.queueId);
+        if (dataWhu.userId) updateWhu.userId = Number(dataWhu.userId);
+
+        await ticket.update(updateWhu);
+
+        try {
+          await UpdateTicketService({
+            ticketData: {
+              status: "pending",
+              ...(updateWhu.queueId ? { queueId: updateWhu.queueId } : {}),
+              ...(updateWhu.userId ? { userId: updateWhu.userId } : {})
+            },
+            ticketId: ticket.id,
+            companyId
+          });
+        } catch (errUpdWhu) {
+          logger.warn(
+            `[FlowBuilder][waitHuman] node=${nodeSelected.id} falha ao emitir update: ${errUpdWhu?.message || errUpdWhu}`
+          );
+        }
+
+        break;
       }
 
       // Nó "notifyTeam": notificação em tempo real para a equipe via socket

@@ -26,6 +26,7 @@ type StoreData = {
   publicReplyText?: string | null;
   flowId?: number | null;
   autoLikeComment?: boolean;
+  hideComment?: boolean;
   requireFollower?: boolean;
   nonFollowerAction?: string | null;
   nonFollowerText?: string | null;

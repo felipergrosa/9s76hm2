@@ -12,6 +12,7 @@ interface Request {
   publicReplyText?: string | null;
   flowId?: number | null;
   autoLikeComment?: boolean;
+  hideComment?: boolean;
   requireFollower?: boolean;
   nonFollowerAction?: string | null;
   nonFollowerText?: string | null;
@@ -38,6 +39,7 @@ const CreateService = async (data: Request): Promise<MetaAutomationRule> => {
     publicReplyText: data.publicReplyText || null,
     flowId: data.flowId || null,
     autoLikeComment: !!data.autoLikeComment,
+    hideComment: !!data.hideComment,
     requireFollower: !!data.requireFollower,
     nonFollowerAction: data.nonFollowerAction || "skip",
     nonFollowerText: data.nonFollowerText || null,

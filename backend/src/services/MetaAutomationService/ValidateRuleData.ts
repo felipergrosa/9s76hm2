@@ -21,8 +21,13 @@ export const VALID_NON_FOLLOWER_ACTIONS = ["skip", "ask_follow"];
 // Tipos de attachment aceitos pelo Send API da Meta para a mídia de recompensa
 export const VALID_REWARD_MEDIA_TYPES = ["image", "video", "audio", "file"];
 
+// Gatilhos de comentário — únicos onde ações de comentário fazem sentido
+// (auto-like, resposta pública, ocultar comentário)
+export const COMMENT_TRIGGERS = ["comment_keyword", "comment_any"];
+
 interface RuleData {
   name?: string;
+  hideComment?: boolean;
   whatsappId?: number | null;
   channel?: string;
   trigger?: string;
@@ -58,6 +63,21 @@ const ValidateRuleData = async (
   if (data.channel !== undefined && !VALID_CHANNELS.includes(data.channel)) {
     throw new AppError(
       `Canal inválido. Use: ${VALID_CHANNELS.join(", ")}`,
+      400
+    );
+  }
+
+  // Ocultar comentário é ação de moderação — só existe quando o gatilho
+  // gera um commentId (comment_keyword / comment_any). Em update parcial
+  // sem trigger no payload, o caller deve repassar o trigger persistido.
+  if (
+    data.hideComment === true &&
+    data.trigger !== undefined &&
+    !COMMENT_TRIGGERS.includes(data.trigger)
+  ) {
+    throw new AppError(
+      "Ocultar comentário só é permitido nos gatilhos de comentário " +
+        `(${COMMENT_TRIGGERS.join(", ")})`,
       400
     );
   }

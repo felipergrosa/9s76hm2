@@ -73,6 +73,7 @@ export const sendText = async (
   id: string | number,
   text: string,
   token: string,
+  replyToMid?: string,
 ): Promise<void> => {
   try {
     const { data } = await apiBase(token).post("me/messages", {
@@ -81,6 +82,8 @@ export const sendText = async (
       },
       message: {
         text: `${text}`,
+        // Threading nativo Meta: resposta ancorada na msg original (mid)
+        ...(replyToMid ? { reply_to: { mid: replyToMid } } : {})
       }
     });
     return data;

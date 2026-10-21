@@ -6328,6 +6328,48 @@ const handleMessage = async (
           ?.type === "waitReply";
     }
 
+    // Nó "waitHuman" ativo: automação pausada até um atendente assumir.
+    // Enquanto humanSpoke=false, a mensagem do cliente fica apenas
+    // registrada (verifyMessage acima) e o bot não responde. Após o
+    // atendente falar (CreateMessageService marca humanSpoke), a
+    // próxima mensagem do cliente retoma o fluxo no nó seguinte.
+    const waitHumanState = (ticket?.dataWebhook as any)?.waitHuman;
+    if (waitHumanState && !msg.key.fromMe) {
+      if (!waitHumanState.humanSpoke) {
+        return;
+      }
+
+      const dwWh: any = { ...(ticket.dataWebhook || {}) };
+      delete dwWh.waitHuman;
+      await ticket.update({ dataWebhook: dwWh });
+
+      if (waitHumanState.nextNodeId && flow) {
+        const mountDataContact = {
+          number: contact.number,
+          name: contact.name,
+          email: contact.email
+        };
+
+        await ActionsWebhookService(
+          whatsapp.id,
+          parseInt(ticket.flowStopped),
+          ticket.companyId,
+          flow.flow["nodes"],
+          flow.flow["connections"],
+          waitHumanState.nextNodeId,
+          dwWh,
+          "",
+          "",
+          "",
+          ticket.id,
+          mountDataContact,
+          msg
+        );
+      }
+
+      return;
+    }
+
     if (!isNil(flow) && isQuestion && !msg.key.fromMe) {
       console.log(
         "|============= QUESTION =============|",

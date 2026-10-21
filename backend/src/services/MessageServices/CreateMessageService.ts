@@ -174,6 +174,30 @@ const CreateMessageService = async ({
       );
   }
 
+  // Flag waitHuman (nó "Aguardar atendente" do FlowBuilder): a primeira
+  // mensagem do atendente (fromMe) marca humanSpoke — a próxima resposta
+  // do cliente retoma o fluxo a partir do nó seguinte.
+  if (messageData.fromMe && !message.isPrivate) {
+    try {
+      const ticketWh = await Ticket.findByPk(message.ticketId, {
+        attributes: ["id", "dataWebhook"]
+      });
+      const wh = (ticketWh?.dataWebhook as any)?.waitHuman;
+      if (wh && !wh.humanSpoke) {
+        await ticketWh.update({
+          dataWebhook: {
+            ...(ticketWh.dataWebhook || {}),
+            waitHuman: { ...wh, humanSpoke: true }
+          }
+        });
+      }
+    } catch (errWh) {
+      logger.debug(
+        `[CreateMessageService] waitHuman humanSpoke falhou: ${errWh?.message || errWh}`
+      );
+    }
+  }
+
   // Invalidar cache de mensagens do ticket (nova mensagem chegou)
   // CRÍTICO: aguardar invalidação ANTES de emitir para evitar race condition
   // onde o frontend carrega cache stale e sobrescreve a mensagem recebida via Socket

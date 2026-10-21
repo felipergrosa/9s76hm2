@@ -100,6 +100,11 @@ class MetaAutomationRule extends Model<MetaAutomationRule> {
   @Column
   rewardMediaType: string;
 
+  // Ocultar o comentário na thread pública após responder (moderação
+  // estilo ManyChat). Só se aplica a gatilhos de comentário.
+  @Column({ defaultValue: false })
+  hideComment: boolean;
+
   @Column({ defaultValue: true })
   active: boolean;
 
@@ -108,6 +113,17 @@ class MetaAutomationRule extends Model<MetaAutomationRule> {
 
   @Column
   lastTriggeredAt: Date;
+
+  // Observabilidade: último erro sanitizado do disparo (sem tokens/dados
+  // de contato), quando ocorreu e quantas falhas a regra acumula
+  @Column(DataType.TEXT)
+  lastError: string;
+
+  @Column
+  lastErrorAt: Date;
+
+  @Column({ defaultValue: 0 })
+  failureCount: number;
 
   @CreatedAt
   createdAt: Date;

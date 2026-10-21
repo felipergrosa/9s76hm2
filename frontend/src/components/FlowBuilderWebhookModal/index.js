@@ -14,11 +14,14 @@ import DialogTitle from "@material-ui/core/DialogTitle";
 import { i18n } from "../../translate/i18n";
 
 import {
+  Checkbox,
   FormControl,
+  FormControlLabel,
   InputLabel,
   MenuItem,
   Select,
-  Stack
+  Stack,
+  Typography
 } from "@mui/material";
 
 const useStyles = makeStyles(theme => ({
@@ -75,6 +78,7 @@ const FlowBuilderWebhookModal = ({ open, onSave, onUpdate, data, close }) => {
   const [method, setMethod] = useState("GET");
   const [url, setUrl] = useState("");
   const [responseVariable, setResponseVariable] = useState("");
+  const [sendResponseAsMessage, setSendResponseAsMessage] = useState(false);
   const [body, setBody] = useState("");
 
   const [labels, setLabels] = useState({
@@ -92,6 +96,7 @@ const FlowBuilderWebhookModal = ({ open, onSave, onUpdate, data, close }) => {
       setMethod(data.data.method || "GET");
       setUrl(data.data.url || "");
       setResponseVariable(data.data.responseVariable || "");
+      setSendResponseAsMessage(Boolean(data.data.sendResponseAsMessage));
       setBody(data.data.body || "");
       setActiveModal(true);
     } else if (open === "create") {
@@ -103,6 +108,7 @@ const FlowBuilderWebhookModal = ({ open, onSave, onUpdate, data, close }) => {
       setMethod("GET");
       setUrl("");
       setResponseVariable("");
+      setSendResponseAsMessage(false);
       setBody("");
       setActiveModal(true);
     } else {
@@ -131,6 +137,7 @@ const FlowBuilderWebhookModal = ({ open, onSave, onUpdate, data, close }) => {
       method,
       url: url.trim(),
       responseVariable,
+      sendResponseAsMessage,
       body
     };
     if (open === "edit") {
@@ -209,6 +216,21 @@ const FlowBuilderWebhookModal = ({ open, onSave, onUpdate, data, close }) => {
                 className={classes.textField}
                 style={{ width: "95%" }}
               />
+              {/* Quando marcado, a resposta da API também é enviada ao cliente */}
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={sendResponseAsMessage}
+                    onChange={e => setSendResponseAsMessage(e.target.checked)}
+                    color="primary"
+                  />
+                }
+                label="Enviar resposta da API como mensagem ao cliente"
+              />
+              <Typography variant="caption" color="textSecondary">
+                A resposta (texto ou JSON) é enviada ao cliente além de ser
+                salva na variável.
+              </Typography>
               {hasBody && (
                 <TextField
                   label={"Corpo (JSON)"}

@@ -220,13 +220,63 @@ export const verifyMessageFace = async (
   // });
 };
 
+// Tipos de attachment Meta que NÃO são binário baixável — `payload.url` é
+// link do post/reel/story (HTML), não mídia. Baixá-los derrubava o handler
+// (fileTypeFromBuffer → undefined.ext) e a mensagem nunca era salva.
+const NON_MEDIA_ATTACHMENT_LABELS: Record<string, string> = {
+  share: "Compartilhou uma publicação",
+  story_mention: "Mencionou você em um story",
+  like: "Curtiu a publicação",
+  fallback: "Enviou um conteúdo",
+  link: "Enviou um link"
+};
+
+// Somente estes tipos têm payload binário baixável — qualquer outro
+// (inclusive tipos novos que a Meta introduzir) vira texto + link,
+// nunca tentativa de download.
+const DOWNLOADABLE_ATTACHMENT_TYPES = new Set([
+  "image",
+  "audio",
+  "video",
+  "file",
+  "sticker"
+]);
+
 export const verifyMessageMedia = async (
   msg: any,
   ticket: Ticket,
   contact: Contact,
   fromMe: boolean = false
 ): Promise<void> => {
-  const { data } = await axios.get(msg.attachments[0].payload.url, {
+  const attachment = msg.attachments[0] || {};
+
+  // Tipos não-binários: salva como texto descritivo com o link do post —
+  // sem isso reações/share chegavam como "notificação sem conteúdo".
+  const nonMediaLabel = NON_MEDIA_ATTACHMENT_LABELS[attachment.type];
+  if (
+    nonMediaLabel ||
+    !attachment?.payload?.url ||
+    !DOWNLOADABLE_ATTACHMENT_TYPES.has(attachment.type)
+  ) {
+    const link = attachment?.payload?.url || "";
+    const label = nonMediaLabel || "Enviou um anexo";
+    const messageData = {
+      wid: msg.mid,
+      ticketId: ticket.id,
+      contactId: contact.id,
+      body: `${msg.text ? `${msg.text}\n` : ""}${label}${link ? `\n${link}` : ""}`,
+      fromMe: fromMe ? fromMe : msg.is_echo ? true : false,
+      read: fromMe ? fromMe : msg.is_echo,
+      quotedMsgId: null,
+      ack: 3,
+      dataJson: JSON.stringify(msg),
+      channel: ticket.channel
+    };
+    await CreateMessageService({ messageData, companyId: ticket.companyId });
+    return;
+  }
+
+  const { data } = await axios.get(attachment.payload.url, {
     responseType: "arraybuffer"
   });
 
@@ -235,7 +285,13 @@ export const verifyMessageMedia = async (
 
   const type = await fileTypeFromBuffer(data);
 
-  const fileName = `${new Date().getTime()}.${type.ext}`;
+  // Alguns attachments binários chegam sem assinatura de magic bytes
+  // (ou o fetch retorna HTML de erro) — antes o acesso a `type.ext`
+  // quebrava o handler e a mensagem era perdida. Fallback grava o
+  // conteúdo como binário genérico em vez de descartar a mensagem.
+  const ext = type?.ext || "bin";
+
+  const fileName = `${new Date().getTime()}.${ext}`;
 
   const folder = `public/company${ticket.companyId}`;
   if (!fs.existsSync(folder)) {
@@ -256,7 +312,7 @@ export const verifyMessageMedia = async (
     body: msg.text || fileName,
     fromMe: fromMe ? fromMe : msg.is_echo ? true : false,
     read: fromMe ? fromMe : msg.is_echo,
-    mediaType: msg.attachments[0].type,
+    mediaType: attachment.type || msg.attachments[0].type,
     mediaUrl: fileName,
     quotedMsgId: null,
     ack: 3,
@@ -715,6 +771,100 @@ export const handleMessage = async (
         await ticket.update({ status: newStatus });
         const { ticketEventBus } = await import("../TicketServices/TicketEventBus");
         ticketEventBus.publishStatusChanged(companyId, ticket.id, ticket.uuid, ticket, "campaign", newStatus);
+      }
+
+      // Reação de DM (IG/Messenger): chega em message.reaction = {mid,
+      // action:"react"|"unreact", reaction, emoji?} — SEM text/attachments.
+      // Antes caía no fluxo comum com body vazio → "notificação" sem
+      // conteúdo. Agora vira mensagem legível referenciando a msg reagida
+      // e encerra: reação não deve disparar chatbot/fluxo.
+      if (message.reaction) {
+        if (!fromMe) {
+          const emojiMap: Record<string, string> = {
+            like: "👍", love: "❤️", dislike: "👎", haha: "😂",
+            wow: "😮", sad: "😢", angry: "😠"
+          };
+          const emoji =
+            message.reaction.emoji ||
+            emojiMap[message.reaction.reaction] ||
+            "👍";
+          const reactedMsg = message.reaction.mid
+            ? await Message.findOne({ where: { wid: message.reaction.mid } })
+            : null;
+          const reactedPreview = reactedMsg?.body
+            ? ` "${reactedMsg.body.substring(0, 80)}"`
+            : "";
+          const body =
+            message.reaction.action === "unreact"
+              ? `Removeu a reação da mensagem${reactedPreview}`
+              : `Reagiu ${emoji} à mensagem${reactedPreview}`;
+
+          await CreateMessageService({
+            messageData: {
+              wid: message.mid || `reaction-${message.reaction.mid}-${Date.now()}`,
+              ticketId: ticket.id,
+              contactId: contact.id,
+              body,
+              fromMe: false,
+              read: false,
+              quotedMsgId: reactedMsg?.id,
+              ack: 3,
+              dataJson: JSON.stringify(message),
+              channel: ticket.channel
+            },
+            companyId
+          });
+        }
+        return;
+      }
+
+      // Nó "waitHuman" ativo: automação pausada até um atendente assumir.
+      // Enquanto humanSpoke=false, a mensagem do cliente fica apenas
+      // registrada e o bot não responde. Após o atendente falar
+      // (CreateMessageService marca humanSpoke), a próxima mensagem do
+      // cliente retoma o fluxo no nó seguinte.
+      const waitHumanState = (ticket?.dataWebhook as any)?.waitHuman;
+      if (waitHumanState && !fromMe) {
+        if (message.attachments) {
+          await verifyMessageMedia(message, ticket, contact);
+        } else {
+          await verifyMessageFace(message, message.text, ticket, contact);
+        }
+
+        if (!waitHumanState.humanSpoke) {
+          return;
+        }
+
+        const dwWh: any = { ...(ticket.dataWebhook || {}) };
+        delete dwWh.waitHuman;
+        await ticket.update({ dataWebhook: dwWh });
+
+        if (waitHumanState.nextNodeId) {
+          const flowWh = await FlowBuilderModel.findOne({
+            where: { id: ticket.flowStopped }
+          });
+          if (flowWh) {
+            await ActionsWebhookFacebookService(
+              getSession,
+              parseInt(ticket.flowStopped),
+              companyId,
+              flowWh.flow["nodes"],
+              flowWh.flow["connections"],
+              waitHumanState.nextNodeId,
+              dwWh,
+              "",
+              "",
+              "",
+              ticket.id,
+              {
+                number: contact.number,
+                name: contact.name,
+                email: contact.email
+              }
+            );
+          }
+        }
+        return;
       }
 
       let bodyRollbackTag = "";
@@ -1284,6 +1434,27 @@ export const handleMessage = async (
       } catch (errRef: any) {
         logger.warn(
           `[facebookMessageListener] Automação referral_ref falhou (ref=${referralRef}): ${errRef?.message || errRef}`
+        );
+      }
+    }
+
+    // Automação Meta por palavra-chave em DM: dispara em qualquer texto
+    // inbound não-echo — o matcher decide se alguma regra casa e o
+    // dedupe de 1h evita repetição. Best-effort como o referral.
+    const dmTextKeyword = webhookEvent.message?.text;
+    if (dmTextKeyword && !webhookEvent.message?.is_echo) {
+      try {
+        await processMetaAutomationEvent({
+          companyId,
+          whatsappId: getSession?.id || token.id,
+          channel: getSession?.channel || token.channel || channel,
+          trigger: "dm_keyword",
+          dmText: dmTextKeyword,
+          senderId: webhookEvent.sender?.id
+        });
+      } catch (errDm: any) {
+        logger.warn(
+          `[facebookMessageListener] Automação dm_keyword falhou: ${errDm?.message || errDm}`
         );
       }
     }

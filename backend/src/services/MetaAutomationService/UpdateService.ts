@@ -13,6 +13,7 @@ interface Request {
   publicReplyText?: string | null;
   flowId?: number | null;
   autoLikeComment?: boolean;
+  hideComment?: boolean;
   requireFollower?: boolean;
   nonFollowerAction?: string | null;
   nonFollowerText?: string | null;
@@ -32,7 +33,13 @@ const UpdateService = async (data: Request): Promise<MetaAutomationRule> => {
     throw new AppError("Automação não encontrada", 404);
   }
 
-  await ValidateRuleData(data, data.companyId, true);
+  // Update parcial: repassa o trigger persistido quando o payload não o
+  // traz — necessário p/ validar hideComment contra o trigger real da regra
+  await ValidateRuleData(
+    { ...data, trigger: data.trigger ?? record.trigger },
+    data.companyId,
+    true
+  );
 
   const fields = [
     "name",
@@ -44,6 +51,7 @@ const UpdateService = async (data: Request): Promise<MetaAutomationRule> => {
     "publicReplyText",
     "flowId",
     "autoLikeComment",
+    "hideComment",
     "requireFollower",
     "nonFollowerAction",
     "nonFollowerText",

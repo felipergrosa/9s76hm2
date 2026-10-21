@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useReducer, useMemo } from "react";
+import React, { useState, useEffect, useReducer, useMemo, useContext } from "react";
 import { toast } from "react-toastify";
+import { format, parseISO } from "date-fns";
 
 import { makeStyles } from "@material-ui/core/styles";
 import Paper from "@material-ui/core/Paper";
@@ -32,6 +33,7 @@ import {
   Send as SentIcon,
   Facebook as FacebookIcon,
   Instagram as InstagramIcon,
+  AlertCircle as ErrorIcon,
 } from "lucide-react";
 
 import MainContainer from "../../components/MainContainer";
@@ -44,6 +46,7 @@ import TableRowSkeleton from "../../components/TableRowSkeleton";
 import ConfirmationModal from "../../components/ConfirmationModal";
 import toastError from "../../errors/toastError";
 import usePermissions from "../../hooks/usePermissions";
+import { AuthContext } from "../../context/Auth/AuthContext";
 import { i18n } from "../../translate/i18n";
 import { motion, useReducedMotion } from "framer-motion";
 import StatCard from "../../components/bento/StatCard";
@@ -303,8 +306,19 @@ const actionLabel = record => {
   return parts.length ? parts.join(" + ") : "—";
 };
 
+// Data do último disparo — vem do backend como ISO string (ou null)
+const formatLastTriggered = value => {
+  if (!value) return "—";
+  try {
+    return format(parseISO(value), "dd/MM/yy HH:mm");
+  } catch {
+    return "—";
+  }
+};
+
 const MetaAutomations = () => {
   const classes = useStyles();
+  const { user, socket } = useContext(AuthContext);
 
   const [loading, setLoading] = useState(false);
   const [searchParam, setSearchParam] = useState("");
@@ -371,6 +385,29 @@ const MetaAutomations = () => {
     return () => clearTimeout(delayDebounceFn);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParam, statusFilter, channelFilter, pageNumber, canView, reloadKey]);
+
+  // Socket: o controller emite company-<id>-meta-automation em
+  // create/update/delete — sincroniza a lista sem refresh manual
+  useEffect(() => {
+    if (!user?.companyId || !socket) return;
+
+    const onMetaAutomationEvent = data => {
+      if (data.action === "create" || data.action === "update") {
+        dispatch({ type: "UPDATE", payload: data.record });
+      }
+      if (data.action === "delete") {
+        // totalCount não é decrementado aqui: handleDelete já o faz e o
+        // evento socket também volta para quem excluiu (evita contagem dupla)
+        dispatch({ type: "DELETE", payload: +data.id });
+      }
+    };
+
+    socket.on(`company-${user.companyId}-meta-automation`, onMetaAutomationEvent);
+
+    return () => {
+      socket.off(`company-${user.companyId}-meta-automation`, onMetaAutomationEvent);
+    };
+  }, [socket, user]);
 
   // KPIs do strip bento — derivados da lista já carregada
   const stats = useMemo(() => ({
@@ -640,6 +677,21 @@ const MetaAutomations = () => {
                             <div className={classes.metaLabel}>{i18n.t("metaAutomations.table.dispatches")}</div>
                             <div className={classes.metaValue}>{record.sentCount || 0}</div>
                           </div>
+                          <div>
+                            <div className={classes.metaLabel}>
+                              {i18n.t("metaAutomations.table.lastTriggered", { defaultValue: "Último disparo" })}
+                            </div>
+                            <div className={classes.metaValue}>
+                              {formatLastTriggered(record.lastTriggeredAt)}
+                              {record.lastError && (
+                                <Tooltip title={record.lastError}>
+                                  <span style={{ display: "inline-flex", verticalAlign: "middle", marginLeft: 4, color: "#e7505a" }}>
+                                    <ErrorIcon size={14} />
+                                  </span>
+                                </Tooltip>
+                              )}
+                            </div>
+                          </div>
                         </div>
                         <div className={classes.cardActions}>{renderActions(record)}</div>
                       </div>
@@ -689,7 +741,20 @@ const MetaAutomations = () => {
                               </Typography>
                             </TableCell>
                             <TableCell align="center" className={classes.bodyCell}>
-                              <Typography variant="body2">{record.sentCount || 0}</Typography>
+                              <Typography variant="body2">
+                                {record.sentCount || 0}
+                                {record.lastError && (
+                                  <Tooltip title={record.lastError}>
+                                    <span style={{ display: "inline-flex", verticalAlign: "middle", marginLeft: 4, color: "#e7505a" }}>
+                                      <ErrorIcon size={14} />
+                                    </span>
+                                  </Tooltip>
+                                )}
+                              </Typography>
+                              {/* Último disparo — telemetria da regra */}
+                              <Typography variant="caption" color="textSecondary" display="block">
+                                {formatLastTriggered(record.lastTriggeredAt)}
+                              </Typography>
                             </TableCell>
                             <TableCell align="center" className={classes.bodyCell}>
                               <Switch

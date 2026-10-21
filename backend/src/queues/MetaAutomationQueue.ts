@@ -4,7 +4,7 @@ import MetaAutomationRule from "../models/MetaAutomationRule";
 import Whatsapp from "../models/Whatsapp";
 import Contact from "../models/Contact";
 import { FlowBuilderModel } from "../models/FlowBuilder";
-import { replyToComment, sendText, sendAttachmentFromUrl, profilePsid } from "../services/FacebookServices/graphAPI";
+import { replyToComment, sendText, sendAttachmentFromUrl, profilePsid, hideComment } from "../services/FacebookServices/graphAPI";
 import CreateOrUpdateContactService from "../services/ContactServices/CreateOrUpdateContactService";
 import FindOrCreateTicketService from "../services/TicketServices/FindOrCreateTicketService";
 import type { MetaAutomationEvent } from "../services/FacebookServices/MetaAutomationService";
@@ -55,6 +55,62 @@ const logMetaError = (label: string, error: any): void => {
 const isPermanentMetaError = (error: any): boolean => {
   const code = Number(error?.response?.data?.error?.code);
   return [10, 190, 200, 230, 368].includes(code);
+};
+
+// Mensagem sanitizada para telemetria: só a mensagem do erro (Meta ou
+// axios), truncada — NUNCA error.config/params (carregam access_token)
+// nem dados do contato.
+const sanitizeErrorMessage = (error: any): string => {
+  const metaErr = error?.response?.data?.error;
+  return String(metaErr?.message || error?.message || error).slice(0, 500);
+};
+
+/**
+ * Telemetria da regra — SEMPRE best-effort: uma falha de update aqui não
+ * pode derrubar o job (retry reenviaria DMs/respostas já entregues).
+ */
+const stampRuleSuccess = async (rule: MetaAutomationRule): Promise<void> => {
+  try {
+    await rule.update({ lastTriggeredAt: new Date(), lastError: null });
+  } catch (error: any) {
+    logger.warn(
+      `[MetaAutomationQueue] Falha ao registrar sucesso da regra ${rule.id}: ${error?.message || error}`
+    );
+  }
+};
+
+const stampRuleFailure = async (
+  rule: MetaAutomationRule,
+  error: any
+): Promise<void> => {
+  try {
+    await rule.increment("failureCount");
+    await rule.update({
+      lastError: sanitizeErrorMessage(error),
+      lastErrorAt: new Date()
+    });
+  } catch (updateError: any) {
+    logger.warn(
+      `[MetaAutomationQueue] Falha ao registrar erro da regra ${rule.id}: ${updateError?.message || updateError}`
+    );
+  }
+};
+
+/**
+ * Ocultar comentário na thread pública após responder (moderação estilo
+ * ManyChat). Best-effort: o helper do graphAPI já engole o erro, mas o
+ * try/catch garante que NADA aqui derrube o job.
+ */
+const hideEventComment = async (
+  evt: MetaAutomationEvent,
+  token: string
+): Promise<void> => {
+  if (!evt.commentId) return;
+  try {
+    await hideComment(evt.commentId, true, token);
+  } catch (error: any) {
+    logMetaError(`hideComment comment=${evt.commentId} channel=${evt.channel}`, error);
+  }
 };
 
 /**
@@ -338,6 +394,12 @@ async function dispatchMetaAutomation(job: any): Promise<void> {
           await sendText(evt.senderId, askText, token);
         }
       }
+      // Moderação: ocultar o comentário também vale no caminho de
+      // não-seguidor (a resposta/ask_follow já foi enviada)
+      if (rule.hideComment) {
+        await hideEventComment(evt, token);
+      }
+      await stampRuleSuccess(rule);
       return;
     }
 
@@ -367,8 +429,18 @@ async function dispatchMetaAutomation(job: any): Promise<void> {
     if (rule.flowId && evt.senderId) {
       await dispatchFlow(rule, whatsapp, evt, token);
     }
+
+    // 6. Moderação: ocultar o comentário APÓS responder (best-effort)
+    if (rule.hideComment) {
+      await hideEventComment(evt, token);
+    }
+
+    // Telemetria: sucesso limpa o último erro e carimba o disparo
+    await stampRuleSuccess(rule);
   } catch (error: any) {
     logMetaError(`rule=${ruleId} trigger=${evt.trigger}`, error);
+    // Telemetria de falha antes de decidir retry — best-effort interno
+    await stampRuleFailure(rule, error);
     // Erro permanente da Meta → não adianta retry (consome attempts)
     if (isPermanentMetaError(error)) return;
     throw error;

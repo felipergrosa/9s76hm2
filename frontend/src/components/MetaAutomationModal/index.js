@@ -102,6 +102,7 @@ const initialState = {
 	publicReplyText: "",
 	flowId: "",
 	autoLikeComment: false,
+	hideComment: false,
 	requireFollower: false,
 	nonFollowerAction: "skip",
 	nonFollowerText: "",
@@ -206,6 +207,8 @@ const MetaAutomationModal = ({ open, onClose, ruleId, onSaved }) => {
 			publicReplyText: isCommentTrigger ? values.publicReplyText : "",
 			// Auto-like só existe para comentários
 			autoLikeComment: isCommentTrigger ? values.autoLikeComment : false,
+			// Ocultar comentário (moderação) idem — backend valida o gatilho
+			hideComment: isCommentTrigger ? values.hideComment : false,
 			// Sem URL de recompensa, o tipo não faz sentido persistir
 			rewardMediaUrl: rewardUrl || "",
 			rewardMediaType: rewardUrl ? values.rewardMediaType : "",
@@ -453,6 +456,29 @@ const MetaAutomationModal = ({ open, onClose, ruleId, onSaved }) => {
 											/>
 											<Typography className={classes.hint}>
 												{i18n.t("metaAutomations.modal.autoLikeHint")}
+											</Typography>
+										</Grid>
+									)}
+
+									{COMMENT_TRIGGERS.includes(values.trigger) && (
+										<Grid item xs={12} sm={6}>
+											<FormControlLabel
+												control={
+													<Switch
+														checked={Boolean(values.hideComment)}
+														onChange={e => setFieldValue("hideComment", e.target.checked)}
+														color="primary"
+													/>
+												}
+												label={i18n.t("metaAutomations.modal.hideComment", {
+													defaultValue: "Ocultar comentário após responder",
+												})}
+											/>
+											<Typography className={classes.hint}>
+												{i18n.t("metaAutomations.modal.hideCommentHint", {
+													defaultValue:
+														"Moderação: o comentário some da thread pública depois da resposta.",
+												})}
 											</Typography>
 										</Grid>
 									)}

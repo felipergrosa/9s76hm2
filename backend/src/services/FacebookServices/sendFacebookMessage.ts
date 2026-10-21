@@ -14,10 +14,13 @@ const sendFacebookMessage = async ({ body, ticket, quotedMsg }: Request): Promis
   const { number } = ticket.contact;
   try {
 
+    // quotedMsg.wid é o mid da msg original — Meta ancora a resposta
+    // na thread ("responder a") quando reply_to.mid é enviado.
     const send = await sendText(
       number,
       formatBody(body, ticket),
-      ticket.whatsapp.facebookUserToken
+      ticket.whatsapp.facebookUserToken,
+      quotedMsg?.wid || undefined
     );
 
     await ticket.update({ lastMessage: body });

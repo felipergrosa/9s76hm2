@@ -5,6 +5,7 @@ import React, {
   useCallback,
 } from "react";
 import { SiOpenai } from "react-icons/si";
+import { UserCheck } from "lucide-react";
 import typebotIcon from "../../assets/typebot-ico.png";
 
 import { toast } from "react-toastify";
@@ -44,6 +45,7 @@ import setStatusNode from "./nodes/setStatusNode";
 import aiAgentNode from "./nodes/aiAgentNode";
 import smartDelayNode from "./nodes/smartDelayNode";
 import waitReplyNode from "./nodes/waitReplyNode";
+import waitHumanNode from "./nodes/waitHumanNode";
 import quickRepliesNode from "./nodes/quickRepliesNode";
 import carouselNode from "./nodes/carouselNode";
 import sendEmailNode from "./nodes/sendEmailNode";
@@ -146,6 +148,7 @@ import FlowBuilderSetStatusModal from "../../components/FlowBuilderSetStatusModa
 import FlowBuilderAiAgentModal from "../../components/FlowBuilderAiAgentModal";
 import FlowBuilderSmartDelayModal from "../../components/FlowBuilderSmartDelayModal";
 import FlowBuilderWaitReplyModal from "../../components/FlowBuilderWaitReplyModal";
+import FlowBuilderWaitHumanModal from "../../components/FlowBuilderWaitHumanModal";
 import FlowBuilderQuickRepliesModal from "../../components/FlowBuilderQuickRepliesModal";
 import FlowBuilderCarouselModal from "../../components/FlowBuilderCarouselModal";
 import FlowBuilderSendEmailModal from "../../components/FlowBuilderSendEmailModal";
@@ -307,6 +310,7 @@ const nodeTypes = {
   aiAgent: aiAgentNode,
   smartDelay: smartDelayNode,
   waitReply: waitReplyNode,
+  waitHuman: waitHumanNode,
   quickReplies: quickRepliesNode,
   carousel: carouselNode,
   sendEmail: sendEmailNode,
@@ -378,6 +382,7 @@ export const FlowBuilderConfig = () => {
   const [modalAddAiAgent, setModalAddAiAgent] = useState(null);
   const [modalAddSmartDelay, setModalAddSmartDelay] = useState(null);
   const [modalAddWaitReply, setModalAddWaitReply] = useState(null);
+  const [modalAddWaitHuman, setModalAddWaitHuman] = useState(null);
   const [modalAddQuickReplies, setModalAddQuickReplies] = useState(null);
   const [modalAddCarousel, setModalAddCarousel] = useState(null);
   const [modalAddSendEmail, setModalAddSendEmail] = useState(null);
@@ -748,6 +753,10 @@ export const FlowBuilderConfig = () => {
     addAndResetDrop("waitReply", data);
   };
 
+  const waitHumanAdd = (data) => {
+    addAndResetDrop("waitHuman", data);
+  };
+
   const quickRepliesAdd = (data) => {
     addAndResetDrop("quickReplies", data);
   };
@@ -1027,6 +1036,9 @@ export const FlowBuilderConfig = () => {
     if (node.type === "waitReply") {
       setModalAddWaitReply("edit");
     }
+    if (node.type === "waitHuman") {
+      setModalAddWaitHuman("edit");
+    }
     if (node.type === "quickReplies") {
       setModalAddQuickReplies("edit");
     }
@@ -1094,6 +1106,7 @@ export const FlowBuilderConfig = () => {
     setModalAddSendEmail(null);
     setModalAddAsaasCharge(null);
     setModalAddGoogleCalendar(null);
+    setModalAddWaitHuman(null);
   };
 
   // Validação pré-publish no estilo ManyChat: blocos órfãos, início sem
@@ -1134,6 +1147,7 @@ export const FlowBuilderConfig = () => {
         aiAgent: "Agente IA",
         smartDelay: "Espera inteligente",
         waitReply: "Aguardar resposta",
+        waitHuman: "Aguardar atendente",
         quickReplies: "Respostas rápidas",
         carousel: "Carrossel",
         sendEmail: "Enviar e-mail",
@@ -1444,6 +1458,13 @@ export const FlowBuilderConfig = () => {
           type: "assignUser",
         },
         {
+          icon: <UserCheck size={22} color="#F59E0B" />,
+          color: "#F59E0B",
+          name: "Aguardar atendente",
+          desc: "Pausa o bot até um humano assumir",
+          type: "waitHuman",
+        },
+        {
           icon: <LocalOffer sx={{ color: "#8B5CF6" }} />,
           color: "#8B5CF6",
           name: "Tag",
@@ -1649,6 +1670,9 @@ export const FlowBuilderConfig = () => {
         break;
       case "waitReply":
         setModalAddWaitReply("create");
+        break;
+      case "waitHuman":
+        setModalAddWaitHuman("create");
         break;
       case "quickReplies":
         setModalAddQuickReplies("create");
@@ -1910,6 +1934,14 @@ export const FlowBuilderConfig = () => {
         data={dataNode}
         onUpdate={updateNode}
         close={setModalAddWaitReply}
+      />
+
+      <FlowBuilderWaitHumanModal
+        open={modalAddWaitHuman}
+        onSave={waitHumanAdd}
+        data={dataNode}
+        onUpdate={updateNode}
+        close={setModalAddWaitHuman}
       />
 
       <FlowBuilderQuickRepliesModal
