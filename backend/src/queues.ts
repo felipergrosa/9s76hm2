@@ -54,6 +54,7 @@ import ContactTag from "./models/ContactTag";
 import Plan from "./models/Plan";
 import GetWhatsAppAdapter from "./helpers/GetWhatsAppAdapter";
 import { clearCampaignMarkerTags } from "./helpers/removeCampaignMarkerTags";
+import { extractMetaErrorDetail } from "./helpers/metaErrorCodes";
 import SendTemplateToContact from "./services/MetaServices/SendTemplateToContact";
 import WhatsappTemplate from "./models/WhatsappTemplate";
 import GetTemplateDefinition from "./services/MetaServices/GetTemplateDefinition";
@@ -2996,7 +2997,7 @@ async function handleDispatchCampaign(job) {
               jobId: null,
               status: 'failed',
               attempts: (record.attempts || 0) + 1,
-              lastError: `Erro permanente da Meta: ${err?.message || 'Erro desconhecido'}`,
+              lastError: `Erro permanente da Meta: ${extractMetaErrorDetail(err)}`,
               lastErrorAt: moment().toDate()
             });
             logger.error(`[CAMPAIGN FAILED][META] Falha permanente (sem retry). Campanha=${campaign.id}; Registro=${campaignShippingId}; Erro=${err?.message}`);
@@ -3013,7 +3014,7 @@ async function handleDispatchCampaign(job) {
               jobId: null,
               status: 'failed',
               attempts: newAttempts,
-              lastError: `Falha após ${maxAttempts} tentativas: ${err?.message || 'Erro desconhecido'}`,
+              lastError: `Falha após ${maxAttempts} tentativas: ${extractMetaErrorDetail(err)}`,
               lastErrorAt: moment().toDate()
             });
             logger.error(`[CAMPAIGN FAILED] Campanha=${campaign.id}; Registro=${campaignShippingId}; Tentativas=${newAttempts}; Erro=${err?.message}`);
@@ -3031,7 +3032,7 @@ async function handleDispatchCampaign(job) {
           await record.update({
             jobId: String(nextJob.id),
             attempts: newAttempts,
-            lastError: err?.message || 'Erro desconhecido',
+            lastError: extractMetaErrorDetail(err),
             lastErrorAt: moment().toDate()
           });
         }

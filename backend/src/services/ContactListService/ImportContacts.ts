@@ -5,6 +5,8 @@ import ContactListItem from "../../models/ContactListItem";
 import ContactList from "../../models/ContactList";
 import AppError from "../../errors/AppError";
 import CheckContactNumber from "../WbotServices/CheckNumber";
+import { CheckNumbersOfficialBatch } from "../MetaServices/CheckNumberOfficial";
+import Whatsapp from "../../models/Whatsapp";
 import logger from "../../utils/logger";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
 
@@ -76,16 +78,57 @@ export async function ImportContacts(
     }
   }
 
-  if (contactList) {
-    for (let newContact of contactList) {
+  if (contactList && contactList.length > 0) {
+    // Validação na criação da lista — escolhe o canal disponível:
+    // prioriza API Oficial (batch /contacts da Graph API) e cai para
+    // Baileys (onWhatsApp). Contatos com erro de API ficam com
+    // isWhatsappValid=null — o worker validateWhatsappContacts re-tenta.
+    const officialWhatsapp = await Whatsapp.findOne({
+      where: { companyId, channelType: "official", status: "CONNECTED" }
+    });
+    const useOfficial = !!(
+      officialWhatsapp?.wabaPhoneNumberId && officialWhatsapp?.wabaAccessToken
+    );
+
+    if (useOfficial) {
       try {
-        const response = await CheckContactNumber(newContact.number, companyId);
-        newContact.isWhatsappValid = response ? true : false;
-        const number = response;
-        newContact.number = number;
-        await newContact.save();
-      } catch (e) {
-        logger.error(`Número de contato inválido: ${newContact.number}`);
+        const batchResult = await CheckNumbersOfficialBatch(
+          contactList.map(c => c.number),
+          companyId,
+          100
+        );
+        for (let i = 0; i < contactList.length; i++) {
+          const newContact = contactList[i];
+          const result = batchResult.results[i];
+          try {
+            if (result?.status === "valid" && result.wa_id) {
+              newContact.number = result.wa_id;
+              newContact.isWhatsappValid = true;
+            } else if (result?.status === "invalid") {
+              newContact.isWhatsappValid = false;
+            }
+            // status "error" → mantém null para revalidação posterior
+            await newContact.save();
+          } catch (e) {
+            logger.error(`Número de contato inválido: ${newContact.number}`);
+          }
+        }
+      } catch (err: any) {
+        logger.error(
+          `[ImportContacts] Validação oficial em lote falhou (contatos ficam pendentes): ${err?.message}`
+        );
+      }
+    } else {
+      for (let newContact of contactList) {
+        try {
+          const response = await CheckContactNumber(newContact.number, companyId);
+          newContact.isWhatsappValid = response ? true : false;
+          const number = response;
+          newContact.number = number;
+          await newContact.save();
+        } catch (e) {
+          logger.error(`Número de contato inválido: ${newContact.number}`);
+        }
       }
     }
   }

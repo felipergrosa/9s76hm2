@@ -945,6 +945,10 @@ async function processIncomingMessage(
   }
 }
 
+// Traduz os códigos de falha de entrega da Meta — helper compartilhado
+// em helpers/metaErrorCodes (também usado no caminho de dispatch).
+import { describeMetaErrorCode } from "../../helpers/metaErrorCodes";
+
 /**
  * Processa status de mensagem enviada (ack)
  */
@@ -1010,10 +1014,23 @@ async function processMessageStatus(
       }
       if (ackStatus === "failed") {
         update.status = "failed";
-        update.lastError =
-          status.errors?.[0]?.title ||
-          status.errors?.[0]?.code ||
-          "Falha reportada pela Meta";
+        // Motivo completo da Meta: código + descrição pt-BR dos códigos
+        // comuns + title + error_data.details (campo que traz o motivo
+        // real: janela 24h, limite de marketing, número sem WhatsApp).
+        const err0 = status.errors?.[0] || {};
+        const hint = describeMetaErrorCode(err0?.code);
+        const raw = [
+          err0?.code != null ? `[${err0.code}]` : null,
+          err0?.title || null,
+          err0?.error_data?.details || err0?.message || null
+        ]
+          .filter(Boolean)
+          .join(" ");
+        update.lastError = [hint, raw || "Falha reportada pela Meta"]
+          .filter(Boolean)
+          .join(" — ")
+          .substring(0, 500);
+        update.lastErrorAt = new Date();
       }
       await shipping.update(update);
       logger.debug(
