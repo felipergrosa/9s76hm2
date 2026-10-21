@@ -432,8 +432,25 @@ const useStyles = makeStyles(theme => ({
   },
 
   importBar: {
-    display: "flex", gap: theme.spacing(2), alignItems: "center",
-    flexWrap: "wrap", padding: "16px 0 0",
+    display: "flex", gap: theme.spacing(1.5), alignItems: "flex-end",
+    flexWrap: "wrap",
+    padding: theme.spacing(1.5, 2),
+    marginTop: 4,
+    border: `1px solid ${theme.palette.divider}`,
+    borderRadius: 12,
+    background: theme.palette.type === "dark" ? "rgba(255,255,255,0.03)" : "#f8fafc",
+  },
+  // Campos da barra de importação: largura fluida e alinhados pelo baseline
+  importField: {
+    flex: "1 1 200px",
+    minWidth: 180,
+  },
+  // Grupo do split-button: sempre à direita, com respiro dos campos
+  importActions: {
+    marginLeft: "auto",
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1),
   },
 
   rating: { color: "#f59e0b", fontWeight: 700, fontSize: 12 },
@@ -1411,7 +1428,7 @@ export default function LeadScraper() {
     // filtros finos (gf*) — mesma hidratação do dialog de refino
     const v = refineFromJobFilters(f);
     Object.keys(v).forEach(k => setGfField(k, v[k]));
-    setTab(4);        // aba Busca Global
+    setTab(0);        // aba Busca Global (agora a primeira)
     setAdvOpen(true); // mostra os filtros carregados
     toast.info("Parâmetros carregados — ajuste e busque novamente");
   };
@@ -1906,14 +1923,14 @@ export default function LeadScraper() {
               variant="scrollable"
               scrollButtons="auto"
             >
+              <Tab label={<Box display="flex" alignItems="center" style={{ gap: 6 }}><GlobalIcon size={16} /> Busca Global</Box>} />
               <Tab label={<Box display="flex" alignItems="center" style={{ gap: 6 }}><MapsIcon size={16} /> Google Maps</Box>} />
               <Tab label={<Box display="flex" alignItems="center" style={{ gap: 6 }}><CnpjIcon size={16} /> CNPJ / Receita Federal</Box>} />
               <Tab label={<Box display="flex" alignItems="center" style={{ gap: 6 }}><FollowersIcon size={16} /> Seguidores IG</Box>} />
               <Tab label={<Box display="flex" alignItems="center" style={{ gap: 6 }}><ConselhoIcon size={16} /> Conselhos</Box>} />
-              <Tab label={<Box display="flex" alignItems="center" style={{ gap: 6 }}><GlobalIcon size={16} /> Busca Global</Box>} />
             </Tabs>
 
-            <TabPanel value={tab} index={0}>
+            <TabPanel value={tab} index={1}>
               <Box className={classes.filterRow}>
                 <TextField
                   label="Palavra-chave" placeholder="academias de ginástica"
@@ -2062,7 +2079,7 @@ export default function LeadScraper() {
               </Collapse>
             </TabPanel>
 
-            <TabPanel value={tab} index={1}>
+            <TabPanel value={tab} index={2}>
               {/* Mode toggle */}
               <Box className={classes.modeToggle}>
                 <Button
@@ -2341,7 +2358,7 @@ export default function LeadScraper() {
                 </Box>
               )}
             </TabPanel>
-            <TabPanel value={tab} index={2}>
+            <TabPanel value={tab} index={3}>
               <Box mt={2}>
                 {!engineStatus?.apify?.configured && (
                   <Box style={{
@@ -2412,7 +2429,7 @@ export default function LeadScraper() {
               </Box>
             </TabPanel>
 
-            <TabPanel value={tab} index={3}>
+            <TabPanel value={tab} index={4}>
               <Box className={classes.searchGrid}>
                 <Box className={classes.infoNote}>
                   Busca registros em <strong>conselhos de classe</strong>.
@@ -2548,7 +2565,7 @@ export default function LeadScraper() {
             </TabPanel>
 
             {/* ── Busca Global: seções numeradas — todas as fontes em paralelo ── */}
-            <TabPanel value={tab} index={4}>
+            <TabPanel value={tab} index={0}>
               {/* 1 — Público: preset vira tile clicável; Personalizado libera keyword + segmento */}
               <div className={classes.gSectionHead}>
                 <span className={classes.gSectionNum}>1</span>
@@ -3454,7 +3471,7 @@ export default function LeadScraper() {
                       placeholder="escolha ou digite p/ criar" />
                   )}
                   noOptionsText="Digite para criar uma nova lista"
-                  style={{ minWidth: 240 }}
+                  className={classes.importField}
                 />
                 <Autocomplete
                   freeSolo
@@ -3467,7 +3484,7 @@ export default function LeadScraper() {
                       placeholder="escolha ou digite p/ criar" />
                   )}
                   noOptionsText="Digite para criar uma nova tag"
-                  style={{ minWidth: 170 }}
+                  className={classes.importField}
                 />
                 <Autocomplete
                   options={walletUsers || []}
@@ -3480,13 +3497,13 @@ export default function LeadScraper() {
                   )}
                   noOptionsText="Nenhum usuário encontrado"
                   clearOnEscape
-                  style={{ minWidth: 200 }}
+                  className={classes.importField}
                 />
                 {canImport && (
                   <>
                     {/* Split button: ação padrão importa só leads novos; a seta abre
                         o menu com "importar incluindo já existentes" */}
-                    <Box style={{ display: "flex", alignItems: "stretch" }}>
+                    <Box className={classes.importActions}>
                       <Button
                         variant="contained" color="primary"
                         startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <ImportIcon size={18} />}
