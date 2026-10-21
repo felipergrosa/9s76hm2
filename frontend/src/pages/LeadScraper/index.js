@@ -6,7 +6,7 @@ import NJS from "../../data/naturezaJuridicaList";
 import SEGMENT_PRESETS from "../../data/leadSegmentPresets";
 import {
   Box, Paper, Typography, Tabs, Tab, TextField, Button, Slider,
-  Select, MenuItem, FormControl, InputLabel, LinearProgress,
+  Select, Menu, MenuItem, FormControl, InputLabel, LinearProgress,
   Table, TableHead, TableRow, TableCell, TableBody, Checkbox,
   Chip, IconButton, Tooltip, CircularProgress, Divider, Grid,
   FormControlLabel, Collapse, InputAdornment,
@@ -37,6 +37,7 @@ import {
   Settings as SettingsIcon,
   Activity as ActivityIcon,
   CheckCircle2 as CheckIcon,
+  ChevronDown as ChevronDownIcon,
 } from "lucide-react";
 import { toast } from "react-toastify";
 import api from "../../services/api";
@@ -228,6 +229,38 @@ const useStyles = makeStyles(theme => ({
     minWidth: 200,
     flex: "1 1 240px",
     maxWidth: 340,
+  },
+  // Barra de resumo de dedupe + filtro por status — topo da seção de resultados
+  summaryBar: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing(1.5),
+    flexWrap: "wrap",
+    padding: theme.spacing(1, 1.5),
+    marginBottom: theme.spacing(1),
+    borderRadius: 10,
+    border: `1px solid ${theme.palette.divider}`,
+    background:
+      theme.palette.type === "dark"
+        ? theme.palette.background.default
+        : "#fafafa",
+  },
+  summaryStats: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1.5),
+    flexWrap: "wrap",
+  },
+  summaryStat: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 5,
+    fontSize: 12,
+    fontWeight: 600,
+    color: theme.palette.text.secondary,
+    whiteSpace: "nowrap",
+    "& i": { width: 8, height: 8, borderRadius: "50%", display: "inline-block" },
   },
   headCell: {
     fontWeight: 600,
@@ -507,6 +540,68 @@ function SortableHeader({ className, label, sortKey, sortConfig, onSort }) {
         <Icon size={13} style={{ opacity: active ? 1 : 0.35 }} />
       </Box>
     </TableCell>
+  );
+}
+
+// ===== Status de dedupe do lead (flags preenchidas pelo backend) =====
+// Prioridade: importado > já nos contatos > em outra lista > capturado em
+// busca anterior > novo. Leads sem nenhuma flag são tratados como "new".
+const LEAD_STATUS_META = {
+  imported: { label: "Importado",      color: "#26c281", tip: "Já importado para os contatos" },
+  contact:  { label: "Nos contatos",   color: "#3598dc", tip: "Já existe nos seus contatos" },
+  list:     { label: "Em outra lista", color: "#8e44ad", tip: "Já está em outra lista de contatos" },
+  job:      { label: "Já capturado",   color: "#757575", tip: "Já capturado em uma busca anterior" },
+  new:      { label: "Novo",           color: "#f39c12", tip: "Lead novo — não encontrado nos contatos" },
+};
+
+const leadDedupeCategory = (r) => {
+  if (r?.imported) return "imported";
+  if (r?.dedupeStatus === "seen_contact" || r?.existsInContacts) return "contact";
+  if (r?.dedupeStatus === "seen_list") return "list";
+  if (r?.dedupeStatus === "seen_job") return "job";
+  return "new";
+};
+
+// Chip compacto de status do lead — mesmo padrão visual dos badges de fonte.
+// showNew=false omite o badge "Novo" (para onde não houver espaço).
+function LeadStatusBadges({ lead, showNew = true }) {
+  const cat = leadDedupeCategory(lead);
+  const meta = LEAD_STATUS_META[cat];
+  return (
+    <>
+      {(cat !== "new" || showNew) && (
+        <Tooltip title={meta.tip}>
+          <span
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 2,
+              background: meta.color + "22",
+              color: meta.color,
+              borderRadius: 3, padding: "0 5px",
+              fontSize: 9, fontWeight: 800, letterSpacing: 0.3,
+              whiteSpace: "nowrap",
+            }}
+          >
+            {cat === "imported" && <CheckIcon size={9} strokeWidth={3} />}
+            {meta.label}
+          </span>
+        </Tooltip>
+      )}
+      {lead?.hasWhatsapp && (
+        <Tooltip title="WhatsApp ativo">
+          <span
+            style={{
+              background: "#25d36618",
+              color: "#128c7e",
+              borderRadius: 3, padding: "0 5px",
+              fontSize: 9, fontWeight: 800, letterSpacing: 0.3,
+              whiteSpace: "nowrap",
+            }}
+          >
+            WA ✓
+          </span>
+        </Tooltip>
+      )}
+    </>
   );
 }
 
@@ -812,7 +907,9 @@ export default function LeadScraper() {
     finally { setLoading(false); }
   };
 
-  const importSelected = async () => {
+  // includeExisting=false (padrão): backend importa só leads novos e pula os que
+  // já existem nos contatos; =true importa mesmo os já existentes (atualiza/mescla).
+  const importSelected = async (includeExisting = false) => {
     if (!activeJob?.id) return;
     const indices = selectedIndices.length
       ? selectedIndices
@@ -823,6 +920,7 @@ export default function LeadScraper() {
       const { data } = await api.post(`/lead-scraper/jobs/${activeJob.id}/import`, {
         indices, contactListName: contactListName || undefined, tagName: tagName || undefined,
         walletUserId: walletUser?.id || undefined,
+        includeExisting,
       });
       const skipped = data.skipped || 0;
       const ignorados = [
@@ -901,6 +999,14 @@ export default function LeadScraper() {
   const [quickFilters, setQuickFilters] = useState({ hasPhone: false, hasCnpj: false, hasWhatsapp: false, hasReceita: false });
   // Busca textual da toolbar de resultados (client-side, só afeta exibição)
   const [resultsSearch, setResultsSearch] = useState("");
+  // Filtro de exibição por status de dedupe: "all" | "new" | "existing" | "imported"
+  const [dedupeFilter, setDedupeFilter] = useState("all");
+  // Âncora do menu de opções do botão Importar (popover)
+  const [importMenuAnchor, setImportMenuAnchor] = useState(null);
+
+  // Ao trocar de job, volta o filtro de dedupe para "Todos"
+  const activeJobId = activeJob?.id;
+  useEffect(() => { setDedupeFilter("all"); }, [activeJobId]);
 
   const toggleQuickFilter = (key) => setQuickFilters(prev => ({ ...prev, [key]: !prev[key] }));
 
@@ -928,6 +1034,14 @@ export default function LeadScraper() {
       if (quickFilters.hasCnpj && !r.cnpj) return false;
       if (quickFilters.hasWhatsapp && !(r.whatsappChecked && r.hasWhatsapp)) return false;
       if (quickFilters.hasReceita && !(r.enrichedFrom || []).includes("receita") && !r.cnaeDescricao) return false;
+      // Filtro por status de dedupe (client-side): "Já tenho" agrupa contatos,
+      // outra lista e capturado em busca anterior
+      if (dedupeFilter !== "all") {
+        const cat = leadDedupeCategory(r);
+        if (dedupeFilter === "new" && cat !== "new") return false;
+        if (dedupeFilter === "imported" && cat !== "imported") return false;
+        if (dedupeFilter === "existing" && cat !== "contact" && cat !== "list" && cat !== "job") return false;
+      }
       // Busca livre: nome, razão social, contatos, CNPJ, endereço, registro e IG
       const q = resultsSearch.trim().toLowerCase();
       if (q) {
@@ -954,6 +1068,15 @@ export default function LeadScraper() {
       leads: list.reduce((acc, j) => acc + (j.totalFound || 0), 0),
     };
   }, [jobs]);
+
+  // Contagens por status de dedupe — calculadas no cliente sobre results[]
+  // ("existing" = já nos contatos + em outra lista + capturado em busca anterior)
+  const leadStatusCounts = useMemo(() => {
+    const c = { new: 0, contact: 0, list: 0, job: 0, imported: 0, existing: 0 };
+    results.forEach(r => { c[leadDedupeCategory(r)] += 1; });
+    c.existing = c.contact + c.list + c.job;
+    return c;
+  }, [results]);
 
   return (
     <MainContainer useWindowScroll>
@@ -2044,6 +2167,40 @@ export default function LeadScraper() {
             </div>
           ) : results.length > 0 ? (
             <>
+              {/* Resumo de dedupe + filtro por status — topo da seção de resultados */}
+              <div className={classes.summaryBar}>
+                <div className={classes.summaryStats}>
+                  <span className={classes.summaryStat}><i style={{ background: "#f39c12" }} />{leadStatusCounts.new} novos</span>
+                  <span className={classes.summaryStat}><i style={{ background: "#3598dc" }} />{leadStatusCounts.contact} já nos contatos</span>
+                  <span className={classes.summaryStat}><i style={{ background: "#8e44ad" }} />{leadStatusCounts.list} em outra lista</span>
+                  <span className={classes.summaryStat}><i style={{ background: "#26c281" }} />{leadStatusCounts.imported} importados</span>
+                  {leadStatusCounts.job > 0 && (
+                    <span className={classes.summaryStat}><i style={{ background: "#757575" }} />{leadStatusCounts.job} já capturados</span>
+                  )}
+                </div>
+                <Box display="flex" alignItems="center" style={{ gap: 6, flexWrap: "wrap" }}>
+                  {[
+                    { key: "all",      label: "Todos",      count: results.length },
+                    { key: "new",      label: "Novos",      count: leadStatusCounts.new },
+                    { key: "existing", label: "Já tenho",   count: leadStatusCounts.existing },
+                    { key: "imported", label: "Importados", count: leadStatusCounts.imported },
+                  ].map(f => (
+                    <Chip
+                      key={f.key}
+                      label={`${f.label} (${f.count})`}
+                      size="small"
+                      clickable
+                      onClick={() => setDedupeFilter(f.key)}
+                      style={{
+                        fontSize: 11, fontWeight: 600,
+                        background: dedupeFilter === f.key ? "#c62828" : undefined,
+                        color: dedupeFilter === f.key ? "#fff" : undefined,
+                      }}
+                    />
+                  ))}
+                </Box>
+              </div>
+
               {/* Toolbar: busca livre + filtros rápidos (client-side, só exibição) */}
               <div className={classes.toolbar}>
                 <TextField
@@ -2107,24 +2264,23 @@ export default function LeadScraper() {
                           )}
                         </div>
                       </div>
-                      {/* Badges das fontes (busca global) */}
-                      {Array.isArray(r.sources) && r.sources.length > 0 && (
-                        <Box display="flex" style={{ gap: 3, flexWrap: "wrap", flexShrink: 0 }}>
-                          {r.sources.map(src => (
-                            <span
-                              key={src}
-                              style={{
-                                background: (GLOBAL_SOURCE_META[src]?.color || "#555") + "22",
-                                color: GLOBAL_SOURCE_META[src]?.color || "#555",
-                                borderRadius: 3, padding: "0 5px",
-                                fontSize: 9, fontWeight: 800, letterSpacing: 0.3,
-                              }}
-                            >
-                              {GLOBAL_SOURCE_META[src]?.label || src}
-                            </span>
-                          ))}
-                        </Box>
-                      )}
+                      {/* Badges: status de dedupe + fontes (busca global) */}
+                      <Box display="flex" style={{ gap: 3, flexWrap: "wrap", flexShrink: 0, justifyContent: "flex-end", maxWidth: "55%" }}>
+                        <LeadStatusBadges lead={r} />
+                        {(r.sources || []).map(src => (
+                          <span
+                            key={src}
+                            style={{
+                              background: (GLOBAL_SOURCE_META[src]?.color || "#555") + "22",
+                              color: GLOBAL_SOURCE_META[src]?.color || "#555",
+                              borderRadius: 3, padding: "0 5px",
+                              fontSize: 9, fontWeight: 800, letterSpacing: 0.3,
+                            }}
+                          >
+                            {GLOBAL_SOURCE_META[src]?.label || src}
+                          </span>
+                        ))}
+                      </Box>
                     </div>
 
                     <div className={classes.cardMeta}>
@@ -2294,23 +2450,23 @@ export default function LeadScraper() {
                               {r.email}
                             </Typography>
                           )}
-                          {Array.isArray(r.sources) && r.sources.length > 0 && (
-                            <Box display="flex" style={{ gap: 3, marginTop: 2, flexWrap: "wrap" }}>
-                              {r.sources.map(src => (
-                                <span
-                                  key={src}
-                                  style={{
-                                    background: (GLOBAL_SOURCE_META[src]?.color || "#555") + "22",
-                                    color: GLOBAL_SOURCE_META[src]?.color || "#555",
-                                    borderRadius: 3, padding: "0 5px",
-                                    fontSize: 9, fontWeight: 800, letterSpacing: 0.3,
-                                  }}
-                                >
-                                  {GLOBAL_SOURCE_META[src]?.label || src}
-                                </span>
-                              ))}
-                            </Box>
-                          )}
+                          {/* Badges: status de dedupe + fontes (busca global) */}
+                          <Box display="flex" style={{ gap: 3, marginTop: 2, flexWrap: "wrap" }}>
+                            <LeadStatusBadges lead={r} />
+                            {(r.sources || []).map(src => (
+                              <span
+                                key={src}
+                                style={{
+                                  background: (GLOBAL_SOURCE_META[src]?.color || "#555") + "22",
+                                  color: GLOBAL_SOURCE_META[src]?.color || "#555",
+                                  borderRadius: 3, padding: "0 5px",
+                                  fontSize: 9, fontWeight: 800, letterSpacing: 0.3,
+                                }}
+                              >
+                                {GLOBAL_SOURCE_META[src]?.label || src}
+                              </span>
+                            ))}
+                          </Box>
                         </TableCell>
                         {activeJob.source === "conselho" && (
                           <TableCell className={classes.bodyCell}>
@@ -2484,17 +2640,53 @@ export default function LeadScraper() {
                   style={{ minWidth: 200 }}
                 />
                 {canImport && (
-                  <Button
-                    variant="contained" color="primary"
-                    startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <ImportIcon size={18} />}
-                    onClick={importSelected}
-                    disabled={loading || (activeJob.status !== "done" && activeJob.status !== "cancelled")}
-                    style={{ textTransform: "none", fontWeight: 600, whiteSpace: "nowrap" }}
-                  >
-                    {someSelected
-                      ? `Importar ${selectedIndices.length} lead${selectedIndices.length !== 1 ? "s" : ""}`
-                      : `Importar todos (${results.length})`}
-                  </Button>
+                  <>
+                    {/* Split button: ação padrão importa só leads novos; a seta abre
+                        o menu com "importar incluindo já existentes" */}
+                    <Box style={{ display: "flex", alignItems: "stretch" }}>
+                      <Button
+                        variant="contained" color="primary"
+                        startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <ImportIcon size={18} />}
+                        onClick={() => importSelected(false)}
+                        disabled={loading || (activeJob.status !== "done" && activeJob.status !== "cancelled")}
+                        style={{
+                          textTransform: "none", fontWeight: 600, whiteSpace: "nowrap",
+                          borderTopRightRadius: 0, borderBottomRightRadius: 0,
+                        }}
+                      >
+                        {someSelected
+                          ? `Importar ${selectedIndices.length} lead${selectedIndices.length !== 1 ? "s" : ""}`
+                          : `Importar apenas novos (${leadStatusCounts.new})`}
+                      </Button>
+                      <Button
+                        variant="contained" color="primary"
+                        onClick={e => setImportMenuAnchor(e.currentTarget)}
+                        disabled={loading || (activeJob.status !== "done" && activeJob.status !== "cancelled")}
+                        style={{
+                          minWidth: 34, padding: "0 6px",
+                          borderTopLeftRadius: 0, borderBottomLeftRadius: 0,
+                          borderLeft: "1px solid rgba(255,255,255,0.35)",
+                          boxShadow: "none",
+                        }}
+                      >
+                        <ChevronDownIcon size={16} />
+                      </Button>
+                    </Box>
+                    <Menu
+                      anchorEl={importMenuAnchor}
+                      open={Boolean(importMenuAnchor)}
+                      onClose={() => setImportMenuAnchor(null)}
+                      anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+                      transformOrigin={{ vertical: "top", horizontal: "right" }}
+                    >
+                      <MenuItem onClick={() => { setImportMenuAnchor(null); importSelected(false); }}>
+                        Importar apenas novos
+                      </MenuItem>
+                      <MenuItem onClick={() => { setImportMenuAnchor(null); importSelected(true); }}>
+                        Importar incluindo já existentes
+                      </MenuItem>
+                    </Menu>
+                  </>
                 )}
               </Box>
             </>

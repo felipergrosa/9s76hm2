@@ -258,7 +258,7 @@ export const clearJobs = async (req: Request, res: Response): Promise<Response> 
 export const importJobResults = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { companyId } = req.user;
-    const { indices, contactListName, tagName, walletUserId } = req.body;
+    const { indices, contactListName, tagName, walletUserId, includeExisting } = req.body;
     const job = await LeadScraperJob.findOne({ where: { id: req.params.id, companyId } });
     if (!job) return res.status(404).json({ error: "Job não encontrado" });
     // cancelled é importável: leads coletados até o cancelamento continuam válidos
@@ -288,13 +288,30 @@ export const importJobResults = async (req: Request, res: Response): Promise<Res
       resolvedWalletUserId = n;
     }
 
+    // includeExisting=true (opt-in) libera a reimportação de leads flagados
+    // como seen_list/seen_contact; default importa só os "new" (ou sem flag —
+    // retrocompat com jobs antigos). Já importados nunca reimportam.
+    const allowExisting = includeExisting === true;
     const allResults = job.results || [];
     const selectedIdx: number[] = [];
-    const selected = allResults.filter((_: any, i: number) => {
-      const ok = indexSet ? indexSet.has(i) : true;
-      if (ok) selectedIdx.push(i);
-      return ok;
+    const selected = allResults.filter((r: any, i: number) => {
+      if (indexSet && !indexSet.has(i)) return false;
+      if (r.imported) return false;
+      const status = r.dedupeStatus;
+      if (!status || status === "new") {
+        selectedIdx.push(i);
+        return true;
+      }
+      if (allowExisting && (status === "seen_list" || status === "seen_contact")) {
+        selectedIdx.push(i);
+        return true;
+      }
+      return false;
     });
+
+    if (!selected.length) {
+      return res.status(400).json({ error: "Nenhum lead elegível para importação" });
+    }
 
     const leads = selected.map((r: any) => ({
       name: r.nomeFantasia || r.name || "",
@@ -336,10 +353,22 @@ export const importJobResults = async (req: Request, res: Response): Promise<Res
       logger.warn(`[LeadScraper] Falha ao enfileirar export ERP: ${err?.message}`);
     }
 
-    // Marca os índices importados e persiste no job (array novo p/ Sequelize detectar mudança no JSON)
+    // Carimba nos results do job apenas os leads efetivamente importados
+    // (importedByIndex vem do ImportLeadsService — lead que falhou não marca).
+    // Array novo p/ o Sequelize detectar mudança no JSON.
+    const importedAt = new Date().toISOString();
+    const importedMap = result.importedByIndex || {};
     const results = [...allResults];
-    selectedIdx.forEach(i => {
-      results[i] = { ...results[i], imported: true };
+    selectedIdx.forEach((resultIdx, leadPos) => {
+      const info = importedMap[leadPos];
+      if (!info) return;
+      results[resultIdx] = {
+        ...results[resultIdx],
+        imported: true,
+        importedAt,
+        contactId: info.contactId,
+        contactListItemId: info.contactListItemId
+      };
     });
     await job.update({ results });
 

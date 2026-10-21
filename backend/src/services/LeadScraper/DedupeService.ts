@@ -1,6 +1,8 @@
 import { Op } from "sequelize";
 import LeadScraperJob, { ScraperResult } from "../../models/LeadScraperJob";
 import Contact from "../../models/Contact";
+import ContactList from "../../models/ContactList";
+import ContactListItem from "../../models/ContactListItem";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
 import logger from "../../utils/logger";
 
@@ -25,24 +27,69 @@ interface SeenSets {
   instagrams: Set<string>;
 }
 
-// Varre resultados de jobs anteriores (done) da empresa e monta os sets de
-// chaves já vistas. Também inclui contatos já importados (Contact.cpfCnpj /
-// canonicalNumber / instagram) — cobre leads trazidos por fora do scraper.
-async function loadSeenKeys(companyId: number): Promise<SeenSets> {
-  const seen: SeenSets = { cnpjs: new Set(), phones: new Set(), instagrams: new Set() };
+// Origem mais forte em que a chave já foi vista. A prioridade entre origens
+// (seen_contact > seen_list > seen_job) é resolvida na CARGA: cada fonte é
+// gravada na ordem crescente de prioridade e a última escrita sobrescreve.
+type SeenOrigin =
+  | { status: "seen_job"; jobId: number }
+  | { status: "seen_list"; contactListId: number }
+  | { status: "seen_contact"; contactId: number };
+
+interface SeenKeyMaps {
+  cnpjs: Map<string, SeenOrigin>;
+  phones: Map<string, SeenOrigin>;
+  instagrams: Map<string, SeenOrigin>;
+}
+
+// Varre as fontes de "já visto" da empresa e monta mapas chave → origem:
+// 1) results de jobs anteriores done/cancelled (cancelado conta: os leads
+//    parciais capturados até o cancelamento são válidos);
+// 2) canonicalNumbers de ContactListItem (join ContactList p/ isolar por
+//    empresa) — leads já importados para uma lista;
+// 3) Contacts da empresa (cpfCnpj / canonicalNumber / instagram) — cobre
+//    leads trazidos por fora do scraper e é a origem mais forte.
+// O job em execução não entra: seu status é "running"/"pending" e seus
+// results ainda estão vazios neste ponto do pipeline.
+async function loadSeenKeys(companyId: number): Promise<SeenKeyMaps> {
+  const seen: SeenKeyMaps = {
+    cnpjs: new Map(),
+    phones: new Map(),
+    instagrams: new Map()
+  };
 
   const priorJobs = await LeadScraperJob.findAll({
-    where: { companyId, status: "done" },
-    attributes: ["results"]
+    where: { companyId, status: { [Op.in]: ["done", "cancelled"] } },
+    attributes: ["id", "results"]
   });
   for (const job of priorJobs) {
     for (const r of job.results || []) {
-      if (r.cnpj) seen.cnpjs.add(r.cnpj.replace(/\D/g, ""));
+      const origin: SeenOrigin = { status: "seen_job", jobId: job.id };
+      if (r.cnpj) seen.cnpjs.set(r.cnpj.replace(/\D/g, ""), origin);
       const p = normPhone(r.phone);
-      if (p) seen.phones.add(p);
+      if (p) seen.phones.set(p, origin);
       const h = normHandle(r.instagram);
-      if (h) seen.instagrams.add(h);
+      if (h) seen.instagrams.set(h, origin);
     }
+  }
+
+  const listItems = await ContactListItem.findAll({
+    where: { canonicalNumber: { [Op.ne]: null } },
+    attributes: ["canonicalNumber", "contactListId"],
+    include: [
+      {
+        model: ContactList,
+        attributes: [],
+        where: { companyId },
+        required: true // inner join — itens de listas de outras empresas fora
+      }
+    ]
+  });
+  for (const item of listItems) {
+    if (!item.canonicalNumber) continue;
+    seen.phones.set(item.canonicalNumber, {
+      status: "seen_list",
+      contactListId: item.contactListId
+    });
   }
 
   const contacts = await Contact.findAll({
@@ -54,13 +101,14 @@ async function loadSeenKeys(companyId: number): Promise<SeenSets> {
         { instagram: { [Op.ne]: null } }
       ]
     },
-    attributes: ["cpfCnpj", "canonicalNumber", "instagram"]
+    attributes: ["id", "cpfCnpj", "canonicalNumber", "instagram"]
   });
   for (const c of contacts) {
-    if (c.cpfCnpj) seen.cnpjs.add(String(c.cpfCnpj).replace(/\D/g, ""));
-    if (c.canonicalNumber) seen.phones.add(String(c.canonicalNumber));
+    const origin: SeenOrigin = { status: "seen_contact", contactId: c.id };
+    if (c.cpfCnpj) seen.cnpjs.set(String(c.cpfCnpj).replace(/\D/g, ""), origin);
+    if (c.canonicalNumber) seen.phones.set(String(c.canonicalNumber), origin);
     const h = normHandle(c.instagram);
-    if (h) seen.instagrams.add(h);
+    if (h) seen.instagrams.set(h, origin);
   }
 
   return seen;
@@ -105,7 +153,14 @@ export const filterOutDuplicates = async (
   if (skipDuplicates === false || !results.length) return results;
 
   try {
-    const seen = await loadSeenKeys(companyId);
+    const maps = await loadSeenKeys(companyId);
+    // dedupeWithinBatch só precisa saber SE a chave já foi vista — a origem
+    // (job/list/contact) é usada apenas pela classificação
+    const seen: SeenSets = {
+      cnpjs: new Set(maps.cnpjs.keys()),
+      phones: new Set(maps.phones.keys()),
+      instagrams: new Set(maps.instagrams.keys())
+    };
     const before = results.length;
     const filtered = dedupeWithinBatch(results, seen);
     const removed = before - filtered.length;
@@ -117,5 +172,79 @@ export const filterOutDuplicates = async (
     // Best-effort: falha no dedupe nunca deve derrubar o job de captura
     logger.warn(`[LeadScraper/Dedupe] falhou (companyId=${companyId}): ${err?.message}`);
     return results;
+  }
+};
+
+// Prioridade de status na resolução final: contato > lista > job anterior.
+// Quando mais de uma chave do lead casa (ex.: CNPJ visto num job e telefone
+// já é Contact), vence a origem mais forte — a informação mais útil pro
+// usuário. Empate de status é desempatado pela prioridade de chave
+// (cnpj > phone > instagram), que decide qual dedupeInfo reportar.
+const STATUS_RANK: Record<string, number> = {
+  seen_contact: 0,
+  seen_list: 1,
+  seen_job: 2
+};
+
+// Classifica cada lead do lote MUTANDO o objeto (dedupeStatus/dedupeInfo/
+// existsInContacts) — contrato consumido pelo frontend e pelo import.
+// Chaves de identidade por prioridade: cnpj (só dígitos) > telefone canônico
+// > handle do Instagram. Lead sem nenhuma chave → "new".
+export const classifyResults = async (
+  companyId: number,
+  results: ScraperResult[]
+): Promise<void> => {
+  if (!results.length) return;
+
+  try {
+    const seen = await loadSeenKeys(companyId);
+
+    for (const r of results) {
+      // Cada entrada é (origem, prioridade da chave que casou)
+      const candidates: Array<{ origin: SeenOrigin; keyRank: number }> = [];
+
+      const cnpj = r.cnpj ? r.cnpj.replace(/\D/g, "") : null;
+      if (cnpj) {
+        const origin = seen.cnpjs.get(cnpj);
+        if (origin) candidates.push({ origin, keyRank: 0 });
+      }
+
+      const phone = normPhone(r.phone);
+      if (phone) {
+        const origin = seen.phones.get(phone);
+        if (origin) candidates.push({ origin, keyRank: 1 });
+      }
+
+      const handle = normHandle(r.instagram);
+      if (handle) {
+        const origin = seen.instagrams.get(handle);
+        if (origin) candidates.push({ origin, keyRank: 2 });
+      }
+
+      if (!candidates.length) {
+        // Sem chave ou sem match — lead inédito para a empresa
+        r.dedupeStatus = "new";
+        continue;
+      }
+
+      candidates.sort(
+        (a, b) =>
+          STATUS_RANK[a.origin.status] - STATUS_RANK[b.origin.status] ||
+          a.keyRank - b.keyRank
+      );
+      const best = candidates[0].origin;
+
+      r.dedupeStatus = best.status;
+      r.dedupeInfo = {
+        jobId: best.status === "seen_job" ? best.jobId : undefined,
+        contactListId: best.status === "seen_list" ? best.contactListId : undefined,
+        contactId: best.status === "seen_contact" ? best.contactId : undefined
+      };
+      if (best.status === "seen_contact") r.existsInContacts = true;
+    }
+  } catch (err: any) {
+    // Best-effort: sem flags o fluxo segue como antes (retrocompat — result
+    // sem dedupeStatus é tratado como "new" por job service e import)
+    logger.warn(`[LeadScraper/Dedupe] classifyResults falhou (companyId=${companyId}): ${err?.message}`);
   }
 };

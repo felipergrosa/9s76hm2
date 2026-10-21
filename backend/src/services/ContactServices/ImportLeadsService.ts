@@ -228,6 +228,9 @@ const ImportLeadsService = async ({
   const leadsSemTelefone: Array<{ name: string; reason: string }> = [];
   // IDs dos contatos criados/atualizados — usados pelo export batch p/ ERP
   const contactIds: number[] = [];
+  // Mapa índice-do-lead → ids criados: permite ao caller (import do scraper)
+  // carimbar contactId/contactListItemId no result JSON do job
+  const importedByIndex: Record<number, { contactId: number; contactListItemId?: number }> = {};
   // Pré-dedupe do lote: mesma canonicalNumber repetida não reprocessa o update
   const seenNumbers = new Set<string>();
 
@@ -290,9 +293,10 @@ const ImportLeadsService = async ({
         });
       }
 
+      let contactListItemId: number | undefined;
       if (contactList) {
         const { canonical: itemCanonical } = safeNormalizePhoneNumber(number);
-        await ContactListItem.findOrCreate({
+        const [listItem] = await ContactListItem.findOrCreate({
           where: {
             canonicalNumber: itemCanonical || number,
             contactListId: contactList.id,
@@ -307,7 +311,10 @@ const ImportLeadsService = async ({
             companyId
           } as any
         });
+        contactListItemId = listItem.id;
       }
+
+      importedByIndex[i] = { contactId: contact.id, contactListItemId };
 
       // created/updated inferido do retorno do service (createdAt === updatedAt
       // em registro recém-criado) — elimina o findOne redundante por lead
@@ -330,6 +337,7 @@ const ImportLeadsService = async ({
     errors,
     leadsSemTelefone,
     contactIds,
+    importedByIndex,
     contactListId: contactList?.id,
     tagId: tag?.id
   };

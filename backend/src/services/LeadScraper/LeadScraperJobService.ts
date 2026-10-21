@@ -13,7 +13,7 @@ import CheckContactNumber from "../WbotServices/CheckNumber";
 import GetDefaultWhatsApp from "../../helpers/GetDefaultWhatsApp";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
 import { toArray, resolveMaxResults } from "./ScraperFilterUtils";
-import { filterOutDuplicates } from "./DedupeService";
+import { filterOutDuplicates, classifyResults } from "./DedupeService";
 import logger from "../../utils/logger";
 
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
@@ -27,6 +27,28 @@ function normalizePhonesInPlace(results: ScraperResult[]): void {
       if (canonical) r.phone = canonical;
     }
   }
+}
+
+// Lead "fresco" = o único que vale passar pelo enriquecimento caro (social /
+// WhatsApp / cross). Sem flag = job antigo ou falha na classificação → trata
+// como "new" (retrocompat).
+const isFreshLead = (r: ScraperResult) => !r.dedupeStatus || r.dedupeStatus === "new";
+
+// Classifica o lote contra o histórico da empresa (DedupeService) e remove
+// do array os leads já capturados em buscas anteriores (seen_job) — recaptura
+// é redundante. seen_list/seen_contact ficam no array com flag para o front
+// exibir badge e permitir reimportação opt-in (includeExisting no import).
+async function classifyAndPrune(companyId: number, results: ScraperResult[]): Promise<ScraperResult[]> {
+  await classifyResults(companyId, results);
+  const total = results.length;
+  const kept = results.filter(r => r.dedupeStatus !== "seen_job");
+  const droppedSeenJob = total - kept.length;
+  if (droppedSeenJob > 0) {
+    const seenList = kept.filter(r => r.dedupeStatus === "seen_list").length;
+    const seenContact = kept.filter(r => r.dedupeStatus === "seen_contact").length;
+    logger.info(`[LeadScraperJob] dedupe companyId=${companyId}: ${JSON.stringify({ total, kept: kept.length, droppedSeenJob, seenList, seenContact })}`);
+  }
+  return kept;
 }
 
 // Cancelamento cooperativo: requestJobCancel sinaliza; checkpoints nos loops
@@ -43,7 +65,9 @@ const throwIfCancelled = (jobId: number) => {
 // Federal por nome (Brasil.io) e enriquecidos pela cascata OpenCNPJ →
 // minhareceita → BrasilAPI. Progresso: 80→88.
 async function runCrossEnrichment(job: LeadScraperJob, results: ScraperResult[]): Promise<void> {
-  const targets = results.filter(r => !r.cnpj && (r.name || r.nomeFantasia));
+  // Só leads "new": seen_list/seen_contact já existem na base — enriquecer
+  // de novo é custo sem ganho (flags já estão nos objetos)
+  const targets = results.filter(r => isFreshLead(r) && !r.cnpj && (r.name || r.nomeFantasia));
   if (!targets.length) {
     await job.update({ progress: 88 });
     return;
@@ -75,7 +99,8 @@ async function runWhatsappValidation(job: LeadScraperJob, results: ScraperResult
     }
   }
 
-  const candidates = results.filter(r => r.phone);
+  // Só leads "new" vão pro onWhatsApp — seen_list/seen_contact já são conhecidos
+  const candidates = results.filter(r => isFreshLead(r) && r.phone);
   let canCheck = false;
   try {
     const wa = await GetDefaultWhatsApp(null, job.companyId);
@@ -129,7 +154,9 @@ async function runWhatsappValidation(job: LeadScraperJob, results: ScraperResult
 // (chunks de 100), trazendo telefone/email/site/categoria de perfis business.
 // Muito mais barato e rápido que 1 run por lead. Progresso: 88→96.
 async function runIgBatchEnrichment(job: LeadScraperJob, results: ScraperResult[]): Promise<void> {
-  const handles = results.map(r => r.instagram).filter(Boolean) as string[];
+  // Só leads "new" — seen_list/seen_contact já existem na base da empresa
+  const eligible = results.filter(isFreshLead);
+  const handles = eligible.map(r => r.instagram).filter(Boolean) as string[];
   if (!handles.length || !(await isApifyConfigured(job.companyId))) {
     await job.update({ progress: 96 });
     return;
@@ -143,7 +170,7 @@ async function runIgBatchEnrichment(job: LeadScraperJob, results: ScraperResult[
     }
   );
   let enriched = 0;
-  for (const r of results) {
+  for (const r of eligible) {
     const p = profiles.get(String(r.instagram || "").toLowerCase());
     if (!p) continue;
     enriched++;
@@ -161,23 +188,31 @@ async function runIgBatchEnrichment(job: LeadScraperJob, results: ScraperResult[
 // Updates DB every 5 leads to reduce write load. Usa Apify (instagram-profile-scraper)
 // quando configurado — sem sessão pessoal, sem risco de ban.
 async function runSocialEnrichment(job: LeadScraperJob, results: ScraperResult[], fromPct = 88, toPct = 96): Promise<void> {
+  // Enriquecimento pesado só nos leads "new"; seen_list/seen_contact seguem no
+  // array (persistidos via [...results]) mas não consomem chamadas externas.
+  const eligible = results.filter(isFreshLead);
+  if (!eligible.length) {
+    await job.update({ results: [...results], progress: toPct });
+    return;
+  }
+
   // Modo batch (Apify configurado): 1 run do Google cobre N leads + profiles em
   // lote — DDG por lead estava sendo bloqueado (HTTP 202 anti-bot).
   const useBatch = await isApifyConfigured(job.companyId).catch(() => false);
   if (useBatch) {
     const span = toPct - fromPct;
     // websites primeiro (grátis, paralelo): 1/3 da fatia
-    await enrichFromWebsitesBatch(results, async (done, total) => {
+    await enrichFromWebsitesBatch(eligible, async (done, total) => {
       throwIfCancelled(job.id);
       await job.update({ results: [...results], progress: fromPct + Math.round((done / Math.max(total, 1)) * span / 3) });
     });
     // google search batch: 2/3 da fatia
-    await enrichSocialsBatchViaApify(results, job.companyId, async (cur, total) => {
+    await enrichSocialsBatchViaApify(eligible, job.companyId, async (cur, total) => {
       throwIfCancelled(job.id);
       await job.update({ results: [...results], progress: fromPct + Math.round(span / 3) + Math.round((cur / Math.max(total, 1)) * span / 3) });
     });
     // telefones/email dos perfis IG em lote
-    await enrichIgPhonesBatch(results, job.companyId).catch(err => {
+    await enrichIgPhonesBatch(eligible, job.companyId).catch(err => {
       if (err instanceof JobCancelledError || cancelRequested.has(job.id)) throw err;
       logger.warn(`[LeadScraperJob] jobId=${job.id}: batch IG phones falhou (${err?.message})`);
     });
@@ -187,23 +222,23 @@ async function runSocialEnrichment(job: LeadScraperJob, results: ScraperResult[]
     return;
   }
 
-  for (let i = 0; i < results.length; i++) {
+  for (let i = 0; i < eligible.length; i++) {
     throwIfCancelled(job.id);
     try {
-      const socials = await enrichLeadSocials(results[i], job.companyId);
-      Object.assign(results[i], socials);
+      const socials = await enrichLeadSocials(eligible[i], job.companyId);
+      Object.assign(eligible[i], socials);
     } catch {
       // best-effort — enriquecimento social nunca derruba o job
     }
 
     // Telefone em tempo real: normaliza assim que o lead sai do enriquecimento social
-    if (results[i].phone) {
-      const { canonical } = safeNormalizePhoneNumber(results[i].phone);
-      if (canonical) results[i].phone = canonical;
+    if (eligible[i].phone) {
+      const { canonical } = safeNormalizePhoneNumber(eligible[i].phone);
+      if (canonical) eligible[i].phone = canonical;
     }
 
-    if ((i + 1) % 5 === 0 || i === results.length - 1) {
-      const p = fromPct + Math.round(((i + 1) / results.length) * (toPct - fromPct));
+    if ((i + 1) % 5 === 0 || i === eligible.length - 1) {
+      const p = fromPct + Math.round(((i + 1) / eligible.length) * (toPct - fromPct));
       await job.update({ results: [...results], progress: p });
     }
   }
@@ -290,7 +325,16 @@ export const runScraperJob = async (jobId: number) => {
       }
 
       normalizePhonesInPlace(results);
-      const deduped = await filterOutDuplicates(job.companyId, results, job.filters.skipDuplicates);
+      const classified = await classifyAndPrune(job.companyId, results);
+      // Dedup intra-lote/histórico só nos "new" — seen_list/seen_contact ficam
+      // no array com flag para o front exibir badge e permitir reimport opt-in
+      const freshDeduped = await filterOutDuplicates(
+        job.companyId,
+        classified.filter(isFreshLead),
+        job.filters.skipDuplicates
+      );
+      const keepSet = new Set<ScraperResult>(freshDeduped);
+      const deduped = classified.filter(r => !isFreshLead(r) || keepSet.has(r));
       await job.update({ results: deduped, totalFound: deduped.length, progress: 80 });
       await runCrossEnrichment(job, deduped);
       await runSocialEnrichment(job, deduped);
@@ -311,10 +355,11 @@ export const runScraperJob = async (jobId: number) => {
       }
 
       normalizePhonesInPlace(results);
-      await job.update({ results, totalFound: results.length, progress: 80 });
+      const classified = await classifyAndPrune(job.companyId, results);
+      await job.update({ results: classified, totalFound: classified.length, progress: 80 });
       // cross-enrich desnecessário: leads já vêm da Receita Federal
-      await runSocialEnrichment(job, results);
-      await runWhatsappValidation(job, results);
+      await runSocialEnrichment(job, classified);
+      await runWhatsappValidation(job, classified);
       throwIfCancelled(job.id);
       await job.update({ status: "done", progress: 100 });
 
@@ -327,9 +372,10 @@ export const runScraperJob = async (jobId: number) => {
         }
       );
       normalizePhonesInPlace(results);
-      await job.update({ results, totalFound: results.length, progress: 80 });
-      await runSocialEnrichment(job, results);
-      await runWhatsappValidation(job, results);
+      const classified = await classifyAndPrune(job.companyId, results);
+      await job.update({ results: classified, totalFound: classified.length, progress: 80 });
+      await runSocialEnrichment(job, classified);
+      await runWhatsappValidation(job, classified);
       throwIfCancelled(job.id);
       await job.update({ status: "done", progress: 100 });
 
@@ -349,18 +395,19 @@ export const runScraperJob = async (jobId: number) => {
         job.companyId
       );
       normalizePhonesInPlace(results);
-      await job.update({ results, totalFound: results.length, progress: 80 });
-      await runCrossEnrichment(job, results);
+      const classified = await classifyAndPrune(job.companyId, results);
+      await job.update({ results: classified, totalFound: classified.length, progress: 80 });
+      await runCrossEnrichment(job, classified);
       // Batch: 1 run cobre todos os perfis; fallback per-lead se falhar
-      const batchOk = await runIgBatchEnrichment(job, results)
+      const batchOk = await runIgBatchEnrichment(job, classified)
         .then(() => true)
         .catch(async (err: any) => {
           if (err instanceof JobCancelledError || cancelRequested.has(job.id)) throw err;
           logger.warn(`[LeadScraperJob] jobId=${job.id}: batch IG falhou (${err.message}) — fallback per-lead`);
           return false;
         });
-      if (!batchOk) await runSocialEnrichment(job, results);
-      await runWhatsappValidation(job, results);
+      if (!batchOk) await runSocialEnrichment(job, classified);
+      await runWhatsappValidation(job, classified);
       throwIfCancelled(job.id);
       await job.update({ status: "done", progress: 100 });
 
@@ -373,10 +420,11 @@ export const runScraperJob = async (jobId: number) => {
         }
       );
       normalizePhonesInPlace(results);
-      await job.update({ results, totalFound: results.length, progress: 80 });
-      await runCrossEnrichment(job, results);
-      await runSocialEnrichment(job, results);
-      await runWhatsappValidation(job, results);
+      const classified = await classifyAndPrune(job.companyId, results);
+      await job.update({ results: classified, totalFound: classified.length, progress: 80 });
+      await runCrossEnrichment(job, classified);
+      await runSocialEnrichment(job, classified);
+      await runWhatsappValidation(job, classified);
       throwIfCancelled(job.id);
       await job.update({ status: "done", progress: 100 });
 
@@ -396,7 +444,16 @@ export const runScraperJob = async (jobId: number) => {
       });
 
       normalizePhonesInPlace(merged);
-      const deduped = await filterOutDuplicates(job.companyId, merged, job.filters.skipDuplicates);
+      const classified = await classifyAndPrune(job.companyId, merged);
+      // Mesma regra do google_maps: dedup histórico só nos "new"; seen_list /
+      // seen_contact permanecem flagados para o front
+      const freshDeduped = await filterOutDuplicates(
+        job.companyId,
+        classified.filter(isFreshLead),
+        job.filters.skipDuplicates
+      );
+      const keepSet = new Set<ScraperResult>(freshDeduped);
+      const deduped = classified.filter(r => !isFreshLead(r) || keepSet.has(r));
       await job.update({ results: deduped, totalFound: deduped.length, progress: 75 });
       // Fontes já fornecem CNPJ quando possível — cross ainda vale para Maps sem CNPJ
       await runCrossEnrichment(job, deduped);

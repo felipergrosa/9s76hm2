@@ -46,6 +46,17 @@ export interface ScraperResult {
   // busca global: fontes de origem do lead (ex.: ["google_maps","cnpj_search"])
   sources?: string[];
   imported?: boolean;
+  // Classificação anti-repetição (DedupeService.classifyResults):
+  // "new" = inédito | "seen_job" = já capturado em outra busca |
+  // "seen_list" = já está em uma lista de contatos | "seen_contact" =
+  // já é um Contact da empresa (unificado no import).
+  dedupeStatus?: "new" | "seen_job" | "seen_list" | "seen_contact";
+  dedupeInfo?: { jobId?: number; contactId?: number; contactListId?: number };
+  existsInContacts?: boolean;
+  // Carimbados no import do job
+  importedAt?: string;
+  contactId?: number;
+  contactListItemId?: number;
 }
 
 // Campos de filtro que aceitam seleção única ou múltipla — normalizados para
