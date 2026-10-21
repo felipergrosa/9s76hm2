@@ -2,7 +2,7 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 
 // <workflow-map>
 // Workflow : NOBRE Busca Pedidos Olist SQLServer
-// Nodes   : 29  |  Connections: 30
+// Nodes   : 34  |  Connections: 38
 //
 // NODE INDEX
 // ──────────────────────────────────────────────────────────────────
@@ -14,10 +14,11 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 // PreparaFiltroSql                   code
 // BuscaDetalheOlist                  httpRequest
 // NormalizaPedidoOlist               code
+// IfPedidoInvalido                   if
 // BuscaCodMunicipioOlist             microsoftSql               [onError→regular] [creds]
 // SqlCadastraClienteOlist            microsoftSql               [creds] [alwaysOutput] [continueOnFail]
-// SqlCadastraVendaOlist              microsoftSql               [creds] [alwaysOutput] [continueOnFail]
-// SqlCadastraItensOlist              microsoftSql               [creds] [alwaysOutput] [continueOnFail]
+// SqlCadastraVendaOlist              microsoftSql               [creds] [alwaysOutput]
+// SqlCadastraItensOlist              microsoftSql               [creds] [alwaysOutput]
 // AdicionaMarcadorOlist              httpRequest                [onError→regular]
 // Autenticacao1                      stickyNote
 // Processamento1                     stickyNote
@@ -27,7 +28,11 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 // MarcaPedidosImportados             code
 // FiltraNovosPedidos                 code
 // IfNovosPedidos                     if
+// SqlVerificaPedidoAtual             microsoftSql               [creds] [alwaysOutput]
+// IfPedidoJaExiste                   if
 // MunicipioEncontrado                if
+// SqlVerificaCliente                 microsoftSql               [creds] [alwaysOutput]
+// IfClienteJaExiste                  if
 // MontaVendaSql                      code
 // LoopPedidos                        splitInBatches
 // MontaClienteSql                    code
@@ -53,21 +58,29 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 //                        → IfNovosPedidos
 //                          → LoopPedidos
 //                            → SalvaUltimaExecucao
-//                           .out(1) → BuscaDetalheOlist
-//                              → NormalizaPedidoOlist
-//                                → BuscaCodMunicipioOlist
-//                                  → MunicipioEncontrado
-//                                    → MontaClienteSql
-//                                      → SqlCadastraClienteOlist
-//                                        → MontaVendaSql
-//                                          → SqlCadastraVendaOlist
-//                                            → MontaItensSql
-//                                              → SqlCadastraItensOlist
-//                                                → PedidoFull
-//                                                  → LoopPedidos (↩ loop)
-//                                                 .out(1) → AdicionaMarcadorOlist
-//                                                    → LoopPedidos (↩ loop)
-//                                   .out(1) → MontaClienteSql (↩ loop)
+//                           .out(1) → SqlVerificaPedidoAtual
+//                              → IfPedidoJaExiste
+//                                → LoopPedidos (↩ loop)
+//                               .out(1) → BuscaDetalheOlist
+//                                  → NormalizaPedidoOlist
+//                                    → IfPedidoInvalido
+//                                      → LoopPedidos (↩ loop)
+//                                     .out(1) → BuscaCodMunicipioOlist
+//                                        → MunicipioEncontrado
+//                                          → SqlVerificaCliente
+//                                            → IfClienteJaExiste
+//                                              → MontaVendaSql
+//                                                → SqlCadastraVendaOlist
+//                                                  → MontaItensSql
+//                                                    → SqlCadastraItensOlist
+//                                                      → PedidoFull
+//                                                        → LoopPedidos (↩ loop)
+//                                                       .out(1) → AdicionaMarcadorOlist
+//                                                          → LoopPedidos (↩ loop)
+//                                             .out(1) → MontaClienteSql
+//                                                → SqlCadastraClienteOlist
+//                                                  → MontaVendaSql (↩ loop)
+//                                         .out(1) → SqlVerificaCliente (↩ loop)
 //                         .out(1) → SalvaUltimaExecucao (↩ loop)
 //                 .out(1) → SalvaUltimaExecucao (↩ loop)
 // </workflow-map>
@@ -81,7 +94,6 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
     name: 'NOBRE Busca Pedidos Olist SQLServer',
     active: true,
     isArchived: false,
-    projectId: 'wFXnwjlGyuHoHb3z',
     tags: ['NOBRE'],
     settings: { executionOrder: 'v1', callerPolicy: 'workflowsFromSameOwner', availableInMCP: false },
 })
@@ -206,7 +218,7 @@ export class NobreBuscaPedidosOlistSqlserverWorkflow {
             parameters: [
                 {
                     name: 'dataCriacaoInicial',
-                    value: "={{ ($('Lê última execução').first().json.data ?? '2024-01-01').toString().substring(0,10) }}",
+                    value: "={{ (() => { const base = ($('Lê última execução').first().json.data ?? '2024-01-01').toString().substring(0,10); const dt = new Date(base + 'T00:00:00'); dt.setDate(dt.getDate() - 1); return dt.toLocaleDateString('pt-BR'); })() }}",
                 },
             ],
         },
@@ -251,7 +263,17 @@ const listaFiltrada = lista.filter(pedido => {
   return !hasBusinessOk;
 });
 
-const ids = listaFiltrada.map((pedido) => {
+// dedup por chave dentro da própria lista (Tiny pode devolver o mesmo numeroPedido 2x)
+const seen = new Set();
+const listaUnica = listaFiltrada.filter(pedido => {
+  const p = pedido.pedido ?? pedido;
+  const key = String(p.numero ?? p.numeroPedido ?? p.id ?? p.idPedido ?? '').trim();
+  if (!key || seen.has(key)) return false;
+  seen.add(key);
+  return true;
+});
+
+const ids = listaUnica.map((pedido) => {
   const p = pedido.pedido ?? pedido;
   return p.numero ?? p.numeroPedido ?? p.id ?? p.idPedido;
 }).filter(Boolean);
@@ -261,7 +283,7 @@ if (ids.length === 0) {
 }
 
 const idsStr = ids.map(id => \`'\${id}'\`).join(',');
-return [{ json: { temPedidos: true, idsStr, lista: listaFiltrada } }];`,
+return [{ json: { temPedidos: true, idsStr, lista: listaUnica } }];`,
     };
 
     @node({
@@ -272,7 +294,7 @@ return [{ json: { temPedidos: true, idsStr, lista: listaFiltrada } }];`,
         position: [400, 512],
     })
     BuscaDetalheOlist = {
-        url: '=https://api.tiny.com.br/public-api/v3/pedidos/{{ $json.id ?? $json.idPedido ?? $json.numero }}',
+        url: "=https://api.tiny.com.br/public-api/v3/pedidos/{{ $('Loop pedidos').item.json.id ?? $('Loop pedidos').item.json.numeroPedido }}",
         sendHeaders: true,
         headerParameters: {
             parameters: [
@@ -309,24 +331,67 @@ function normalizaNumero(str) {
   return val.replace(/\\D/g, '') || '0';
 }
 function first(...values) { return values.find((value) => value !== undefined && value !== null && String(value).trim() !== '') ?? ''; }
-const raw = $json;
-const contato = raw.contato ?? raw.cliente ?? raw.customer ?? {};
-const endereco = raw.enderecoEntrega ?? raw.endereco ?? raw.transporte?.etiqueta ?? contato.endereco ?? {};
-const documento = first(contato.numeroDocumento, contato.cpfCnpj, contato.cpf, contato.cnpj, raw.cpfCnpj);
+const loopItem = $('Loop pedidos').item.json;
+// se a resposta vier encapsulada ({itens,paginacao}), localiza o pedido pelo id do item do loop
+const raw = ($json && ($json.numero !== undefined || $json.numeroPedido !== undefined || $json.id !== undefined))
+  ? $json
+  : (($json.itens || []).find(i => String(i.id) === String(loopItem.id)) ?? {});
+const contato = raw.contato ?? raw.cliente ?? raw.customer ?? loopItem.cliente ?? {};
+const endereco = raw.enderecoEntrega ?? raw.endereco ?? raw.transporte?.etiqueta ?? contato.endereco ?? loopItem.cliente?.endereco ?? {};
+const documento = first(contato.numeroDocumento, contato.cpfCnpj, contato.cpf, contato.cnpj, raw.cpfCnpj, loopItem.cliente?.cpfCnpj);
 const documentoNumeros = onlyDigits(documento);
 const tipoPessoa = documentoNumeros.length > 11 ? 'J' : 'F';
-const itens = raw.itens ?? raw.items ?? raw.produtos ?? [];
-const dataPedido = first(raw.data, raw.dataPedido, raw.createdAt, raw.dataEmissao, new Date().toISOString().slice(0, 10));
-const numeroPedido = first(raw.numero, raw.numeroPedido, raw.id, raw.idPedido);
-const idTiny = first(raw.id, raw.idPedido);
-const canal = first(raw.ecommerce?.nome, raw.marketplace?.nome, raw.canalVenda, raw.origem, raw.marcadores?.[0]?.descricao, 'TINY');
-const canalVenda = raw.ecommerce?.canalVenda ?? '';
+const itensRaw = raw.itens ?? raw.items ?? raw.produtos;
+const itens = Array.isArray(itensRaw) ? itensRaw : [];
+const dataPedido = first(raw.data, raw.dataPedido, raw.dataCriacao, raw.createdAt, raw.dataEmissao, loopItem.dataCriacao, new Date().toISOString().slice(0, 10));
+const numeroPedido = first(raw.numero, raw.numeroPedido, loopItem.numeroPedido, raw.id, loopItem.id);
+const idTiny = first(raw.id, raw.idPedido, loopItem.id);
+const canal = first(raw.ecommerce?.nome, raw.marketplace?.nome, raw.canalVenda, raw.origem, raw.marcadores?.[0]?.descricao, loopItem.ecommerce?.nome, 'TINY');
+const canalVenda = raw.ecommerce?.canalVenda ?? loopItem.ecommerce?.canalVenda ?? '';
+// doc faltante/zerado vira placeholder único e rastreável (não colide entre pedidos nem com CNPJ real)
+const cnpjFinal = first(documento, 'ISENTO-' + String(numeroPedido));
+const docFaltante = !documentoNumeros || /^0+$/.test(documentoNumeros) || documentoNumeros.length < 11;
+const skipReason = !numeroPedido ? 'sem numeroPedido' : (itens.length === 0 ? 'sem itens' : '');
 const formaEnvioNome = raw.transportador?.formaEnvio?.nome ?? '';
 const formaFreteNome = raw.transportador?.formaFrete?.nome ?? '';
 const marcadores = raw.marcadores ?? [];
 const hasFulfillmentMarker = marcadores.some(m => String(m?.descricao ?? '').toLowerCase().includes('fulfillment'));
 const isFull = canalVenda.toLowerCase().includes('full') || formaEnvioNome.toLowerCase().includes('full') || formaFreteNome.toLowerCase().includes('full') || canal.toLowerCase().includes('full') || hasFulfillmentMarker;
-return [{ json: { raw, numeroPedido, idTiny, dataPedido, canal, canalVenda, formaEnvioNome, formaFreteNome, isFull, tipoPessoa, documento, documentoNumeros, nome: removeAcentos(first(contato.nome, contato.razaoSocial, raw.nomeCliente)).trim().toUpperCase(), fantasia: removeAcentos(first(contato.fantasia, contato.nomeFantasia, contato.nome, contato.razaoSocial, raw.nomeCliente)).trim().toUpperCase(), ieRg: first(contato.ie, contato.inscricaoEstadual, contato.rg), endereco: { cep: first(endereco.cep, contato.cep), bairro: upper(first(endereco.bairro, contato.bairro)), cidade: upper(first(endereco.municipio, endereco.cidade, contato.municipio, contato.cidade)), uf: upper(first(endereco.uf, endereco.estado, contato.uf, contato.estado)), numero: normalizaNumero(first(endereco.numero, contato.numero)), logradouro: upper(first(endereco.endereco, endereco.logradouro, contato.endereco, contato.logradouro)), complemento: upper(first(endereco.complemento, contato.complemento)) }, itens: Array.isArray(itens) ? itens : [] } }];`,
+if (skipReason) console.log(\`Pedido \${loopItem.numeroPedido ?? loopItem.id} ignorado: \${skipReason}\`);
+if (docFaltante && !skipReason) console.log(\`Pedido \${numeroPedido} sem documento válido — usando \${cnpjFinal}\`);
+return [{ json: { raw, numeroPedido, idTiny, dataPedido, canal, canalVenda, formaEnvioNome, formaFreteNome, isFull, tipoPessoa, documento, documentoNumeros, skipReason, cnpjFinal, docFaltante, nome: removeAcentos(first(contato.nome, contato.razaoSocial, raw.nomeCliente, loopItem.cliente?.nome)).trim().toUpperCase(), fantasia: removeAcentos(first(contato.fantasia, contato.nomeFantasia, contato.nome, contato.razaoSocial, raw.nomeCliente, loopItem.cliente?.nome)).trim().toUpperCase(), ieRg: first(contato.ie, contato.inscricaoEstadual, contato.rg), endereco: { cep: first(endereco.cep, contato.cep), bairro: upper(first(endereco.bairro, contato.bairro)), cidade: upper(first(endereco.municipio, endereco.cidade, contato.municipio, contato.cidade)), uf: upper(first(endereco.uf, endereco.estado, contato.uf, contato.estado)), numero: normalizaNumero(first(endereco.numero, contato.numero)), logradouro: upper(first(endereco.endereco, endereco.logradouro, contato.endereco, contato.logradouro)), complemento: upper(first(endereco.complemento, contato.complemento)) }, itens: Array.isArray(itens) ? itens : [] } }];`,
+    };
+
+    @node({
+        id: 'valida-pedido-if-01',
+        name: 'IF Pedido Inválido?',
+        type: 'n8n-nodes-base.if',
+        version: 2,
+        position: [608, 720],
+    })
+    IfPedidoInvalido = {
+        conditions: {
+            options: {
+                caseSensitive: true,
+                leftValue: '',
+                typeValidation: 'strict',
+                version: 1,
+            },
+            conditions: [
+                {
+                    id: 'cond-pedido-invalido',
+                    leftValue: '={{ $json.skipReason }}',
+                    rightValue: '',
+                    operator: {
+                        type: 'string',
+                        operation: 'notEmpty',
+                        singleValue: true,
+                    },
+                },
+            ],
+            combinator: 'and',
+        },
+        options: {},
     };
 
     @node({
@@ -372,7 +437,6 @@ return [{ json: { raw, numeroPedido, idTiny, dataPedido, canal, canalVenda, form
         position: [1840, 512],
         credentials: { microsoftSql: { id: '347YbKVdQ6hSkPU6', name: 'Microsoft SQL account' } },
         alwaysOutputData: true,
-        continueOnFail: true,
     })
     SqlCadastraVendaOlist = {
         table: 'BusinessMovPedidoVenda',
@@ -388,7 +452,6 @@ return [{ json: { raw, numeroPedido, idTiny, dataPedido, canal, canalVenda, form
         position: [2288, 512],
         credentials: { microsoftSql: { id: '347YbKVdQ6hSkPU6', name: 'Microsoft SQL account' } },
         alwaysOutputData: true,
-        continueOnFail: true,
     })
     SqlCadastraItensOlist = {
         table: 'BusinessMovPedidoVendaItem',
@@ -527,7 +590,7 @@ return [{ json: { raw, numeroPedido, idTiny, dataPedido, canal, canalVenda, form
     })
     SqlVerificaImportados = {
         operation: 'executeQuery',
-        query: "SELECT CdPedidoRepre, CdRepresentante, CdEmpresa FROM BusinessMovPedidoVenda WHERE CdEmpresa = '97' AND CdRepresentante = '1019' AND CdPedidoRepre IN ({{ $('Prepara Filtro SQL').item.json.idsStr }})",
+        query: "SELECT CAST(TRY_CAST(LTRIM(RTRIM(CdPedidoRepre)) AS BIGINT) AS VARCHAR(20)) AS CdPedidoRepre, CdRepresentante, CdEmpresa FROM BusinessMovPedidoVenda WHERE CdEmpresa = '97' AND CdRepresentante = '1019' AND DtPedido >= DATEADD(day, -60, GETDATE()) AND TRY_CAST(LTRIM(RTRIM(CdPedidoRepre)) AS BIGINT) IN ({{ $('Prepara Filtro SQL').item.json.idsStr }})",
     };
 
     @node({
@@ -638,6 +701,52 @@ return filtrados.map(p => ({ json: Object.assign({ temNovos: true }, p.pedido ??
     };
 
     @node({
+        id: 'verifica-atual-sql-01',
+        name: 'SQL Verifica Pedido Atual',
+        type: 'n8n-nodes-base.microsoftSql',
+        version: 1.1,
+        position: [400, 720],
+        credentials: { microsoftSql: { id: '347YbKVdQ6hSkPU6', name: 'Microsoft SQL account' } },
+        alwaysOutputData: true,
+    })
+    SqlVerificaPedidoAtual = {
+        operation: 'executeQuery',
+        query: "SELECT TOP 1 CdPedidoRepre FROM BusinessMovPedidoVenda WHERE CdEmpresa = '97' AND CdRepresentante = '1019' AND DtPedido >= DATEADD(day, -60, GETDATE()) AND TRY_CAST(LTRIM(RTRIM(CdPedidoRepre)) AS BIGINT) = TRY_CAST('{{ String($json.numero ?? $json.numeroPedido ?? $json.id ?? '').replace(/'/g, \"''\") }}' AS BIGINT)",
+    };
+
+    @node({
+        id: 'verifica-atual-if-01',
+        name: 'IF Pedido Já Existe?',
+        type: 'n8n-nodes-base.if',
+        version: 2,
+        position: [624, 720],
+    })
+    IfPedidoJaExiste = {
+        conditions: {
+            options: {
+                caseSensitive: true,
+                leftValue: '',
+                typeValidation: 'strict',
+                version: 1,
+            },
+            conditions: [
+                {
+                    id: 'cond-ja-existe',
+                    leftValue: '={{ $json.CdPedidoRepre }}',
+                    rightValue: '',
+                    operator: {
+                        type: 'string',
+                        operation: 'notEmpty',
+                        singleValue: true,
+                    },
+                },
+            ],
+            combinator: 'and',
+        },
+        options: {},
+    };
+
+    @node({
         id: '330f34c3-7560-4050-b902-35e11cecde97',
         name: 'Municipio encontrado?',
         type: 'n8n-nodes-base.if',
@@ -670,6 +779,52 @@ return filtrados.map(p => ({ json: Object.assign({ temNovos: true }, p.pedido ??
     };
 
     @node({
+        id: 'verifica-cliente-sql-01',
+        name: 'SQL Verifica Cliente',
+        type: 'n8n-nodes-base.microsoftSql',
+        version: 1.1,
+        position: [1232, 720],
+        credentials: { microsoftSql: { id: '347YbKVdQ6hSkPU6', name: 'Microsoft SQL account' } },
+        alwaysOutputData: true,
+    })
+    SqlVerificaCliente = {
+        operation: 'executeQuery',
+        query: "SELECT TOP 1 Cnpj_Cnpf FROM BusinessCadCliente WHERE REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(Cnpj_Cnpf)),'.',''),'-',''),'/','') = '{{ String($('Normaliza pedido Olist').item.json.cnpjFinal ?? '').replace(/\\./g,'').replace(/-/g,'').replace(/\\//g,'').replace(/'/g,\"''\") }}'",
+    };
+
+    @node({
+        id: 'verifica-cliente-if-01',
+        name: 'IF Cliente Já Existe?',
+        type: 'n8n-nodes-base.if',
+        version: 2,
+        position: [1424, 720],
+    })
+    IfClienteJaExiste = {
+        conditions: {
+            options: {
+                caseSensitive: true,
+                leftValue: '',
+                typeValidation: 'strict',
+                version: 1,
+            },
+            conditions: [
+                {
+                    id: 'cond-cliente-existe',
+                    leftValue: '={{ $json.Cnpj_Cnpf }}',
+                    rightValue: '',
+                    operator: {
+                        type: 'string',
+                        operation: 'notEmpty',
+                        singleValue: true,
+                    },
+                },
+            ],
+            combinator: 'and',
+        },
+        options: {},
+    };
+
+    @node({
         id: '6554e1fe-cb1d-4991-9aeb-4d55092851e0',
         name: 'Monta venda SQL',
         type: 'n8n-nodes-base.code',
@@ -678,9 +833,8 @@ return filtrados.map(p => ({ json: Object.assign({ temNovos: true }, p.pedido ??
     })
     MontaVendaSql = {
         jsCode: `function t(str, len) { return String(str ?? '').trim().substring(0, len); }
-const base = $('Monta cliente SQL').item.json;
-const pedido = base.pedido;
-return [{ json: { CdRepresentante: t(base.CdRepresentante, 6), CdEmpresa: '97', CdPedidoRepre: t(pedido.numeroPedido, 20), CdPedidoEmpre: 'XXXXXX', Cnpj_Cnpf: t(pedido.documento, 18), CdTabela: '10', CdCondPgto: '045', CdTransportadora: '0239', RefRepresentante: '', RefCliente: '', PeDesconto: 0, PeDesconto2: 0, PeDesconto3: 0, PeDesconto4: 0, PeDesconto5: 0, FlFrete: 'C', FlStatus: 'B', FlEnvRecEmpresa: 'S', FlEnvRecRepre: 'S', DtCancelamento: '', MotivoCancelamento: '', Observacao: '', PRIORIDADE: '1', CdNatureza: '006', XML: '', DtPedido: \`\${pedido.dataPedido} 00:00:00.000\`, DtEntrega: \`\${pedido.dataPedido} 00:00:00.000\`, pedido } } ];`,
+const pedido = $('Normaliza pedido Olist').item.json;
+return [{ json: { CdRepresentante: '1019', CdEmpresa: '97', CdPedidoRepre: t(pedido.numeroPedido, 20), CdPedidoEmpre: 'XXXXXX', Cnpj_Cnpf: t(pedido.cnpjFinal, 18), CdTabela: '10', CdCondPgto: '045', CdTransportadora: '0239', RefRepresentante: '', RefCliente: '', PeDesconto: 0, PeDesconto2: 0, PeDesconto3: 0, PeDesconto4: 0, PeDesconto5: 0, FlFrete: 'C', FlStatus: 'B', FlEnvRecEmpresa: 'S', FlEnvRecRepre: 'S', DtCancelamento: '', MotivoCancelamento: '', Observacao: '', PRIORIDADE: '1', CdNatureza: '006', XML: '', DtPedido: \`\${pedido.dataPedido} 00:00:00.000\`, DtEntrega: \`\${pedido.dataPedido} 00:00:00.000\`, pedido } } ];`,
     };
 
     @node({
@@ -708,7 +862,7 @@ const municipio = t($json.CdMunicipio, 6) || '9841';
 const representante = '1019';
 const nome = String(pedido.nome || 'CLIENTE TINY').trim();
 const end = pedido.endereco || {};
-return [{ json: { C_Cep: t(end.cep, 9), E_Cep: t(end.cep, 9), F_Cep: t(end.cep, 9), E_Cnpj: t(pedido.documento, 18), FlTipo: t(pedido.tipoPessoa, 1), CdGrupo: '001', DiaPgto: 'Indefinido', C_Bairro: t(end.bairro, 30), C_Cidade: t(end.cidade, 30), C_Estado: t(end.uf, 2), C_Numero: t(end.numero, 10), CdRegiao: '', E_Bairro: t(end.bairro, 30), E_Cidade: t(end.cidade, 30), E_Estado: t(end.uf, 2), E_Numero: t(end.numero, 10), F_Bairro: t(end.bairro, 30), F_Cidade: t(end.cidade, 30), F_Estado: t(end.uf, 2), F_Numero: t(end.numero, 10), Cnpj_Cnpf: t(pedido.documento, 18), FsCliente: t(nome.split(/\\s+/)[0], 15).toUpperCase(), RzCliente: t(nome, 40).toUpperCase(), C_Endereco: t(end.logradouro, 50), CdSegmento: '60', DtAtivacao: \`\${pedido.dataPedido} 00:00:00.000\`, E_Endereco: t(end.logradouro, 50), F_Endereco: t(end.logradouro, 50), PeDesconto: '0', RestricaoSN: 'N', C_CdMunicipio: municipio, C_Complemento: t(end.complemento, 20), CapitalSocial: '0', E_CdMunicipio: municipio, E_Complemento: t(end.complemento, 20), F_CdMunicipio: municipio, F_Complemento: t(end.complemento, 20), FlEnvRecRepre: 'S', CdRepresentante: representante, DescontaSuframa: 'N', FlEnvRecEmpresa: 'S', DtAlteracao: \`\${pedido.dataPedido} 00:00:00.000\`, DtUltCompra: pedido.dataPedido, Ativo_Inativo_ExCliente: 'Ativo', pedido } } ];`,
+return [{ json: { C_Cep: t(end.cep, 9), E_Cep: t(end.cep, 9), F_Cep: t(end.cep, 9), E_Cnpj: t(pedido.cnpjFinal, 18), FlTipo: t(pedido.tipoPessoa, 1), CdGrupo: '001', DiaPgto: 'Indefinido', C_Bairro: t(end.bairro, 30), C_Cidade: t(end.cidade, 30), C_Estado: t(end.uf, 2), C_Numero: t(end.numero, 10), CdRegiao: '', E_Bairro: t(end.bairro, 30), E_Cidade: t(end.cidade, 30), E_Estado: t(end.uf, 2), E_Numero: t(end.numero, 10), F_Bairro: t(end.bairro, 30), F_Cidade: t(end.cidade, 30), F_Estado: t(end.uf, 2), F_Numero: t(end.numero, 10), Cnpj_Cnpf: t(pedido.cnpjFinal, 18), FsCliente: t(nome.split(/\\s+/)[0], 15).toUpperCase(), RzCliente: t(nome, 40).toUpperCase(), C_Endereco: t(end.logradouro, 50), CdSegmento: '60', DtAtivacao: \`\${pedido.dataPedido} 00:00:00.000\`, E_Endereco: t(end.logradouro, 50), F_Endereco: t(end.logradouro, 50), PeDesconto: '0', RestricaoSN: 'N', C_CdMunicipio: municipio, C_Complemento: t(end.complemento, 20), CapitalSocial: '0', E_CdMunicipio: municipio, E_Complemento: t(end.complemento, 20), F_CdMunicipio: municipio, F_Complemento: t(end.complemento, 20), FlEnvRecRepre: 'S', CdRepresentante: representante, DescontaSuframa: 'N', FlEnvRecEmpresa: 'S', DtAlteracao: \`\${pedido.dataPedido} 00:00:00.000\`, DtUltCompra: pedido.dataPedido, Ativo_Inativo_ExCliente: 'Ativo', pedido } } ];`,
     };
 
     @node({
@@ -963,7 +1117,9 @@ return itens.map((item) => {
         this.LeUltimaExecucao.out(0).to(this.BuscaPedidosOlist.in(0));
         this.BuscaPedidosOlist.out(0).to(this.PreparaFiltroSql.in(0));
         this.BuscaDetalheOlist.out(0).to(this.NormalizaPedidoOlist.in(0));
-        this.NormalizaPedidoOlist.out(0).to(this.BuscaCodMunicipioOlist.in(0));
+        this.NormalizaPedidoOlist.out(0).to(this.IfPedidoInvalido.in(0));
+        this.IfPedidoInvalido.out(0).to(this.LoopPedidos.in(0));
+        this.IfPedidoInvalido.out(1).to(this.BuscaCodMunicipioOlist.in(0));
         this.BuscaCodMunicipioOlist.out(0).to(this.MunicipioEncontrado.in(0));
         this.SqlCadastraClienteOlist.out(0).to(this.MontaVendaSql.in(0));
         this.SqlCadastraVendaOlist.out(0).to(this.MontaItensSql.in(0));
@@ -971,11 +1127,17 @@ return itens.map((item) => {
         this.AdicionaMarcadorOlist.out(0).to(this.LoopPedidos.in(0));
         this.PedidoFull.out(0).to(this.LoopPedidos.in(0));
         this.PedidoFull.out(1).to(this.AdicionaMarcadorOlist.in(0));
-        this.MunicipioEncontrado.out(0).to(this.MontaClienteSql.in(0));
-        this.MunicipioEncontrado.out(1).to(this.MontaClienteSql.in(0));
+        this.MunicipioEncontrado.out(0).to(this.SqlVerificaCliente.in(0));
+        this.MunicipioEncontrado.out(1).to(this.SqlVerificaCliente.in(0));
+        this.SqlVerificaCliente.out(0).to(this.IfClienteJaExiste.in(0));
+        this.IfClienteJaExiste.out(0).to(this.MontaVendaSql.in(0));
+        this.IfClienteJaExiste.out(1).to(this.MontaClienteSql.in(0));
         this.MontaVendaSql.out(0).to(this.SqlCadastraVendaOlist.in(0));
         this.LoopPedidos.out(0).to(this.SalvaUltimaExecucao.in(0));
-        this.LoopPedidos.out(1).to(this.BuscaDetalheOlist.in(0));
+        this.LoopPedidos.out(1).to(this.SqlVerificaPedidoAtual.in(0));
+        this.SqlVerificaPedidoAtual.out(0).to(this.IfPedidoJaExiste.in(0));
+        this.IfPedidoJaExiste.out(0).to(this.LoopPedidos.in(0));
+        this.IfPedidoJaExiste.out(1).to(this.BuscaDetalheOlist.in(0));
         this.MontaClienteSql.out(0).to(this.SqlCadastraClienteOlist.in(0));
         this.MontaItensSql.out(0).to(this.SqlCadastraItensOlist.in(0));
         this.ScheduleTrigger.out(0).to(this.TokenOlist.in(0));
