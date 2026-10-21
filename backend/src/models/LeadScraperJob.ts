@@ -85,6 +85,9 @@ export interface ScraperFilters {
   cnae?: MultiValue;
   naturezaJuridica?: MultiValue;
   situacao?: MultiValue;
+  // quando situacao está setada: corta também leads SEM dado de situação
+  // (fail-closed) — sem isso, um lead do Maps sem CNPJ passa por não ter o campo
+  situacaoStrict?: boolean;
   porte?: MultiValue;        // escala do negócio: MEI | MICRO EMPRESA | EPP | DEMAIS
   capitalSocialMin?: number; // capital social mínimo em R$ (pós-filtro Receita)
   uf?: MultiValue;

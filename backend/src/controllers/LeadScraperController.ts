@@ -453,7 +453,7 @@ export const setResultFeedback = async (req: Request, res: Response): Promise<Re
 const REFILTER_FIELDS = [
   "minRating", "minReviews", "skipClosedPlaces", "onlyWithWebsite",
   "onlyWithoutWebsite", "onlyCellPhone", "excludeKeywords", "excludeMei",
-  "situacao", "capitalSocialMin", "dataAberturaMin", "dataAberturaMax",
+  "situacao", "situacaoStrict", "capitalSocialMin", "dataAberturaMin", "dataAberturaMax",
 ] as const;
 
 // Reaplica os pós-filtros de qualidade sobre os results já capturados (sem

@@ -770,7 +770,9 @@ const buildAdvFilters = (v) => ({
   onlyCellPhone: v.onlyCell || undefined,
   excludeKeywords: v.excludeKw.length ? v.excludeKw : undefined,
   excludeMei: v.excludeMei || undefined,
-  situacao: v.onlyActive ? ["ATIVA"] : undefined,
+  situacao: v.situacao?.length ? v.situacao : undefined,
+  // estrito = exclui também quem não tem dado de situação (fail-closed no backend)
+  situacaoStrict: (v.situacao?.length && !v.situacaoInc) || undefined,
   capitalSocialMin: v.capitalMin !== "" ? Number(v.capitalMin) : undefined,
   dataAberturaMin: v.aberturaMin || undefined,
   dataAberturaMax: v.aberturaMax || undefined,
@@ -784,7 +786,8 @@ const refineFromJobFilters = (f = {}) => ({
   minReviews: f.minReviews != null ? String(f.minReviews) : "",
   site: f.onlyWithWebsite ? "with" : f.onlyWithoutWebsite ? "without" : "any",
   onlyCell: !!f.onlyCellPhone,
-  onlyActive: Array.isArray(f.situacao) ? f.situacao.includes("ATIVA") : false,
+  situacao: Array.isArray(f.situacao) ? f.situacao : (f.situacao ? [f.situacao] : []),
+  situacaoInc: f.situacaoStrict !== true,
   excludeMei: !!f.excludeMei,
   capitalMin: f.capitalSocialMin != null ? String(f.capitalSocialMin) : "",
   excludeKw: Array.isArray(f.excludeKeywords) ? f.excludeKeywords.filter(Boolean) : [],
@@ -854,10 +857,23 @@ function GlobalRefineFields({ v, set }) {
         />
       </div>
       <div>
+        <span className={classes.advLabel}>Situação cadastral<span className={classes.srcTag}>Receita</span></span>
+        <Select
+          multiple variant="outlined"
+          value={v.situacao} onChange={e => set("situacao", e.target.value)}
+          renderValue={sel => (sel && sel.length ? sel.join(", ") : "Todas")}
+          displayEmpty
+          style={{ fontSize: 13, width: "100%" }}
+        >
+          <MenuItem value="ATIVA">Ativa</MenuItem>
+          <MenuItem value="SUSPENSA">Suspensa</MenuItem>
+          <MenuItem value="INAPTA">Inapta</MenuItem>
+          <MenuItem value="BAIXADA">Baixada</MenuItem>
+        </Select>
         <FormControlLabel
-          style={{ marginLeft: 0 }}
-          control={<Switch size="small" color="primary" checked={v.onlyActive} onChange={e => set("onlyActive", e.target.checked)} />}
-          label={<Typography variant="body2">Apenas empresas ativas<span className={classes.srcTag}>Receita</span></Typography>}
+          style={{ marginLeft: 0, marginTop: 2 }}
+          control={<Switch size="small" color="primary" checked={v.situacaoInc} onChange={e => set("situacaoInc", e.target.checked)} />}
+          label={<Typography variant="body2" style={{ fontSize: 11, color: "#888" }}>Incluir leads sem dados de situação</Typography>}
         />
       </div>
       <div>
@@ -977,7 +993,8 @@ export default function LeadScraper() {
   const [gfMinReviews, setGfMinReviews] = useState("");     // "" | 5 | 10 | 25 | 50
   const [gfSite, setGfSite] = useState("any");              // "any" | "with" | "without"
   const [gfOnlyCell, setGfOnlyCell] = useState(false);
-  const [gfOnlyActive, setGfOnlyActive] = useState(true);   // ON → situacao=["ATIVA"]
+  const [gfSituacao, setGfSituacao] = useState(["ATIVA"]);  // multi-select — [] = sem filtro
+  const [gfSituacaoInc, setGfSituacaoInc] = useState(true); // incluir leads sem dado de situação
   const [gfExcludeMei, setGfExcludeMei] = useState(false);
   const [gfCapitalMin, setGfCapitalMin] = useState("");
   const [gfExcludeKw, setGfExcludeKw] = useState([]);       // string[] → excludeKeywords
@@ -997,7 +1014,7 @@ export default function LeadScraper() {
   // compartilhado com o dialog de refino via GlobalRefineFields
   const gfVals = {
     skipClosed: gfSkipClosed, minRating: gfMinRating, minReviews: gfMinReviews,
-    site: gfSite, onlyCell: gfOnlyCell, onlyActive: gfOnlyActive,
+    site: gfSite, onlyCell: gfOnlyCell, situacao: gfSituacao, situacaoInc: gfSituacaoInc,
     excludeMei: gfExcludeMei, capitalMin: gfCapitalMin, excludeKw: gfExcludeKw,
     aberturaMin: gfAberturaMin, aberturaMax: gfAberturaMax,
   };
@@ -1008,7 +1025,8 @@ export default function LeadScraper() {
       case "minReviews": setGfMinReviews(val); break;
       case "site": setGfSite(val); break;
       case "onlyCell": setGfOnlyCell(val); break;
-      case "onlyActive": setGfOnlyActive(val); break;
+      case "situacao": setGfSituacao(val); break;
+      case "situacaoInc": setGfSituacaoInc(val); break;
       case "excludeMei": setGfExcludeMei(val); break;
       case "capitalMin": setGfCapitalMin(val); break;
       case "excludeKw": setGfExcludeKw(val); break;

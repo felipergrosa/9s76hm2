@@ -96,10 +96,15 @@ export const applyQualityPostFilters = (
       }
     }
 
-    // situacao: vale p/ leads merged também — fail-open quando a fonte não traz
-    if (situacoes.length && r.situacao) {
-      const sit = normUpper(r.situacao);
-      if (!situacoes.some(v => sit.includes(v))) { drop("situacao"); return false; }
+    // situacao: lead sem o campo passa (fail-open — merge pode trazer de
+    // outra fonte), EXCETO no modo estrito, em que "só ativas" exige prova
+    if (situacoes.length) {
+      if (!r.situacao) {
+        if (f.situacaoStrict) { drop("situacao"); return false; }
+      } else if (!situacoes.some(v => normUpper(r.situacao).includes(v))) {
+        drop("situacao");
+        return false;
+      }
     }
 
     if ((minAbertura || maxAbertura) && r.dataAbertura) {
