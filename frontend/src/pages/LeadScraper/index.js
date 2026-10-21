@@ -9,7 +9,8 @@ import {
   Select, Menu, MenuItem, FormControl, InputLabel, LinearProgress,
   Table, TableHead, TableRow, TableCell, TableBody, Checkbox,
   Chip, IconButton, Tooltip, CircularProgress, Divider, Grid,
-  FormControlLabel, Collapse, InputAdornment,
+  FormControlLabel, Collapse, InputAdornment, Switch,
+  Dialog, DialogTitle, DialogContent,
 } from "@material-ui/core";
 import { makeStyles } from "@material-ui/core/styles";
 // WhatsApp permanece em @material-ui/icons — não há equivalente no lucide-react
@@ -35,9 +36,15 @@ import {
   CircleStop as StopIcon,
   Globe as GlobalIcon,
   Settings as SettingsIcon,
-  Activity as ActivityIcon,
   CheckCircle2 as CheckIcon,
   ChevronDown as ChevronDownIcon,
+  Pencil as PencilIcon,
+  PenTool as PenToolIcon,
+  ShoppingBag as ShopIcon,
+  SlidersHorizontal as SlidersIcon,
+  Database as DatabaseIcon,
+  Star as StarIcon,
+  X as XIcon,
 } from "lucide-react";
 import { toast } from "react-toastify";
 import api from "../../services/api";
@@ -498,6 +505,90 @@ const useStyles = makeStyles(theme => ({
       borderRadius: 4, padding: "1px 5px", fontFamily: "monospace", fontSize: 12,
     },
   },
+
+  // ===== Busca Global — seções numeradas e cards clicáveis =====
+  gSectionHead: {
+    display: "flex", alignItems: "center", gap: 8,
+    margin: theme.spacing(2.25, 0, 1.25),
+  },
+  gSectionNum: {
+    width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
+    background: "var(--primary-color)",
+    color: "#fff", fontSize: 12, fontWeight: 800,
+    display: "inline-flex", alignItems: "center", justifyContent: "center",
+  },
+  gSectionTitle: { fontWeight: 700, fontSize: 14 },
+  presetRow: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+    gap: theme.spacing(1),
+  },
+  presetTile: {
+    border: `1.5px solid ${theme.palette.divider}`,
+    borderRadius: 10,
+    padding: theme.spacing(1.25, 1.5),
+    cursor: "pointer",
+    display: "flex", flexDirection: "column", gap: 4,
+    background: theme.palette.background.paper,
+    transition: "border-color 120ms ease, box-shadow 120ms ease",
+    "&:hover": { borderColor: theme.palette.primary.main },
+  },
+  presetTileOn: {
+    borderColor: "var(--primary-color)",
+    boxShadow: "0 0 0 1px var(--primary-color)",
+  },
+  sourceCard: {
+    flex: "1 1 160px", minWidth: 150,
+    border: `1.5px solid ${theme.palette.divider}`,
+    borderRadius: 10,
+    padding: theme.spacing(1.25, 1.5),
+    cursor: "pointer", userSelect: "none",
+    display: "flex", flexDirection: "column", gap: 4,
+    transition: "opacity 120ms ease, border-color 120ms ease",
+    "&:hover": { borderColor: theme.palette.primary.main },
+  },
+  sourceCardOn: { borderColor: "var(--primary-color)" },
+  sourceCardOff: { opacity: 0.45 },
+  costBadge: {
+    alignSelf: "flex-start",
+    borderRadius: 999, padding: "1px 8px",
+    fontSize: 10, fontWeight: 700,
+    background: theme.palette.type === "dark" ? "#263445" : "#eef2f7",
+    color: theme.palette.text.secondary,
+  },
+  // Micro-badge que indica qual fonte o refinamento afeta
+  srcTag: {
+    display: "inline-block", marginLeft: 6,
+    borderRadius: 3, padding: "0 5px",
+    fontSize: 9, fontWeight: 800, letterSpacing: 0.3,
+    background: theme.palette.type === "dark" ? "#2a3a4d" : "#e3ecf5",
+    color: theme.palette.type === "dark" ? "#9cc3e6" : "#3a6ea5",
+    verticalAlign: "middle", whiteSpace: "nowrap",
+  },
+  advGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: theme.spacing(1.5, 2),
+    marginTop: theme.spacing(1.5),
+    [theme.breakpoints.down("sm")]: { gridTemplateColumns: "1fr" },
+  },
+  advLabel: {
+    display: "block", fontWeight: 600, fontSize: 12,
+    color: theme.palette.text.secondary, marginBottom: 4,
+  },
+  // ===== Modal Raio-X do lead =====
+  xrayTitle: {
+    fontSize: 11, fontWeight: 800, letterSpacing: "0.08em",
+    textTransform: "uppercase", color: theme.palette.text.secondary,
+    marginBottom: 6, paddingBottom: 4,
+    borderBottom: `1px solid ${theme.palette.divider}`,
+  },
+  xrayGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+    gap: theme.spacing(1.25),
+  },
+  xrayValue: { fontSize: 13, fontWeight: 500, wordBreak: "break-word" },
 }));
 
 function timeAgo(d) {
@@ -605,6 +696,60 @@ function LeadStatusBadges({ lead, showNew = true }) {
   );
 }
 
+// ===== Tier de score do lead (leadTier/leadScore vêm do backend) =====
+const LEAD_TIER_META = {
+  gold:   { label: "Ouro",   icon: "🏆", color: "#f39c12" },
+  silver: { label: "Prata",  icon: "🥈", color: "#8e9aab" },
+  bronze: { label: "Bronze", icon: "🥉", color: "#cd7f32" },
+};
+
+// Badge ao lado do nome — retrocompat: lead sem leadTier não renderiza nada
+function LeadTierBadge({ lead }) {
+  const meta = LEAD_TIER_META[lead?.leadTier];
+  if (!meta) return null;
+  return (
+    <Tooltip title={`Score ${lead.leadScore ?? "—"}/100`}>
+      <span
+        style={{
+          display: "inline-flex", alignItems: "center", gap: 2,
+          background: meta.color + "26",
+          color: meta.color,
+          borderRadius: 3, padding: "0 5px",
+          fontSize: 9, fontWeight: 800, letterSpacing: 0.3,
+          whiteSpace: "nowrap",
+        }}
+      >
+        {meta.icon} {meta.label}
+      </span>
+    </Tooltip>
+  );
+}
+
+// Badges das fontes de origem do lead (busca global) — "Maps", "RF", "CAU"…
+function SourceBadges({ lead }) {
+  return (lead?.sources || []).map(src => (
+    <span
+      key={src}
+      style={{
+        background: (GLOBAL_SOURCE_META[src]?.color || "#555") + "22",
+        color: GLOBAL_SOURCE_META[src]?.color || "#555",
+        borderRadius: 3, padding: "0 5px",
+        fontSize: 9, fontWeight: 800, letterSpacing: 0.3,
+      }}
+    >
+      {GLOBAL_SOURCE_META[src]?.label || src}
+    </span>
+  ));
+}
+
+// Cards de fonte da Busca Global (seção 3) — custo é resolvido no render
+// porque depende do engineStatus (Apify configurado ou fallback local)
+const GLOBAL_SOURCE_CARDS = [
+  { key: "google_maps", label: "Google Maps", hint: "Nome, telefone, site, endereço e avaliação", Icon: MapsIcon },
+  { key: "cnpj_search", label: "Receita Federal", hint: "CNPJ, razão social, CNAE e situação", Icon: CnpjIcon },
+  { key: "conselho", label: "CAU — Arquitetura", hint: "Registro profissional e empresarial", Icon: ConselhoIcon },
+];
+
 export default function LeadScraper() {
   const classes = useStyles();
   const [tab, setTab] = useState(0);
@@ -660,6 +805,22 @@ export default function LeadScraper() {
   const [globalSources, setGlobalSources] = useState(["google_maps", "cnpj_search", "conselho"]);
   const [globalPreset, setGlobalPreset] = useState(""); // "" | "arquitetos" | "lojistas"
   const [consMaxResults, setConsMaxResults] = useState(100);
+
+  // Refinamento avançado da Busca Global — viram filters do job "global"
+  const [advOpen, setAdvOpen] = useState(false);
+  const [gfSkipClosed, setGfSkipClosed] = useState(true);   // default do backend já é true — só enviamos quando desmarca
+  const [gfMinRating, setGfMinRating] = useState("");       // "" | "3" | "3.5" | "4" | "4.5"
+  const [gfMinReviews, setGfMinReviews] = useState("");     // "" | 5 | 10 | 25 | 50
+  const [gfSite, setGfSite] = useState("any");              // "any" | "with" | "without"
+  const [gfOnlyCell, setGfOnlyCell] = useState(false);
+  const [gfOnlyActive, setGfOnlyActive] = useState(true);   // ON → situacao=["ATIVA"]
+  const [gfExcludeMei, setGfExcludeMei] = useState(false);
+  const [gfCapitalMin, setGfCapitalMin] = useState("");
+  const [gfExcludeKw, setGfExcludeKw] = useState([]);       // string[] → excludeKeywords
+  const [gfAberturaMin, setGfAberturaMin] = useState("");   // YYYY-MM-DD
+  const [gfAberturaMax, setGfAberturaMax] = useState("");
+  const [segGlobal, setSegGlobal] = useState(null);         // atalho de segmento — só preenche keyword
+  const [xrayLead, setXrayLead] = useState(null);           // lead aberto no modal Raio-X
 
   // atalhos de segmento (Maps preenche keyword, RF preenche CNAE)
   const [segMaps, setSegMaps] = useState(null);
@@ -875,6 +1036,22 @@ export default function LeadScraper() {
     if (!globalSources.length) { toast.warning("Selecione ao menos uma fonte."); return; }
     setLoading(true);
     try {
+      // Refinamento avançado — merge nos DOIS modos (preset e custom).
+      // skipClosedPlaces: default do backend é true, só enviamos false.
+      // onlyWith/onlyWithout são mutuamente exclusivos (seletor "Site próprio").
+      const adv = {
+        minRating: gfMinRating !== "" ? Number(gfMinRating) : undefined,
+        minReviews: gfMinReviews !== "" ? Number(gfMinReviews) : undefined,
+        ...(gfSkipClosed ? {} : { skipClosedPlaces: false }),
+        ...(gfSite === "with" ? { onlyWithWebsite: true } : gfSite === "without" ? { onlyWithoutWebsite: true } : {}),
+        onlyCellPhone: gfOnlyCell || undefined,
+        excludeKeywords: gfExcludeKw.length ? gfExcludeKw : undefined,
+        excludeMei: gfExcludeMei || undefined,
+        situacao: gfOnlyActive ? ["ATIVA"] : undefined,
+        capitalSocialMin: gfCapitalMin !== "" ? Number(gfCapitalMin) : undefined,
+        dataAberturaMin: gfAberturaMin || undefined,
+        dataAberturaMax: gfAberturaMax || undefined,
+      };
       const filters = preset
         ? {
             preset: globalPreset,
@@ -887,6 +1064,7 @@ export default function LeadScraper() {
             sources: globalSources,
             conselho: "cau",
             conselhoTipo: preset.conselhoTipo,
+            ...adv,
           }
         : {
             keyword: keyword.trim(),
@@ -894,6 +1072,7 @@ export default function LeadScraper() {
             sources: globalSources,
             conselho: "cau",
             conselhoTipo: "ambos",
+            ...adv,
           };
       const { data } = await api.post("/lead-scraper/jobs", { source: "global", filters });
       setActiveJob(data);
@@ -1041,6 +1220,8 @@ export default function LeadScraper() {
         if (dedupeFilter === "new" && cat !== "new") return false;
         if (dedupeFilter === "imported" && cat !== "imported") return false;
         if (dedupeFilter === "existing" && cat !== "contact" && cat !== "list" && cat !== "job") return false;
+        // filtro por tier de score — independente do status de dedupe
+        if (dedupeFilter === "gold" && r.leadTier !== "gold") return false;
       }
       // Busca livre: nome, razão social, contatos, CNPJ, endereço, registro e IG
       const q = resultsSearch.trim().toLowerCase();
@@ -1058,25 +1239,47 @@ export default function LeadScraper() {
       return sortConfig.dir === "asc" ? cmp : -cmp;
     });
 
-  // KPIs do strip bento — derivados do histórico de buscas já carregado
-  const jobStats = useMemo(() => {
-    const list = jobs || [];
-    return {
-      total: list.length,
-      running: list.filter(j => j.status === "running" || j.status === "pending").length,
-      done: list.filter(j => j.status === "done").length,
-      leads: list.reduce((acc, j) => acc + (j.totalFound || 0), 0),
-    };
-  }, [jobs]);
-
   // Contagens por status de dedupe — calculadas no cliente sobre results[]
   // ("existing" = já nos contatos + em outra lista + capturado em busca anterior)
   const leadStatusCounts = useMemo(() => {
-    const c = { new: 0, contact: 0, list: 0, job: 0, imported: 0, existing: 0 };
-    results.forEach(r => { c[leadDedupeCategory(r)] += 1; });
+    const c = { new: 0, contact: 0, list: 0, job: 0, imported: 0, existing: 0, gold: 0 };
+    results.forEach(r => {
+      c[leadDedupeCategory(r)] += 1;
+      if (r.leadTier === "gold") c.gold += 1;
+    });
     c.existing = c.contact + c.list + c.job;
     return c;
   }, [results]);
+
+  // KPIs do strip bento — derivados do job ativo; zerados quando nenhum
+  // job está selecionado (loading cobre o carregamento inicial do histórico)
+  const kpi = useMemo(() => {
+    const waChecked = results.filter(r => r.whatsappChecked).length;
+    const waValid = results.filter(r => r.whatsappChecked && r.hasWhatsapp === true).length;
+    return {
+      leads: activeJob ? (activeJob.totalFound || results.length) : 0,
+      novos: activeJob ? leadStatusCounts.new : 0,
+      // "na base" = já nos contatos + em outra lista + já importados
+      naBase: activeJob ? leadStatusCounts.contact + leadStatusCounts.list + leadStatusCounts.imported : 0,
+      waPct: waChecked ? Math.round((waValid / waChecked) * 100) : 0,
+    };
+  }, [activeJob, results, leadStatusCounts]);
+
+  // Helpers do modal Raio-X — seção e linha (o item some quando não há valor)
+  const XraySection = ({ title, children }) => (
+    <Box mb={2.5}>
+      <div className={classes.xrayTitle}>{title}</div>
+      <div className={classes.xrayGrid}>{children}</div>
+    </Box>
+  );
+  const XrayItem = ({ label, children }) => (
+    children === null || children === undefined || children === "" || children === false ? null : (
+      <div>
+        <div className={classes.metaLabel}>{label}</div>
+        <div className={classes.xrayValue}>{children}</div>
+      </div>
+    )
+  );
 
   return (
     <MainContainer useWindowScroll>
@@ -1105,18 +1308,152 @@ export default function LeadScraper() {
             : "Excluir esta busca do histórico? Leads já importados não serão afetados."}
       </ConfirmationModal>
 
+      {/* ── Raio-X do lead — aberto ao clicar na linha/card de resultado ── */}
+      <Dialog open={!!xrayLead} onClose={() => setXrayLead(null)} maxWidth="sm" fullWidth>
+        {xrayLead && (
+          <>
+            <DialogTitle disableTypography style={{ paddingBottom: 4 }}>
+              <Box display="flex" justifyContent="space-between" alignItems="flex-start">
+                <Box style={{ minWidth: 0 }}>
+                  <Typography variant="h6" style={{ fontWeight: 700, lineHeight: 1.2 }}>
+                    {xrayLead.nomeFantasia || xrayLead.name || "Lead"}
+                  </Typography>
+                  <Box display="flex" style={{ gap: 4, marginTop: 6, flexWrap: "wrap" }}>
+                    <LeadTierBadge lead={xrayLead} />
+                    <LeadStatusBadges lead={xrayLead} />
+                    <SourceBadges lead={xrayLead} />
+                  </Box>
+                </Box>
+                <IconButton size="small" onClick={() => setXrayLead(null)} aria-label="Fechar">
+                  <XIcon size={18} />
+                </IconButton>
+              </Box>
+            </DialogTitle>
+            <DialogContent dividers>
+              <XraySection title="Empresa">
+                <XrayItem label="Nome fantasia">{xrayLead.nomeFantasia || xrayLead.name}</XrayItem>
+                <XrayItem label="Razão social">{xrayLead.razaoSocial}</XrayItem>
+                <XrayItem label="CNPJ">
+                  {xrayLead.cnpj
+                    ? xrayLead.cnpj.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5")
+                    : null}
+                </XrayItem>
+                <XrayItem label="CNAE">{xrayLead.cnaeDescricao || xrayLead.cnae}</XrayItem>
+                <XrayItem label="Situação">{xrayLead.situacao}</XrayItem>
+                <XrayItem label="Porte">{xrayLead.porte}</XrayItem>
+                <XrayItem label="Capital social">
+                  {xrayLead.capitalSocial ? `R$ ${Number(xrayLead.capitalSocial).toLocaleString("pt-BR")}` : null}
+                </XrayItem>
+                <XrayItem label="Abertura">{xrayLead.dataAbertura}</XrayItem>
+                <XrayItem label="Natureza jurídica">{xrayLead.naturezaJuridica}</XrayItem>
+                <XrayItem label="Registro">{xrayLead.registro}</XrayItem>
+              </XraySection>
+
+              <XraySection title="Contato">
+                <XrayItem label="Telefone">{xrayLead.phone ? formatPhoneBR(xrayLead.phone) : null}</XrayItem>
+                <XrayItem label="Telefone (Instagram)">
+                  {xrayLead.instagramPhone ? formatPhoneBR(xrayLead.instagramPhone) : null}
+                </XrayItem>
+                <XrayItem label="E-mail">{xrayLead.email}</XrayItem>
+                <XrayItem label="WhatsApp">
+                  {xrayLead.whatsappChecked
+                    ? (xrayLead.hasWhatsapp ? "✓ ativo" : "✗ sem WhatsApp")
+                    : "não verificado"}
+                </XrayItem>
+              </XraySection>
+
+              <XraySection title="Digital">
+                <XrayItem label="Site">
+                  {xrayLead.website
+                    ? <a href={xrayLead.website} target="_blank" rel="noopener noreferrer">{xrayLead.website}</a>
+                    : null}
+                </XrayItem>
+                {["instagram", "twitter", "linkedin", "facebook"].map(p =>
+                  xrayLead[p] ? (
+                    <XrayItem key={p} label={p === "twitter" ? "X (Twitter)" : p.charAt(0).toUpperCase() + p.slice(1)}>
+                      <a href={SOCIAL_LINKS[p](xrayLead[p])} target="_blank" rel="noopener noreferrer">
+                        @{xrayLead[p]}
+                      </a>
+                    </XrayItem>
+                  ) : null
+                )}
+                <XrayItem label="Google Maps">
+                  {xrayLead.googleMapsUrl
+                    ? <a href={xrayLead.googleMapsUrl} target="_blank" rel="noopener noreferrer">abrir no Maps</a>
+                    : null}
+                </XrayItem>
+                <XrayItem label="Avaliação">
+                  {xrayLead.rating
+                    ? `${xrayLead.rating}${xrayLead.reviewsCount != null ? ` (${xrayLead.reviewsCount} avaliações)` : ""}`
+                    : null}
+                </XrayItem>
+              </XraySection>
+
+              <XraySection title="Localização">
+                <XrayItem label="Endereço">{xrayLead.address}</XrayItem>
+                <XrayItem label="Município">{xrayLead.municipio}</XrayItem>
+                <XrayItem label="UF">{xrayLead.uf}</XrayItem>
+                <XrayItem label="CEP">{xrayLead.cep}</XrayItem>
+              </XraySection>
+
+              <XraySection title="Origem">
+                {xrayLead.sources?.length > 0 && (
+                  <XrayItem label="Fontes">
+                    <Box display="flex" style={{ gap: 3, flexWrap: "wrap" }}>
+                      <SourceBadges lead={xrayLead} />
+                    </Box>
+                  </XrayItem>
+                )}
+                <XrayItem label="Status">
+                  {LEAD_STATUS_META[leadDedupeCategory(xrayLead)].label}
+                </XrayItem>
+                <XrayItem label="Enriquecido por">
+                  {(xrayLead.enrichedFrom || []).length ? xrayLead.enrichedFrom.join(", ") : null}
+                </XrayItem>
+                <XrayItem label="Busca">
+                  {activeJob ? `#${activeJob.id} · ${activeJob.source}` : null}
+                </XrayItem>
+              </XraySection>
+
+              {(xrayLead.leadScore != null || xrayLead.leadTier) && (
+                <XraySection title="Score">
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <Box display="flex" alignItems="center" style={{ gap: 8 }}>
+                      <LeadTierBadge lead={xrayLead} />
+                      <Typography variant="body2" style={{ fontWeight: 700 }}>
+                        {xrayLead.leadScore ?? "—"}/100
+                      </Typography>
+                    </Box>
+                    <div style={{ height: 6, borderRadius: 3, background: "rgba(127,127,127,0.15)", marginTop: 6, overflow: "hidden" }}>
+                      <div
+                        style={{
+                          width: `${Math.min(100, Math.max(0, xrayLead.leadScore || 0))}%`,
+                          height: "100%", borderRadius: 3,
+                          background: LEAD_TIER_META[xrayLead.leadTier]?.color || "#3598dc",
+                        }}
+                      />
+                    </div>
+                  </div>
+                </XraySection>
+              )}
+            </DialogContent>
+          </>
+        )}
+      </Dialog>
+
       <motion.div
         variants={bentoContainer}
         initial="hidden"
         animate="show"
         style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, gap: 12 }}
       >
-        {/* Strip de KPIs bento — espelha o histórico de buscas */}
+        {/* Strip de KPIs bento — espelha o job ativo (zerado sem job) */}
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-          <StatCard label="Buscas" value={jobStats.total} icon={<SearchIcon size={20} />} accent="var(--primary-color)" loading={!jobsLoaded} />
-          <StatCard label="Em execução" value={jobStats.running} icon={<ActivityIcon size={20} />} accent="#f39c12" loading={!jobsLoaded} />
-          <StatCard label="Concluídas" value={jobStats.done} icon={<CheckIcon size={20} />} accent="#26c281" loading={!jobsLoaded} />
-          <StatCard label="Leads coletados" value={jobStats.leads} icon={<LeadIcon size={20} />} accent="#8e44ad" loading={!jobsLoaded} />
+          <StatCard label="Leads capturados" value={kpi.leads} icon={<LeadIcon size={20} />} accent="var(--primary-color)" loading={!jobsLoaded} />
+          <StatCard label="Novos p/ importar" value={kpi.novos} icon={<StarIcon size={20} />} accent="#26c281" loading={!jobsLoaded} />
+          <StatCard label="Já na base" value={kpi.naBase} icon={<DatabaseIcon size={20} />} accent="#8e44ad" loading={!jobsLoaded} />
+          {/* StatCard sem sufixo: % vai como string pronta */}
+          <StatCard label="WhatsApp válido" value={`${kpi.waPct}%`} icon={<WhatsAppIcon style={{ fontSize: 20, color: "#fff" }} />} accent="#f39c12" loading={!jobsLoaded} />
         </div>
 
       <motion.div variants={itemVariant} style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
@@ -1827,62 +2164,63 @@ export default function LeadScraper() {
               </Box>
             </TabPanel>
 
-            {/* ── Busca Global: todas as fontes em paralelo, merge por identidade ── */}
+            {/* ── Busca Global: seções numeradas — todas as fontes em paralelo ── */}
             <TabPanel value={tab} index={4}>
-              <Box className={classes.filterRow}>
-                <FormControl variant="outlined" size="small" style={{ minWidth: 210 }}>
-                  <InputLabel>Público-alvo</InputLabel>
-                  <Select
-                    value={globalPreset}
-                    onChange={e => {
-                      const p = e.target.value;
-                      setGlobalPreset(p);
-                      if (p && GLOBAL_PRESETS[p]) setGlobalSources(GLOBAL_PRESETS[p].defaultSources);
-                    }}
-                    label="Público-alvo"
-                  >
-                    <MenuItem value=""><em>Personalizado</em></MenuItem>
-                    <MenuItem value="arquitetos">Arquitetos / Light Design</MenuItem>
-                    <MenuItem value="lojistas">Lojistas e Distribuidores</MenuItem>
-                  </Select>
-                </FormControl>
-                {!globalPreset && (
+              {/* 1 — Público: preset vira tile clicável; Personalizado libera keyword + segmento */}
+              <div className={classes.gSectionHead}>
+                <span className={classes.gSectionNum}>1</span>
+                <span className={classes.gSectionTitle}>Público</span>
+              </div>
+              <div className={classes.presetRow}>
+                {[
+                  { key: "",           label: "Personalizado",            sub: "keyword livre + segmento",    Icon: PencilIcon },
+                  { key: "arquitetos", label: "Arquitetos · Light Design", sub: "projetos luminotécnicos",     Icon: PenToolIcon },
+                  { key: "lojistas",   label: "Lojistas · Distribuidores", sub: "iluminação e mat. elétrico",  Icon: ShopIcon },
+                ].map(p => {
+                  const on = globalPreset === p.key;
+                  const IconCmp = p.Icon;
+                  return (
+                    <div
+                      key={p.key || "custom"}
+                      className={`${classes.presetTile} ${on ? classes.presetTileOn : ""}`}
+                      onClick={() => {
+                        setGlobalPreset(p.key);
+                        if (p.key && GLOBAL_PRESETS[p.key]) setGlobalSources(GLOBAL_PRESETS[p.key].defaultSources);
+                      }}
+                    >
+                      <Box display="flex" alignItems="center" style={{ gap: 6 }}>
+                        <IconCmp size={15} />
+                        <Typography style={{ fontSize: 12, fontWeight: 700 }}>{p.label}</Typography>
+                      </Box>
+                      <Typography variant="caption" color="textSecondary">{p.sub}</Typography>
+                    </div>
+                  );
+                })}
+              </div>
+              {!globalPreset && (
+                <Box className={classes.filterRow} style={{ marginTop: 10 }}>
                   <TextField
                     label="Palavra-chave" placeholder="ex: iluminação, arquitetura, academia"
                     value={keyword} onChange={e => setKeyword(e.target.value)}
                     variant="outlined" size="small" style={{ flex: 2, minWidth: 180 }}
                   />
-                )}
-                <Autocomplete
-                  multiple freeSolo
-                  options={cityOptions}
-                  value={city}
-                  onChange={(_, val) => setCity(val)}
-                  renderTags={(val, getTagProps) => val.map((opt, i) => (
-                    <Chip variant="outlined" size="small" label={opt} {...getTagProps({ index: i })} key={opt} />
-                  ))}
-                  renderInput={params => (
-                    <TextField {...params} label="Cidade" placeholder="São Paulo"
-                      variant="outlined" size="small" />
-                  )}
-                  style={{ flex: 1, minWidth: 160 }}
-                />
-                <FormControl variant="outlined" size="small" style={{ minWidth: 100 }}>
-                  <InputLabel>UF</InputLabel>
-                  <Select
-                    multiple
-                    value={state}
-                    onChange={e => setState(e.target.value)}
-                    label="UF"
-                    renderValue={sel => sel.join(", ")}
-                  >
-                    {STATES.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}
-                  </Select>
-                </FormControl>
-              </Box>
-
+                  <Autocomplete
+                    options={SEGMENT_PRESETS}
+                    getOptionLabel={opt => opt.label}
+                    value={segGlobal}
+                    onChange={(_, val) => { setSegGlobal(val); if (val) setKeyword(val.mapsKeyword); }}
+                    renderInput={params => (
+                      <TextField {...params} label="Segmento (atalho)" variant="outlined" size="small"
+                        placeholder="ex: Odontologia" />
+                    )}
+                    noOptionsText="Nenhum segmento"
+                    clearOnEscape
+                    style={{ flex: 2, minWidth: 180 }}
+                  />
+                </Box>
+              )}
               {globalPreset && GLOBAL_PRESETS[globalPreset] && (
-                <Box mt={1} mb={0.5}>
+                <Box mt={1.5} mb={0.5}>
                   <Typography variant="body2" style={{ fontWeight: 600, fontSize: 12 }}>
                     {GLOBAL_PRESETS[globalPreset].label} — busca:
                   </Typography>
@@ -1900,32 +2238,210 @@ export default function LeadScraper() {
                 </Box>
               )}
 
-              <Box display="flex" alignItems="center" style={{ gap: 4, marginTop: 8, flexWrap: "wrap" }}>
-                <Typography variant="body2" style={{ fontWeight: 600, marginRight: 4 }}>Fontes:</Typography>
-                {[
-                  { key: "google_maps", label: "Google Maps", hint: "nome, telefone, site, endereço, avaliação + contatos do site" },
-                  { key: "cnpj_search", label: "Receita Federal", hint: "CNPJ, razão social, CNAE, situação cadastral" },
-                  { key: "conselho", label: "CAU (arquitetura)", hint: "registro profissional/empresarial no CAU" },
-                ].map(s => (
-                  <Tooltip key={s.key} title={s.hint}>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          size="small"
-                          checked={globalSources.includes(s.key)}
-                          onChange={e => setGlobalSources(prev =>
-                            e.target.checked ? [...prev, s.key] : prev.filter(x => x !== s.key)
-                          )}
-                        />
-                      }
-                      label={<span style={{ fontSize: 12 }}>{s.label}</span>}
-                      style={{ marginRight: 4 }}
-                    />
-                  </Tooltip>
-                ))}
+              {/* 2 — Onde */}
+              <div className={classes.gSectionHead}>
+                <span className={classes.gSectionNum}>2</span>
+                <span className={classes.gSectionTitle}>Onde</span>
+              </div>
+              <Box className={classes.filterRow} style={{ marginTop: 0 }}>
+                <Autocomplete
+                  multiple freeSolo
+                  options={cityOptions}
+                  value={city}
+                  onChange={(_, val) => setCity(val)}
+                  renderTags={(val, getTagProps) => val.map((opt, i) => (
+                    <Chip variant="outlined" size="small" label={opt} {...getTagProps({ index: i })} key={opt} />
+                  ))}
+                  renderInput={params => (
+                    <TextField {...params} label="Cidade" placeholder="São Paulo"
+                      variant="outlined" size="small" />
+                  )}
+                  style={{ flex: 2, minWidth: 160 }}
+                />
+                <FormControl variant="outlined" size="small" style={{ minWidth: 100, flex: 1 }}>
+                  <InputLabel>UF</InputLabel>
+                  <Select
+                    multiple
+                    value={state}
+                    onChange={e => setState(e.target.value)}
+                    label="UF"
+                    renderValue={sel => sel.join(", ")}
+                  >
+                    {STATES.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}
+                  </Select>
+                </FormControl>
               </Box>
 
-              <Box className={classes.sliderBox}>
+              {/* 3 — Fontes: toggle-cards com badge de custo por fonte */}
+              <div className={classes.gSectionHead}>
+                <span className={classes.gSectionNum}>3</span>
+                <span className={classes.gSectionTitle}>Fontes</span>
+              </div>
+              <Box display="flex" style={{ gap: 8, flexWrap: "wrap" }}>
+                {GLOBAL_SOURCE_CARDS.map(s => {
+                  const on = globalSources.includes(s.key);
+                  const IconCmp = s.Icon;
+                  const cost = s.key === "google_maps"
+                    ? (engineStatus?.apify?.configured ? "créditos Apify" : "grátis local")
+                    : "grátis";
+                  return (
+                    <div
+                      key={s.key}
+                      className={`${classes.sourceCard} ${on ? classes.sourceCardOn : classes.sourceCardOff}`}
+                      onClick={() => setGlobalSources(prev =>
+                        on ? prev.filter(x => x !== s.key) : [...prev, s.key]
+                      )}
+                    >
+                      <Box display="flex" alignItems="center" style={{ gap: 6 }}>
+                        <IconCmp size={15} />
+                        <Typography style={{ fontSize: 12, fontWeight: 700, flex: 1 }}>{s.label}</Typography>
+                        {on && <CheckIcon size={14} />}
+                      </Box>
+                      <Typography variant="caption" color="textSecondary">{s.hint}</Typography>
+                      <span className={classes.costBadge}>{cost}</span>
+                    </div>
+                  );
+                })}
+              </Box>
+
+              {/* 4 — Refinamento avançado: accordion com micro-badge da fonte afetada */}
+              <div className={classes.gSectionHead}>
+                <span className={classes.gSectionNum}>4</span>
+                <span className={classes.gSectionTitle}>Refinamento avançado</span>
+              </div>
+              <Box className={classes.helpToggle} style={{ marginTop: 0 }} onClick={() => setAdvOpen(o => !o)}>
+                <SlidersIcon size={15} />
+                <span>{advOpen ? "Ocultar refinamentos" : "Ajustar filtros finos por fonte"}</span>
+                <ChevronDownIcon
+                  size={14}
+                  style={{
+                    transform: advOpen ? "rotate(180deg)" : "none",
+                    transition: "transform 150ms ease",
+                  }}
+                />
+              </Box>
+              <Collapse in={advOpen}>
+                <div className={classes.advGrid}>
+                  <div>
+                    <FormControlLabel
+                      style={{ marginLeft: 0 }}
+                      control={<Switch size="small" color="primary" checked={gfSkipClosed} onChange={e => setGfSkipClosed(e.target.checked)} />}
+                      label={<Typography variant="body2">Pular estabelecimentos fechados<span className={classes.srcTag}>Maps</span></Typography>}
+                    />
+                  </div>
+                  <div>
+                    <span className={classes.advLabel}>Nota mínima<span className={classes.srcTag}>Maps</span></span>
+                    <Select
+                      variant="outlined" displayEmpty
+                      value={gfMinRating} onChange={e => setGfMinRating(e.target.value)}
+                      style={{ fontSize: 13, width: "100%" }}
+                    >
+                      <MenuItem value="">Qualquer</MenuItem>
+                      <MenuItem value="3">3.0+</MenuItem>
+                      <MenuItem value="3.5">3.5+</MenuItem>
+                      <MenuItem value="4">4.0+</MenuItem>
+                      <MenuItem value="4.5">4.5+</MenuItem>
+                    </Select>
+                  </div>
+                  <div>
+                    <span className={classes.advLabel}>Mín. de avaliações<span className={classes.srcTag}>Maps</span></span>
+                    <Select
+                      variant="outlined" displayEmpty
+                      value={gfMinReviews} onChange={e => setGfMinReviews(e.target.value)}
+                      style={{ fontSize: 13, width: "100%" }}
+                    >
+                      <MenuItem value="">Qualquer</MenuItem>
+                      <MenuItem value="5">5+</MenuItem>
+                      <MenuItem value="10">10+</MenuItem>
+                      <MenuItem value="25">25+</MenuItem>
+                      <MenuItem value="50">50+</MenuItem>
+                    </Select>
+                  </div>
+                  <div>
+                    <span className={classes.advLabel}>Site próprio<span className={classes.srcTag}>Todas</span></span>
+                    <Select
+                      variant="outlined"
+                      value={gfSite} onChange={e => setGfSite(e.target.value)}
+                      style={{ fontSize: 13, width: "100%" }}
+                    >
+                      <MenuItem value="any">Qualquer</MenuItem>
+                      <MenuItem value="with">Só com site</MenuItem>
+                      <MenuItem value="without">Só sem site</MenuItem>
+                    </Select>
+                  </div>
+                  <div>
+                    <FormControlLabel
+                      style={{ marginLeft: 0 }}
+                      control={<Switch size="small" color="primary" checked={gfOnlyCell} onChange={e => setGfOnlyCell(e.target.checked)} />}
+                      label={<Typography variant="body2">Apenas celular (WhatsApp-ready)<span className={classes.srcTag}>Todas</span></Typography>}
+                    />
+                  </div>
+                  <div>
+                    <FormControlLabel
+                      style={{ marginLeft: 0 }}
+                      control={<Switch size="small" color="primary" checked={gfOnlyActive} onChange={e => setGfOnlyActive(e.target.checked)} />}
+                      label={<Typography variant="body2">Apenas empresas ativas<span className={classes.srcTag}>Receita</span></Typography>}
+                    />
+                  </div>
+                  <div>
+                    <FormControlLabel
+                      style={{ marginLeft: 0 }}
+                      control={<Switch size="small" color="primary" checked={gfExcludeMei} onChange={e => setGfExcludeMei(e.target.checked)} />}
+                      label={<Typography variant="body2">Excluir MEI<span className={classes.srcTag}>Receita</span></Typography>}
+                    />
+                  </div>
+                  <div>
+                    <span className={classes.advLabel}>Capital social mínimo (R$)<span className={classes.srcTag}>Receita</span></span>
+                    <TextField
+                      type="number" variant="outlined" size="small" fullWidth
+                      placeholder="ex: 50000"
+                      value={gfCapitalMin} onChange={e => setGfCapitalMin(e.target.value)}
+                      inputProps={{ min: 0 }}
+                    />
+                  </div>
+                  <div>
+                    <span className={classes.advLabel}>Abertas a partir de<span className={classes.srcTag}>Receita</span></span>
+                    <TextField
+                      type="date" variant="outlined" size="small" fullWidth
+                      value={gfAberturaMin} onChange={e => setGfAberturaMin(e.target.value)}
+                      InputLabelProps={{ shrink: true }}
+                    />
+                  </div>
+                  <div>
+                    <span className={classes.advLabel}>Abertas até<span className={classes.srcTag}>Receita</span></span>
+                    <TextField
+                      type="date" variant="outlined" size="small" fullWidth
+                      value={gfAberturaMax} onChange={e => setGfAberturaMax(e.target.value)}
+                      InputLabelProps={{ shrink: true }}
+                    />
+                  </div>
+                  <div className={classes.fullRow}>
+                    <Autocomplete
+                      multiple freeSolo
+                      options={[]}
+                      value={gfExcludeKw}
+                      onChange={(_, val) => setGfExcludeKw(val)}
+                      renderTags={(val, getTagProps) => val.map((opt, i) => (
+                        <Chip variant="outlined" size="small" label={opt} {...getTagProps({ index: i })} key={opt} />
+                      ))}
+                      renderInput={params => (
+                        <TextField
+                          {...params} variant="outlined" size="small"
+                          label={<>Excluir termos do nome<span className={classes.srcTag}>Todas</span></>}
+                          placeholder="ex.: distribuidora"
+                        />
+                      )}
+                    />
+                  </div>
+                </div>
+              </Collapse>
+
+              {/* 5 — Limite + CTA */}
+              <div className={classes.gSectionHead}>
+                <span className={classes.gSectionNum}>5</span>
+                <span className={classes.gSectionTitle}>Limite e busca</span>
+              </div>
+              <Box className={classes.sliderBox} style={{ minWidth: 0 }}>
                 <Typography variant="body2" style={{ marginBottom: 6 }}>
                   Máximo de resultados <em>por fonte</em>: <strong>{maxResults === 0 ? "sem limite" : maxResults}</strong>
                 </Typography>
@@ -1935,19 +2451,20 @@ export default function LeadScraper() {
                   marks={[{ value: 0, label: "∞" }, { value: 500, label: "500" }, { value: 1000, label: "1000" }]}
                 />
               </Box>
+              {canImport && (
+                <Button
+                  variant="contained" color="primary" fullWidth size="large"
+                  startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <GlobalIcon size={18} />}
+                  onClick={startGlobalJob} disabled={loading || !globalSources.length}
+                  style={{ textTransform: "none", fontWeight: 700, marginTop: 4 }}
+                >
+                  Buscar em todas as fontes
+                </Button>
+              )}
+              <Typography variant="caption" color="textSecondary" style={{ display: "block", textAlign: "center", marginTop: 6 }}>
+                {globalSources.length} fonte{globalSources.length !== 1 ? "s" : ""} ativa{globalSources.length !== 1 ? "s" : ""} · dedup automático · enriquecimento só em leads novos
+              </Typography>
 
-              <Box mt={2}>
-                {canImport && (
-                  <Button
-                    variant="contained" color="primary"
-                    startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <GlobalIcon size={18} />}
-                    onClick={startGlobalJob} disabled={loading}
-                    style={{ textTransform: "none", fontWeight: 600 }}
-                  >
-                    Buscar em todas as fontes
-                  </Button>
-                )}
-              </Box>
               <Box className={classes.helpToggle} onClick={() => setHelpOpen(o => !o)}>
                 <HelpIcon size={15} />
                 <span>{helpOpen ? "Ocultar tutorial" : "Como funciona?"}</span>
@@ -2184,6 +2701,7 @@ export default function LeadScraper() {
                     { key: "new",      label: "Novos",      count: leadStatusCounts.new },
                     { key: "existing", label: "Já tenho",   count: leadStatusCounts.existing },
                     { key: "imported", label: "Importados", count: leadStatusCounts.imported },
+                    { key: "gold",     label: "🏆 Ouro",    count: leadStatusCounts.gold },
                   ].map(f => (
                     <Chip
                       key={f.key}
@@ -2247,16 +2765,25 @@ export default function LeadScraper() {
               {/* Cards — mobile */}
               <div className={classes.mobileList}>
                 {displayRows.map(({ r, i }) => (
-                  <div key={i} className={classes.card}>
+                  <div
+                    key={i}
+                    className={classes.card}
+                    style={{ cursor: "pointer" }}
+                    onClick={() => setXrayLead(r)}
+                  >
                     <div className={classes.cardHeader}>
                       <div className={classes.cardTitle}>
                         <Checkbox
                           checked={selectedIndices.includes(i)}
                           onChange={() => toggleSelect(i)}
+                          onClick={e => e.stopPropagation()}
                           size="small"
                         />
                         <div style={{ minWidth: 0 }}>
-                          <div className={classes.cardName}>{r.nomeFantasia || r.name || "—"}</div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <div className={classes.cardName}>{r.nomeFantasia || r.name || "—"}</div>
+                            <LeadTierBadge lead={r} />
+                          </div>
                           {r.razaoSocial && r.razaoSocial !== r.name && (
                             <Typography variant="caption" color="textSecondary" style={{ display: "block" }}>
                               {r.razaoSocial}
@@ -2267,19 +2794,7 @@ export default function LeadScraper() {
                       {/* Badges: status de dedupe + fontes (busca global) */}
                       <Box display="flex" style={{ gap: 3, flexWrap: "wrap", flexShrink: 0, justifyContent: "flex-end", maxWidth: "55%" }}>
                         <LeadStatusBadges lead={r} />
-                        {(r.sources || []).map(src => (
-                          <span
-                            key={src}
-                            style={{
-                              background: (GLOBAL_SOURCE_META[src]?.color || "#555") + "22",
-                              color: GLOBAL_SOURCE_META[src]?.color || "#555",
-                              borderRadius: 3, padding: "0 5px",
-                              fontSize: 9, fontWeight: 800, letterSpacing: 0.3,
-                            }}
-                          >
-                            {GLOBAL_SOURCE_META[src]?.label || src}
-                          </span>
-                        ))}
+                        <SourceBadges lead={r} />
                       </Box>
                     </div>
 
@@ -2317,7 +2832,7 @@ export default function LeadScraper() {
                           {r.cnpj
                             ? r.cnpj.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5")
                             : r.website
-                              ? <a href={r.website} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11 }}>site</a>
+                              ? <a href={r.website} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11 }} onClick={e => e.stopPropagation()}>site</a>
                               : "—"}
                           {(r.enrichedFrom || []).includes("receita") && (
                             <Chip label="RF" size="small"
@@ -2358,13 +2873,18 @@ export default function LeadScraper() {
                       <div>
                         <div className={classes.metaLabel}>Avaliação</div>
                         <div className={classes.metaValue}>
-                          <span className={classes.rating}><Stars value={r.rating} /></span>
+                          <span className={classes.rating}>
+                            <Stars value={r.rating} />
+                            {r.reviewsCount != null && (
+                              <span style={{ fontSize: 10, opacity: 0.7 }}> ({r.reviewsCount})</span>
+                            )}
+                          </span>
                         </div>
                       </div>
                     </div>
 
-                    {/* Redes sociais */}
-                    <div className={classes.cardActions}>
+                    {/* Redes sociais — stopPropagation p/ não abrir o Raio-X ao clicar num link */}
+                    <div className={classes.cardActions} onClick={e => e.stopPropagation()}>
                       {["instagram","twitter","linkedin","facebook"].map(p =>
                         r[p] ? (
                           <a
@@ -2428,8 +2948,13 @@ export default function LeadScraper() {
                   </TableHead>
                   <TableBody>
                     {displayRows.map(({ r, i }) => (
-                      <TableRow key={i} hover selected={selectedIndices.includes(i)} className={classes.rowHover}>
-                        <TableCell padding="checkbox">
+                      <TableRow
+                        key={i} hover selected={selectedIndices.includes(i)}
+                        className={classes.rowHover}
+                        style={{ cursor: "pointer" }}
+                        onClick={() => setXrayLead(r)}
+                      >
+                        <TableCell padding="checkbox" onClick={e => e.stopPropagation()}>
                           <Checkbox
                             checked={selectedIndices.includes(i)}
                             onChange={() => toggleSelect(i)}
@@ -2437,9 +2962,12 @@ export default function LeadScraper() {
                           />
                         </TableCell>
                         <TableCell className={classes.bodyCell}>
-                          <Typography variant="body2" style={{ fontWeight: 600, fontSize: 12 }}>
-                            {r.nomeFantasia || r.name || "—"}
-                          </Typography>
+                          <Box display="flex" alignItems="center" style={{ gap: 6 }}>
+                            <Typography variant="body2" style={{ fontWeight: 600, fontSize: 12 }}>
+                              {r.nomeFantasia || r.name || "—"}
+                            </Typography>
+                            <LeadTierBadge lead={r} />
+                          </Box>
                           {r.razaoSocial && r.razaoSocial !== r.name && (
                             <Typography variant="caption" color="textSecondary" style={{ display: "block" }}>
                               {r.razaoSocial}
@@ -2453,19 +2981,7 @@ export default function LeadScraper() {
                           {/* Badges: status de dedupe + fontes (busca global) */}
                           <Box display="flex" style={{ gap: 3, marginTop: 2, flexWrap: "wrap" }}>
                             <LeadStatusBadges lead={r} />
-                            {(r.sources || []).map(src => (
-                              <span
-                                key={src}
-                                style={{
-                                  background: (GLOBAL_SOURCE_META[src]?.color || "#555") + "22",
-                                  color: GLOBAL_SOURCE_META[src]?.color || "#555",
-                                  borderRadius: 3, padding: "0 5px",
-                                  fontSize: 9, fontWeight: 800, letterSpacing: 0.3,
-                                }}
-                              >
-                                {GLOBAL_SOURCE_META[src]?.label || src}
-                              </span>
-                            ))}
+                            <SourceBadges lead={r} />
                           </Box>
                         </TableCell>
                         {activeJob.source === "conselho" && (
@@ -2497,7 +3013,7 @@ export default function LeadScraper() {
                             </Typography>
                           )}
                         </TableCell>
-                        <TableCell className={classes.bodyCell}>
+                        <TableCell className={classes.bodyCell} onClick={e => e.stopPropagation()}>
                           <Box display="flex" style={{ gap: 4, flexWrap: "wrap" }}>
                             {["instagram","twitter","linkedin","facebook"].map(p =>
                               r[p] ? (
@@ -2531,7 +3047,7 @@ export default function LeadScraper() {
                             {r.address || (r.municipio ? `${r.municipio}/${r.uf}` : "—")}
                           </Typography>
                         </TableCell>
-                        <TableCell className={classes.bodyCell} style={{ whiteSpace: "nowrap" }}>
+                        <TableCell className={classes.bodyCell} style={{ whiteSpace: "nowrap" }} onClick={e => e.stopPropagation()}>
                           <Box display="flex" alignItems="center" style={{ gap: 4 }}>
                             <Typography variant="body2" style={{ fontSize: 11, fontFamily: "monospace", whiteSpace: "nowrap" }}>
                               {r.cnpj
@@ -2588,7 +3104,12 @@ export default function LeadScraper() {
                           </TableCell>
                         )}
                         <TableCell className={classes.bodyCell}>
-                          <span className={classes.rating}><Stars value={r.rating} /></span>
+                          <span className={classes.rating}>
+                            <Stars value={r.rating} />
+                            {r.reviewsCount != null && (
+                              <span style={{ fontSize: 10, opacity: 0.7 }}> ({r.reviewsCount})</span>
+                            )}
+                          </span>
                         </TableCell>
                       </TableRow>
                     ))}

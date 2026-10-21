@@ -21,6 +21,9 @@ export interface CnpjDiscoveryFilters {
   situacao?: MultiValue;       // post-filter: ATIVA | SUSPENSA | INAPTA | BAIXADA
   porte?: MultiValue;          // post-filter: MEI | MICRO EMPRESA | EPP | DEMAIS
   capitalSocialMin?: number;   // post-filter: capital social mínimo em R$
+  excludeMei?: boolean;        // post-filter: excluir MEI / Empresário Individual
+  dataAberturaMin?: string;    // post-filter: YYYY-MM-DD — abertas a partir de
+  dataAberturaMax?: string;    // post-filter: YYYY-MM-DD — abertas até
   uf?: MultiValue;
   municipio?: MultiValue;      // post-filter: city name
   temTelefone?: boolean;
@@ -34,6 +37,16 @@ export interface CnpjDiscoveryFilters {
 // comparação de texto sem acento e case-insensitive ("São Paulo" casa "SAO PAULO")
 const norm = (s: string) =>
   s.normalize("NFD").replace(/\p{Diacritic}/gu, "").toUpperCase();
+
+// dataAbertura pode vir "YYYY-MM-DD" (Receita) ou "DD/MM/YYYY" — normaliza
+// para ISO p/ permitir comparação lexicográfica
+const toIsoDate = (v?: string): string => {
+  const s = String(v || "").trim();
+  const br = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (br) return `${br[3]}-${br[2]}-${br[1]}`;
+  const iso = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  return iso ? iso[1] : "";
+};
 
 const toCnae7 = (v: any): string => {
   const digits = String(v ?? "").replace(/\D/g, "");
@@ -177,6 +190,17 @@ const passesFilters = (lead: EnrichedLead, f: CnpjDiscoveryFilters): boolean => 
       : parseFloat(raw);
     if (!(capital >= f.capitalSocialMin)) return false;
   }
+  // excludeMei/dataAbertura: fail-open quando o campo não veio na fonte —
+  // o QualityFilters pós-merge cobre os filtros de qualidade restantes
+  if (f.excludeMei) {
+    const porte = norm(lead.porte || "");
+    const nj = norm(lead.naturezaJuridica || "");
+    const njCodigo = (lead.naturezaJuridica || "").match(/\d{3,4}/)?.[0] || "";
+    if (porte.includes("MEI") || nj.includes("EMPRESARIO INDIVIDUAL") || (njCodigo && njCodigo.startsWith("213"))) return false;
+  }
+  const aberturaIso = toIsoDate(lead.dataAbertura);
+  if (f.dataAberturaMin && aberturaIso && aberturaIso < f.dataAberturaMin) return false;
+  if (f.dataAberturaMax && aberturaIso && aberturaIso > f.dataAberturaMax) return false;
   if (f.temTelefone && !lead.phone) return false;
   if (f.temEmail && !lead.email) return false;
   return true;

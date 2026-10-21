@@ -115,6 +115,29 @@ export const startJob = async (req: Request, res: Response): Promise<Response> =
       if (!IG_HANDLE_REGEX.test(handle)) return res.status(400).json({ error: "igTargetHandle inválido" });
       filters.igTargetHandle = handle;
     }
+    // Filtros de qualidade (opt-in): saneamento básico de ranges/formatos
+    if (filters.minRating !== undefined) {
+      const n = Number(filters.minRating);
+      if (!Number.isFinite(n) || n < 0 || n > 5) {
+        return res.status(400).json({ error: "minRating deve estar entre 0 e 5" });
+      }
+      filters.minRating = n;
+    }
+    for (const key of ["minReviews", "capitalSocialMin"] as const) {
+      if (filters[key] !== undefined) {
+        const n = Number(filters[key]);
+        if (!Number.isFinite(n) || n < 0) {
+          return res.status(400).json({ error: `${key} deve ser >= 0` });
+        }
+        filters[key] = n;
+      }
+    }
+    for (const key of ["dataAberturaMin", "dataAberturaMax"] as const) {
+      if (filters[key] !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(String(filters[key]))) {
+        return res.status(400).json({ error: `${key} deve estar no formato YYYY-MM-DD` });
+      }
+    }
+
     // Geo (busca por área no mapa): lat/lng obrigatórios juntos, radiusKm opcional
     if (filters.lat !== undefined || filters.lng !== undefined) {
       const lat = Number(filters.lat);

@@ -45,6 +45,9 @@ export interface ScraperResult {
   enrichedFrom?: string[];  // ex.: ["receita"]
   // busca global: fontes de origem do lead (ex.: ["google_maps","cnpj_search"])
   sources?: string[];
+  reviewsCount?: number;       // total de avaliações no Maps (só Apify fornece)
+  leadScore?: number;          // 0-100 — calculado ao fim do pipeline
+  leadTier?: "gold" | "silver" | "bronze";
   imported?: boolean;
   // Classificação anti-repetição (DedupeService.classifyResults):
   // "new" = inédito | "seen_job" = já capturado em outra busca |
@@ -104,6 +107,18 @@ export interface ScraperFilters {
   keywords?: MultiValue;
   mapQueries?: MultiValue;
   preset?: string; // identificador do preset (ex.: "arquitetos", "lojistas")
+  // qualidade do lead (google_maps + global) — pós-filtros baratos antes do enrich
+  minRating?: number;          // nota mínima no Maps (0-5, ex.: 4.0)
+  minReviews?: number;         // mínimo de avaliações no Maps
+  skipClosedPlaces?: boolean;  // pular "permanently closed" — default true no Apify
+  onlyWithWebsite?: boolean;   // exige website próprio
+  onlyWithoutWebsite?: boolean;// inverso (ex.: prospectar p/ vender site)
+  onlyCellPhone?: boolean;     // só celular BR (canonical 55DDD9XXXXXXXX) — fail-closed
+  excludeKeywords?: MultiValue;// blacklist de termos no nome/razão social
+  // receita federal
+  excludeMei?: boolean;        // excluir MEI / Empresário Individual
+  dataAberturaMin?: string;    // YYYY-MM-DD — abertas a partir de
+  dataAberturaMax?: string;    // YYYY-MM-DD — abertas até
 }
 
 @Table

@@ -1,5 +1,5 @@
 import axios from "axios";
-import { ScraperResult } from "../../models/LeadScraperJob";
+import { ScraperResult, ScraperFilters } from "../../models/LeadScraperJob";
 import { APIFY_TOKEN_ENV } from "../Instagram/InstagramApifyProvider";
 import { getCompanyApifyToken } from "./ApifyTokenService";
 import logger from "../../utils/logger";
@@ -152,15 +152,30 @@ const getDatasetItems = async (datasetId: string, companyId?: number): Promise<a
   }
 };
 
+// placeMinimumStars do actor aceita só faixas fixas — mapeia minRating (0-5)
+// para a faixa imediatamente abaixo (nunca filtra mais do que o pedido)
+const toPlaceMinimumStars = (min: number): string | undefined => {
+  if (min >= 5) return "five";
+  if (min >= 4.75) return "fourAndThreeQuarters";
+  if (min >= 4.5) return "fourAndHalf";
+  if (min >= 4) return "four";
+  if (min >= 3.5) return "threeAndHalf";
+  if (min >= 3) return "three";
+  if (min >= 2.5) return "twoAndHalf";
+  if (min >= 2) return "two";
+  return undefined;
+};
+
 export const scrapeGoogleMapsViaApify = async (
   keyword: string | string[],
   cityQuery: string,
   maxResults = 50,
   onProgress?: (current: number, total: number) => Promise<void>,
-  opts?: { state?: string; geo?: { lat: number; lng: number; radiusKm: number }; companyId?: number }
+  opts?: { state?: string; geo?: { lat: number; lng: number; radiusKm: number }; companyId?: number; filters?: ScraperFilters }
 ): Promise<ScraperResult[]> => {
   const geo = opts?.geo;
   const companyId = opts?.companyId;
+  const filters = opts?.filters;
   // aceita várias queries num único run (searchStringsArray nativo) — o cap
   // é por query, então divide o total para não estourar custo/limites
   const queries = (Array.isArray(keyword) ? keyword : [keyword])
@@ -174,6 +189,19 @@ export const scrapeGoogleMapsViaApify = async (
     // scrapeContacts já cobre os links sociais
     scrapeContacts: true,
   };
+
+  // skipClosedPlaces já vem ligado por padrão no actor — reforçamos no input e
+  // só desligamos via opt-out explícito (filters.skipClosedPlaces === false).
+  // O corte local abaixo no loop é redundância barata contra dataset antigo.
+  const skipClosed = filters?.skipClosedPlaces !== false;
+  if (skipClosed) input.skipClosedPlaces = true;
+
+  const minStars = typeof filters?.minRating === "number" ? toPlaceMinimumStars(filters.minRating) : undefined;
+  if (minStars) input.placeMinimumStars = minStars;
+
+  // filtro de website no próprio actor economiza crawl/dataset
+  if (filters?.onlyWithWebsite) input.website = "withWebsiteOnly";
+  else if (filters?.onlyWithoutWebsite) input.website = "withoutWebsiteOnly";
 
   if (geo) {
     input.customGeolocation = {
@@ -196,6 +224,8 @@ export const scrapeGoogleMapsViaApify = async (
     if (results.length >= maxResults) break;
     const name = item.title || item.name;
     if (!name) continue;
+    // defesa local: mesmo com skipClosedPlaces no input, garante o corte
+    if (skipClosed && item.permanentlyClosed === true) continue;
 
     const address = [item.address, item.city, item.state].filter(Boolean).join(", ") || item.address || "";
 
@@ -226,6 +256,7 @@ export const scrapeGoogleMapsViaApify = async (
       municipio: item.city || "",
       uf: toUf(item.state),
       rating: item.totalScore ? String(item.totalScore) : "",
+      ...(typeof item.reviewsCount === "number" ? { reviewsCount: item.reviewsCount } : {}),
       category: item.categoryName || (Array.isArray(item.categories) ? item.categories[0] : "") || "",
       googleMapsUrl: item.url || "",
     } as ScraperResult);

@@ -14,6 +14,8 @@ import GetDefaultWhatsApp from "../../helpers/GetDefaultWhatsApp";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
 import { toArray, resolveMaxResults } from "./ScraperFilterUtils";
 import { filterOutDuplicates, classifyResults } from "./DedupeService";
+import { applyQualityPostFilters } from "./QualityFilters";
+import { scoreResults } from "./LeadScoreService";
 import logger from "../../utils/logger";
 
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
@@ -304,7 +306,7 @@ export const runScraperJob = async (jobId: number) => {
       const engine = useApify ? "apify" : useSidecar ? "sidecar" : "puppeteer";
       logger.info(`[LeadScraperJob] jobId=${job.id} google_maps via ${engine} (${cityQueries.length} query(ies))${geo ? ` geo(${lat},${lng},${geo.radiusKm}km)` : ""}`);
 
-      const results: ScraperResult[] = [];
+      let results: ScraperResult[] = [];
       for (let qi = 0; qi < cityQueries.length; qi++) {
         throwIfCancelled(job.id);
         if (results.length >= cap) break;
@@ -317,13 +319,15 @@ export const runScraperJob = async (jobId: number) => {
         };
         const remaining = Math.min(perQueryCap, cap - results.length);
         const queryResults = useApify
-          ? await scrapeGoogleMapsViaApify(keyword, cityQuery, remaining, onProgress, { state: states[0], geo, companyId: job.companyId })
+          ? await scrapeGoogleMapsViaApify(keyword, cityQuery, remaining, onProgress, { state: states[0], geo, companyId: job.companyId, filters: job.filters })
           : useSidecar
             ? await scrapeViaSidecar(keyword, cityQuery, remaining, onProgress, geo)
             : await scrapeGoogleMaps(keyword, cityQuery, remaining, onProgress, { state: states[0], geo });
         results.push(...queryResults);
       }
 
+      // pós-filtros baratos de qualidade antes do enrich/dedupe (opt-in)
+      results = applyQualityPostFilters(results, job.filters);
       normalizePhonesInPlace(results);
       const classified = await classifyAndPrune(job.companyId, results);
       // Dedup intra-lote/histórico só nos "new" — seen_list/seen_contact ficam
@@ -340,7 +344,9 @@ export const runScraperJob = async (jobId: number) => {
       await runSocialEnrichment(job, deduped);
       await runWhatsappValidation(job, deduped);
       throwIfCancelled(job.id);
-      await job.update({ status: "done", progress: 100 });
+      // lead score usa hasWhatsapp/whatsappChecked — só depois da validação
+      scoreResults(deduped);
+      await job.update({ results: [...deduped], status: "done", progress: 100 });
 
     } else if (job.source === "cnpj") {
       const cnpjs = job.filters.cnpjs || [];
@@ -361,7 +367,8 @@ export const runScraperJob = async (jobId: number) => {
       await runSocialEnrichment(job, classified);
       await runWhatsappValidation(job, classified);
       throwIfCancelled(job.id);
-      await job.update({ status: "done", progress: 100 });
+      scoreResults(classified);
+      await job.update({ results: [...classified], status: "done", progress: 100 });
 
     } else if (job.source === "cnpj_search") {
       const results = await searchCnpjsByFilters(
@@ -377,7 +384,8 @@ export const runScraperJob = async (jobId: number) => {
       await runSocialEnrichment(job, classified);
       await runWhatsappValidation(job, classified);
       throwIfCancelled(job.id);
-      await job.update({ status: "done", progress: 100 });
+      scoreResults(classified);
+      await job.update({ results: [...classified], status: "done", progress: 100 });
 
     } else if (job.source === "ig_followers") {
       const { igTargetHandle = "", maxResults = 500 } = job.filters;
@@ -409,7 +417,8 @@ export const runScraperJob = async (jobId: number) => {
       if (!batchOk) await runSocialEnrichment(job, classified);
       await runWhatsappValidation(job, classified);
       throwIfCancelled(job.id);
-      await job.update({ status: "done", progress: 100 });
+      scoreResults(classified);
+      await job.update({ results: [...classified], status: "done", progress: 100 });
 
     } else if (job.source === "conselho") {
       const results = await scrapeConselho(
@@ -426,7 +435,8 @@ export const runScraperJob = async (jobId: number) => {
       await runSocialEnrichment(job, classified);
       await runWhatsappValidation(job, classified);
       throwIfCancelled(job.id);
-      await job.update({ status: "done", progress: 100 });
+      scoreResults(classified);
+      await job.update({ results: [...classified], status: "done", progress: 100 });
 
     } else if (job.source === "global") {
       // Busca multi-fonte: Maps + Receita + conselhos em paralelo, com merge
@@ -460,7 +470,9 @@ export const runScraperJob = async (jobId: number) => {
       await runSocialEnrichment(job, deduped);
       await runWhatsappValidation(job, deduped);
       throwIfCancelled(job.id);
-      await job.update({ status: "done", progress: 100 });
+      // pós-filtro de qualidade já ocorreu dentro do runGlobalSearch (sobre o merged)
+      scoreResults(deduped);
+      await job.update({ results: [...deduped], status: "done", progress: 100 });
 
     } else {
       await job.update({ status: "error", errorMessage: "source desconhecido" });

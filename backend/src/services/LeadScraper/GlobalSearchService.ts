@@ -3,6 +3,7 @@ import { scrapeGoogleMaps } from "./GoogleMapsScraperService";
 import { scrapeViaSidecar, isSidecarAvailable } from "./GmapsSidecarService";
 import { isGmapsApifyConfigured, scrapeGoogleMapsViaApify } from "./GoogleMapsApifyProvider";
 import { searchCnpjsByFilters } from "./CnpjSearchService";
+import { applyQualityPostFilters } from "./QualityFilters";
 import { scrapeConselho } from "./ConselhoScraperService";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
 import logger from "../../utils/logger";
@@ -91,7 +92,7 @@ async function scrapeMapsBranch(
     };
     if (useApify) {
       // Apify aceita o array inteiro de queries num único run
-      const batch = await scrapeGoogleMapsViaApify(queries, cityQueries[qi], remaining, share, { state: states[0], geo, companyId });
+      const batch = await scrapeGoogleMapsViaApify(queries, cityQueries[qi], remaining, share, { state: states[0], geo, companyId, filters });
       accept(batch);
     } else {
       // sidecar/puppeteer: itera uma query por vez com cap dividido
@@ -145,6 +146,11 @@ async function scrapeReceitaBranch(
         situacao: filters.situacao,
         porte: filters.porte,
         capitalSocialMin: filters.capitalSocialMin,
+        excludeMei: filters.excludeMei,
+        dataAberturaMin: filters.dataAberturaMin,
+        dataAberturaMax: filters.dataAberturaMax,
+        temTelefone: filters.temTelefone,
+        temEmail: filters.temEmail,
       } as ScraperFilters,
       async (cur, total) => {
         checkCancelled();
@@ -205,6 +211,7 @@ const MERGE_SCALAR_FIELDS: (keyof ScraperResult)[] = [
   "naturezaJuridica", "situacao", "porte", "municipio", "uf",
   "instagram", "twitter", "linkedin", "instagramPhone", "googleMapsUrl",
   "capitalSocial", "dataAbertura", "registro", "registroTipo",
+  "reviewsCount", // só o Maps traz — preserva no merge p/ filtros e score
 ];
 
 const mergeInto = (target: ScraperResult, src: ScraperResult): void => {
@@ -330,8 +337,10 @@ export const runGlobalSearch = async (opts: GlobalSearchOpts): Promise<ScraperRe
   }
 
   const merged = mergeByIdentity(all);
-  const multi = merged.filter(m => (m.sources?.length || 0) > 1).length;
-  logger.info(`[GlobalSearch] ${all.length} brutos → ${merged.length} únicos (${multi} multi-fonte, ${failures.length} fonte(s) falharam)`);
+  // pós-filtros de qualidade sobre o merged — roda uma vez, antes do enrich
+  const qualified = applyQualityPostFilters(merged, filters);
+  const multi = qualified.filter(m => (m.sources?.length || 0) > 1).length;
+  logger.info(`[GlobalSearch] ${all.length} brutos → ${merged.length} únicos → ${qualified.length} qualificados (${multi} multi-fonte, ${failures.length} fonte(s) falharam)`);
 
-  return merged;
+  return qualified;
 };
