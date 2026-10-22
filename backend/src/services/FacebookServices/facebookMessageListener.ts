@@ -231,9 +231,9 @@ const NON_MEDIA_ATTACHMENT_LABELS: Record<string, string> = {
   link: "Enviou um link"
 };
 
-// Somente estes tipos têm payload binário baixável — qualquer outro
-// (inclusive tipos novos que a Meta introduzir) vira texto + link,
-// nunca tentativa de download.
+// Somente estes tipos têm payload binário baixável garantido — mas tipos
+// "não-mídia" (story_mention, fallback, desconhecidos) também recebem
+// tentativa de download quando a URL aponta para o CDN da Meta.
 const DOWNLOADABLE_ATTACHMENT_TYPES = new Set([
   "image",
   "audio",
@@ -242,6 +242,43 @@ const DOWNLOADABLE_ATTACHMENT_TYPES = new Set([
   "sticker"
 ]);
 
+// Tipos cujo payload.url é link de página HTML (post/reel/externo) — só
+// baixáveis quando a URL já aponta para o CDN de mensageria da Meta.
+const HTML_ATTACHMENT_TYPES = new Set(["share", "link"]);
+
+// URLs do CDN de mensageria retornam o binário da mídia (story, anexo
+// efêmero) mesmo em tipos que o webhook marca como não-mídia.
+const CDN_MEDIA_URL_PATTERN =
+  /lookaside\.fbsbx\.com|fbcdn\.net|cdninstagram\.com|asset_id=/i;
+
+// mediaType renderizável derivado do mime real do conteúdo — garante que
+// story/anexo vire image/video/audio no frontend em vez de depender do
+// `type` que o webhook declarou.
+const mimeToMediaType = (mime: string, fallback: string): string => {
+  if (/^image\//.test(mime)) return "image";
+  if (/^video\//.test(mime)) return "video";
+  if (/^audio\//.test(mime)) return "audio";
+  return DOWNLOADABLE_ATTACHMENT_TYPES.has(fallback) ? fallback : "file";
+};
+
+// Extensão de fallback quando magic bytes não detectam o formato mas o
+// Content-Type é de mídia conhecida.
+const extFromMime = (mime: string): string =>
+  ({
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/gif": "gif",
+    "image/webp": "webp",
+    "video/mp4": "mp4",
+    "video/quicktime": "mov",
+    "video/webm": "webm",
+    "audio/mpeg": "mp3",
+    "audio/mp4": "m4a",
+    "audio/ogg": "ogg",
+    "audio/webm": "webm",
+    "application/pdf": "pdf"
+  } as Record<string, string>)[mime] || "";
+
 export const verifyMessageMedia = async (
   msg: any,
   ticket: Ticket,
@@ -249,22 +286,18 @@ export const verifyMessageMedia = async (
   fromMe: boolean = false
 ): Promise<void> => {
   const attachment = msg.attachments[0] || {};
-
-  // Tipos não-binários: salva como texto descritivo com o link do post —
-  // sem isso reações/share chegavam como "notificação sem conteúdo".
+  const url: string = attachment?.payload?.url || "";
   const nonMediaLabel = NON_MEDIA_ATTACHMENT_LABELS[attachment.type];
-  if (
-    nonMediaLabel ||
-    !attachment?.payload?.url ||
-    !DOWNLOADABLE_ATTACHMENT_TYPES.has(attachment.type)
-  ) {
-    const link = attachment?.payload?.url || "";
+
+  // Texto descritivo + link — fallback de qualquer caminho em que a mídia
+  // não pôde ser materializada. Garante que a mensagem nunca se perca.
+  const saveTextFallback = async (): Promise<void> => {
     const label = nonMediaLabel || "Enviou um anexo";
     const messageData = {
       wid: msg.mid,
       ticketId: ticket.id,
       contactId: contact.id,
-      body: `${msg.text ? `${msg.text}\n` : ""}${label}${link ? `\n${link}` : ""}`,
+      body: `${msg.text ? `${msg.text}\n` : ""}${label}${url ? `\n${url}` : ""}`,
       fromMe: fromMe ? fromMe : msg.is_echo ? true : false,
       read: fromMe ? fromMe : msg.is_echo,
       quotedMsgId: null,
@@ -273,23 +306,59 @@ export const verifyMessageMedia = async (
       channel: ticket.channel
     };
     await CreateMessageService({ messageData, companyId: ticket.companyId });
+  };
+
+  // Sem URL, ou link de página HTML que não é CDN de mídia → texto + link.
+  if (
+    !url ||
+    (HTML_ATTACHMENT_TYPES.has(attachment.type) &&
+      !CDN_MEDIA_URL_PATTERN.test(url))
+  ) {
+    await saveTextFallback();
     return;
   }
 
-  const { data } = await axios.get(attachment.payload.url, {
-    responseType: "arraybuffer"
-  });
+  // URL assinada pode estar expirada/indisponível — antes a exceção
+  // propagava e a mensagem era perdida inteira; agora cai no texto.
+  let data: Buffer;
+  let contentType = "";
+  try {
+    const res = await axios.get(url, {
+      responseType: "arraybuffer",
+      timeout: 30000
+    });
+    data = res.data;
+    contentType = String(res.headers?.["content-type"] || "")
+      .split(";")[0]
+      .trim()
+      .toLowerCase();
+  } catch (err: any) {
+    logger.warn(
+      `[facebookMessageListener] Download de anexo falhou (type=${attachment.type}): ${err?.message || err}`
+    );
+    await saveTextFallback();
+    return;
+  }
 
   // eslint-disable-next-line no-eval
   const { fileTypeFromBuffer } = await (eval('import("file-type")') as Promise<typeof import("file-type")>);
 
   const type = await fileTypeFromBuffer(data);
+  const mime = type?.mime || contentType;
 
-  // Alguns attachments binários chegam sem assinatura de magic bytes
-  // (ou o fetch retorna HTML de erro) — antes o acesso a `type.ext`
-  // quebrava o handler e a mensagem era perdida. Fallback grava o
-  // conteúdo como binário genérico em vez de descartar a mensagem.
-  const ext = type?.ext || "bin";
+  // Binário de mídia reconhecível por magic bytes ou Content-Type.
+  const isMediaContent =
+    !!type || /^(image|video|audio)\//.test(mime) || mime === "application/pdf";
+
+  // Tipo "não-mídia" sem conteúdo reconhecível (página de erro HTML do
+  // CDN, JSON de erro) → texto + link. Tipo declarado binário mantém o
+  // .bin genérico de antes.
+  if (!isMediaContent && !DOWNLOADABLE_ATTACHMENT_TYPES.has(attachment.type)) {
+    await saveTextFallback();
+    return;
+  }
+
+  const ext = type?.ext || extFromMime(mime) || "bin";
 
   const fileName = `${new Date().getTime()}.${ext}`;
 
@@ -309,10 +378,10 @@ export const verifyMessageMedia = async (
     wid: msg.mid,
     ticketId: ticket.id,
     contactId: contact.id, // SEMPRE usar contact.id (nunca undefined)
-    body: msg.text || fileName,
+    body: msg.text || nonMediaLabel || fileName,
     fromMe: fromMe ? fromMe : msg.is_echo ? true : false,
     read: fromMe ? fromMe : msg.is_echo,
-    mediaType: attachment.type || msg.attachments[0].type,
+    mediaType: mimeToMediaType(mime, attachment.type),
     mediaUrl: fileName,
     quotedMsgId: null,
     ack: 3,
