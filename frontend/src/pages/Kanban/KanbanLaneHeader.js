@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { makeStyles } from "@material-ui/core/styles";
+import { makeStyles, useTheme } from "@material-ui/core/styles";
 import { Typography, IconButton, Tooltip, Chip, Menu, MenuItem, ListItemText } from "@material-ui/core";
 import MoreHorizIcon from "@material-ui/icons/MoreHoriz";
 import DragIndicatorIcon from "@material-ui/icons/DragIndicator";
@@ -11,8 +11,8 @@ const useStyles = makeStyles(theme => ({
     alignItems: "center",
     justifyContent: "space-between",
     padding: theme.spacing(1.5, 1.5, 0.5),
-    backgroundColor: "#fff", // Fundo branco para o header
-    borderBottom: "1px solid rgba(0,0,0,0.08)",
+    backgroundColor: theme.palette.background.paper,
+    borderBottom: `1px solid ${theme.palette.divider}`,
     borderTopLeftRadius: 8,
     borderTopRightRadius: 8,
     cursor: "grab",
@@ -52,8 +52,15 @@ const useStyles = makeStyles(theme => ({
 
 export default function KanbanLaneHeader(props) {
   const { title, label, unreadCount, laneTotal, onEditLane, onDeleteLane } = props;
+  const theme = useTheme();
   const color = props.color || props.laneColor;
   const classes = useStyles();
+
+  // Chip de valor da fase: tinta clara no light, translúcida no dark
+  const laneTotalChipStyle =
+    theme.mode === "light"
+      ? { background: "#e8f5e9", color: "#2e7d32" }
+      : { background: "rgba(102,187,106,0.25)", color: "#a5d6a7" };
   const [anchorEl, setAnchorEl] = useState(null);
 
   const isDefaultLane = String(props?.id) === 'lane0';
@@ -100,16 +107,16 @@ export default function KanbanLaneHeader(props) {
     >
       <div className={classes.left}>
         <div {...props.dragHandleProps} style={{ cursor: 'grab', display: 'flex', alignItems: 'center', marginRight: 4 }}>
-          <DragIndicatorIcon style={{ color: "#999", fontSize: 20 }} />
+          <DragIndicatorIcon style={{ color: theme.palette.text.secondary, fontSize: 20 }} />
         </div>
-        <Typography variant="subtitle2" className={classes.title} style={{ color: color || "#333" }}>{title}</Typography>
+        <Typography variant="subtitle2" className={classes.title} style={{ color: color || theme.palette.text.primary }}>{title}</Typography>
         <Chip size="small" label={label} variant="default" style={{ height: 20, fontSize: "0.7rem", fontWeight: 600 }} />
         {typeof unreadCount === 'number' && unreadCount > 0 && (
           <Chip size="small" color="secondary" label={`${unreadCount}`} style={{ height: 20, fontSize: "0.7rem", marginLeft: 4 }} />
         )}
         {Number(laneTotal) > 0 && (
           <Tooltip title="Total de negócios na fase">
-            <Chip size="small" label={fmtBRL(laneTotal)} style={{ height: 20, fontSize: "0.7rem", marginLeft: 4, background: "#e8f5e9", color: "#2e7d32", fontWeight: 700 }} />
+            <Chip size="small" label={fmtBRL(laneTotal)} style={{ height: 20, fontSize: "0.7rem", marginLeft: 4, ...laneTotalChipStyle, fontWeight: 700 }} />
           </Tooltip>
         )}
       </div>

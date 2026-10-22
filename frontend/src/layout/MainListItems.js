@@ -58,6 +58,7 @@ import {
   HeartPulse as HealthIcon,
   Target as TargetIcon,
   PhoneCall as PhoneCallIcon,
+  BarChart3 as BarChartIcon,
 } from "lucide-react";
 
 import { WhatsAppsContext } from "../context/WhatsApp/WhatsAppsContext";
@@ -266,6 +267,8 @@ const MainListItems = ({ collapsed, drawerClose }) => {
   const [openCampaignSubmenu, setOpenCampaignSubmenu] = useState(false);
   const [openFlowSubmenu, setOpenFlowSubmenu] = useState(false);
   const [openDashboardSubmenu, setOpenDashboardSubmenu] = useState(false);
+  const [openReportsSubmenu, setOpenReportsSubmenu] = useState(false);
+  const [reportsHover, setReportsHover] = useState(false);
   const [showCampaigns, setShowCampaigns] = useState(false);
   const [showKanban, setShowKanban] = useState(false);
   const [showOpenAi, setShowOpenAi] = useState(false);
@@ -310,6 +313,11 @@ const MainListItems = ({ collapsed, drawerClose }) => {
   const isFlowbuilderRouteActive =
     location.pathname.startsWith("/phrase-lists") ||
     location.pathname.startsWith("/flowbuilders");
+
+  const isReportsRouteActive =
+    location.pathname === "/closing-report" ||
+    location.pathname === "/ads-report" ||
+    location.pathname === "/call-report";
 
   const isIARouteActive =
     location.pathname === "/ai-agents" ||
@@ -528,37 +536,76 @@ const MainListItems = ({ collapsed, drawerClose }) => {
         />
       )}
 
-      {/* 6b. RELATÓRIO DE FECHAMENTO */}
+      {/* 6b. RELATÓRIOS (grupo colapsável) */}
       {hasPermission("reports.view") && (
-        <ListItemLink
-          to="/closing-report"
-          primary={i18n.t("closingReport.title")}
-          icon={<Description />}
-          viewMode={viewMode}
-          tooltip={collapsed}
-        />
-      )}
-
-      {/* 6c. RELATÓRIO DE ANÚNCIOS (CTWA) */}
-      {hasPermission("reports.view") && (
-        <ListItemLink
-          to="/ads-report"
-          primary={i18n.t("adsReport.title")}
-          icon={<TargetIcon />}
-          viewMode={viewMode}
-          tooltip={collapsed}
-        />
-      )}
-
-      {/* 6d. RELATÓRIO DE CHAMADAS */}
-      {hasPermission("reports.view") && (
-        <ListItemLink
-          to="/call-report"
-          primary={i18n.t("callReport.title")}
-          icon={<PhoneCallIcon />}
-          viewMode={viewMode}
-          tooltip={collapsed}
-        />
+        <>
+          <Tooltip title={collapsed ? i18n.t("mainDrawer.listItems.reports") : ""} placement="right">
+            <ListItem
+              dense
+              button
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpenReportsSubmenu((prev) => !prev);
+              }}
+              onMouseEnter={() => setReportsHover(true)}
+              onMouseLeave={() => setReportsHover(false)}
+              className={clsx(classes.listItem, viewMode === "modern" && classes.modernItem, (isReportsRouteActive || openReportsSubmenu) && "active")}
+            >
+              <ListItemIcon className={clsx(viewMode === "modern" && classes.modernIcon)}>
+                {viewMode === "modern" ? (
+                  <BarChartIcon />
+                ) : (
+                  <Avatar
+                    className={`${classes.iconHoverActive} ${isReportsRouteActive || reportsHover ? "active" : ""
+                      }`}
+                  >
+                    <BarChartIcon />
+                  </Avatar>
+                )}
+              </ListItemIcon>
+              <ListItemText
+                primary={
+                  <Typography className={clsx(classes.listItemText, viewMode === "modern" && classes.modernText)}>
+                    {i18n.t("mainDrawer.listItems.reports")}
+                  </Typography>
+                }
+              />
+              {openReportsSubmenu ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+            </ListItem>
+          </Tooltip>
+          <Collapse
+            in={openReportsSubmenu}
+            timeout="auto"
+            unmountOnExit
+            style={{
+              backgroundColor: theme.mode === "light" ? "rgba(120,120,120,0.1)" : "rgba(120,120,120,0.5)",
+            }}
+          >
+            <List dense component="div" disablePadding>
+              <ListItemLink
+                to="/closing-report"
+                primary={i18n.t("closingReport.title")}
+                icon={<Description />}
+                viewMode={viewMode}
+                tooltip={collapsed}
+              />
+              <ListItemLink
+                to="/ads-report"
+                primary={i18n.t("adsReport.title")}
+                icon={<TargetIcon />}
+                viewMode={viewMode}
+                tooltip={collapsed}
+              />
+              <ListItemLink
+                to="/call-report"
+                primary={i18n.t("callReport.title")}
+                icon={<PhoneCallIcon />}
+                viewMode={viewMode}
+                tooltip={collapsed}
+              />
+            </List>
+          </Collapse>
+        </>
       )}
 
       {/* 7. KANBAN */}

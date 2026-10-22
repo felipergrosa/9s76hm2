@@ -13,6 +13,16 @@ module.exports = {
 
     const tableInfo: any = await queryInterface.showAllTables();
     if (Array.isArray(tableInfo) && tableInfo.map(String).includes(table)) {
+      // Tabela já existe (boot anterior pode ter morrido antes do índice):
+      // garante o índice do relatório em vez de retornar direto.
+      const indexes = (await queryInterface.showIndex(table)) as Array<{
+        name?: string;
+      }>;
+      if (!indexes.some((idx) => idx.name === "call_logs_company_started_idx")) {
+        await queryInterface.addIndex(table, ["companyId", "startedAt"], {
+          name: "call_logs_company_started_idx"
+        });
+      }
       return;
     }
 

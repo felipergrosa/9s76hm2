@@ -1,12 +1,12 @@
 import React, { useState, useMemo, useEffect, useContext } from "react";
-import { makeStyles } from "@material-ui/core/styles";
+import { makeStyles, useTheme } from "@material-ui/core/styles";
 import { Typography, Tooltip, Card, CardContent, IconButton, Menu, MenuItem, ListItemText } from "@material-ui/core";
 import { Facebook, Instagram, WhatsApp, Close as CloseIcon, MoreVert as MoreVertIcon, AttachFile, EventAvailable } from "@material-ui/icons";
 import ContactAvatar from "../../components/ContactAvatar";
 import { i18n } from "../../translate/i18n";
 import { format, parseISO } from "date-fns";
 import { AuthContext } from "../../context/Auth/AuthContext";
-import { grey, blue } from "@material-ui/core/colors";
+import { grey } from "@material-ui/core/colors";
 import { Eye as VisibilityIcon } from "lucide-react";
 import ConversationPeekModal from "../../components/ConversationPeekModal";
 import { canViewTicketConversation } from "../../utils/ticketPreviewPermissions";
@@ -16,7 +16,7 @@ const useStyles = makeStyles(theme => ({
   ticketCard: {
     background: theme.palette.background.paper,
     borderRadius: 8,
-    border: "1px solid rgba(0, 0, 0, 0.05) !important",
+    border: `1px solid ${theme.palette.divider} !important`,
     boxShadow: "none !important",
     transition: "all 0.2s",
     marginBottom: 8,
@@ -52,7 +52,7 @@ const useStyles = makeStyles(theme => ({
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    border: "2px solid #fff",
+    border: `2px solid ${theme.palette.background.paper}`,
     boxShadow: "0 1px 2px rgba(0,0,0,0.15)",
     zIndex: 2,
   },
@@ -97,7 +97,7 @@ const useStyles = makeStyles(theme => ({
     alignItems: "center",
   },
   queueTag: {
-    backgroundColor: theme.palette.grey[300],
+    backgroundColor: theme.palette.action.selected,
     color: theme.palette.text.primary,
     marginRight: theme.spacing(1),
   },
@@ -147,7 +147,7 @@ const useStyles = makeStyles(theme => ({
     width: 10,
     height: 10,
     borderRadius: 999,
-    border: "1px solid #fff",
+    border: `1px solid ${theme.palette.background.paper}`,
     zIndex: 5,
   },
   // Barra de progresso
@@ -238,7 +238,7 @@ const useStyles = makeStyles(theme => ({
     display: "flex",
     alignItems: "center",
     padding: theme.spacing(1, 2),
-    backgroundColor: theme.palette.grey[100],
+    backgroundColor: theme.palette.action.hover,
   },
   messageAvatar: {
     marginRight: theme.spacing(1),
@@ -251,11 +251,12 @@ const useStyles = makeStyles(theme => ({
     position: "relative",
   },
   fromMe: {
-    backgroundColor: "#dcf8c6",
+    // Mesma convenção de cor do chat principal (MessagesList)
+    backgroundColor: theme.mode === 'light' ? "#dcf8c6" : "#005c4b",
     marginLeft: "auto",
   },
   fromThem: {
-    backgroundColor: "#f5f5f5",
+    backgroundColor: theme.mode === 'light' ? "#f5f5f5" : "#202c33",
   },
   messageTime: {
     fontSize: "0.75rem",
@@ -287,7 +288,7 @@ const useStyles = makeStyles(theme => ({
     right: -1,
     padding: 8,
     zIndex: 10,
-    color: blue[700],
+    color: theme.palette.primary.main,
     // Alvo de toque mínimo 44x44 no mobile (desce para não sobrepor o botão fechar)
     [theme.breakpoints.down("sm")]: {
       minWidth: 44,
@@ -306,6 +307,7 @@ const getPriorityFromUnread = (unread) => {
 
 export default function KanbanCard({ ticket, onClick, allTags = [], onMoveRequest, onEditDeal, onDeleteDeal, compact = false }) {
   const classes = useStyles();
+  const theme = useTheme();
   const { user } = useContext(AuthContext);
   const [menuEl, setMenuEl] = useState(null);
   const [moveEl, setMoveEl] = useState(null);
@@ -378,6 +380,16 @@ export default function KanbanCard({ ticket, onClick, allTags = [], onMoveReques
   const dealValue = Number(ticket?.value) || 0;
   const fmtBRL = (val) => Number(val).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
+  // Badges semânticas: tinta clara no light, translúcida no dark
+  const isLight = theme.mode === 'light';
+  const slaBadgeStyle = isLight
+    ? { backgroundColor: "#fdecea", color: "#b71c1c" }
+    : { backgroundColor: "rgba(239,83,80,0.25)", color: "#ef9a9a" };
+  const dealBadgeStyle = isLight
+    ? { backgroundColor: "#e8f5e9", color: "#2e7d32" }
+    : { backgroundColor: "rgba(102,187,106,0.25)", color: "#a5d6a7" };
+  const queueFallbackBg = isLight ? "#e0e0e0" : theme.palette.action.selected;
+
   const canPreviewConversation = useMemo(() => {
     return canViewTicketConversation({ ticket, user });
   }, [ticket, user]);
@@ -445,7 +457,7 @@ export default function KanbanCard({ ticket, onClick, allTags = [], onMoveReques
               </Typography>
               {slaOverdue && (
                 <Tooltip title={i18n.t('kanban.slaOverdueTooltip')}>
-                  <div className={classes.badge} style={{ backgroundColor: "#fdecea", color: "#b71c1c", textTransform: "uppercase" }}>
+                  <div className={classes.badge} style={{ ...slaBadgeStyle, textTransform: "uppercase" }}>
                     {i18n.t('kanban.slaBadge')}
                   </div>
                 </Tooltip>
@@ -454,7 +466,7 @@ export default function KanbanCard({ ticket, onClick, allTags = [], onMoveReques
                 <div
                   className={classes.badge}
                   style={{
-                    backgroundColor: ticket?.queue?.color || "#e0e0e0",
+                    backgroundColor: ticket?.queue?.color || queueFallbackBg,
                     color: ticket?.queue?.color ? "#fff" : "inherit",
                     textTransform: "uppercase"
                   }}
@@ -499,7 +511,7 @@ export default function KanbanCard({ ticket, onClick, allTags = [], onMoveReques
                 {isDeal && dealValue > 0 && (
                   <div
                     className={classes.badge}
-                    style={{ backgroundColor: "#e8f5e9", color: "#2e7d32", marginBottom: 4 }}
+                    style={{ ...dealBadgeStyle, marginBottom: 4 }}
                   >
                     {fmtBRL(dealValue)}
                   </div>
@@ -518,8 +530,8 @@ export default function KanbanCard({ ticket, onClick, allTags = [], onMoveReques
           {/* Barra de Progresso + Horário */}
           <div className={classes.progressWrap}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-              <Typography style={{ fontSize: '0.75rem', color: grey[600] }}>Progresso</Typography>
-              <Typography style={{ fontSize: '0.75rem', color: grey[600] }}>
+              <Typography style={{ fontSize: '0.75rem', color: theme.palette.text.secondary }}>Progresso</Typography>
+              <Typography style={{ fontSize: '0.75rem', color: theme.palette.text.secondary }}>
                 {format(parseISO(ticket.updatedAt), "HH:mm")}
               </Typography>
             </div>
@@ -534,7 +546,7 @@ export default function KanbanCard({ ticket, onClick, allTags = [], onMoveReques
               <Tooltip title={i18n.t('kanban.slaOverdueTooltip')}>
                 <div
                   className={classes.badge}
-                  style={{ backgroundColor: "#fdecea", color: "#b71c1c", textTransform: "uppercase" }}
+                  style={{ ...slaBadgeStyle, textTransform: "uppercase" }}
                 >
                   {i18n.t('kanban.slaBadge')}
                 </div>
@@ -571,7 +583,7 @@ export default function KanbanCard({ ticket, onClick, allTags = [], onMoveReques
               <div
                 className={`${classes.badge}`}
                 style={{
-                  backgroundColor: ticket?.queue?.color || "#e0e0e0",
+                  backgroundColor: ticket?.queue?.color || queueFallbackBg,
                   color: ticket?.queue?.color ? "#fff" : "inherit",
                   textTransform: "uppercase"
                 }}

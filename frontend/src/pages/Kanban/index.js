@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useContext, useMemo, useRef, useCallback } from "react";
-import { makeStyles } from "@material-ui/core/styles";
+import { makeStyles, useTheme } from "@material-ui/core/styles";
 import api from "../../services/api";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import KanbanLane from "./KanbanLane";
 import { debounce } from 'lodash';
 
-import ColorModeContext from "../../layout/themeContext";
 import { i18n } from "../../translate/i18n";
 import { useHistory } from 'react-router-dom';
 import { FilterList, Add, Refresh, AttachMoney, ViewCompact, ViewAgenda, Warning } from "@material-ui/icons";
@@ -160,6 +159,7 @@ const useStyles = makeStyles(theme => ({
 
 const Kanban = () => {
   const classes = useStyles();
+  const theme = useTheme();
 
   const history = useHistory();
   const { user, socket } = useContext(AuthContext);
@@ -169,8 +169,6 @@ const Kanban = () => {
   const [tags, setTags] = useState([]);
   const [tickets, setTickets] = useState([]);
 
-  const { colorMode } = useContext(ColorModeContext);
-  const { viewMode } = colorMode || {};
   const [file, setFile] = useState({ lanes: [] });
   const [startDate, setStartDate] = useState(format(startOfMonth(new Date()), "yyyy-MM-dd"));
   const [endDate, setEndDate] = useState(format(endOfMonth(new Date()), "yyyy-MM-dd"));
@@ -517,8 +515,10 @@ const Kanban = () => {
   const handleDragEnd = useCallback((result) => {
     const { source, destination, draggableId, type } = result;
 
+    // Drop fora de qualquer área ou drag cancelado -> destination é null
+    if (!source || !destination) return;
+
     if (type === "COLUMN") {
-      const { source, destination } = result;
       if (source.index === destination.index) return;
       // lane0 é fixo no índice 0
       if (source.index === 0 || destination.index === 0) return;
@@ -539,21 +539,6 @@ const Kanban = () => {
   const popularCards = useCallback((ticketsSource = tickets) => {
     const filteredTickets = applySearchAndSort((ticketsSource || []).filter(ticket => (ticket.tags || []).length === 0));
 
-    // Estilo padrão das lanes (colunas)
-    const laneStyle = {
-      backgroundColor: viewMode === "modern" ? "rgba(255, 255, 255, 0.4)" : "#f5f5f5",
-      backdropFilter: viewMode === "modern" ? "blur(10px)" : "none",
-      borderRadius: viewMode === "modern" ? 16 : 8,
-      border: viewMode === "modern" ? "1px solid rgba(255, 255, 255, 0.3)" : "1px solid rgba(0,0,0,0.12)",
-      maxHeight: "100%",
-      display: "flex",
-      flexDirection: "column",
-      minWidth: 350,
-      maxWidth: 350,
-      width: 350,
-      boxShadow: viewMode === "modern" ? "0 4px 20px rgba(0,0,0,0.05)" : "none",
-    };
-
     let lanes = [
       {
         id: "lane0",
@@ -563,7 +548,6 @@ const Kanban = () => {
         dealTotal: filteredTickets.reduce((acc, t) => acc + (t.isDeal ? Number(t.value) || 0 : 0), 0),
         tag: null,
         laneColor: '#5C5C5C', // Cor padrão para "Em aberto"
-        style: { ...laneStyle, borderTop: `4px solid #5C5C5C` }, // Borda colorida no topo
         cards: filteredTickets.map(ticket => ({
           id: ticket.id.toString(),
           ticket: ticket,
@@ -585,7 +569,6 @@ const Kanban = () => {
           dealTotal: dealSum,
           tag,
           laneColor: tag.color,
-          style: { ...laneStyle, borderTop: `4px solid ${tag.color}` }, // Borda colorida no topo
           cards: filteredTickets.map(ticket => ({
             id: ticket.id.toString(),
             ticket: ticket,
@@ -603,7 +586,7 @@ const Kanban = () => {
     } catch (e) { }
 
     setFile({ lanes });
-  }, [tickets, tags, applySearchAndSort, viewMode]);
+  }, [tickets, tags, applySearchAndSort]);
 
   useEffect(() => {
     popularCards();
@@ -940,7 +923,9 @@ const Kanban = () => {
                 icon={<AttachMoney style={{ fontSize: 16 }} />}
                 label={fmtBRL(pipelineTotal)}
                 size="small"
-                style={{ background: "#e8f5e9", color: "#2e7d32", fontWeight: 700 }}
+                style={theme.mode === 'light'
+                  ? { background: "#e8f5e9", color: "#2e7d32", fontWeight: 700 }
+                  : { background: "rgba(102,187,106,0.25)", color: "#a5d6a7", fontWeight: 700 }}
               />
             </Tooltip>
           )}
@@ -974,7 +959,11 @@ const Kanban = () => {
               clickable
               onClick={() => setSlaOnly(v => !v)}
               variant={slaOnly ? "default" : "outlined"}
-              style={slaOnly ? { background: "#fdecea", color: "#b71c1c", fontWeight: 700 } : {}}
+              style={slaOnly
+                ? (theme.mode === 'light'
+                  ? { background: "#fdecea", color: "#b71c1c", fontWeight: 700 }
+                  : { background: "rgba(239,83,80,0.25)", color: "#ef9a9a", fontWeight: 700 })
+                : {}}
             />
           </Tooltip>
 
@@ -1013,7 +1002,7 @@ const Kanban = () => {
                 {!file || !file.lanes ? (
                   <div style={{ display: 'flex', gap: 12 }}>
                     {[1, 2, 3].map(i => (
-                      <div key={i} style={{ width: 350, maxWidth: "80vw", flexShrink: 0, height: "100%", borderRadius: 8, padding: 8, background: '#f5f5f5' }} />
+                      <div key={i} style={{ width: 350, maxWidth: "80vw", flexShrink: 0, height: "100%", borderRadius: 8, padding: 8, background: theme.palette.background.paper }} />
                     ))}
                   </div>
                 ) : file.lanes.length === 0 || file.lanes.every(l => (l.cards || []).length === 0) ? (
@@ -1133,7 +1122,7 @@ const Kanban = () => {
                     onClick={() => setLaneForm(f => ({ ...f, color: c }))}
                     style={{
                       width: 28, height: 28, borderRadius: "50%", background: c, cursor: "pointer",
-                      border: laneForm.color === c ? "3px solid #000" : "3px solid transparent",
+                      border: laneForm.color === c ? `3px solid ${theme.palette.text.primary}` : "3px solid transparent",
                       outline: laneForm.color === c ? `2px solid ${c}` : "none",
                       outlineOffset: 2,
                       transform: laneForm.color === c ? "scale(1.15)" : "scale(1)",

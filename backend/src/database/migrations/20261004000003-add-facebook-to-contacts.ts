@@ -2,18 +2,28 @@ import { QueryInterface, DataTypes } from "sequelize";
 
 module.exports = {
   up: async (queryInterface: QueryInterface) => {
-    return queryInterface.sequelize.transaction(async (transaction) => {
+    const tableInfo = (await queryInterface.describeTable("Contacts")) as Record<
+      string,
+      any
+    >;
+
+    if (!tableInfo.facebook) {
       await queryInterface.addColumn("Contacts", "facebook", {
         type: DataTypes.STRING,
         allowNull: true,
         defaultValue: null
-      }, { transaction });
-    });
+      });
+    }
   },
 
   down: async (queryInterface: QueryInterface) => {
-    return queryInterface.sequelize.transaction(async (transaction) => {
-      await queryInterface.removeColumn("Contacts", "facebook", { transaction });
-    });
+    const tableInfo = (await queryInterface.describeTable("Contacts")) as Record<
+      string,
+      any
+    >;
+
+    if (tableInfo.facebook) {
+      await queryInterface.removeColumn("Contacts", "facebook");
+    }
   }
 };
