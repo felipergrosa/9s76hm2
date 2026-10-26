@@ -10,7 +10,7 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 // TokenOlist                         googleSheets               [creds]
 // LeUltimaExecucao                   googleSheets               [creds]
 // RefreshTokenOlist                  httpRequest
-// SalvaNovoToken                     googleSheets               [creds]
+// SalvaNovoToken                     googleSheets               [creds] [retry]
 // ChecaValidadeToken                 code
 // TokenAindaValido                   if
 // TokenAtivo                         code
@@ -102,7 +102,12 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
     active: true,
     isArchived: false,
     tags: ['ZEUS'],
-    settings: { executionOrder: 'v1', callerPolicy: 'workflowsFromSameOwner', availableInMCP: false },
+    settings: {
+        executionOrder: 'v1',
+        callerPolicy: 'workflowsFromSameOwner',
+        availableInMCP: false,
+        binaryMode: 'separate',
+    },
 })
 export class ZeusBuscaPedidosOlistSqlserverWorkflow {
     // =====================================================================
@@ -218,6 +223,9 @@ export class ZeusBuscaPedidosOlistSqlserverWorkflow {
         version: 4.6,
         position: [752, -272],
         credentials: { googleSheetsOAuth2Api: { id: 'TiPhH1FEnU2CjOmH', name: 'V2 n8n' } },
+        retryOnFail: true,
+        maxTries: 3,
+        waitBetweenTries: 3000,
     })
     SalvaNovoToken = {
         operation: 'appendOrUpdate',

@@ -42,7 +42,7 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 // MontaItensSql                      code
 // SalvaUltimaExecucao                googleSheets               [creds]
 // ScheduleTrigger                    scheduleTrigger
-// SalvaNovoToken                     googleSheets               [creds]
+// SalvaNovoToken                     googleSheets               [creds] [retry]
 // BuscaPedidos                       stickyNote
 //
 // ROUTING MAP
@@ -102,7 +102,12 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
     active: true,
     isArchived: false,
     tags: ['NOBRE'],
-    settings: { executionOrder: 'v1', callerPolicy: 'workflowsFromSameOwner', availableInMCP: false },
+    settings: {
+        executionOrder: 'v1',
+        callerPolicy: 'workflowsFromSameOwner',
+        availableInMCP: false,
+        binaryMode: 'separate',
+    },
 })
 export class NobreBuscaPedidosOlistSqlserverWorkflow {
     // =====================================================================
@@ -1044,6 +1049,9 @@ return itens.map((item) => {
         version: 4.6,
         position: [1504, -16],
         credentials: { googleSheetsOAuth2Api: { id: 'TiPhH1FEnU2CjOmH', name: 'V2 n8n' } },
+        retryOnFail: true,
+        maxTries: 3,
+        waitBetweenTries: 3000,
     })
     SalvaNovoToken = {
         operation: 'appendOrUpdate',
