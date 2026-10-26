@@ -29,7 +29,6 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
     name: 'ZEUS Troca Code OAuth Olist',
     active: false,
     isArchived: false,
-    projectId: 'wFXnwjlGyuHoHb3z',
     tags: ['ZEUS'],
     settings: { executionOrder: 'v1', callerPolicy: 'workflowsFromSameOwner', availableInMCP: false },
 })
@@ -105,7 +104,7 @@ return [{ json: { code: CODE } }];`,
                 },
                 {
                     name: 'redirect_uri',
-                    value: 'https://n8n.nobreluminarias.com.br/webhook-test/auth-placeholder',
+                    value: 'https://n8n.nobreluminarias.com.br/webhook/olist-auth',
                 },
             ],
         },

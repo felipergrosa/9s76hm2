@@ -25,7 +25,6 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
     name: 'ZEUS Autorizacao Inicial Olist',
     active: false,
     isArchived: false,
-    projectId: 'wFXnwjlGyuHoHb3z',
     tags: ['ZEUS'],
     settings: { executionOrder: 'v1', callerPolicy: 'workflowsFromSameOwner', availableInMCP: false },
 })
@@ -52,7 +51,7 @@ export class ZeusAutorizacaoInicialOlistWorkflow {
     })
     GeraUrlAuth = {
         jsCode: `const clientId = 'tiny-api-7eda645c546d1ef5060712274b7acc144eddcd04-1748567574';
-const redirectUri = 'https://n8n.nobreluminarias.com.br/webhook-test/a267c1e6-bf23-4fac-8e6e-69e00a3aft';
+const redirectUri = 'https://n8n.nobreluminarias.com.br/webhook/olist-auth';
 
 const authUrl = \`https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/auth?response_type=code&client_id=\${clientId}&redirect_uri=\${encodeURIComponent(redirectUri)}\`;
 
