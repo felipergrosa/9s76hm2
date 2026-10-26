@@ -1,0 +1,1842 @@
+{
+  "id": "1121324",
+  "finished": false,
+  "mode": "trigger",
+  "retryOf": null,
+  "retrySuccessId": null,
+  "startedAt": "2026-10-26T15:00:52.073Z",
+  "stoppedAt": "2026-10-26T15:00:52.978Z",
+  "workflowId": "190oc7uwtrLMiQxN",
+  "waitTill": null,
+  "customData": {},
+  "status": "error",
+  "data": {
+    "version": 1,
+    "startData": {},
+    "resultData": {
+      "runData": {
+        "Schedule Trigger": [
+          {
+            "startTime": 1793026852102,
+            "executionIndex": 0,
+            "source": [],
+            "hints": [],
+            "executionTime": 2,
+            "executionStatus": "success",
+            "data": {
+              "main": [
+                [
+                  {
+                    "json": {
+                      "timestamp": "2026-10-26T12:00:52.010-03:00",
+                      "Readable date": "October 26th 2026, 12:00:52 pm",
+                      "Readable time": "12:00:52 pm",
+                      "Day of week": "Monday",
+                      "Year": "2026",
+                      "Month": "October",
+                      "Day of month": "26",
+                      "Hour": "12",
+                      "Minute": "00",
+                      "Second": "52",
+                      "Timezone": "America/Sao_Paulo (UTC-03:00)"
+                    },
+                    "pairedItem": {
+                      "item": 0
+                    }
+                  }
+                ]
+              ]
+            }
+          }
+        ],
+        "Token Olist": [
+          {
+            "startTime": 1793026852104,
+            "executionIndex": 1,
+            "source": [
+              {
+                "previousNode": "Schedule Trigger",
+                "previousNodeOutput": 0,
+                "previousNodeRun": 0
+              }
+            ],
+            "hints": [],
+            "executionTime": 660,
+            "executionStatus": "success",
+            "data": {
+              "main": [
+                [
+                  {
+                    "json": {
+                      "row_number": 3,
+                      "linha": 2,
+                      "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJnWXk2cDhkQkU0dDBkZkFvU0J4WkJvbDBkYmpTcEF5Z3FpQm1vY3pMcXJVIn0.eyJleHAiOjE3OTI3OTQ2NTIsImlhdCI6MTc5Mjc4MDI1MiwiYXV0aF90aW1lIjoxNzc5MDM0OTUyLCJqdGkiOiJhZDMxMGZjNS00ZDQ5LTRjOWYtOTg5ZC1hYTRlZmI3NjdhMzciLCJpc3MiOiJodHRwczovL2FjY291bnRzLnRpbnkuY29tLmJyL3JlYWxtcy90aW55IiwiYXVkIjoidGlueS1hcGkiLCJzdWIiOiJlODdkNWUyOC1iYTIyLTRjMjMtYmZlNi0wZGM3ZDAzYjM1NjgiLCJ0eXAiOiJCZWFyZXIiLCJhenAiOiJ0aW55LWFwaS01MzE5NmYxMGFhNWU2MWUxZDM1Nzc2MThlYTJiOGFjNGYyNDEzNmE4LTE3NDg5MTM0MDciLCJzZXNzaW9uX3N0YXRlIjoiMzc4ODE5NjktODlmZS00MTVlLTgwODUtMmZkNjc3MTZjYTRkIiwic2NvcGUiOiJlbWFpbCBvZmZsaW5lX2FjY2VzcyIsInNpZCI6IjM3ODgxOTY5LTg5ZmUtNDE1ZS04MDg1LTJmZDY3NzE2Y2E0ZCIsImVtYWlsX3ZlcmlmaWVkIjpmYWxzZSwicm9sZXMiOnsidGlueS1hcGkiOlsibWFyY2FzLWVzY3JpdGEiLCJwZWRpZG9zLWxlaXR1cmEiLCJlc3RvcXVlLWxlaXR1cmEiLCJjcm0tZXhjbHVzYW8iLCJzZXJ2aWNvcy1leGNsdXNhbyIsIm5vdGFzLWZpc2NhaXMtZXNjcml0YSIsImNybS1sZWl0dXJhIiwiY29udGF0b3MtZXhjbHVzYW8iLCJpbmZvLWNvbnRhLWxlaXR1cmEiLCJwcm9kdXRvcy1leGNsdXNhbyIsImxpc3RhLXByZWNvcy1sZWl0dXJhIiwibGlzdGEtcHJlY29zLWVzY3JpdGEiLCJzZXJ2aWNvcy1lc2NyaXRhIiwiY2F0ZWdvcmlhcy1sZWl0dXJhIiwiZXhwZWRpY2FvLWV4Y2x1c2FvIiwic2VwYXJhY2FvLWxlaXR1cmEiLCJmb3JtYS1lbnZpby1sZWl0dXJhIiwicHJvZHV0b3MtbGVpdHVyYSIsImZvcm1hLXJlY2ViaW1lbnRvLWxlaXR1cmEiLCJvcmRlbS1jb21wcmEtbGVpdHVyYSIsImV4cGVkaWNhby1sZWl0dXJhIiwiY29udGF0b3MtZXNjcml0YSIsIm5vdGFzLWZpc2NhaXMtbGVpdHVyYSIsInBlZGlkb3MtZXNjcml0YSIsImNvbnRhcy1wYWdhci1lc2NyaXRhIiwib3JkZW0tc2Vydmljby1sZWl0dXJhIiwiY29udGFzLXBhZ2FyLWxlaXR1cmEiLCJleHBlZGljYW8tZXNjcml0YSIsImNvbnRhcy1yZWNlYmVyLWxlaXR1cmEiLCJzZXBhcmFjYW8tZXNjcml0YSIsIm1hcmNhcy1sZWl0dXJhIiwiY2F0ZWdvcmlhcy1leGNsdXNhbyIsImNhdGVnb3JpYXMtZXNjcml0YSIsImZvcm1hLXBhZ2FtZW50by1sZWl0dXJhIiwiaW50ZXJtZWRpYWRvcmVzLWxlaXR1cmEiLCJnYXRpbGhvcyIsImVzdG9xdWUtZXNjcml0YSIsInByb2R1dG9zLWVzY3JpdGEiLCJ1c3Vhcmlvcy1sZWl0dXJhIiwiY3JtLWVzY3JpdGEiLCJvcmRlbS1zZXJ2aWNvLWVzY3JpdGEiLCJjb250YXMtcmVjZWJlci1lc2NyaXRhIiwic2Vydmljb3MtbGVpdHVyYSIsImNvbnRhdG9zLWxlaXR1cmEiLCJwZWRpZG9zLWV4Y2x1c2FvIiwiZGVwb3NpdG9zLWxlaXR1cmEiLCJvcmRlbS1jb21wcmEtZXNjcml0YSIsIm5vdGFzLWZpc2NhaXMtZXhjbHVzYW8iXX0sImVtYWlsIjoiY29tZXJjaWFsQG5vYnJlbHVtaW5hcmlhcy5jb20uYnIifQ.OifxnQToDdP_y36mo_8dx9CWqrFjr66OG-e3F7jVo9WZtGDc5CuD-Gn7ew2Cf4H9H22xEfJhw5sDFh_GtV1l7YZ2JfE9yZ44hP02rBN_fAepGVov-qjeYI0QDeUDf5bVmgh3xXlbFS6GGuYmO0_fMmxr17ttIEo-QW5VbgSnG_Ua89hT4lrtLWKfb5_pZ9LMqB-GMQdUH7g4oyQ0NOzGnS2U2-l4SjWQSN3td9e_r6pqI2051mEIjQv88hwW9qnuwgPx76NntSrUqKibOR2sywORveZeccUqIaLtviFSxocBMqh3n23yTOWprJ6L0yFXnABdChZpK7vgTrU7BQBbxQ",
+                      "expires_in": 14400,
+                      "refresh_expires_in": 86400,
+                      "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICI5MDNkY2IxNi0xNTgwLTQ0NzYtYWY0Mi1lYTFkN2YyNzY4MjcifQ.eyJleHAiOjE3OTI4NjY2NTIsImlhdCI6MTc5Mjc4MDI1MiwianRpIjoiMjYzM2RjYTgtMGUwMy00YjI0LWJiODItZmVmN2Y4ZDcwOGNlIiwiaXNzIjoiaHR0cHM6Ly9hY2NvdW50cy50aW55LmNvbS5ici9yZWFsbXMvdGlueSIsImF1ZCI6Imh0dHBzOi8vYWNjb3VudHMudGlueS5jb20uYnIvcmVhbG1zL3RpbnkiLCJzdWIiOiJlODdkNWUyOC1iYTIyLTRjMjMtYmZlNi0wZGM3ZDAzYjM1NjgiLCJ0eXAiOiJPZmZsaW5lIiwiYXpwIjoidGlueS1hcGktNTMxOTZmMTBhYTVlNjFlMWQzNTc3NjE4ZWEyYjhhYzRmMjQxMzZhOC0xNzQ4OTEzNDA3Iiwic2Vzc2lvbl9zdGF0ZSI6IjM3ODgxOTY5LTg5ZmUtNDE1ZS04MDg1LTJmZDY3NzE2Y2E0ZCIsInNjb3BlIjoiZW1haWwgb2ZmbGluZV9hY2Nlc3MiLCJzaWQiOiIzNzg4MTk2OS04OWZlLTQxNWUtODA4NS0yZmQ2NzcxNmNhNGQifQ.PCznXEmP8qsg8ahZk2es_CTm9Fr-bDbIa6pkSjx5bPQ",
+                      "token_type": "Bearer",
+                      "id_token": "",
+                      "not-before-policy": 0,
+                      "session_state": "37881969-89fe-415e-8085-2fd67716ca4d",
+                      "scope": "email offline_access"
+                    },
+                    "pairedItem": {
+                      "item": 0
+                    }
+                  }
+                ]
+              ]
+            }
+          }
+        ],
+        "Refresh Token Olist": [
+          {
+            "startTime": 1793026852764,
+            "executionIndex": 2,
+            "source": [
+              {
+                "previousNode": "Token Olist",
+                "previousNodeOutput": 0,
+                "previousNodeRun": 0
+              }
+            ],
+            "hints": [],
+            "executionTime": 211,
+            "executionStatus": "error",
+            "error": {
+              "level": "warning",
+              "shouldReport": true,
+              "description": "invalid_grant",
+              "tags": {},
+              "timestamp": 1793026852974,
+              "context": {
+                "itemIndex": 0,
+                "request": {
+                  "headers": {
+                    "authorization": "**hidden**",
+                    "accept": "application/json,text/html,application/xhtml+xml,application/xml,text/*;q=0.9, image/*;q=0.8, */*;q=0.7",
+                    "Content-Type": "application/x-www-form-urlencoded"
+                  },
+                  "method": "POST",
+                  "uri": "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token",
+                  "gzip": true,
+                  "rejectUnauthorized": true,
+                  "followRedirect": true,
+                  "resolveWithFullResponse": true,
+                  "sendCredentialsOnCrossOriginRedirect": true,
+                  "followAllRedirects": true,
+                  "timeout": 300000,
+                  "form": {
+                    "grant_type": "refresh_token",
+                    "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICI5MDNkY2IxNi0xNTgwLTQ0NzYtYWY0Mi1lYTFkN2YyNzY4MjcifQ.eyJleHAiOjE3OTI4NjY2NTIsImlhdCI6MTc5Mjc4MDI1MiwianRpIjoiMjYzM2RjYTgtMGUwMy00YjI0LWJiODItZmVmN2Y4ZDcwOGNlIiwiaXNzIjoiaHR0cHM6Ly9hY2NvdW50cy50aW55LmNvbS5ici9yZWFsbXMvdGlueSIsImF1ZCI6Imh0dHBzOi8vYWNjb3VudHMudGlueS5jb20uYnIvcmVhbG1zL3RpbnkiLCJzdWIiOiJlODdkNWUyOC1iYTIyLTRjMjMtYmZlNi0wZGM3ZDAzYjM1NjgiLCJ0eXAiOiJPZmZsaW5lIiwiYXpwIjoidGlueS1hcGktNTMxOTZmMTBhYTVlNjFlMWQzNTc3NjE4ZWEyYjhhYzRmMjQxMzZhOC0xNzQ4OTEzNDA3Iiwic2Vzc2lvbl9zdGF0ZSI6IjM3ODgxOTY5LTg5ZmUtNDE1ZS04MDg1LTJmZDY3NzE2Y2E0ZCIsInNjb3BlIjoiZW1haWwgb2ZmbGluZV9hY2Nlc3MiLCJzaWQiOiIzNzg4MTk2OS04OWZlLTQxNWUtODA4NS0yZmQ2NzcxNmNhNGQifQ.PCznXEmP8qsg8ahZk2es_CTm9Fr-bDbIa6pkSjx5bPQ"
+                  },
+                  "encoding": null,
+                  "json": false,
+                  "useStream": true
+                }
+              },
+              "functionality": "regular",
+              "name": "NodeApiError",
+              "node": {
+                "id": "82b8f7e1-eaa5-4ef3-a61a-8feb1eede590",
+                "name": "Refresh Token Olist",
+                "type": "n8n-nodes-base.httpRequest",
+                "typeVersion": 4.2,
+                "position": [
+                  1232,
+                  -16
+                ],
+                "parameters": {
+                  "curlImport": "",
+                  "method": "POST",
+                  "url": "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token",
+                  "authentication": "none",
+                  "provideSslCertificates": false,
+                  "sendQuery": false,
+                  "sendHeaders": true,
+                  "specifyHeaders": "keypair",
+                  "headerParameters": {
+                    "parameters": [
+                      {
+                        "name": "Authorization",
+                        "value": "Basic dGlueS1hcGktNTMxOTZmMTBhYTVlNjFlMWQzNTc3NjE4ZWEyYjhhYzRmMjQxMzZhOC0xNzQ4OTEzNDA3OjhnSU9KczNmeE5FZVVmcjBkVVl0M2VzajlESm5VQjRK"
+                      }
+                    ]
+                  },
+                  "sendBody": true,
+                  "contentType": "form-urlencoded",
+                  "specifyBody": "keypair",
+                  "bodyParameters": {
+                    "parameters": [
+                      {
+                        "name": "grant_type",
+                        "value": "refresh_token"
+                      },
+                      {
+                        "name": "refresh_token",
+                        "value": "={{ $json.refresh_token }}"
+                      }
+                    ]
+                  },
+                  "options": {},
+                  "infoMessage": ""
+                }
+              },
+              "messages": [
+                "400 - \"{\\\"error\\\":\\\"invalid_grant\\\",\\\"error_description\\\":\\\"Token is not active\\\"}\""
+              ],
+              "httpCode": "400",
+              "message": "Bad request - please check your parameters",
+              "stack": "NodeApiError: Bad request - please check your parameters\n    at ExecuteContext.execute (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/n8n-nodes-base@file++++home+runner+_work+n8n+n8n+packages+nodes-base/node_modules/n8n-nodes-base/nodes/HttpRequest/V3/HttpRequestV3.node.ts:892:16)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at WorkflowExecute.executeNode (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/n8n-core@file++++home+runner+_work+n8n+n8n+packages+core/node_modules/n8n-core/src/execution-engine/workflow-execute.ts:1154:8)\n    at WorkflowExecute.runNode (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/n8n-core@file++++home+runner+_work+n8n+n8n+packages+core/node_modules/n8n-core/src/execution-engine/workflow-execute.ts:1456:11)\n    at /usr/local/lib/node_modules/n8n/node_modules/.pnpm/n8n-core@file++++home+runner+_work+n8n+n8n+packages+core/node_modules/n8n-core/src/execution-engine/workflow-execute.ts:2383:27\n    at /usr/local/lib/node_modules/n8n/node_modules/.pnpm/n8n-core@file++++home+runner+_work+n8n+n8n+packages+core/node_modules/n8n-core/src/execution-engine/workflow-execute.ts:2864:11"
+            }
+          }
+        ]
+      },
+      "lastNodeExecuted": "Refresh Token Olist",
+      "error": {
+        "level": "warning",
+        "shouldReport": true,
+        "description": "invalid_grant",
+        "tags": {},
+        "timestamp": 1793026852974,
+        "context": {
+          "itemIndex": 0,
+          "request": {
+            "headers": {
+              "authorization": "**hidden**",
+              "accept": "application/json,text/html,application/xhtml+xml,application/xml,text/*;q=0.9, image/*;q=0.8, */*;q=0.7",
+              "Content-Type": "application/x-www-form-urlencoded"
+            },
+            "method": "POST",
+            "uri": "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token",
+            "gzip": true,
+            "rejectUnauthorized": true,
+            "followRedirect": true,
+            "resolveWithFullResponse": true,
+            "sendCredentialsOnCrossOriginRedirect": true,
+            "followAllRedirects": true,
+            "timeout": 300000,
+            "form": {
+              "grant_type": "refresh_token",
+              "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICI5MDNkY2IxNi0xNTgwLTQ0NzYtYWY0Mi1lYTFkN2YyNzY4MjcifQ.eyJleHAiOjE3OTI4NjY2NTIsImlhdCI6MTc5Mjc4MDI1MiwianRpIjoiMjYzM2RjYTgtMGUwMy00YjI0LWJiODItZmVmN2Y4ZDcwOGNlIiwiaXNzIjoiaHR0cHM6Ly9hY2NvdW50cy50aW55LmNvbS5ici9yZWFsbXMvdGlueSIsImF1ZCI6Imh0dHBzOi8vYWNjb3VudHMudGlueS5jb20uYnIvcmVhbG1zL3RpbnkiLCJzdWIiOiJlODdkNWUyOC1iYTIyLTRjMjMtYmZlNi0wZGM3ZDAzYjM1NjgiLCJ0eXAiOiJPZmZsaW5lIiwiYXpwIjoidGlueS1hcGktNTMxOTZmMTBhYTVlNjFlMWQzNTc3NjE4ZWEyYjhhYzRmMjQxMzZhOC0xNzQ4OTEzNDA3Iiwic2Vzc2lvbl9zdGF0ZSI6IjM3ODgxOTY5LTg5ZmUtNDE1ZS04MDg1LTJmZDY3NzE2Y2E0ZCIsInNjb3BlIjoiZW1haWwgb2ZmbGluZV9hY2Nlc3MiLCJzaWQiOiIzNzg4MTk2OS04OWZlLTQxNWUtODA4NS0yZmQ2NzcxNmNhNGQifQ.PCznXEmP8qsg8ahZk2es_CTm9Fr-bDbIa6pkSjx5bPQ"
+            },
+            "encoding": null,
+            "json": false,
+            "useStream": true
+          }
+        },
+        "functionality": "regular",
+        "name": "NodeApiError",
+        "node": {
+          "id": "82b8f7e1-eaa5-4ef3-a61a-8feb1eede590",
+          "name": "Refresh Token Olist",
+          "type": "n8n-nodes-base.httpRequest",
+          "typeVersion": 4.2,
+          "position": [
+            1232,
+            -16
+          ],
+          "parameters": {
+            "curlImport": "",
+            "method": "POST",
+            "url": "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token",
+            "authentication": "none",
+            "provideSslCertificates": false,
+            "sendQuery": false,
+            "sendHeaders": true,
+            "specifyHeaders": "keypair",
+            "headerParameters": {
+              "parameters": [
+                {
+                  "name": "Authorization",
+                  "value": "Basic dGlueS1hcGktNTMxOTZmMTBhYTVlNjFlMWQzNTc3NjE4ZWEyYjhhYzRmMjQxMzZhOC0xNzQ4OTEzNDA3OjhnSU9KczNmeE5FZVVmcjBkVVl0M2VzajlESm5VQjRK"
+                }
+              ]
+            },
+            "sendBody": true,
+            "contentType": "form-urlencoded",
+            "specifyBody": "keypair",
+            "bodyParameters": {
+              "parameters": [
+                {
+                  "name": "grant_type",
+                  "value": "refresh_token"
+                },
+                {
+                  "name": "refresh_token",
+                  "value": "={{ $json.refresh_token }}"
+                }
+              ]
+            },
+            "options": {},
+            "infoMessage": ""
+          }
+        },
+        "messages": [
+          "400 - \"{\\\"error\\\":\\\"invalid_grant\\\",\\\"error_description\\\":\\\"Token is not active\\\"}\""
+        ],
+        "httpCode": "400",
+        "message": "Bad request - please check your parameters",
+        "stack": "NodeApiError: Bad request - please check your parameters\n    at ExecuteContext.execute (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/n8n-nodes-base@file++++home+runner+_work+n8n+n8n+packages+nodes-base/node_modules/n8n-nodes-base/nodes/HttpRequest/V3/HttpRequestV3.node.ts:892:16)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at WorkflowExecute.executeNode (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/n8n-core@file++++home+runner+_work+n8n+n8n+packages+core/node_modules/n8n-core/src/execution-engine/workflow-execute.ts:1154:8)\n    at WorkflowExecute.runNode (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/n8n-core@file++++home+runner+_work+n8n+n8n+packages+core/node_modules/n8n-core/src/execution-engine/workflow-execute.ts:1456:11)\n    at /usr/local/lib/node_modules/n8n/node_modules/.pnpm/n8n-core@file++++home+runner+_work+n8n+n8n+packages+core/node_modules/n8n-core/src/execution-engine/workflow-execute.ts:2383:27\n    at /usr/local/lib/node_modules/n8n/node_modules/.pnpm/n8n-core@file++++home+runner+_work+n8n+n8n+packages+core/node_modules/n8n-core/src/execution-engine/workflow-execute.ts:2864:11"
+      }
+    },
+    "executionData": {
+      "contextData": {},
+      "nodeExecutionStack": [
+        {
+          "node": {
+            "id": "82b8f7e1-eaa5-4ef3-a61a-8feb1eede590",
+            "name": "Refresh Token Olist",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+              1232,
+              -16
+            ],
+            "parameters": {
+              "curlImport": "",
+              "method": "POST",
+              "url": "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token",
+              "authentication": "none",
+              "provideSslCertificates": false,
+              "sendQuery": false,
+              "sendHeaders": true,
+              "specifyHeaders": "keypair",
+              "headerParameters": {
+                "parameters": [
+                  {
+                    "name": "Authorization",
+                    "value": "Basic dGlueS1hcGktNTMxOTZmMTBhYTVlNjFlMWQzNTc3NjE4ZWEyYjhhYzRmMjQxMzZhOC0xNzQ4OTEzNDA3OjhnSU9KczNmeE5FZVVmcjBkVVl0M2VzajlESm5VQjRK"
+                  }
+                ]
+              },
+              "sendBody": true,
+              "contentType": "form-urlencoded",
+              "specifyBody": "keypair",
+              "bodyParameters": {
+                "parameters": [
+                  {
+                    "name": "grant_type",
+                    "value": "refresh_token"
+                  },
+                  {
+                    "name": "refresh_token",
+                    "value": "={{ $json.refresh_token }}"
+                  }
+                ]
+              },
+              "options": {},
+              "infoMessage": ""
+            }
+          },
+          "data": {
+            "main": [
+              [
+                {
+                  "json": {
+                    "row_number": 3,
+                    "linha": 2,
+                    "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJnWXk2cDhkQkU0dDBkZkFvU0J4WkJvbDBkYmpTcEF5Z3FpQm1vY3pMcXJVIn0.eyJleHAiOjE3OTI3OTQ2NTIsImlhdCI6MTc5Mjc4MDI1MiwiYXV0aF90aW1lIjoxNzc5MDM0OTUyLCJqdGkiOiJhZDMxMGZjNS00ZDQ5LTRjOWYtOTg5ZC1hYTRlZmI3NjdhMzciLCJpc3MiOiJodHRwczovL2FjY291bnRzLnRpbnkuY29tLmJyL3JlYWxtcy90aW55IiwiYXVkIjoidGlueS1hcGkiLCJzdWIiOiJlODdkNWUyOC1iYTIyLTRjMjMtYmZlNi0wZGM3ZDAzYjM1NjgiLCJ0eXAiOiJCZWFyZXIiLCJhenAiOiJ0aW55LWFwaS01MzE5NmYxMGFhNWU2MWUxZDM1Nzc2MThlYTJiOGFjNGYyNDEzNmE4LTE3NDg5MTM0MDciLCJzZXNzaW9uX3N0YXRlIjoiMzc4ODE5NjktODlmZS00MTVlLTgwODUtMmZkNjc3MTZjYTRkIiwic2NvcGUiOiJlbWFpbCBvZmZsaW5lX2FjY2VzcyIsInNpZCI6IjM3ODgxOTY5LTg5ZmUtNDE1ZS04MDg1LTJmZDY3NzE2Y2E0ZCIsImVtYWlsX3ZlcmlmaWVkIjpmYWxzZSwicm9sZXMiOnsidGlueS1hcGkiOlsibWFyY2FzLWVzY3JpdGEiLCJwZWRpZG9zLWxlaXR1cmEiLCJlc3RvcXVlLWxlaXR1cmEiLCJjcm0tZXhjbHVzYW8iLCJzZXJ2aWNvcy1leGNsdXNhbyIsIm5vdGFzLWZpc2NhaXMtZXNjcml0YSIsImNybS1sZWl0dXJhIiwiY29udGF0b3MtZXhjbHVzYW8iLCJpbmZvLWNvbnRhLWxlaXR1cmEiLCJwcm9kdXRvcy1leGNsdXNhbyIsImxpc3RhLXByZWNvcy1sZWl0dXJhIiwibGlzdGEtcHJlY29zLWVzY3JpdGEiLCJzZXJ2aWNvcy1lc2NyaXRhIiwiY2F0ZWdvcmlhcy1sZWl0dXJhIiwiZXhwZWRpY2FvLWV4Y2x1c2FvIiwic2VwYXJhY2FvLWxlaXR1cmEiLCJmb3JtYS1lbnZpby1sZWl0dXJhIiwicHJvZHV0b3MtbGVpdHVyYSIsImZvcm1hLXJlY2ViaW1lbnRvLWxlaXR1cmEiLCJvcmRlbS1jb21wcmEtbGVpdHVyYSIsImV4cGVkaWNhby1sZWl0dXJhIiwiY29udGF0b3MtZXNjcml0YSIsIm5vdGFzLWZpc2NhaXMtbGVpdHVyYSIsInBlZGlkb3MtZXNjcml0YSIsImNvbnRhcy1wYWdhci1lc2NyaXRhIiwib3JkZW0tc2Vydmljby1sZWl0dXJhIiwiY29udGFzLXBhZ2FyLWxlaXR1cmEiLCJleHBlZGljYW8tZXNjcml0YSIsImNvbnRhcy1yZWNlYmVyLWxlaXR1cmEiLCJzZXBhcmFjYW8tZXNjcml0YSIsIm1hcmNhcy1sZWl0dXJhIiwiY2F0ZWdvcmlhcy1leGNsdXNhbyIsImNhdGVnb3JpYXMtZXNjcml0YSIsImZvcm1hLXBhZ2FtZW50by1sZWl0dXJhIiwiaW50ZXJtZWRpYWRvcmVzLWxlaXR1cmEiLCJnYXRpbGhvcyIsImVzdG9xdWUtZXNjcml0YSIsInByb2R1dG9zLWVzY3JpdGEiLCJ1c3Vhcmlvcy1sZWl0dXJhIiwiY3JtLWVzY3JpdGEiLCJvcmRlbS1zZXJ2aWNvLWVzY3JpdGEiLCJjb250YXMtcmVjZWJlci1lc2NyaXRhIiwic2Vydmljb3MtbGVpdHVyYSIsImNvbnRhdG9zLWxlaXR1cmEiLCJwZWRpZG9zLWV4Y2x1c2FvIiwiZGVwb3NpdG9zLWxlaXR1cmEiLCJvcmRlbS1jb21wcmEtZXNjcml0YSIsIm5vdGFzLWZpc2NhaXMtZXhjbHVzYW8iXX0sImVtYWlsIjoiY29tZXJjaWFsQG5vYnJlbHVtaW5hcmlhcy5jb20uYnIifQ.OifxnQToDdP_y36mo_8dx9CWqrFjr66OG-e3F7jVo9WZtGDc5CuD-Gn7ew2Cf4H9H22xEfJhw5sDFh_GtV1l7YZ2JfE9yZ44hP02rBN_fAepGVov-qjeYI0QDeUDf5bVmgh3xXlbFS6GGuYmO0_fMmxr17ttIEo-QW5VbgSnG_Ua89hT4lrtLWKfb5_pZ9LMqB-GMQdUH7g4oyQ0NOzGnS2U2-l4SjWQSN3td9e_r6pqI2051mEIjQv88hwW9qnuwgPx76NntSrUqKibOR2sywORveZeccUqIaLtviFSxocBMqh3n23yTOWprJ6L0yFXnABdChZpK7vgTrU7BQBbxQ",
+                    "expires_in": 14400,
+                    "refresh_expires_in": 86400,
+                    "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICI5MDNkY2IxNi0xNTgwLTQ0NzYtYWY0Mi1lYTFkN2YyNzY4MjcifQ.eyJleHAiOjE3OTI4NjY2NTIsImlhdCI6MTc5Mjc4MDI1MiwianRpIjoiMjYzM2RjYTgtMGUwMy00YjI0LWJiODItZmVmN2Y4ZDcwOGNlIiwiaXNzIjoiaHR0cHM6Ly9hY2NvdW50cy50aW55LmNvbS5ici9yZWFsbXMvdGlueSIsImF1ZCI6Imh0dHBzOi8vYWNjb3VudHMudGlueS5jb20uYnIvcmVhbG1zL3RpbnkiLCJzdWIiOiJlODdkNWUyOC1iYTIyLTRjMjMtYmZlNi0wZGM3ZDAzYjM1NjgiLCJ0eXAiOiJPZmZsaW5lIiwiYXpwIjoidGlueS1hcGktNTMxOTZmMTBhYTVlNjFlMWQzNTc3NjE4ZWEyYjhhYzRmMjQxMzZhOC0xNzQ4OTEzNDA3Iiwic2Vzc2lvbl9zdGF0ZSI6IjM3ODgxOTY5LTg5ZmUtNDE1ZS04MDg1LTJmZDY3NzE2Y2E0ZCIsInNjb3BlIjoiZW1haWwgb2ZmbGluZV9hY2Nlc3MiLCJzaWQiOiIzNzg4MTk2OS04OWZlLTQxNWUtODA4NS0yZmQ2NzcxNmNhNGQifQ.PCznXEmP8qsg8ahZk2es_CTm9Fr-bDbIa6pkSjx5bPQ",
+                    "token_type": "Bearer",
+                    "id_token": "",
+                    "not-before-policy": 0,
+                    "session_state": "37881969-89fe-415e-8085-2fd67716ca4d",
+                    "scope": "email offline_access"
+                  },
+                  "pairedItem": {
+                    "item": 0
+                  }
+                }
+              ]
+            ]
+          },
+          "source": {
+            "main": [
+              {
+                "previousNode": "Token Olist",
+                "previousNodeOutput": 0,
+                "previousNodeRun": 0
+              }
+            ]
+          }
+        }
+      ],
+      "metadata": {},
+      "waitingExecution": {},
+      "waitingExecutionSource": {},
+      "runtimeData": {
+        "version": 1,
+        "establishedAt": 1793026852023,
+        "source": "trigger",
+        "triggerNode": {
+          "name": "Schedule Trigger",
+          "type": "n8n-nodes-base.scheduleTrigger"
+        },
+        "redaction": {
+          "version": 2,
+          "production": false,
+          "manual": false
+        }
+      }
+    },
+    "resumeToken": "18bf5bfde3f85cbbccff63c8af60374b4183e173c5a57411a59a03ba2d4bbf7f"
+  },
+  "workflowData": {
+    "id": "190oc7uwtrLMiQxN",
+    "name": "NOBRE Busca Pedidos Olist SQLServer",
+    "nodes": [
+      {
+        "id": "7ab260a1-f654-4890-8c0d-883175596f83",
+        "name": "Token Olist",
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.6,
+        "position": [
+          992,
+          -16
+        ],
+        "parameters": {
+          "authentication": "oAuth2",
+          "resource": "sheet",
+          "operation": "read",
+          "documentId": {
+            "__rl": true,
+            "value": "1zNT5vaP3_fkq9nlJ7SfYXISicejLCllB44mTf4y8h0M",
+            "mode": "list",
+            "cachedResultName": "n8n tiny key | auto-refresh "
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "gid=0",
+            "mode": "list",
+            "cachedResultName": "Página1"
+          },
+          "filtersUI": {
+            "values": [
+              {
+                "lookupColumn": "linha",
+                "lookupValue": "2"
+              }
+            ]
+          },
+          "combineFilters": "AND",
+          "options": {}
+        },
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "TiPhH1FEnU2CjOmH",
+            "name": "V2 n8n"
+          }
+        }
+      },
+      {
+        "id": "82b8f7e1-eaa5-4ef3-a61a-8feb1eede590",
+        "name": "Refresh Token Olist",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1232,
+          -16
+        ],
+        "parameters": {
+          "curlImport": "",
+          "method": "POST",
+          "url": "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token",
+          "authentication": "none",
+          "provideSslCertificates": false,
+          "sendQuery": false,
+          "sendHeaders": true,
+          "specifyHeaders": "keypair",
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "Basic dGlueS1hcGktNTMxOTZmMTBhYTVlNjFlMWQzNTc3NjE4ZWEyYjhhYzRmMjQxMzZhOC0xNzQ4OTEzNDA3OjhnSU9KczNmeE5FZVVmcjBkVVl0M2VzajlESm5VQjRK"
+              }
+            ]
+          },
+          "sendBody": true,
+          "contentType": "form-urlencoded",
+          "specifyBody": "keypair",
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "grant_type",
+                "value": "refresh_token"
+              },
+              {
+                "name": "refresh_token",
+                "value": "={{ $json.refresh_token }}"
+              }
+            ]
+          },
+          "options": {},
+          "infoMessage": ""
+        }
+      },
+      {
+        "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+        "name": "Lê última execução",
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.6,
+        "position": [
+          1776,
+          -16
+        ],
+        "parameters": {
+          "authentication": "oAuth2",
+          "resource": "sheet",
+          "operation": "read",
+          "documentId": {
+            "__rl": true,
+            "value": "1zNT5vaP3_fkq9nlJ7SfYXISicejLCllB44mTf4y8h0M",
+            "mode": "list",
+            "cachedResultName": "n8n tiny key | auto-refresh "
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 1425205966,
+            "mode": "list",
+            "cachedResultName": "Página2",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1zNT5vaP3_fkq9nlJ7SfYXISicejLCllB44mTf4y8h0M/edit#gid=1425205966"
+          },
+          "filtersUI": {
+            "values": [
+              {
+                "lookupColumn": "linha",
+                "lookupValue": "2"
+              }
+            ]
+          },
+          "combineFilters": "AND",
+          "options": {}
+        },
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "TiPhH1FEnU2CjOmH",
+            "name": "V2 n8n"
+          }
+        }
+      },
+      {
+        "id": "f8dd969d-3a4d-4b95-8b28-ffa45760d242",
+        "name": "Busca pedidos Olist",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          624,
+          240
+        ],
+        "parameters": {
+          "curlImport": "",
+          "method": "GET",
+          "url": "https://api.tiny.com.br/public-api/v3/pedidos",
+          "authentication": "none",
+          "provideSslCertificates": false,
+          "sendQuery": true,
+          "specifyQuery": "keypair",
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "dataCriacaoInicial",
+                "value": "={{ (() => { const base = ($('Lê última execução').first().json.data ?? '2024-01-01').toString().substring(0,10); const dt = new Date(base + 'T00:00:00'); dt.setDate(dt.getDate() - 1); return dt.toLocaleDateString('pt-BR'); })() }}"
+              }
+            ]
+          },
+          "sendHeaders": true,
+          "specifyHeaders": "keypair",
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $('Refresh Token Olist').first().json.access_token }}"
+              }
+            ]
+          },
+          "sendBody": false,
+          "options": {
+            "batching": {
+              "batch": {
+                "batchSize": 1,
+                "batchInterval": 500
+              }
+            }
+          },
+          "infoMessage": ""
+        }
+      },
+      {
+        "id": "7fa849ab-e504-45b4-93a3-c09784842b12",
+        "name": "Prepara Filtro SQL",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          848,
+          240
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "language": "javaScript",
+          "jsCode": "const payload = items[0]?.json ?? {};\nconst lista = payload.itens ?? payload.items ?? payload.data ?? payload.pedidos ?? [];\n\nif (!Array.isArray(lista) || lista.length === 0) {\n  return [{ json: { temPedidos: false, idsStr: \"''\", lista: [] } }];\n}\n\nconst listaFiltrada = lista.filter(pedido => {\n  const p = pedido.pedido ?? pedido;\n  const marcadores = p.marcadores ?? [];\n  const hasBusinessOk = marcadores.some(m => String(m.descricao ?? '').toLowerCase().trim() === 'business-ok');\n  return !hasBusinessOk;\n});\n\n// dedup por chave dentro da própria lista (Tiny pode devolver o mesmo numeroPedido 2x)\nconst seen = new Set();\nconst listaUnica = listaFiltrada.filter(pedido => {\n  const p = pedido.pedido ?? pedido;\n  const key = String(p.numero ?? p.numeroPedido ?? p.id ?? p.idPedido ?? '').trim();\n  if (!key || seen.has(key)) return false;\n  seen.add(key);\n  return true;\n});\n\nconst ids = listaUnica.map((pedido) => {\n  const p = pedido.pedido ?? pedido;\n  return p.numero ?? p.numeroPedido ?? p.id ?? p.idPedido;\n}).filter(Boolean);\n\nif (ids.length === 0) {\n  return [{ json: { temPedidos: false, idsStr: \"''\", lista: [] } }];\n}\n\nconst idsStr = ids.map(id => `'${id}'`).join(',');\nreturn [{ json: { temPedidos: true, idsStr, lista: listaUnica } }];",
+          "notice": ""
+        }
+      },
+      {
+        "id": "afe26e6c-f767-40fa-978a-8283080ad0e6",
+        "name": "Busca detalhe Olist",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          400,
+          512
+        ],
+        "parameters": {
+          "curlImport": "",
+          "method": "GET",
+          "url": "=https://api.tiny.com.br/public-api/v3/pedidos/{{ $('Loop pedidos').item.json.id ?? $('Loop pedidos').item.json.numeroPedido }}",
+          "authentication": "none",
+          "provideSslCertificates": false,
+          "sendQuery": false,
+          "sendHeaders": true,
+          "specifyHeaders": "keypair",
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $('Refresh Token Olist').first().json.access_token }}"
+              }
+            ]
+          },
+          "sendBody": false,
+          "options": {
+            "batching": {
+              "batch": {
+                "batchSize": 1,
+                "batchInterval": 300
+              }
+            }
+          },
+          "infoMessage": ""
+        }
+      },
+      {
+        "id": "789fe3f5-2576-4966-b7bc-44f86ee80308",
+        "name": "Normaliza pedido Olist",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          608,
+          512
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "language": "javaScript",
+          "jsCode": "function onlyDigits(value) { return String(value ?? '').replace(/\\D/g, ''); }\nfunction removeAcentos(str) { return String(str ?? '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, ''); }\nfunction upper(value) { return removeAcentos(String(value ?? '').trim()).toUpperCase(); }\nfunction normalizaNumero(str) {\n  const val = String(str ?? '').trim().toUpperCase();\n  if (!val || val === 'SN' || val === 'S/N' || val === 'S.N' || /\\D/.test(val)) return '0';\n  return val.replace(/\\D/g, '') || '0';\n}\nfunction first(...values) { return values.find((value) => value !== undefined && value !== null && String(value).trim() !== '') ?? ''; }\nconst loopItem = $('Loop pedidos').item.json;\n// se a resposta vier encapsulada ({itens,paginacao}), localiza o pedido pelo id do item do loop\nconst raw = ($json && ($json.numero !== undefined || $json.numeroPedido !== undefined || $json.id !== undefined))\n  ? $json\n  : (($json.itens || []).find(i => String(i.id) === String(loopItem.id)) ?? {});\nconst contato = raw.contato ?? raw.cliente ?? raw.customer ?? loopItem.cliente ?? {};\nconst endereco = raw.enderecoEntrega ?? raw.endereco ?? raw.transporte?.etiqueta ?? contato.endereco ?? loopItem.cliente?.endereco ?? {};\nconst documento = first(contato.numeroDocumento, contato.cpfCnpj, contato.cpf, contato.cnpj, raw.cpfCnpj, loopItem.cliente?.cpfCnpj);\nconst documentoNumeros = onlyDigits(documento);\nconst tipoPessoa = documentoNumeros.length > 11 ? 'J' : 'F';\nconst itensRaw = raw.itens ?? raw.items ?? raw.produtos;\nconst itens = Array.isArray(itensRaw) ? itensRaw : [];\nconst dataPedido = first(raw.data, raw.dataPedido, raw.dataCriacao, raw.createdAt, raw.dataEmissao, loopItem.dataCriacao, new Date().toISOString().slice(0, 10));\nconst numeroPedido = first(raw.numero, raw.numeroPedido, loopItem.numeroPedido, raw.id, loopItem.id);\nconst idTiny = first(raw.id, raw.idPedido, loopItem.id);\nconst canal = first(raw.ecommerce?.nome, raw.marketplace?.nome, raw.canalVenda, raw.origem, raw.marcadores?.[0]?.descricao, loopItem.ecommerce?.nome, 'TINY');\nconst canalVenda = raw.ecommerce?.canalVenda ?? loopItem.ecommerce?.canalVenda ?? '';\n// doc faltante/zerado vira placeholder único e rastreável (não colide entre pedidos nem com CNPJ real)\nconst cnpjFinal = first(documento, 'ISENTO-' + String(numeroPedido));\nconst docFaltante = !documentoNumeros || /^0+$/.test(documentoNumeros) || documentoNumeros.length < 11;\nconst skipReason = !numeroPedido ? 'sem numeroPedido' : (itens.length === 0 ? 'sem itens' : '');\nconst formaEnvioNome = raw.transportador?.formaEnvio?.nome ?? '';\nconst formaFreteNome = raw.transportador?.formaFrete?.nome ?? '';\nconst marcadores = raw.marcadores ?? [];\nconst hasFulfillmentMarker = marcadores.some(m => String(m?.descricao ?? '').toLowerCase().includes('fulfillment'));\nconst isFull = canalVenda.toLowerCase().includes('full') || formaEnvioNome.toLowerCase().includes('full') || formaFreteNome.toLowerCase().includes('full') || canal.toLowerCase().includes('full') || hasFulfillmentMarker;\nif (skipReason) console.log(`Pedido ${loopItem.numeroPedido ?? loopItem.id} ignorado: ${skipReason}`);\nif (docFaltante && !skipReason) console.log(`Pedido ${numeroPedido} sem documento válido — usando ${cnpjFinal}`);\nreturn [{ json: { raw, numeroPedido, idTiny, dataPedido, canal, canalVenda, formaEnvioNome, formaFreteNome, isFull, tipoPessoa, documento, documentoNumeros, skipReason, cnpjFinal, docFaltante, nome: removeAcentos(first(contato.nome, contato.razaoSocial, raw.nomeCliente, loopItem.cliente?.nome)).trim().toUpperCase(), fantasia: removeAcentos(first(contato.fantasia, contato.nomeFantasia, contato.nome, contato.razaoSocial, raw.nomeCliente, loopItem.cliente?.nome)).trim().toUpperCase(), ieRg: first(contato.ie, contato.inscricaoEstadual, contato.rg), endereco: { cep: first(endereco.cep, contato.cep), bairro: upper(first(endereco.bairro, contato.bairro)), cidade: upper(first(endereco.municipio, endereco.cidade, contato.municipio, contato.cidade)), uf: upper(first(endereco.uf, endereco.estado, contato.uf, contato.estado)), numero: normalizaNumero(first(endereco.numero, contato.numero)), logradouro: upper(first(endereco.endereco, endereco.logradouro, contato.endereco, contato.logradouro)), complemento: upper(first(endereco.complemento, contato.complemento)) }, itens: Array.isArray(itens) ? itens : [] } }];",
+          "notice": ""
+        }
+      },
+      {
+        "id": "valida-pedido-if-01",
+        "name": "IF Pedido Inválido?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          608,
+          720
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 1
+            },
+            "conditions": [
+              {
+                "id": "cond-pedido-invalido",
+                "leftValue": "={{ $json.skipReason }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "string",
+                  "operation": "notEmpty",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "22eeb53a-005f-4314-92a5-2e865f42725c",
+        "name": "Busca cod municipio Olist",
+        "type": "n8n-nodes-base.microsoftSql",
+        "typeVersion": 1.1,
+        "onError": "continueRegularOutput",
+        "position": [
+          816,
+          512
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT (\n  SELECT TOP 1 CdMunicipio\n  FROM BusinessCadMunicipio\n  WHERE LOWER(LTRIM(RTRIM(DsMunicipio))) = LOWER(LTRIM(RTRIM('{{ $('Normaliza pedido Olist').item.json.endereco.cidade.replace(/'/g, \"''\") }}')))\n  AND LOWER(LTRIM(RTRIM(Estado))) = LOWER(LTRIM(RTRIM('{{ $('Normaliza pedido Olist').item.json.endereco.uf.replace(/'/g, \"''\") }}')))\n) AS CdMunicipio;",
+          "options": {}
+        },
+        "credentials": {
+          "microsoftSql": {
+            "id": "347YbKVdQ6hSkPU6",
+            "name": "Microsoft SQL account"
+          }
+        }
+      },
+      {
+        "id": "31b9c47f-69e4-4d52-b229-7a9425a4d3ae",
+        "name": "SQL Cadastra Cliente Olist",
+        "type": "n8n-nodes-base.microsoftSql",
+        "typeVersion": 1.1,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          1424,
+          512
+        ],
+        "parameters": {
+          "operation": "insert",
+          "table": "BusinessCadCliente",
+          "columns": "C_Cep,E_Cep,F_Cep,E_Cnpj,FlTipo,CdGrupo,DiaPgto,C_Bairro,C_Cidade,C_Estado,C_Numero,CdRegiao,E_Bairro,E_Cidade,E_Estado,E_Numero,F_Bairro,F_Cidade,F_Estado,F_Numero,Cnpj_Cnpf,FsCliente,RzCliente,C_Endereco,CdSegmento,DtAtivacao,E_Endereco,F_Endereco,PeDesconto,RestricaoSN,C_CdMunicipio,C_Complemento,CapitalSocial,E_CdMunicipio,E_Complemento,F_CdMunicipio,F_Complemento,FlEnvRecRepre,CdRepresentante,DescontaSuframa,FlEnvRecEmpresa,DtAlteracao,DtUltCompra,Ativo_Inativo_ExCliente"
+        },
+        "credentials": {
+          "microsoftSql": {
+            "id": "347YbKVdQ6hSkPU6",
+            "name": "Microsoft SQL account"
+          }
+        }
+      },
+      {
+        "id": "f53fa55f-827b-4c03-9fb4-9ee2e7ed1ea8",
+        "name": "SQL Cadastra Venda Olist",
+        "type": "n8n-nodes-base.microsoftSql",
+        "typeVersion": 1.1,
+        "alwaysOutputData": true,
+        "position": [
+          1840,
+          512
+        ],
+        "parameters": {
+          "operation": "insert",
+          "table": "BusinessMovPedidoVenda",
+          "columns": "CdRepresentante,CdEmpresa,CdPedidoRepre,CdPedidoEmpre,Cnpj_Cnpf,CdTabela,CdCondPgto,CdTransportadora,RefRepresentante,RefCliente,PeDesconto,PeDesconto2,PeDesconto3,PeDesconto4,PeDesconto5,FlFrete,FlStatus,FlEnvRecEmpresa,FlEnvRecRepre,DtCancelamento,MotivoCancelamento,Observacao,PRIORIDADE,CdNatureza,XML,DtPedido,DtEntrega"
+        },
+        "credentials": {
+          "microsoftSql": {
+            "id": "347YbKVdQ6hSkPU6",
+            "name": "Microsoft SQL account"
+          }
+        }
+      },
+      {
+        "id": "65c7e062-ee6e-4b96-ba19-3a78dfcefd3f",
+        "name": "SQL Cadastra Itens Olist",
+        "type": "n8n-nodes-base.microsoftSql",
+        "typeVersion": 1.1,
+        "alwaysOutputData": true,
+        "position": [
+          2288,
+          512
+        ],
+        "parameters": {
+          "operation": "insert",
+          "table": "BusinessMovPedidoVendaItem",
+          "columns": "CdRepresentante,CdEmpresa,CdPedidoRepre,CdPedidoEmpre,CdProduto,QtProduto,QtBaixado,Unitario,PeDesconto,PeDesconto2,PeDesconto3,PeDesconto4,PeDesconto5,Negociado,PeIpi,PeIcms,PeReducao,FlFalha,Gramatura,RefCliente"
+        },
+        "credentials": {
+          "microsoftSql": {
+            "id": "347YbKVdQ6hSkPU6",
+            "name": "Microsoft SQL account"
+          }
+        }
+      },
+      {
+        "id": "88648b05-3cfc-4f56-8133-0646d6886d94",
+        "name": "Adiciona marcador Olist",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "onError": "continueRegularOutput",
+        "position": [
+          2256,
+          736
+        ],
+        "parameters": {
+          "curlImport": "",
+          "method": "POST",
+          "url": "=https://api.tiny.com.br/public-api/v3/pedidos/{{ $('Normaliza pedido Olist').first().json.idTiny }}/marcadores",
+          "authentication": "none",
+          "provideSslCertificates": false,
+          "sendQuery": false,
+          "sendHeaders": true,
+          "specifyHeaders": "keypair",
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $('Refresh Token Olist').first().json.access_token }}"
+              }
+            ]
+          },
+          "sendBody": true,
+          "contentType": "raw",
+          "rawContentType": "application/json",
+          "body": "[{\"descricao\":\"Business-ok\"}]",
+          "options": {},
+          "infoMessage": ""
+        }
+      },
+      {
+        "id": "e0871f33-8c52-48e0-9fa0-307e9c3d800a",
+        "name": "🔑 Autenticação1",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          720,
+          -64
+        ],
+        "parameters": {
+          "content": "## 🔑 Autenticação\\nLeitura do token, refresh automático e gravação de volta no Sheets.",
+          "height": 196,
+          "width": 1244,
+          "color": 4
+        }
+      },
+      {
+        "id": "6709a793-a91c-4376-af4c-58bbf077402b",
+        "name": "⚙️ Processamento1",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          96,
+          448
+        ],
+        "parameters": {
+          "content": "##  Processamento por Pedido\\nBusca detalhe → Normaliza → Município → Cliente → Venda → Itens no SQL Server.⚙️",
+          "height": 232,
+          "width": 2376,
+          "color": 3
+        }
+      },
+      {
+        "id": "12616a03-a434-4bca-a6c0-5dd7481f977a",
+        "name": "Pedido Full?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          1984,
+          720
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 1
+            },
+            "conditions": [
+              {
+                "id": "10000000-0000-4000-8000-000000000021",
+                "leftValue": "={{ $('Normaliza pedido Olist').item.json.isFull }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "equal",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "6d64c1b2-fa1b-4caa-8b62-8b71938c96f3",
+        "name": "IF Tem Pedidos?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          1088,
+          240
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 1
+            },
+            "conditions": [
+              {
+                "id": "cond-1",
+                "leftValue": "={{ String($json.temPedidos) }}",
+                "rightValue": "true",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "10000000-0000-4000-8000-000000000022",
+        "name": "SQL Verifica Importados",
+        "type": "n8n-nodes-base.microsoftSql",
+        "typeVersion": 1.1,
+        "alwaysOutputData": true,
+        "position": [
+          1328,
+          224
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT CAST(TRY_CAST(LTRIM(RTRIM(CdPedidoRepre)) AS BIGINT) AS VARCHAR(20)) AS CdPedidoRepre, CdRepresentante, CdEmpresa FROM BusinessMovPedidoVenda WHERE CdEmpresa = '97' AND CdRepresentante = '1019' AND DtPedido >= DATEADD(day, -60, GETDATE()) AND TRY_CAST(LTRIM(RTRIM(CdPedidoRepre)) AS BIGINT) IN ({{ $('Prepara Filtro SQL').item.json.idsStr }})",
+          "options": {}
+        },
+        "credentials": {
+          "microsoftSql": {
+            "id": "347YbKVdQ6hSkPU6",
+            "name": "Microsoft SQL account"
+          }
+        }
+      },
+      {
+        "id": "10000000-0000-4000-8000-000000000041",
+        "name": "Marca Pedidos Importados",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1504,
+          224
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "language": "javaScript",
+          "jsCode": "const lista = $('Prepara Filtro SQL').item.json.lista;\nconst token = $('Refresh Token Olist').first().json.access_token;\n\nconst importados = items\n  .map(i => String(i.json?.CdPedidoRepre ?? '').trim())\n  .filter(id => id !== '' && id !== 'undefined' && id !== 'null');\n\nfor (const numPedido of importados) {\n  const pedidoObj = lista.find(p => {\n    const base = p.pedido ?? p;\n    const id = String(base.numero ?? base.numeroPedido ?? base.id ?? base.idPedido ?? '').trim();\n    return id === numPedido;\n  });\n  if (!pedidoObj) continue;\n  const base = pedidoObj.pedido ?? pedidoObj;\n  const idTiny = base.id ?? base.idPedido;\n  if (!idTiny) continue;\n  try {\n    await $helpers.httpRequest({\n      method: 'POST',\n      url: `https://api.tiny.com.br/public-api/v3/pedidos/${idTiny}/marcadores`,\n      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },\n      body: JSON.stringify([{ descricao: 'Business-ok' }])\n    });\n  } catch (e) {\n    console.log(`Marcador falhou para pedido ${idTiny}: ${e.message}`);\n  }\n}\n\nreturn items;",
+          "notice": ""
+        }
+      },
+      {
+        "id": "new-filtra-novos",
+        "name": "Filtra Novos Pedidos",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1696,
+          224
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "language": "javaScript",
+          "jsCode": "const lista = $('Prepara Filtro SQL').item.json.lista;\n\nconst importados = items\n  .map(i => String(i.json?.CdPedidoRepre ?? '').trim())\n  .filter(id => id !== '' && id !== 'undefined' && id !== 'null');\n\nconsole.log('Total pedidos API:', lista.length);\nconsole.log('Total importados SQL:', importados.length);\nconsole.log('Importados:', importados);\n\nconst filtrados = lista.filter(pedido => {\n  const p = pedido.pedido ?? pedido;\n  if (String(p.situacao ?? '') === '2') return false;\n  const id = String(p.numero ?? p.numeroPedido ?? p.id ?? p.idPedido).trim();\n  if (importados.includes(id)) return false;\n  return true;\n});\n\nconsole.log('Pedidos novos:', filtrados.length);\n\nif (filtrados.length === 0) {\n  return [{ json: { temNovos: false, debug: { totalApi: lista.length, totalImportados: importados.length, importados } } }];\n}\n\nreturn filtrados.map(p => ({ json: Object.assign({ temNovos: true }, p.pedido ?? p) }));",
+          "notice": ""
+        }
+      },
+      {
+        "id": "new-if-novos",
+        "name": "IF Novos Pedidos?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          1888,
+          224
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 1
+            },
+            "conditions": [
+              {
+                "id": "cond-1",
+                "leftValue": "={{ String($json.temNovos) }}",
+                "rightValue": "true",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "verifica-atual-sql-01",
+        "name": "SQL Verifica Pedido Atual",
+        "type": "n8n-nodes-base.microsoftSql",
+        "typeVersion": 1.1,
+        "alwaysOutputData": true,
+        "position": [
+          400,
+          720
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT TOP 1 CdPedidoRepre FROM BusinessMovPedidoVenda WHERE CdEmpresa = '97' AND CdRepresentante = '1019' AND DtPedido >= DATEADD(day, -60, GETDATE()) AND TRY_CAST(LTRIM(RTRIM(CdPedidoRepre)) AS BIGINT) = TRY_CAST('{{ String($json.numero ?? $json.numeroPedido ?? $json.id ?? '').replace(/'/g, \"''\") }}' AS BIGINT)",
+          "options": {}
+        },
+        "credentials": {
+          "microsoftSql": {
+            "id": "347YbKVdQ6hSkPU6",
+            "name": "Microsoft SQL account"
+          }
+        }
+      },
+      {
+        "id": "verifica-atual-if-01",
+        "name": "IF Pedido Já Existe?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          624,
+          720
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 1
+            },
+            "conditions": [
+              {
+                "id": "cond-ja-existe",
+                "leftValue": "={{ $json.CdPedidoRepre }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "string",
+                  "operation": "notEmpty",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "330f34c3-7560-4050-b902-35e11cecde97",
+        "name": "Municipio encontrado?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          1008,
+          512
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 1
+            },
+            "conditions": [
+              {
+                "id": "10000000-0000-4000-8000-000000000009",
+                "leftValue": "={{ $json.CdMunicipio }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "string",
+                  "operation": "notEmpty",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "verifica-cliente-sql-01",
+        "name": "SQL Verifica Cliente",
+        "type": "n8n-nodes-base.microsoftSql",
+        "typeVersion": 1.1,
+        "alwaysOutputData": true,
+        "position": [
+          1232,
+          720
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT TOP 1 Cnpj_Cnpf FROM BusinessCadCliente WHERE REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(Cnpj_Cnpf)),'.',''),'-',''),'/','') = '{{ String($('Normaliza pedido Olist').item.json.cnpjFinal ?? '').replace(/\\./g,'').replace(/-/g,'').replace(/\\//g,'').replace(/'/g,\"''\") }}'",
+          "options": {}
+        },
+        "credentials": {
+          "microsoftSql": {
+            "id": "347YbKVdQ6hSkPU6",
+            "name": "Microsoft SQL account"
+          }
+        }
+      },
+      {
+        "id": "verifica-cliente-if-01",
+        "name": "IF Cliente Já Existe?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          1424,
+          720
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 1
+            },
+            "conditions": [
+              {
+                "id": "cond-cliente-existe",
+                "leftValue": "={{ $json.Cnpj_Cnpf }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "string",
+                  "operation": "notEmpty",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "6554e1fe-cb1d-4991-9aeb-4d55092851e0",
+        "name": "Monta venda SQL",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1632,
+          512
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "language": "javaScript",
+          "jsCode": "function t(str, len) { return String(str ?? '').trim().substring(0, len); }\nconst pedido = $('Normaliza pedido Olist').item.json;\nreturn [{ json: { CdRepresentante: '1019', CdEmpresa: '97', CdPedidoRepre: t(pedido.numeroPedido, 20), CdPedidoEmpre: 'XXXXXX', Cnpj_Cnpf: t(pedido.cnpjFinal, 18), CdTabela: '10', CdCondPgto: '045', CdTransportadora: '0239', RefRepresentante: '', RefCliente: '', PeDesconto: 0, PeDesconto2: 0, PeDesconto3: 0, PeDesconto4: 0, PeDesconto5: 0, FlFrete: 'C', FlStatus: 'B', FlEnvRecEmpresa: 'S', FlEnvRecRepre: 'S', DtCancelamento: '', MotivoCancelamento: '', Observacao: '', PRIORIDADE: '1', CdNatureza: '006', XML: '', DtPedido: `${pedido.dataPedido} 00:00:00.000`, DtEntrega: `${pedido.dataPedido} 00:00:00.000`, pedido } } ];",
+          "notice": ""
+        }
+      },
+      {
+        "id": "fae43777-d9fd-4ca2-986e-d56137e80f52",
+        "name": "Loop pedidos",
+        "type": "n8n-nodes-base.splitInBatches",
+        "typeVersion": 3,
+        "position": [
+          176,
+          496
+        ],
+        "parameters": {
+          "splitInBatchesNotice": "",
+          "batchSize": 1,
+          "options": {}
+        }
+      },
+      {
+        "id": "e601f720-6391-426b-937b-29aeef7bff36",
+        "name": "Monta cliente SQL",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1232,
+          512
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "language": "javaScript",
+          "jsCode": "function t(str, len) { return String(str ?? '').trim().substring(0, len); }\nconst pedido = $('Normaliza pedido Olist').item.json;\nconst municipio = t($json.CdMunicipio, 6) || '9841';\nconst representante = '1019';\nconst nome = String(pedido.nome || 'CLIENTE TINY').trim();\nconst end = pedido.endereco || {};\nreturn [{ json: { C_Cep: t(end.cep, 9), E_Cep: t(end.cep, 9), F_Cep: t(end.cep, 9), E_Cnpj: t(pedido.cnpjFinal, 18), FlTipo: t(pedido.tipoPessoa, 1), CdGrupo: '001', DiaPgto: 'Indefinido', C_Bairro: t(end.bairro, 30), C_Cidade: t(end.cidade, 30), C_Estado: t(end.uf, 2), C_Numero: t(end.numero, 10), CdRegiao: '', E_Bairro: t(end.bairro, 30), E_Cidade: t(end.cidade, 30), E_Estado: t(end.uf, 2), E_Numero: t(end.numero, 10), F_Bairro: t(end.bairro, 30), F_Cidade: t(end.cidade, 30), F_Estado: t(end.uf, 2), F_Numero: t(end.numero, 10), Cnpj_Cnpf: t(pedido.cnpjFinal, 18), FsCliente: t(nome.split(/\\s+/)[0], 15).toUpperCase(), RzCliente: t(nome, 40).toUpperCase(), C_Endereco: t(end.logradouro, 50), CdSegmento: '60', DtAtivacao: `${pedido.dataPedido} 00:00:00.000`, E_Endereco: t(end.logradouro, 50), F_Endereco: t(end.logradouro, 50), PeDesconto: '0', RestricaoSN: 'N', C_CdMunicipio: municipio, C_Complemento: t(end.complemento, 20), CapitalSocial: '0', E_CdMunicipio: municipio, E_Complemento: t(end.complemento, 20), F_CdMunicipio: municipio, F_Complemento: t(end.complemento, 20), FlEnvRecRepre: 'S', CdRepresentante: representante, DescontaSuframa: 'N', FlEnvRecEmpresa: 'S', DtAlteracao: `${pedido.dataPedido} 00:00:00.000`, DtUltCompra: pedido.dataPedido, Ativo_Inativo_ExCliente: 'Ativo', pedido } } ];",
+          "notice": ""
+        }
+      },
+      {
+        "id": "b52bbb6d-a17a-44c7-8359-9388d1b0b3d4",
+        "name": "Monta itens SQL",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2064,
+          512
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "language": "javaScript",
+          "jsCode": "function t(str, len) { return String(str ?? '').trim().substring(0, len); }\nconst venda = $('Monta venda SQL').item.json;\nconst itens = venda.pedido.itens || [];\nreturn itens.map((item) => {\n  const produto = item.produto ?? item;\n  return { json: { CdRepresentante: t(venda.CdRepresentante, 6), CdEmpresa: '97', CdPedidoRepre: t(venda.CdPedidoRepre, 20), CdPedidoEmpre: 'XXXXXX', CdProduto: t(produto.codigo ?? produto.sku ?? produto.id ?? produto.descricao ?? '', 20), QtProduto: Number(item.quantidade ?? item.qtd ?? produto.quantidade ?? 1), QtBaixado: Number(item.quantidade ?? item.qtd ?? produto.quantidade ?? 1), Unitario: Number(item.valorUnitario ?? item.precoUnitario ?? item.preco ?? item.valor ?? produto.valorUnitario ?? produto.preco ?? 0), PeDesconto: 0, PeDesconto2: 0, PeDesconto3: 0, PeDesconto4: 0, PeDesconto5: 0, Negociado: Number(item.valorUnitario ?? item.precoUnitario ?? item.preco ?? item.valor ?? produto.valorUnitario ?? produto.preco ?? 0), PeIpi: 0, PeIcms: 0, PeReducao: 0, FlFalha: 'S', Gramatura: '0', RefCliente: '' } };\n});",
+          "notice": ""
+        }
+      },
+      {
+        "id": "10000000-0000-4000-8000-000000000031",
+        "name": "Salva última execução",
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.6,
+        "position": [
+          208,
+          720
+        ],
+        "parameters": {
+          "authentication": "oAuth2",
+          "resource": "sheet",
+          "operation": "appendOrUpdate",
+          "documentId": {
+            "__rl": true,
+            "value": "1zNT5vaP3_fkq9nlJ7SfYXISicejLCllB44mTf4y8h0M",
+            "mode": "list",
+            "cachedResultName": "n8n tiny key | auto-refresh "
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 1425205966,
+            "mode": "list",
+            "cachedResultName": "Página2",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1zNT5vaP3_fkq9nlJ7SfYXISicejLCllB44mTf4y8h0M/edit#gid=1425205966"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "linha": "2",
+              "data": "={{ $now.format('yyyy-MM-dd HH:mm:ss') }}"
+            },
+            "matchingColumns": [
+              "linha"
+            ],
+            "schema": [
+              {
+                "id": "linha",
+                "displayName": "linha",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "data",
+                "displayName": "data",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "TiPhH1FEnU2CjOmH",
+            "name": "V2 n8n"
+          }
+        }
+      },
+      {
+        "id": "643f1bda-376f-43bc-9c54-d8f1db8dbf0a",
+        "name": "Schedule Trigger",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.3,
+        "position": [
+          784,
+          -16
+        ],
+        "parameters": {
+          "notice": "",
+          "rule": {
+            "interval": [
+              {
+                "field": "minutes",
+                "minutesInterval": 2
+              }
+            ]
+          },
+          "skipDurableScheduler": false
+        }
+      },
+      {
+        "id": "82b33417-2298-4d9b-93c1-2fda44510a48",
+        "name": "Salva novo token",
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.6,
+        "position": [
+          1504,
+          -16
+        ],
+        "parameters": {
+          "authentication": "oAuth2",
+          "resource": "sheet",
+          "operation": "appendOrUpdate",
+          "documentId": {
+            "__rl": true,
+            "value": "1zNT5vaP3_fkq9nlJ7SfYXISicejLCllB44mTf4y8h0M",
+            "mode": "list",
+            "cachedResultName": "n8n tiny key | auto-refresh "
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "gid=0",
+            "mode": "list",
+            "cachedResultName": "Página1"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "linha": "2",
+              "access_token": "={{ $json.access_token }}",
+              "refresh_token": "={{ $json.refresh_token }}"
+            },
+            "matchingColumns": [
+              "linha"
+            ],
+            "schema": [
+              {
+                "id": "linha",
+                "displayName": "linha",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "access_token",
+                "displayName": "access_token",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "expires_in",
+                "displayName": "expires_in",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "refresh_expires_in",
+                "displayName": "refresh_expires_in",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "refresh_token",
+                "displayName": "refresh_token",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "token_type",
+                "displayName": "token_type",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "id_token",
+                "displayName": "id_token",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "not-before-policy",
+                "displayName": "not-before-policy",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "session_state",
+                "displayName": "session_state",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "scope",
+                "displayName": "scope",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "TiPhH1FEnU2CjOmH",
+            "name": "V2 n8n"
+          }
+        }
+      },
+      {
+        "id": "49d9284f-bb6b-4061-8e13-b9daadb2bba9",
+        "name": "��� Busca Pedidos",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          544,
+          192
+        ],
+        "parameters": {
+          "content": "## 📋 Busca Pedidos\\nConsulta a API Olist e expande a lista de pedidos.",
+          "height": 188,
+          "width": 1520,
+          "color": 5
+        }
+      }
+    ],
+    "connections": {
+      "Token Olist": {
+        "main": [
+          [
+            {
+              "node": "Refresh Token Olist",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Refresh Token Olist": {
+        "main": [
+          [
+            {
+              "node": "Salva novo token",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Lê última execução": {
+        "main": [
+          [
+            {
+              "node": "Busca pedidos Olist",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Busca pedidos Olist": {
+        "main": [
+          [
+            {
+              "node": "Prepara Filtro SQL",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Busca detalhe Olist": {
+        "main": [
+          [
+            {
+              "node": "Normaliza pedido Olist",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Normaliza pedido Olist": {
+        "main": [
+          [
+            {
+              "node": "IF Pedido Inválido?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "IF Pedido Inválido?": {
+        "main": [
+          [
+            {
+              "node": "Loop pedidos",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Busca cod municipio Olist",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Busca cod municipio Olist": {
+        "main": [
+          [
+            {
+              "node": "Municipio encontrado?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "SQL Cadastra Cliente Olist": {
+        "main": [
+          [
+            {
+              "node": "Monta venda SQL",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "SQL Cadastra Venda Olist": {
+        "main": [
+          [
+            {
+              "node": "Monta itens SQL",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "SQL Cadastra Itens Olist": {
+        "main": [
+          [
+            {
+              "node": "Pedido Full?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Adiciona marcador Olist": {
+        "main": [
+          [
+            {
+              "node": "Loop pedidos",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Pedido Full?": {
+        "main": [
+          [
+            {
+              "node": "Loop pedidos",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Adiciona marcador Olist",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Municipio encontrado?": {
+        "main": [
+          [
+            {
+              "node": "SQL Verifica Cliente",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "SQL Verifica Cliente",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "SQL Verifica Cliente": {
+        "main": [
+          [
+            {
+              "node": "IF Cliente Já Existe?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "IF Cliente Já Existe?": {
+        "main": [
+          [
+            {
+              "node": "Monta venda SQL",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Monta cliente SQL",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Monta venda SQL": {
+        "main": [
+          [
+            {
+              "node": "SQL Cadastra Venda Olist",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Loop pedidos": {
+        "main": [
+          [
+            {
+              "node": "Salva última execução",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "SQL Verifica Pedido Atual",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "SQL Verifica Pedido Atual": {
+        "main": [
+          [
+            {
+              "node": "IF Pedido Já Existe?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "IF Pedido Já Existe?": {
+        "main": [
+          [
+            {
+              "node": "Loop pedidos",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Busca detalhe Olist",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Monta cliente SQL": {
+        "main": [
+          [
+            {
+              "node": "SQL Cadastra Cliente Olist",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Monta itens SQL": {
+        "main": [
+          [
+            {
+              "node": "SQL Cadastra Itens Olist",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Schedule Trigger": {
+        "main": [
+          [
+            {
+              "node": "Token Olist",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Salva novo token": {
+        "main": [
+          [
+            {
+              "node": "Lê última execução",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepara Filtro SQL": {
+        "main": [
+          [
+            {
+              "node": "IF Tem Pedidos?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "IF Tem Pedidos?": {
+        "main": [
+          [
+            {
+              "node": "SQL Verifica Importados",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Salva última execução",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "SQL Verifica Importados": {
+        "main": [
+          [
+            {
+              "node": "Marca Pedidos Importados",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Marca Pedidos Importados": {
+        "main": [
+          [
+            {
+              "node": "Filtra Novos Pedidos",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Filtra Novos Pedidos": {
+        "main": [
+          [
+            {
+              "node": "IF Novos Pedidos?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "IF Novos Pedidos?": {
+        "main": [
+          [
+            {
+              "node": "Loop pedidos",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Salva última execução",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1",
+      "callerPolicy": "workflowsFromSameOwner",
+      "availableInMCP": false
+    },
+    "nodeGroups": []
+  }
+}

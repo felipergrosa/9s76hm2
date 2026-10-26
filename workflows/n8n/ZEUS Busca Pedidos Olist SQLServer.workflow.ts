@@ -2,7 +2,7 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 
 // <workflow-map>
 // Workflow : ZEUS Busca Pedidos Olist SQLServer
-// Nodes   : 34  |  Connections: 38
+// Nodes   : 37  |  Connections: 42
 //
 // NODE INDEX
 // ──────────────────────────────────────────────────────────────────
@@ -11,6 +11,9 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 // LeUltimaExecucao                   googleSheets               [creds]
 // RefreshTokenOlist                  httpRequest
 // SalvaNovoToken                     googleSheets               [creds]
+// ChecaValidadeToken                 code
+// TokenAindaValido                   if
+// TokenAtivo                         code
 // BuscaPedidosOlist                  httpRequest
 // PreparaFiltroSql                   code
 // LoopPedidos                        splitInBatches
@@ -46,43 +49,47 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 // ──────────────────────────────────────────────────────────────────
 // ScheduleTrigger
 //    → TokenOlist
-//      → RefreshTokenOlist
-//        → SalvaNovoToken
-//          → LeUltimaExecucao
-//            → BuscaPedidosOlist
-//              → PreparaFiltroSql
-//                → IfTemPedidos
-//                  → SqlVerificaImportados
-//                    → MarcaPedidosImportados
-//                      → FiltraNovosPedidos
-//                        → IfNovosPedidos
-//                          → LoopPedidos
-//                            → SalvaUltimaExecucao
-//                           .out(1) → SqlVerificaPedidoAtual
-//                              → IfPedidoJaExiste
-//                                → LoopPedidos (↩ loop)
-//                               .out(1) → BuscaDetalheOlist
-//                                  → NormalizaPedidoOlist
-//                                    → IfPedidoInvalido
-//                                      → LoopPedidos (↩ loop)
-//                                     .out(1) → BuscaCodMunicipioOlist
-//                                        → MunicipioEncontrado
-//                                          → SqlVerificaCliente
-//                                            → IfClienteJaExiste
-//                                              → MontaVendaSql
-//                                                → SqlCadastraVendaOlist
-//                                                  → MontaItensSql
-//                                                    → SqlCadastraItensOlist
-//                                                      → PedidoFull
-//                                                        → LoopPedidos (↩ loop)
-//                                                       .out(1) → AdicionaMarcadorOlist
+//      → ChecaValidadeToken
+//        → TokenAindaValido
+//          → TokenAtivo
+//            → LeUltimaExecucao
+//              → BuscaPedidosOlist
+//                → PreparaFiltroSql
+//                  → IfTemPedidos
+//                    → SqlVerificaImportados
+//                      → MarcaPedidosImportados
+//                        → FiltraNovosPedidos
+//                          → IfNovosPedidos
+//                            → LoopPedidos
+//                              → SalvaUltimaExecucao
+//                             .out(1) → SqlVerificaPedidoAtual
+//                                → IfPedidoJaExiste
+//                                  → LoopPedidos (↩ loop)
+//                                 .out(1) → BuscaDetalheOlist
+//                                    → NormalizaPedidoOlist
+//                                      → IfPedidoInvalido
+//                                        → LoopPedidos (↩ loop)
+//                                       .out(1) → BuscaCodMunicipioOlist
+//                                          → MunicipioEncontrado
+//                                            → SqlVerificaCliente
+//                                              → IfClienteJaExiste
+//                                                → MontaVendaSql
+//                                                  → SqlCadastraVendaOlist
+//                                                    → MontaItensSql
+//                                                      → SqlCadastraItensOlist
+//                                                        → PedidoFull
 //                                                          → LoopPedidos (↩ loop)
-//                                             .out(1) → MontaClienteSql
-//                                                → SqlCadastraClienteOlist
-//                                                  → MontaVendaSql (↩ loop)
-//                                         .out(1) → SqlVerificaCliente (↩ loop)
-//                         .out(1) → SalvaUltimaExecucao (↩ loop)
-//                 .out(1) → SalvaUltimaExecucao (↩ loop)
+//                                                         .out(1) → AdicionaMarcadorOlist
+//                                                            → LoopPedidos (↩ loop)
+//                                               .out(1) → MontaClienteSql
+//                                                  → SqlCadastraClienteOlist
+//                                                    → MontaVendaSql (↩ loop)
+//                                           .out(1) → SqlVerificaCliente (↩ loop)
+//                           .out(1) → SalvaUltimaExecucao (↩ loop)
+//                   .out(1) → SalvaUltimaExecucao (↩ loop)
+//         .out(1) → RefreshTokenOlist
+//            → SalvaNovoToken
+//              → TokenAtivo (↩ loop)
 // </workflow-map>
 
 // =====================================================================
@@ -231,7 +238,7 @@ export class ZeusBuscaPedidosOlistSqlserverWorkflow {
             value: {
                 linha: '1',
                 access_token: '={{ $json.access_token }}',
-                refresh_token: '={{ $json.refresh_token }}',
+                refresh_token: "={{ $json.refresh_token || $('Token Olist').first().json.refresh_token }}",
             },
             matchingColumns: ['linha'],
             schema: [
@@ -340,6 +347,79 @@ export class ZeusBuscaPedidosOlistSqlserverWorkflow {
     };
 
     @node({
+        id: 'checa-token-validade-01',
+        name: 'Checa validade token',
+        type: 'n8n-nodes-base.code',
+        version: 2,
+        position: [448, -144],
+    })
+    ChecaValidadeToken = {
+        jsCode: `// Decodifica o exp do JWT do access_token salvo na planilha.
+// Válido por >2min -> pula o refresh. Rotacionar o refresh_token a cada
+// execução (1/min) expõe o fluxo a perda irreversível: basta UMA gravação
+// na planilha falhar depois do Tiny consumir o token antigo.
+const row = items[0]?.json || {};
+const at = String(row.access_token || '');
+let exp = 0;
+try {
+  const payload = at.split('.')[1] || '';
+  exp = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')).exp || 0;
+} catch (e) {}
+const now = Math.floor(Date.now() / 1000);
+return [{ json: { ...row, tokenValido: at !== '' && exp > now + 120 } }];`,
+    };
+
+    @node({
+        id: 'if-token-valido-01',
+        name: 'Token ainda válido?',
+        type: 'n8n-nodes-base.if',
+        version: 2,
+        position: [640, -144],
+    })
+    TokenAindaValido = {
+        conditions: {
+            options: {
+                caseSensitive: true,
+                leftValue: '',
+                typeValidation: 'loose',
+                version: 2,
+            },
+            conditions: [
+                {
+                    id: 'cond-token-valido',
+                    leftValue: '={{ $json.tokenValido }}',
+                    rightValue: true,
+                    operator: {
+                        type: 'boolean',
+                        operation: 'true',
+                        singleValue: true,
+                    },
+                },
+            ],
+            combinator: 'and',
+        },
+        options: {},
+    };
+
+    @node({
+        id: 'token-ativo-01',
+        name: 'Token Ativo',
+        type: 'n8n-nodes-base.code',
+        version: 2,
+        position: [912, -144],
+    })
+    TokenAtivo = {
+        jsCode: `// Ponto de convergência dos dois caminhos: token da planilha
+// (quando válido) ou resposta do refresh gravada na planilha.
+const j = items[0]?.json || {};
+let token = j.access_token;
+if (!token) {
+  try { token = $('Refresh Token Olist').first().json.access_token; } catch (e) {}
+}
+return [{ json: { access_token: token || '' } }];`,
+    };
+
+    @node({
         id: '10000000-0000-4000-8000-000000000003',
         name: 'Busca pedidos Olist',
         type: 'n8n-nodes-base.httpRequest',
@@ -362,7 +442,7 @@ export class ZeusBuscaPedidosOlistSqlserverWorkflow {
             parameters: [
                 {
                     name: 'Authorization',
-                    value: "=Bearer {{ $('Refresh Token Olist').first().json.access_token }}",
+                    value: "=Bearer {{ $('Token Ativo').first().json.access_token }}",
                 },
             ],
         },
@@ -439,7 +519,7 @@ return [{ json: { temPedidos: true, idsStr, lista: listaUnica } }];`,
             parameters: [
                 {
                     name: 'Authorization',
-                    value: "=Bearer {{ $('Refresh Token Olist').first().json.access_token }}",
+                    value: "=Bearer {{ $('Token Ativo').first().json.access_token }}",
                 },
             ],
         },
@@ -874,7 +954,7 @@ return itens.map((item) => {
             parameters: [
                 {
                     name: 'Authorization',
-                    value: "=Bearer {{ $('Refresh Token Olist').first().json.access_token }}",
+                    value: "=Bearer {{ $('Token Ativo').first().json.access_token }}",
                 },
             ],
         },
@@ -983,7 +1063,7 @@ return itens.map((item) => {
     })
     MarcaPedidosImportados = {
         jsCode: `const lista = $('Prepara Filtro SQL').item.json.lista;
-const token = $('Refresh Token Olist').first().json.access_token;
+const token = $('Token Ativo').first().json.access_token;
 
 const importados = items
   .map(i => String(i.json?.CdPedidoRepre ?? '').trim())
@@ -1100,9 +1180,13 @@ return filtrados.map(p => ({ json: Object.assign({ temNovos: true }, p.pedido ??
 
     @links()
     defineRouting() {
-        this.TokenOlist.out(0).to(this.RefreshTokenOlist.in(0));
+        this.TokenOlist.out(0).to(this.ChecaValidadeToken.in(0));
+        this.ChecaValidadeToken.out(0).to(this.TokenAindaValido.in(0));
+        this.TokenAindaValido.out(0).to(this.TokenAtivo.in(0));
+        this.TokenAindaValido.out(1).to(this.RefreshTokenOlist.in(0));
         this.RefreshTokenOlist.out(0).to(this.SalvaNovoToken.in(0));
-        this.SalvaNovoToken.out(0).to(this.LeUltimaExecucao.in(0));
+        this.SalvaNovoToken.out(0).to(this.TokenAtivo.in(0));
+        this.TokenAtivo.out(0).to(this.LeUltimaExecucao.in(0));
         this.LeUltimaExecucao.out(0).to(this.BuscaPedidosOlist.in(0));
         this.BuscaPedidosOlist.out(0).to(this.PreparaFiltroSql.in(0));
         this.PreparaFiltroSql.out(0).to(this.IfTemPedidos.in(0));
