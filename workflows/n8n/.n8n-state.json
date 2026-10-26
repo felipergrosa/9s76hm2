@@ -19,6 +19,46 @@
       "lastSyncedHash": "bee33c12c20558161b18417b5f7629b776607ae4ad1aaf371bf9911fc1d41fb4",
       "lastSyncedAt": "2026-10-26T15:12:09.116Z",
       "filename": "ZEUS Busca Pedidos Olist SQLServer.workflow.ts"
+    },
+    "08AWZvRk00CVXlSY": {
+      "lastSyncedHash": "066a975e909642cdbdc7c6ab0e6ac5382ecc7f4cb172fae898ae5c12c883da78",
+      "lastSyncedAt": "2026-10-26T16:11:02.628Z",
+      "filename": "ZEUS Refres token Olist.workflow.ts"
+    },
+    "lSFGOBbYks0grgf3": {
+      "lastSyncedHash": "1df1bae010e579c37b4439133875d5b2044538b3b5c62358eabf09c8bc98b0d7",
+      "lastSyncedAt": "2026-05-18T02:10:46.894Z",
+      "filename": "NOBRE Refres token Olist.workflow.ts"
+    },
+    "61dhnnoMhpXHkFrw": {
+      "lastSyncedHash": "055066928f27b56a964f113d90f119a62b4068d0a5748c85b11b7e81793e9c0e",
+      "lastSyncedAt": "2026-05-17T15:23:33.317Z",
+      "filename": "ZEUS Autorizacao Inicial Olist.workflow.ts"
+    },
+    "byDcggI5k5ZMLjWe": {
+      "lastSyncedHash": "9a0906fbd6a4dfccd148c55e2a01e49a9124d64ee0cdfb371a1a401a5097eaa0",
+      "lastSyncedAt": "2026-05-17T15:22:57.496Z",
+      "filename": "ZEUS Callback OAuth Olist.workflow.ts"
+    },
+    "XMCJwxGPrwp1V3Ah": {
+      "lastSyncedHash": "9898b6a46b1d52b243ffc57df7c8759bd58806a047498534b1a1f4aa47afc19c",
+      "lastSyncedAt": "2026-05-17T15:23:10.716Z",
+      "filename": "ZEUS Troca Code OAuth Olist.workflow.ts"
+    },
+    "xtMnYiGoT961uTxP": {
+      "lastSyncedHash": "e169056524c40b37770e026022a1697c3ad7c575f9a07c1ea296c2ceb82f473e",
+      "lastSyncedAt": "2026-05-18T01:24:21.865Z",
+      "filename": "NOBRE Autorizacao Inicial Olist.workflow.ts"
+    },
+    "iLJgNhPn0oVcJdiq": {
+      "lastSyncedHash": "00dd5a67f15e3e8a213007e4a450031025bec0247c691177d9ae58807faaf5c6",
+      "lastSyncedAt": "2026-05-18T01:28:13.286Z",
+      "filename": "NOBRE Callback OAuth Olist.workflow.ts"
+    },
+    "jOQQZ2yP59vMyRJO": {
+      "lastSyncedHash": "2444273193c24a87ac3a8be0437cf9a7d2e904491d5b6c451553fc0f507a23e2",
+      "lastSyncedAt": "2026-05-18T00:42:35.724Z",
+      "filename": "NOBRE Troca Code OAuth Olist.workflow.ts"
     }
   }
 }
