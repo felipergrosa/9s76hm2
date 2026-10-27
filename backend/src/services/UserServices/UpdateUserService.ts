@@ -333,8 +333,11 @@ const UpdateUserService = async ({
   }
 
   // Filas são campo privilegiado: só atualizáveis por users.edit/admin/super
+  // (through.companyId obrigatório — UserQueues.companyId é NOT NULL)
   if (queueIds !== undefined && canEditPrivileged) {
-    await user.$set("queues", queueIds);
+    await user.$set("queues", queueIds, {
+      through: { companyId: targetCompanyId }
+    });
   }
 
   await user.reload();

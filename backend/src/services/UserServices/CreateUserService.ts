@@ -235,7 +235,11 @@ const CreateUserService = async ({
     { include: ["queues", "company"] }
   );
 
-  await user.$set("queues", queueIds);
+  // UserQueues.companyId é NOT NULL (isolamento por tenant) — $set não
+  // preenche colunas extras da tabela de junção por padrão, então o
+  // companyId é passado via `through` (senão o INSERT quebra com 500
+  // depois do usuário já ter sido criado).
+  await user.$set("queues", queueIds, { through: { companyId } });
 
   // Fase 3 (composição de permissões): profile "admin" não é mais cobertor
   // automático — os poderes vêm da Role de sistema "Administrador" da empresa.
