@@ -77,17 +77,34 @@ export const showUserRoles = async (req: Request, res: Response): Promise<Respon
   const { companyId } = req.user;
   const { userId } = req.params;
 
-  const roles = await ListUserRolesService(userId, companyId);
+  // Super admin pode consultar roles de usuário de outro tenant —
+  // resolve a empresa do alvo (mesmo padrão do UpdateUserService).
+  const requestUser = await User.findByPk(req.user.id);
+  let targetCompanyId = companyId;
+  if (requestUser?.super === true) {
+    const target = await User.findByPk(userId);
+    if (!target) {
+      return res.status(404).json({ error: "ERR_NO_USER_FOUND" });
+    }
+    targetCompanyId = target.companyId;
+  }
+
+  const roles = await ListUserRolesService(userId, targetCompanyId);
 
   return res.status(200).json(roles);
 };
 
 export const setUserRoles = async (req: Request, res: Response): Promise<Response> => {
-  const { companyId } = req.user;
+  const { companyId, id: requestUserId } = req.user;
   const { userId } = req.params;
   const { roleIds } = req.body;
 
-  const userRoles = await SetUserRolesService({ userId, companyId, roleIds });
+  const userRoles = await SetUserRolesService({
+    userId,
+    companyId,
+    roleIds,
+    requestUserId: +requestUserId
+  });
 
   return res.status(200).json(userRoles);
 };

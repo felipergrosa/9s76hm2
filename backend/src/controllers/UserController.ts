@@ -3,6 +3,7 @@
 import { Request, Response } from "express";
 import { getIO } from "../libs/socket";
 import { isEmpty, isNil } from "lodash";
+import { SerializeUser } from "../helpers/SerializeUser";
 import CheckSettingsHelper from "../helpers/CheckSettings";
 import AppError from "../errors/AppError";
 
@@ -129,9 +130,10 @@ export const remove = async (
   } else {
     await DeleteUserService(userId, user.companyId);
 
+    // Emite no workspace do TENANT DO ALVO (super pode remover cross-tenant)
     const io = getIO();
-    io.of(`/workspace-${companyId}`)
-      .emit(`company-${companyId}-user`, {
+    io.of(`/workspace-${user.companyId}`)
+      .emit(`company-${user.companyId}-user`, {
         action: "delete",
         userId
       });
@@ -170,7 +172,11 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     allowedConnectionIds: rawAllowedConnectionIds,
     isPrivate: rawIsPrivate,
     color,
-    ramal // Ramal interno (referência Fluxoo — cadastro simples)
+    ramal, // Ramal interno (referência Fluxoo — cadastro simples)
+    farewellMessage,
+    managedUserIds: rawManagedUserIds,
+    supervisorViewMode: rawSupervisorViewMode,
+    language
   } = req.body;
   let userCompanyId: number | null = null;
 
@@ -202,6 +208,10 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
   const permissions = isPublicSignup ? [] : rawPermissions;
   const allowedConnectionIds = isPublicSignup ? [] : rawAllowedConnectionIds;
   const isPrivate = isPublicSignup ? false : rawIsPrivate;
+  // Carteiras gerenciadas (supervisão) também são privilégio — signup público
+  // nunca pode auto-conceder supervisão de outros usuários.
+  const managedUserIds = isPublicSignup ? [] : rawManagedUserIds;
+  const supervisorViewMode = isPublicSignup ? "include" : rawSupervisorViewMode;
   if (isPublicSignup && req.body.super === true) {
     throw new AppError("ERR_NO_PERMISSION", 403);
   }
@@ -347,15 +357,23 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
       isPrivate,
       color,
       ramal,
+      farewellMessage,
+      managedUserIds,
+      supervisorViewMode,
+      language,
       superUser,
       requestUserIsSuper: isRequestSuper
     });
+
+    // O evento é broadcast para todo o tenant — remove o token de sessão
+    // antes de emitir (o response HTTP continua com o payload completo).
+    const { token: _socketToken, ...userToEmit } = user as any;
 
     const io = getIO();
     io.of(`/workspace-${companyUser}`)
       .emit(`company-${companyUser}-user`, {
         action: "create",
-        user
+        user: userToEmit
       });
 
     return res.status(200).json(user);
@@ -366,15 +384,30 @@ export const show = async (req: Request, res: Response): Promise<Response> => {
   const { userId } = req.params;
   const { companyId, id: requestUserId } = req.user;
 
-  // Permite buscar próprios dados mesmo sem users.view
+  // Permite buscar próprios dados mesmo sem users.view.
+  // hasPermissionAsync no usuário FRESCO do DB — o resolver síncrono sobre
+  // o JWT ignora permissões concedidas via Roles (falso-negativo).
   const isOwnProfile = +userId === +requestUserId;
-  const canView = isOwnProfile || hasPermission(req.user, "users.view");
+  const requestUser = await User.findByPk(requestUserId);
+  const canView =
+    isOwnProfile || (await hasPermissionAsync(requestUser, "users.view"));
 
   if (!canView) {
     throw new AppError("ERR_NO_PERMISSION: users.view", 403);
   }
 
-  const user = await ShowUserService(userId, companyId);
+  // Super admin pode ver usuário de outro tenant — resolve a empresa do
+  // alvo antes do ShowUserService (que filtra por companyId).
+  let targetCompanyId = companyId;
+  if (requestUser?.super === true) {
+    const target = await User.findByPk(userId);
+    if (!target) {
+      throw new AppError("ERR_NO_USER_FOUND", 404);
+    }
+    targetCompanyId = target.companyId;
+  }
+
+  const user = await ShowUserService(userId, targetCompanyId);
 
   return res.status(200).json(user);
 };
@@ -453,9 +486,10 @@ export const update = async (
     requestUser: currentUser
   });
 
+  // Emite no workspace do TENANT DO ALVO (super pode editar cross-tenant)
   const io = getIO();
-  io.of(`/workspace-${companyId}`)
-    .emit(`company-${companyId}-user`, {
+  io.of(`/workspace-${user.companyId}`)
+    .emit(`company-${user.companyId}-user`, {
       action: "update",
       user
     });
@@ -500,8 +534,9 @@ export const mediaUpload = async (
     const ext = path.extname(file.originalname) || path.extname(file.filename) || ".jpg";
     const targetFileName = `avatar${ext}`;
 
-    const relativeDir = buildUserBase(companyId, username); // company{}/users/{username}
-    const relativePath = buildUserAvatarRelativePath(companyId, username, targetFileName);
+    // Paths usam a empresa do ALVO (super pode editar cross-tenant)
+    const relativeDir = buildUserBase(user.companyId, username); // company{}/users/{username}
+    const relativePath = buildUserAvatarRelativePath(user.companyId, username, targetFileName);
 
     const publicRoot = path.resolve(__dirname, "..", "..", "public");
     const absDir = path.resolve(publicRoot, relativeDir);
@@ -529,13 +564,19 @@ export const mediaUpload = async (
     // Invalida o cache do usuário usado pelo middleware checkPermission (chave user:{id})
     serviceCache.invalidate(`user:${user.id}`);
 
-    user = await ShowUserService(userId, companyId);
+    user = await ShowUserService(userId, user.companyId);
 
+    // Emite o shape serializado (permissões efetivas) e nunca o token —
+    // o evento é broadcast para todo o tenant.
+    const serialized = await SerializeUser(user);
+    delete serialized.token;
+
+    // Emite no workspace do TENANT DO ALVO (super pode editar cross-tenant)
     const io = getIO();
-    io.of(`/workspace-${companyId}`)
-      .emit(`company-${companyId}-user`, {
+    io.of(`/workspace-${user.companyId}`)
+      .emit(`company-${user.companyId}-user`, {
         action: "update",
-        user
+        user: serialized
       });
 
     return res.status(200).json({ user, message: "Imagem atualizada" });

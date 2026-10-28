@@ -123,8 +123,14 @@ const useAuth = () => {
       }
       const handleCompanyUser = (data) => {
         if (data.action === "update" && data.user.id === user.id) {
-          setUser(data.user);
-          localStorage.setItem("user", JSON.stringify(data.user));
+          // Merge em vez de substituição: alguns emissores enviam payload
+          // parcial ({id, online, status}); substituir apagaria campos
+          // como permissions/super e derrubaria os menus em tempo real.
+          setUser(prev => {
+            const merged = { ...prev, ...data.user };
+            localStorage.setItem("user", JSON.stringify(merged));
+            return merged;
+          });
         }
       };
       io.on(`company-${user.companyId}-user`, handleCompanyUser);

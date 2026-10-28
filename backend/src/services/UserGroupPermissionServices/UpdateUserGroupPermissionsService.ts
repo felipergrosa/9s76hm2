@@ -1,5 +1,6 @@
 import UserGroupPermission from "../../models/UserGroupPermission";
 import { Op } from "sequelize";
+import { serviceCache } from "../../utils/serviceCache";
 
 /**
  * Atualiza as permissões de grupo de um usuário.
@@ -45,6 +46,11 @@ const UpdateUserGroupPermissionsService = async (
       ignoreDuplicates: true,
     });
   }
+
+  // A listagem de tickets cacheia os contactIds permitidos por grupo sob
+  // `groupPermissions:{userId}:{companyId}` (TTL 60s) — invalidar para a
+  // mudança valer já na próxima query.
+  serviceCache.invalidate(`groupPermissions:${userId}:${companyId}`);
 
   return contactIds;
 };

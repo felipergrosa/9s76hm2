@@ -3,6 +3,7 @@
 import * as Yup from "yup";
 
 import AppError from "../../errors/AppError";
+import { SerializeUser } from "../../helpers/SerializeUser";
 import ShowUserService from "./ShowUserService";
 import Company from "../../models/Company";
 import User from "../../models/User";
@@ -64,12 +65,7 @@ interface Request {
   requestUser: User;
 }
 
-interface Response {
-  id: number;
-  name: string;
-  email: string;
-  profile: string;
-}
+type Response = Awaited<ReturnType<typeof SerializeUser>>;
 
 const UpdateUserService = async ({
   userData,
@@ -310,7 +306,10 @@ const UpdateUserService = async ({
   if (dataToUpdate.profile && dataToUpdate.profile !== previousProfile) {
     if (dataToUpdate.profile === "admin") {
       const adminRole = await EnsureAdminRoleService(targetCompanyId);
-      await UserRole.findOrCreate({
+      // where sem companyId (o índice único é userId+roleId); se uma linha
+      // legada existir com companyId divergente, corrige — o resolver de
+      // permissões filtra por user.companyId e a role sumiria silenciosamente.
+      const [adminUserRole, urCreated] = await UserRole.findOrCreate({
         where: { userId: user.id, roleId: adminRole.id },
         defaults: {
           userId: user.id,
@@ -318,6 +317,9 @@ const UpdateUserService = async ({
           companyId: targetCompanyId
         } as any
       });
+      if (!urCreated && adminUserRole.companyId !== targetCompanyId) {
+        await adminUserRole.update({ companyId: targetCompanyId } as any);
+      }
       invalidateRolePermissionsCache(user.id, targetCompanyId);
     } else if (previousProfile === "admin") {
       const adminRole = await Role.findOne({
@@ -360,36 +362,18 @@ const UpdateUserService = async ({
     }
   }
 
-  const serializedUser = {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    profile: user.profile,
-    companyId: user.companyId,
-    company,
-    queues: user.queues,
-    startWork: user.startWork,
-    endWork: user.endWork,
-    greetingMessage: user.farewellMessage,
-    allTicket: user.allTicket,
-
-    defaultMenu: user.defaultMenu,
-    defaultTheme: user.defaultTheme,
-    allowGroup: user.allowGroup,
-    allHistoric: user.allHistoric,
-    userClosePendingTicket: user.userClosePendingTicket,
-    showDashboard: user.showDashboard,
-    defaultTicketsManagerWidth: user.defaultTicketsManagerWidth,
-    allowRealTime: user.allowRealTime,
-    allowConnections: user.allowConnections,
-    profileImage: user.profileImage,
-    color: (user as any).color,
-    allowedContactTags: user.allowedContactTags,
-    managedUserIds: (user as any).managedUserIds || [],
-    supervisorViewMode: (user as any).supervisorViewMode || "include",
-    permissions: user.permissions || [],
-    ramal: (user as any).ramal
-  };
+  // Serializa igual ao login/refresh (SerializeUser): devolve o set EFETIVO
+  // de permissões (base + flags + ACL + Roles). O objeto manual anterior
+  // expunha só a coluna ACL (user.permissions = []) e omitia `super` — o
+  // evento socket `company-{id}-user` derrubava as permissões do usuário
+  // logado sempre que o próprio perfil era editado (mesma classe de bug
+  // do refresh_token).
+  user.queues = await user.$get("queues");
+  if (company) user.company = company;
+  const serializedUser = await SerializeUser(user);
+  // O objeto retornado é broadcast via socket para o tenant inteiro —
+  // nunca emitir o token de sessão do usuário serializado.
+  delete serializedUser.token;
 
   return serializedUser;
 };

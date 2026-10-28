@@ -8,6 +8,7 @@ import {
   getAllAvailablePermissions,
   invalidateRolePermissionsCache
 } from "../../helpers/PermissionAdapter";
+import { ADMIN_ROLE_DESCRIPTION } from "./EnsureAdminRoleService";
 
 interface Request {
   id: string | number;
@@ -31,6 +32,24 @@ const UpdateService = async ({
 
   if (!role) {
     throw new AppError("ERR_ROLE_NOT_FOUND", 404);
+  }
+
+  // Role de sistema "Administrador" é gerenciada pelo código (composição de
+  // permissões) — bloquear edições evita: (i) esvaziar permissions e
+  // rebaixar todos os admins do tenant; (ii) renomear/remover a marca da
+  // description, quebrando o lookup por nome do EnsureAdminRoleService e
+  // criando divergência entre admins do mesmo tenant.
+  const isSystemRole = role.description === ADMIN_ROLE_DESCRIPTION;
+  if (
+    isSystemRole &&
+    ((name !== undefined && name.trim() !== role.name) ||
+      permissions !== undefined ||
+      (description !== undefined && description !== ADMIN_ROLE_DESCRIPTION))
+  ) {
+    throw new AppError(
+      "A role de sistema 'Administrador' é gerenciada automaticamente e não pode ser alterada.",
+      400
+    );
   }
 
   if (name && name.trim()) {

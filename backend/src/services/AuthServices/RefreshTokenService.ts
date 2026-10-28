@@ -1,9 +1,9 @@
 import { verify } from "jsonwebtoken";
 import { Response as Res } from "express";
 
-import User from "../../models/User";
 import AppError from "../../errors/AppError";
 import ShowUserService from "../UserServices/ShowUserService";
+import { SerializeUser } from "../../helpers/SerializeUser";
 import authConfig from "../../config/auth";
 import {
   createAccessToken,
@@ -17,7 +17,7 @@ interface RefreshTokenPayload {
 }
 
 interface Response {
-  user: User;
+  user: Awaited<ReturnType<typeof SerializeUser>>;
   newToken: string;
   refreshToken: string;
 }
@@ -40,7 +40,13 @@ export const RefreshTokenService = async (
     const newToken = createAccessToken(user);
     const refreshToken = createRefreshToken(user);
 
-    return { user, newToken, refreshToken };
+    // Serializa igual ao login (AuthUserService): devolve o set EFETIVO de
+    // permissões (base + flags + ACL + Roles) em user.permissions. Retornar
+    // o model cru expõe apenas a coluna ACL pontual e o frontend perde
+    // todas as permissões granulares a cada F5.
+    const serializedUser = await SerializeUser(user);
+
+    return { user: serializedUser, newToken, refreshToken };
   } catch (err) {
     res.clearCookie("jrt");
     throw new AppError("ERR_SESSION_EXPIRED", 401);

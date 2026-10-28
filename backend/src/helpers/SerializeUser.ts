@@ -35,6 +35,11 @@ interface SerializedUser {
   permissions: string[];
   color?: string;
   ramal?: string;
+  allowedConnectionIds?: number[];
+  isPrivate?: boolean;
+  farewellMessage?: string;
+  language?: string;
+  online?: boolean;
 }
 
 export const SerializeUser = async (user: User): Promise<SerializedUser> => {
@@ -76,6 +81,11 @@ export const SerializeUser = async (user: User): Promise<SerializedUser> => {
     supervisorViewMode: (user as any).supervisorViewMode || "include",
     permissions: await getUserPermissionsAsync(user),
     color: (user as any).color,
-    ramal: (user as any).ramal
+    ramal: (user as any).ramal,
+    allowedConnectionIds: (user as any).allowedConnectionIds || [],
+    isPrivate: (user as any).isPrivate,
+    farewellMessage: (user as any).farewellMessage,
+    language: (user as any).language,
+    online: (user as any).online
   };
 };

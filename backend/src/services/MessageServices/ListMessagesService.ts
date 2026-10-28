@@ -11,6 +11,7 @@ import Queue from "../../models/Queue";
 import Whatsapp from "../../models/Whatsapp";
 import ImportContactHistoryService from "./ImportContactHistoryService";
 import logger from "../../utils/logger";
+import { hasPermissionAsync } from "../../helpers/PermissionAdapter";
 import { getCachedTicketMessages, cacheTicketMessages } from "./MessageCacheService";
 
 interface Request {
@@ -180,7 +181,9 @@ const ListMessagesService = async ({
           contactId: ticket.contactId,
           whatsappId: ticket.whatsappId,
           isGroup: ticket.isGroup,
-          queueId: user.profile === "admin" || user.allTicket === "enable" || (ticket.isGroup && user.allowGroup) ?
+          queueId: user.profile === "admin" || user.allTicket === "enable" ||
+            (await hasPermissionAsync(user, "tickets.view-all")) ||
+            (ticket.isGroup && user.allowGroup) ?
             { [Op.or]: [queues, null] } :
             { [Op.in]: queues }
         },

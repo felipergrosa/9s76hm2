@@ -5,8 +5,6 @@ import AppError from "../errors/AppError";
 import authConfig from "../config/auth";
 import logger from "../utils/logger";
 
-import { updateUser } from "../helpers/updateUser";
-
 // Interface para Request estendido
 interface ExtendedRequest extends Request {
   user?: {

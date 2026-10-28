@@ -1,6 +1,11 @@
 import { Transaction } from "sequelize";
 import Role from "../../models/Role";
-import { getAdminPermissions } from "../../helpers/PermissionAdapter";
+import UserRole from "../../models/UserRole";
+import { serviceCache } from "../../utils/serviceCache";
+import {
+  getAdminPermissions,
+  invalidateRolePermissionsCache
+} from "../../helpers/PermissionAdapter";
 
 /**
  * Role de sistema "Administrador" — fase 3 (composição de permissões).
@@ -29,7 +34,34 @@ const EnsureAdminRoleService = async (
     where: { name: ADMIN_ROLE_NAME, companyId },
     transaction
   });
-  if (existing) return existing;
+  if (existing) {
+    // Self-heal: role de sistema (marca da description) é re-sincronizada
+    // com o catálogo vivo — corrige drift (ex.: snapshot da migration
+    // 20261006000001 ficou sem as permissões meta-automations.*).
+    if (existing.description === ADMIN_ROLE_DESCRIPTION) {
+      const live = getAdminPermissions();
+      const current = Array.isArray(existing.permissions)
+        ? existing.permissions
+        : [];
+      const drift =
+        live.length !== current.length ||
+        live.some(p => !current.includes(p)) ||
+        current.some(p => !live.includes(p));
+      if (drift) {
+        await existing.update({ permissions: live } as any, { transaction });
+        // Permissões da role mudaram — invalida o cache dos atribuídos.
+        const userRoles = await UserRole.findAll({
+          where: { roleId: existing.id, companyId },
+          transaction
+        });
+        userRoles.forEach(ur => {
+          invalidateRolePermissionsCache(ur.userId, companyId);
+          serviceCache.invalidate(`user:${ur.userId}`);
+        });
+      }
+    }
+    return existing;
+  }
 
   try {
     return await Role.create({

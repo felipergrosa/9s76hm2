@@ -22,6 +22,7 @@ import GetUserPersonalTagContactIds from "../../helpers/GetUserPersonalTagContac
 import walletExistsSql from "../../helpers/walletExistsSql";
 import ListUserGroupPermissionsService from "../UserGroupPermissionServices/ListUserGroupPermissionsService";
 import { withCache } from "../../utils/serviceCache";
+import { hasPermissionAsync } from "../../helpers/PermissionAdapter";
 
 interface Request {
   searchParam?: string;
@@ -103,7 +104,12 @@ const ListTicketsService = async ({
   ]);
 
   const showTicketAllQueues = user.allHistoric === "enabled";
-  const showTicketWithoutQueue = user.allTicket === "enable";
+  // "Sem fila": flag legada allTicket OU permissão granular tickets.view-all
+  // concedida via Role/ACL (fase 3 — antes só a flag era honrada e a role
+  // não liberava a visibilidade).
+  const showTicketWithoutQueue =
+    user.allTicket === "enable" ||
+    (await hasPermissionAsync(user, "tickets.view-all"));
   const showGroups = user.allowGroup === true;
   const showNotificationPendingValue = showPendingNotification?.[0]?.showNotificationPending || "disabled";
 

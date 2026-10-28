@@ -81,7 +81,7 @@ const CreateCompanyService = async (
     // Role de sistema "Administrador" — sem ela, o profile="admin" cairia no
     // fallback legado de blanket total em vez da composição granular.
     const adminRole = await EnsureAdminRoleService(company.id, t);
-    await UserRole.findOrCreate({
+    const [adminUserRole, urCreated] = await UserRole.findOrCreate({
       where: { userId: user.id, roleId: adminRole.id },
       defaults: {
         userId: user.id,
@@ -90,6 +90,9 @@ const CreateCompanyService = async (
       } as any,
       transaction: t
     });
+    if (!urCreated && adminUserRole.companyId !== company.id) {
+      await adminUserRole.update({ companyId: company.id } as any, { transaction: t });
+    }
 
     const settings = await CompaniesSettings.create({
           companyId: company.id,

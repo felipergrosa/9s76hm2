@@ -45,6 +45,8 @@ interface Request {
   superUser?: boolean;
   color?: string;
   ramal?: string; // Ramal interno (cadastro; futuramente SIP)
+  farewellMessage?: string;
+  language?: string;
   // Flag do requisitante (vinda do DB) — controla concessão de admin/super
   // e permissões do grupo super
   requestUserIsSuper?: boolean;
@@ -87,6 +89,8 @@ const CreateUserService = async ({
   superUser = false,
   color = "",
   ramal,
+  farewellMessage,
+  language,
   requestUserIsSuper = false
 }: Request): Promise<Response> => {
   // SEGURANÇA (N2): profile "admin" e flag super só podem ser concedidos por
@@ -229,6 +233,8 @@ const CreateUserService = async ({
       isPrivate,
       super: superUser,
       color,
+      farewellMessage,
+      language,
       // Ramal interno: string vazia vira null para não poluir a coluna
       ramal: typeof ramal === "string" && ramal.trim() !== "" ? ramal.trim() : null
     },
@@ -245,10 +251,15 @@ const CreateUserService = async ({
   // automático — os poderes vêm da Role de sistema "Administrador" da empresa.
   if (profile === "admin" && companyId !== undefined) {
     const adminRole = await EnsureAdminRoleService(companyId);
-    await UserRole.findOrCreate({
+    const [adminUserRole, urCreated] = await UserRole.findOrCreate({
       where: { userId: user.id, roleId: adminRole.id },
       defaults: { userId: user.id, roleId: adminRole.id, companyId } as any
     });
+    // Corrige linha legada com companyId divergente (o resolver filtra por
+    // user.companyId — vínculo mis-scoped some silenciosamente).
+    if (!urCreated && adminUserRole.companyId !== companyId) {
+      await adminUserRole.update({ companyId } as any);
+    }
   }
 
   await user.reload();

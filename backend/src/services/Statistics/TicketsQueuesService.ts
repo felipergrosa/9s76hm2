@@ -7,6 +7,7 @@ import Contact from "../../models/Contact";
 import Queue from "../../models/Queue";
 import GetUserPersonalTagContactIds from "../../helpers/GetUserPersonalTagContactIds";
 import FindCompanySettingOneService from "../CompaniesSettings/FindCompanySettingOneService";
+import { hasPermissionAsync } from "../../helpers/PermissionAdapter";
 
 interface Request {
   dateStart: string;
@@ -64,7 +65,11 @@ const TicketsQueuesService = async ({
     }
 
   ];
-  const showTicketWithoutQueue = user.allTicket === "enable";
+  // "Sem fila": flag legada allTicket OU permissão granular tickets.view-all
+  // concedida via Role/ACL (fase 3 — antes só a flag era honrada).
+  const showTicketWithoutQueue =
+    user.allTicket === "enable" ||
+    (await hasPermissionAsync(user, "tickets.view-all"));
 
   if (isExistsQueues) {
     let allowedQueueIds = userQueues.map(q => q.queueId);

@@ -885,6 +885,29 @@ const UserModal = ({ open, onClose, userId }) => {
                           </Grid>
                         </Grid>
 
+                        {/* Visualização de tickets sem fila (flag allTicket).
+                            Sem ela — e sem permissão tickets.view-all via
+                            Role — o atendente não enxerga tickets pendentes
+                            que chegaram sem fila atribuída. */}
+                        <Divider style={{ marginTop: 16, marginBottom: 16 }} />
+                        <Grid container spacing={1}>
+                          <Grid item xs={12} md={6} xl={6}>
+                            <FormControl variant="outlined" margin="dense" fullWidth>
+                              <InputLabel>
+                                {i18n.t("userModal.form.allTicket")}
+                              </InputLabel>
+                              <Field
+                                as={Select}
+                                label={i18n.t("userModal.form.allTicket")}
+                                name="allTicket"
+                              >
+                                <MenuItem value="enable">{i18n.t("userModal.form.allTicketEnable")}</MenuItem>
+                                <MenuItem value="disable">{i18n.t("userModal.form.allTicketDisable")}</MenuItem>
+                              </Field>
+                            </FormControl>
+                          </Grid>
+                        </Grid>
+
                         {/* Usuários gerenciados - para supervisores verem carteiras de outros usuários */}
                         {/* Apenas superadmin pode ver esta opção */}
                         {loggedInUser.super && (
