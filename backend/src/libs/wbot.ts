@@ -1045,7 +1045,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 await whatsapp.update({ status: "PENDING", session: "" });
                 await DeleteBaileysService(whatsapp.id);
                 await cacheLayer.delFromPattern(`sessions:${whatsapp.id}:*`);
-                // remove sessão em filesystem se existir
+                // remove sessão em filesystem se existir (creds + journal inbound)
                 try {
                   const baseDir = path.resolve(
                     process.cwd(),
@@ -1053,7 +1053,16 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                     String(whatsapp.companyId || "0"),
                     String(whatsapp.id)
                   );
-                  await fs.promises.rm(baseDir, { recursive: true, force: true });
+                  const journalDir = path.resolve(
+                    process.cwd(),
+                    "private/baileys-inbound",
+                    String(whatsapp.companyId || "0"),
+                    String(whatsapp.id)
+                  );
+                  await Promise.all([
+                    fs.promises.rm(baseDir, { recursive: true, force: true }),
+                    fs.promises.rm(journalDir, { recursive: true, force: true })
+                  ]);
                 } catch { }
                 io?.of(`/workspace-${companyId}`)
                   .emit(`company-${whatsapp.companyId}-whatsappSession`, {
@@ -1089,7 +1098,16 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                     String(whatsapp.companyId || "0"),
                     String(whatsapp.id)
                   );
-                  await fs.promises.rm(baseDir, { recursive: true, force: true });
+                  const journalDir = path.resolve(
+                    process.cwd(),
+                    "private/baileys-inbound",
+                    String(whatsapp.companyId || "0"),
+                    String(whatsapp.id)
+                  );
+                  await Promise.all([
+                    fs.promises.rm(baseDir, { recursive: true, force: true }),
+                    fs.promises.rm(journalDir, { recursive: true, force: true })
+                  ]);
                 } catch { }
 
                 try {
@@ -1270,7 +1288,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 await DeleteBaileysService(whatsapp.id);
                 await cacheLayer.delFromPattern(`sessions:${whatsapp.id}:*`);
                 
-                // remove sessão em filesystem se existir
+                // remove sessão em filesystem se existir (creds + journal inbound)
                 try {
                   const baseDir = path.resolve(
                     process.cwd(),
@@ -1278,7 +1296,16 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                     String(whatsapp.companyId || "0"),
                     String(whatsapp.id)
                   );
-                  await fs.promises.rm(baseDir, { recursive: true, force: true });
+                  const journalDir = path.resolve(
+                    process.cwd(),
+                    "private/baileys-inbound",
+                    String(whatsapp.companyId || "0"),
+                    String(whatsapp.id)
+                  );
+                  await Promise.all([
+                    fs.promises.rm(baseDir, { recursive: true, force: true }),
+                    fs.promises.rm(journalDir, { recursive: true, force: true })
+                  ]);
                 } catch { }
                 io?.of(`/workspace-${companyId}`)
                   .emit(`company-${whatsapp.companyId}-whatsappSession`, {

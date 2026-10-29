@@ -838,9 +838,35 @@ const wbotMonitor = async (
         // desconectada e força reconexão (gera QR novo se o pareamento morreu).
         if (!(session as any)?.user) {
           logger.error(
-            `[HealthCheck] Sessão ${whatsapp.id} sem identidade (despareada) — forçando reconexão`
+            `[HealthCheck] Sessão ${whatsapp.id} sem identidade (despareada) — limpando credenciais para QR limpo`
           );
           await markDisconnected();
+
+          // Limpa creds + journal: se o pareamento morreu no WhatsApp, a próxima
+          // tentativa deve gerar QR novo em vez de reconectar com creds inválidos.
+          try {
+            const path = require("path");
+            const fs = require("fs");
+            const credsDir = path.resolve(
+              process.cwd(),
+              process.env.SESSIONS_DIR || "private/sessions",
+              String(companyId),
+              String(whatsapp.id)
+            );
+            const journalDir = path.resolve(
+              process.cwd(),
+              "private/baileys-inbound",
+              String(companyId),
+              String(whatsapp.id)
+            );
+            await Promise.all([
+              fs.promises.rm(credsDir, { recursive: true, force: true }),
+              fs.promises.rm(journalDir, { recursive: true, force: true })
+            ]);
+          } catch (rmErr: any) {
+            logger.error(`[HealthCheck] falha ao limpar sessão ${whatsapp.id}: ${rmErr?.message}`);
+          }
+
           removeWbot(whatsapp.id, false);
 
           const { getCircuitBreakerStatus } = require("../../libs/wbot");
