@@ -200,7 +200,15 @@ const QrcodeModal = ({ open, onClose, whatsAppId }) => {
         resetCountdown();
       }
 
-      if (data.action === "update" && data.session.qrcode === "") {
+      // Fecha quando a sessão conectou (status CONNECTED) ou quando o
+      // backend esvazia o qrcode. Antes conferia apenas qrcode === "", mas
+      // no "open" o backend grava connected_<ts> no campo — o modal nunca
+      // fechava sozinho após um pareamento novo.
+      if (
+        data.action === "update" &&
+        data.session.id === whatsAppId &&
+        (data.session.status === "CONNECTED" || data.session.qrcode === "")
+      ) {
         onClose();
       }
     }

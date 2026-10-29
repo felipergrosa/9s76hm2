@@ -49,6 +49,7 @@ import FlowExecutionLog from "../../models/FlowExecutionLog";
 import axios from "axios";
 import Tag from "../../models/Tag";
 import ContactTag from "../../models/ContactTag";
+import TicketTag from "../../models/TicketTag";
 import { FlowBuilderModel } from "../../models/FlowBuilder";
 import User from "../../models/User";
 import ContactCustomField from "../../models/ContactCustomField";
@@ -1011,6 +1012,86 @@ export const ActionsWebhookService = async (
         } catch (errTag) {
           logger.warn(
             `[FlowBuilder][tag] Falha no node ${nodeSelected.id}: ${errTag?.message || errTag}`
+          );
+        }
+      }
+
+      // Nó "kanbanLane": move o ticket entre as lanes do Kanban (tag kanban).
+      // data.laneId: id da tag kanban de destino (0 = "Em aberto", sem lane).
+      // data.requireLaneId (opcional): só move se a lane atual for essa —
+      // cobre a regra "lead na lane X, interagiu → vai para lane Y".
+      if (nodeSelected.type === "kanbanLane") {
+        try {
+          await ensureTicket();
+
+          if (!ticket) {
+            logger.warn(`[FlowBuilder][kanbanLane] node=${nodeSelected.id} sem ticket`);
+          } else {
+            const laneIdNode = Number(nodeSelected.data?.laneId ?? -1);
+            const requireLaneId = nodeSelected.data?.requireLaneId;
+
+            if (laneIdNode < 0) {
+              logger.warn(`[FlowBuilder][kanbanLane] node=${nodeSelected.id} sem laneId`);
+            } else {
+              const laneTag =
+                laneIdNode > 0
+                  ? await Tag.findOne({ where: { id: laneIdNode, companyId, kanban: 1 } })
+                  : null;
+
+              if (laneIdNode > 0 && !laneTag) {
+                logger.warn(
+                  `[FlowBuilder][kanbanLane] Lane ${laneIdNode} inválida p/ empresa ${companyId}`
+                );
+              } else {
+                const currentTicketTags = await TicketTag.findAll({
+                  where: { ticketId: ticket.id, companyId }
+                });
+                const currentTagIds = currentTicketTags.map(t => t.tagId);
+
+                let kanbanTagIds: number[] = [];
+                if (currentTagIds.length > 0) {
+                  const kanbanTags = await Tag.findAll({
+                    where: { id: { [Op.in]: currentTagIds }, kanban: 1, companyId }
+                  });
+                  kanbanTagIds = kanbanTags.map(t => t.id);
+                }
+
+                const currentLaneId = kanbanTagIds[0] ?? 0;
+                if (
+                  requireLaneId !== undefined &&
+                  requireLaneId !== null &&
+                  Number(requireLaneId) !== currentLaneId
+                ) {
+                  logger.info(
+                    `[FlowBuilder][kanbanLane] ticket ${ticket.id} na lane ${currentLaneId}, exigida ${requireLaneId} — nó ignorado`
+                  );
+                } else {
+                  if (kanbanTagIds.length > 0) {
+                    await TicketTag.destroy({
+                      where: { ticketId: ticket.id, companyId, tagId: { [Op.in]: kanbanTagIds } }
+                    });
+                  }
+                  if (laneIdNode > 0) {
+                    await TicketTag.create({
+                      ticketId: ticket.id,
+                      tagId: laneIdNode,
+                      companyId
+                    });
+                  }
+
+                  const ioLane = getIO();
+                  const fullTicketLane = await ShowTicketService(ticket.id, companyId);
+                  ioLane.of(`/workspace-${companyId}`).emit(`company-${companyId}-ticket`, {
+                    action: "update",
+                    ticket: fullTicketLane
+                  });
+                }
+              }
+            }
+          }
+        } catch (errLane) {
+          logger.warn(
+            `[FlowBuilder][kanbanLane] Falha no node ${nodeSelected.id}: ${errLane?.message || errLane}`
           );
         }
       }

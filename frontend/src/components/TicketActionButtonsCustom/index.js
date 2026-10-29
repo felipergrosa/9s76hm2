@@ -18,6 +18,7 @@ import {
     Download as DownloadIcon,
     RefreshCw,
     Workflow as WorkflowIcon,
+    Trello as KanbanLaneIcon,
 } from "lucide-react";
 
 import { v4 as uuidv4 } from "uuid";
@@ -146,6 +147,35 @@ const TicketActionButtonsCustom = ({ ticket, onSearchClick
 
     const [anchorEl, setAnchorEl] = useState(null);
     const [menuOpen, setMenuOpen] = useState(false);
+    const [laneDialogOpen, setLaneDialogOpen] = useState(false);
+    const [kanbanLanes, setKanbanLanes] = useState([]);
+
+    // "Mover para lane": carrega as lanes visíveis (públicas + privadas do
+    // usuário) e aplica a mesma mecânica do drag-drop do Kanban:
+    // DELETE das tags kanban atuais + PUT da nova lane. 0 = "Em aberto".
+    const handleOpenLaneDialog = async () => {
+        try {
+            const { data } = await api.get("/tag/kanban");
+            setKanbanLanes(data?.lista || []);
+            setLaneDialogOpen(true);
+        } catch (err) {
+            toastError(err);
+        }
+    };
+
+    const handleMoveToLane = async (laneId) => {
+        try {
+            await api.delete(`/ticket-tags/${ticket.id}`);
+            if (Number(laneId) > 0) {
+                await api.put(`/ticket-tags/${ticket.id}/${laneId}`);
+            }
+            toast.success(laneId > 0 ? "Ticket movido para a lane" : "Ticket movido para Em aberto");
+        } catch (err) {
+            toastError(err);
+        } finally {
+            setLaneDialogOpen(false);
+        }
+    };
 
     useEffect(() => {
         fetchData();
@@ -681,7 +711,32 @@ const TicketActionButtonsCustom = ({ ticket, onSearchClick
                             {i18n.t("triggerFlowModal.menuItem")}
                         </MenuItem>
                     )}
+                    {/* Mover o lead entre as lanes do Kanban */}
+                    {!ticket.isGroup && hasPermission("tickets.update") && (
+                        <MenuItem onClick={() => { handleCloseMenu(); handleOpenLaneDialog(); }}>
+                            <KanbanLaneIcon style={{ color: '#0e7490', marginRight: 10 }} />
+                            Mover para lane
+                        </MenuItem>
+                    )}
                 </Menu>
+                <Dialog
+                    open={laneDialogOpen}
+                    onClose={() => setLaneDialogOpen(false)}
+                    maxWidth="xs"
+                    fullWidth
+                >
+                    <DialogTitle>Mover para lane</DialogTitle>
+                    <DialogContent dividers>
+                        <MenuItem onClick={() => handleMoveToLane(0)}>
+                            Em aberto (sem lane)
+                        </MenuItem>
+                        {kanbanLanes.map((lane) => (
+                            <MenuItem key={lane.id} onClick={() => handleMoveToLane(lane.id)}>
+                                {lane.name}
+                            </MenuItem>
+                        ))}
+                    </DialogContent>
+                </Dialog>
             </div>
             <>
                 <Formik

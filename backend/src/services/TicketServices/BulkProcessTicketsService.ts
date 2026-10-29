@@ -10,6 +10,7 @@ import ShowTicketService from "./ShowTicketService";
 import UpdateTicketService from "./UpdateTicketService";
 import SendWhatsAppMessage from "../WbotServices/SendWhatsAppMessage";
 import ContactTag from "../../models/ContactTag";
+import TicketTag from "../../models/TicketTag";
 import logger from "../../utils/logger";
 import { Op } from "sequelize";
 
@@ -104,6 +105,16 @@ const BulkProcessTicketsService = async (
 
     if (tags.length !== tagIds.length) {
       throw new AppError("Uma ou mais tags são inválidas", 400);
+    }
+  }
+
+  // Validar lane do kanban (tag com kanban=1 da empresa; 0 = "Em aberto")
+  if (kanbanLaneId !== undefined && kanbanLaneId !== null && Number(kanbanLaneId) > 0) {
+    const lane = await Tag.findOne({
+      where: { id: kanbanLaneId, companyId, kanban: 1 }
+    });
+    if (!lane) {
+      throw new AppError("Lane de kanban inválida", 400);
     }
   }
 
@@ -279,6 +290,54 @@ const BulkProcessTicketsService = async (
           }
         } else {
           logger.info(`[BulkProcess] Nenhuma tag para adicionar (tagIds: ${JSON.stringify(tagIds)})`);
+        }
+
+        // 3.5. Mover de lane do Kanban — mesma semântica do drag-drop:
+        // remove as tags kanban atuais do ticket e aplica a nova lane.
+        // kanbanLaneId=0 representa "Em aberto" (sem tag kanban).
+        if (kanbanLaneId !== undefined && kanbanLaneId !== null) {
+          try {
+            const currentTicketTags = await TicketTag.findAll({
+              where: { ticketId: ticket.id, companyId }
+            });
+            const currentTagIds = currentTicketTags.map(t => t.tagId);
+
+            let kanbanTagIds: number[] = [];
+            if (currentTagIds.length > 0) {
+              const kanbanTags = await Tag.findAll({
+                where: { id: { [Op.in]: currentTagIds }, kanban: 1, companyId }
+              });
+              kanbanTagIds = kanbanTags.map(t => t.id);
+            }
+
+            if (kanbanTagIds.length > 0) {
+              await TicketTag.destroy({
+                where: { ticketId: ticket.id, companyId, tagId: { [Op.in]: kanbanTagIds } }
+              });
+            }
+
+            if (Number(kanbanLaneId) > 0) {
+              await TicketTag.create({
+                ticketId: ticket.id,
+                tagId: Number(kanbanLaneId),
+                companyId
+              });
+              ticketResult.actions?.push(`Movido para lane ${kanbanLaneId}`);
+            } else {
+              ticketResult.actions?.push('Movido para "Em aberto"');
+            }
+
+            // Emite update do ticket para o Kanban refletir a troca de lane
+            // mesmo quando nenhum campo de status/fila mudou.
+            const fullTicketAfterLane = await ShowTicketService(ticket.id, companyId);
+            io.of(`/workspace-${companyId}`).emit(`company-${companyId}-ticket`, {
+              action: "update",
+              ticket: fullTicketAfterLane
+            });
+          } catch (error) {
+            logger.error(`[BulkProcess] Erro ao mover ticket ${ticket.id} de lane:`, error);
+            ticketResult.actions?.push('Erro ao mover de lane');
+          }
         }
 
         // 4. Atualizar status/fila/usuário

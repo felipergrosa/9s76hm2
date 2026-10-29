@@ -179,6 +179,8 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
   const [aiAgents, setAiAgents] = useState([]);
   const [selectedTags, setSelectedTags] = useState([]);
   const [availableTags, setAvailableTags] = useState([]);
+  const [kanbanLaneId, setKanbanLaneId] = useState("");
+  const [availableLanes, setAvailableLanes] = useState([]);
   const [newStatus, setNewStatus] = useState('');
   const [closeTicket, setCloseTicket] = useState(false);
   const [addNote, setAddNote] = useState('');
@@ -333,6 +335,14 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
     try {
       const { data } = await api.get('/tags');
       setAvailableTags(normalizeTags(data));
+      try {
+        // Lanes do kanban visíveis para o usuário (públicas + privadas dele)
+        const lanesRes = await api.get('/tag/kanban');
+        setAvailableLanes(lanesRes.data?.lista || []);
+      } catch (e) {
+        // Sem permissão kanban.view — select fica vazio
+        setAvailableLanes([]);
+      }
     } catch (error) {
       console.error('Erro ao carregar tags:', error);
     }
@@ -468,6 +478,7 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
         responseMessage: responseType === 'standard' ? responseMessage : undefined,
         aiAgentId: responseType === 'ai' ? aiAgentId : undefined,
         tagIds: selectedTags.map((t) => t.id),
+        kanbanLaneId: kanbanLaneId !== "" ? Number(kanbanLaneId) : undefined,
         newStatus: newStatus || undefined,
         queueId: selectedQueue || undefined,
         userId: selectedUserId || undefined,
@@ -934,6 +945,28 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
                           <TextField {...params} variant="outlined" label="Tags (contato)" placeholder="Selecione tags" />
                         )}
                       />
+                    )}
+
+                    {/* Lane do Kanban (ticket) — move o lead entre as colunas */}
+                    {canEditTags && (
+                      <FormControl variant="outlined" fullWidth>
+                        <InputLabel>Lane do Kanban (ticket)</InputLabel>
+                        <Select
+                          value={kanbanLaneId}
+                          onChange={(e) => setKanbanLaneId(e.target.value)}
+                          label="Lane do Kanban (ticket)"
+                        >
+                          <MenuItem value="">
+                            <em>Sem alteração</em>
+                          </MenuItem>
+                          <MenuItem value="0">Em aberto (sem lane)</MenuItem>
+                          {availableLanes.map((lane) => (
+                            <MenuItem key={lane.id} value={String(lane.id)}>
+                              {lane.name}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
                     )}
                   </Box>
 

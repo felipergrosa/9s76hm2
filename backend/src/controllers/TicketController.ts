@@ -751,6 +751,7 @@ export const bulkProcess = async (req: Request, res: Response): Promise<Response
     if (queueId !== undefined && queueId !== null) requiredPermissions.push("tickets.bulk-edit-queue");
     if (userId !== undefined && userId !== null) requiredPermissions.push("tickets.bulk-edit-user");
     if (Array.isArray(tagIds) && tagIds.length > 0) requiredPermissions.push("tickets.bulk-edit-tags");
+    if (kanbanLaneId !== undefined && kanbanLaneId !== null) requiredPermissions.push("tickets.bulk-edit-tags");
     if (responseType !== 'none') requiredPermissions.push("tickets.bulk-edit-response");
     if (closeTicket) requiredPermissions.push("tickets.bulk-edit-close");
     if (addNote) requiredPermissions.push("tickets.bulk-edit-notes");

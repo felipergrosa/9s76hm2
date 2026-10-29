@@ -22,6 +22,7 @@ import assignUserNode from "./nodes/assignUserNode";
 import internalNoteNode from "./nodes/internalNoteNode";
 import updateContactNode from "./nodes/updateContactNode";
 import tagNode from "./nodes/tagNode";
+import kanbanLaneNode from "./nodes/kanbanLaneNode";
 import webhookNode from "./nodes/webhookNode";
 import endNode from "./nodes/endNode";
 import gotoFlowNode from "./nodes/gotoFlowNode";
@@ -93,6 +94,7 @@ import {
   ImportExport,
   LibraryBooks,
   LocalOffer,
+  ViewKanban,
   PersonPin,
   RocketLaunch,
   Schedule,
@@ -131,6 +133,7 @@ import FlowBuilderTypebotModal from "../../components/FlowBuilderAddTypebotModal
 import FlowBuilderOpenAIModal from "../../components/FlowBuilderAddOpenAIModal";
 import FlowBuilderAddQuestionModal from "../../components/FlowBuilderAddQuestionModal";
 import FlowBuilderTagModal from "../../components/FlowBuilderTagModal";
+import FlowBuilderKanbanLaneModal from "../../components/FlowBuilderKanbanLaneModal";
 import FlowBuilderWebhookModal from "../../components/FlowBuilderWebhookModal";
 import FlowBuilderEndModal from "../../components/FlowBuilderEndModal";
 import FlowBuilderGotoFlowModal from "../../components/FlowBuilderGotoFlowModal";
@@ -297,6 +300,7 @@ const nodeTypes = {
   internalNote: internalNoteNode,
   updateContact: updateContactNode,
   tag: tagNode,
+  kanbanLane: kanbanLaneNode,
   webhook: webhookNode,
   end: endNode,
   gotoFlow: gotoFlowNode,
@@ -369,6 +373,7 @@ export const FlowBuilderConfig = () => {
   const [modalAddInternalNote, setModalAddInternalNote] = useState(null);
   const [modalAddUpdateContact, setModalAddUpdateContact] = useState(null);
   const [modalAddTag, setModalAddTag] = useState(null);
+  const [modalAddKanbanLane, setModalAddKanbanLane] = useState(null);
   const [modalAddWebhook, setModalAddWebhook] = useState(null);
   const [modalAddEnd, setModalAddEnd] = useState(null);
   const [modalAddGotoFlow, setModalAddGotoFlow] = useState(null);
@@ -701,6 +706,10 @@ export const FlowBuilderConfig = () => {
     addAndResetDrop("tag", data);
   };
 
+  const kanbanLaneAdd = (data) => {
+    addAndResetDrop("kanbanLane", data);
+  };
+
   const webhookAdd = (data) => {
     addAndResetDrop("webhook", data);
   };
@@ -996,6 +1005,9 @@ export const FlowBuilderConfig = () => {
     }
     if (node.type === "tag") {
       setModalAddTag("edit");
+    }
+    if (node.type === "kanbanLane") {
+      setModalAddKanbanLane("edit");
     }
     if (node.type === "webhook") {
       setModalAddWebhook("edit");
@@ -1472,6 +1484,13 @@ export const FlowBuilderConfig = () => {
           type: "tag",
         },
         {
+          icon: <ViewKanban sx={{ color: "#0E7490" }} />,
+          color: "#0E7490",
+          name: "Mover lane",
+          desc: "Move o lead entre as lanes do Kanban",
+          type: "kanbanLane",
+        },
+        {
           icon: <StickyNote2 sx={{ color: "#D97706" }} />,
           color: "#D97706",
           name: "Nota interna",
@@ -1797,6 +1816,14 @@ export const FlowBuilderConfig = () => {
         data={dataNode}
         onUpdate={updateNode}
         close={setModalAddTag}
+      />
+
+      <FlowBuilderKanbanLaneModal
+        open={modalAddKanbanLane}
+        onSave={kanbanLaneAdd}
+        data={dataNode}
+        onUpdate={updateNode}
+        close={setModalAddKanbanLane}
       />
 
       <FlowBuilderWebhookModal
