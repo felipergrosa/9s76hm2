@@ -29,6 +29,8 @@ import CompaniesSettings from "../../models/CompaniesSettings";
 import FindOrCreateTicketService from "../TicketServices/FindOrCreateTicketService";
 import { verifyMessage } from "./wbotMessageListener";
 import { emitTicketUpdateSimple } from "../../helpers/emitTicketUpdate";
+import { getIO } from "../../libs/socket";
+import sanitizeWhatsapp from "../../helpers/sanitizeWhatsapp";
 
 let i = 0;
 
@@ -752,6 +754,31 @@ const wbotMonitor = async (
       try {
         // Verificar se o socket ainda existe no pool de sessões
         const { getWbot, getWbotIsReconnecting, removeWbot } = require("../../libs/wbot");
+        // Reflete o estado real na UI: grava DISCONNECTED no banco e emite
+        // whatsappSession — sem isso, a linha ficava CONNECTED no banco
+        // mesmo com a sessão morta, e ninguém sabia que precisava reconectar.
+        const markDisconnected = async () => {
+          try {
+            const wa = await Whatsapp.findByPk(whatsapp.id);
+            if (wa && wa.status !== "DISCONNECTED") {
+              await wa.update({ status: "DISCONNECTED" });
+              getIO()
+                .of(`/workspace-${companyId}`)
+                .emit(`company-${companyId}-whatsappSession`, {
+                  action: "update",
+                  session: sanitizeWhatsapp(wa)
+                });
+              logger.warn(
+                `[HealthCheck] whatsappId=${whatsapp.id} → DISCONNECTED (emitido p/ frontend)`
+              );
+            }
+          } catch (e: any) {
+            logger.error(
+              `[HealthCheck] falha ao marcar DISCONNECTED ${whatsapp.id}: ${e?.message}`
+            );
+          }
+        };
+
         const session = getWbot(whatsapp.id);
 
         if (!session) {
@@ -781,6 +808,8 @@ const wbotMonitor = async (
               logger.error(`[HealthCheck] Socket ${whatsapp.id} morto (readyState=${ws.readyState}), forçando reconexão`);
               failedPings = 0;
 
+              await markDisconnected();
+
               // O StartWhatsAppSessionUnified coordena a exclusividade via lock.
               // Disparar reconexão
               removeWbot(whatsapp.id, false);
@@ -801,6 +830,29 @@ const wbotMonitor = async (
             }
             return;
           }
+        }
+
+        // Sessão "zumbi": WebSocket OPEN mas sem identidade pareada
+        // (deslogada no celular ou substituída por outra sessão) — o socket
+        // continua aceitando comandos mas nunca recebe mensagens. Marca
+        // desconectada e força reconexão (gera QR novo se o pareamento morreu).
+        if (!(session as any)?.user) {
+          logger.error(
+            `[HealthCheck] Sessão ${whatsapp.id} sem identidade (despareada) — forçando reconexão`
+          );
+          await markDisconnected();
+          removeWbot(whatsapp.id, false);
+
+          const { getCircuitBreakerStatus } = require("../../libs/wbot");
+          const cbStatus = getCircuitBreakerStatus(whatsapp.id);
+          if (cbStatus.status !== "open") {
+            const wa = await Whatsapp.findByPk(whatsapp.id);
+            if (wa && wa.status !== "PENDING") {
+              const { StartWhatsAppSessionUnified } = require("./StartWhatsAppSessionUnified");
+              setTimeout(() => StartWhatsAppSessionUnified(wa, companyId), 2000);
+            }
+          }
+          return;
         }
 
         // Tentar ping leve: sendPresenceUpdate com timeout mais curto
@@ -829,6 +881,8 @@ const wbotMonitor = async (
           if (failedPings >= MAX_FAILED_PINGS) {
             logger.error(`[HealthCheck] Socket ${whatsapp.id} não responde a pings, forçando reconexão`);
             failedPings = 0;
+
+            await markDisconnected();
 
             // O StartWhatsAppSessionUnified coordena a exclusividade via lock.
             // Disparar reconexão
