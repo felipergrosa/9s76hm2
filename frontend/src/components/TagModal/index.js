@@ -414,7 +414,11 @@ const TagModal = ({ open, onClose, tagId, kanban }) => {
 			return;
 		}
 
-		const tagData = { ...values, userId: user?.id, kanban: kanban, nextLaneId: selectedLane || null, rollbackLaneId: selectedRollbackLane || null };
+		// Respeita o "Workspace (Dono da Tag)" selecionado: null = Global
+		// (lane pública). Antes forçava sempre user?.id — toda lane ficava
+		// privada do criador e nenhum outro usuário a enxergava no Kanban.
+		// Não-admin: o backend força o próprio id mesmo assim.
+		const tagData = { ...values, userId: tag.userId ?? null, kanban: kanban, nextLaneId: selectedLane || null, rollbackLaneId: selectedRollbackLane || null };
 
 		try {
 			if (tagId) {

@@ -13,7 +13,7 @@ import Autocomplete from "@material-ui/lab/Autocomplete";
 import { toast } from "react-toastify";
 import usePermissions from "../../hooks/usePermissions";
 import { 
-  Tooltip, Typography, IconButton, InputBase, Select, MenuItem, FormControl,
+  Tooltip, Typography, IconButton, InputBase, Select, MenuItem, FormControl, InputLabel,
   Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Button,
   TextField, Chip, CircularProgress, InputAdornment, Box
 } from "@material-ui/core";
@@ -147,10 +147,18 @@ const useStyles = makeStyles(theme => ({
     display: "flex",
     position: "relative",
   },
-  // Hint discreto dos atalhos de teclado — some em telas pequenas
+  // Hint dos atalhos de teclado como chip sutil, alinhado aos botões da
+  // toolbar (antes era texto solto sem moldura) — some em telas pequenas
   shortcutsHint: {
     marginLeft: "auto",
     whiteSpace: "nowrap",
+    fontSize: "0.72rem",
+    letterSpacing: "0.02em",
+    padding: "6px 12px",
+    borderRadius: 8,
+    border: `1px dashed ${theme.palette.divider}`,
+    background: theme.palette.action.hover,
+    color: theme.palette.text.secondary,
     [theme.breakpoints.down("sm")]: {
       display: "none",
     },
@@ -200,7 +208,7 @@ const Kanban = () => {
   const canEditLanes = hasPermission("tags.edit");
   const canDeleteLanes = hasPermission("tags.delete");
   const LANE_COLORS = ["#1976d2", "#388e3c", "#f57c00", "#d32f2f", "#7b1fa2", "#0288d1", "#455a64", "#c2185b"];
-  const emptyLaneForm = { name: "", color: LANE_COLORS[0] };
+  const emptyLaneForm = { name: "", color: LANE_COLORS[0], userId: "" };
   const emptyDealForm = { contactId: "", contact: null, dealTitle: "", value: "", dealDescription: "", laneId: null };
   const [laneDialogOpen, setLaneDialogOpen] = useState(false);
   const [laneForm, setLaneForm] = useState(emptyLaneForm);
@@ -601,16 +609,16 @@ const Kanban = () => {
 
   // ── CRUD de fases (tags kanban) ──────────────────────────────────────────
   const openAddLane = () => { setLaneForm(emptyLaneForm); setEditLaneId(null); setLaneDialogOpen(true); };
-  const openEditLane = (tag) => { setLaneForm({ name: tag.name, color: tag.color }); setEditLaneId(tag.id); setLaneDialogOpen(true); };
+  const openEditLane = (tag) => { setLaneForm({ name: tag.name, color: tag.color, userId: tag.userId || "" }); setEditLaneId(tag.id); setLaneDialogOpen(true); };
 
   const saveLane = async () => {
     if (!laneForm.name.trim()) { toast.warning("Nome da fase é obrigatório"); return; }
     setSaving(true);
     try {
       if (editLaneId) {
-        await api.put(`/tags/${editLaneId}`, { name: laneForm.name.trim(), color: laneForm.color });
+        await api.put(`/tags/${editLaneId}`, { name: laneForm.name.trim(), color: laneForm.color, userId: laneForm.userId || null });
       } else {
-        await api.post("/tags", { name: laneForm.name.trim(), color: laneForm.color, kanban: 1 });
+        await api.post("/tags", { name: laneForm.name.trim(), color: laneForm.color, kanban: 1, userId: laneForm.userId || null });
       }
       setLaneDialogOpen(false);
       fetchTags();
@@ -1131,6 +1139,21 @@ const Kanban = () => {
                 ))}
               </Box>
             </Box>
+            {(user.profile === "admin" || user.super) && (
+              <FormControl variant="outlined" size="small" fullWidth>
+                <InputLabel>Workspace (dono da fase)</InputLabel>
+                <Select
+                  value={laneForm.userId}
+                  onChange={e => setLaneForm(f => ({ ...f, userId: e.target.value }))}
+                  label="Workspace (dono da fase)"
+                >
+                  <MenuItem value="">Global (Todos)</MenuItem>
+                  {selectableUsers.map(u => (
+                    <MenuItem key={u.id} value={u.id}>{u.name}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
           </Box>
         </DialogContent>
         <DialogActions>

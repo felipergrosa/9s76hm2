@@ -19,6 +19,7 @@ interface Data {
   tagListId?: string | number | null;
   negativeTagListIds?: number[] | string | null;
   campaignTagId?: string | number | null;
+  kanbanLaneId?: string | number | null;
   message1?: string;
   message2?: string;
   message3?: string;
@@ -123,7 +124,7 @@ const EDITABLE_FIELDS = [
   "confirmationMessage1", "confirmationMessage2", "confirmationMessage3",
   "confirmationMessage4", "confirmationMessage5",
   "contactListId", "contactListIds", "tagListId", "negativeTagListIds",
-  "campaignTagId",
+  "campaignTagId", "kanbanLaneId",
   "whatsappId", "userId", "userIds", "queueId",
   "statusTicket", "openTicket", "dispatchStrategy", "allowedWhatsappIds",
   "mediaUrl1", "mediaName1", "mediaUrl2", "mediaName2",
@@ -176,6 +177,7 @@ const UpdateService = async (data: Data): Promise<Campaign> => {
   await assertSameCompany(Tag, toIdList(data.tagListId), companyId, "Tag");
   await assertSameCompany(Tag, toIdList(data.negativeTagListIds), companyId, "Tags de exclusão");
   await assertSameCompany(Tag, toIdList(data.campaignTagId), companyId, "Tag de controle");
+  await assertSameCompany(Tag, toIdList(data.kanbanLaneId), companyId, "Lane do Kanban");
   await assertSameCompany(Whatsapp, toIdList(data.whatsappId), companyId, "Conexão WhatsApp");
   await assertSameCompany(Whatsapp, toIdList(data.allowedWhatsappIds), companyId, "Conexões permitidas");
   await assertWhatsappChannel(
@@ -210,6 +212,12 @@ const UpdateService = async (data: Data): Promise<Campaign> => {
     payload.campaignTagId = null;
   } else if (payload.campaignTagId != null) {
     payload.campaignTagId = Number(payload.campaignTagId);
+  }
+  // "" do formulário ("Sem alteração") → null; id positivo → number
+  if (payload.kanbanLaneId === "") {
+    payload.kanbanLaneId = null;
+  } else if (payload.kanbanLaneId != null) {
+    payload.kanbanLaneId = Number(payload.kanbanLaneId);
   }
 
   // Serializa allowedWhatsappIds e contactListIds se vierem como array/objeto

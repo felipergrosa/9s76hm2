@@ -745,7 +745,7 @@ const CampaignForm = () => {
     status: "INATIVA", confirmation: false, scheduledAt: "",
     // Recorrência do disparo (none | daily | weekly | monthly) + fim opcional
     recurrence: "none", recurrenceEndAt: "",
-    contactListId: "", contactListIds: [], tagListId: "Nenhuma", negativeTagListIds: [], campaignTagId: "", companyId,
+    contactListId: "", contactListIds: [], tagListId: "Nenhuma", negativeTagListIds: [], campaignTagId: "", kanbanLaneId: "", companyId,
     statusTicket: "closed", openTicket: "disabled", dispatchStrategy: "single",
     allowedWhatsappIds: [], metaTemplateName: null, metaTemplateLanguage: null,
     metaTemplateVariables: {}, sendMediaSeparately: false,
@@ -761,6 +761,7 @@ const CampaignForm = () => {
   // Data lists
   const [contactLists, setContactLists] = useState([]);
   const [tagLists, setTagLists] = useState([]);
+  const [kanbanLanes, setKanbanLanes] = useState([]);
   const [whatsapps, setWhatsapps] = useState([]);
   const [options, setOptions] = useState([]);
   const [queues, setQueues] = useState([]);
@@ -943,11 +944,13 @@ const CampaignForm = () => {
     if (!isMounted.current) return;
     (async () => {
       try {
-        const [clRes, waRes, tagRes] = await Promise.all([
+        const [clRes, waRes, tagRes, lanesRes] = await Promise.all([
           loadAllContactLists(),
           api.get("/whatsapp", { params: { companyId, session: 0 } }),
           api.get("/tags/list", { params: { companyId, kanban: 0 } }),
+          api.get("/tag/kanban").catch(() => ({ data: { lista: [] } })),
         ]);
+        setKanbanLanes(lanesRes?.data?.lista || []);
         setContactLists(clRes || []);
         // Somente conexões WhatsApp (baileys/official/legado null) suportam
         // disparo em massa — instagram/facebook/telegram/webchat ficam de fora
@@ -997,6 +1000,7 @@ const CampaignForm = () => {
           prev.negativeTagListIds = parseStoredIdArray(data?.negativeTagListIds);
           // Tag de controle: Select compara string com string
           prev.campaignTagId = data?.campaignTagId ? String(data.campaignTagId) : "";
+          prev.kanbanLaneId = data?.kanbanLaneId ? String(data.kanbanLaneId) : "";
 
           // Copiar demais campos, mas NÃO sobrescrever campos normalizados acima
           Object.entries(data).forEach(([k,v]) => {
@@ -1571,6 +1575,24 @@ const CampaignForm = () => {
                                {values.campaignTagId && (
                                  <Typography variant="caption" style={{ color: "#64748b", marginTop: 4, display: "block" }}>
                                    Marca o contato no disparo e remove quando ele responde
+                                 </Typography>
+                               )}
+                             </FormControl>
+                           </Grid>
+
+                           <Grid item xs={12} md={6}>
+                             <Box display="flex" alignItems="center" mb={1} gap={0.5}>
+                               <label className={classes.label} style={{ marginBottom: 0 }}>Lane do Kanban</label>
+                               <Tooltip title="Opcional: posiciona o lead nesta fase do Kanban assim que o ticket da campanha é criado no disparo."><InfoOutlinedIcon style={{ fontSize: 16, color: "#64748b", cursor: "pointer" }} /></Tooltip>
+                             </Box>
+                             <FormControl variant="outlined" fullWidth className={classes.formField}>
+                               <Select name="kanbanLaneId" value={values.kanbanLaneId||""} onChange={e => setFieldValue("kanbanLaneId", e.target.value)} disabled={!campaignEditable}>
+                                 <MenuItem value="">Sem alteração</MenuItem>
+                                 {kanbanLanes.map(l => <MenuItem key={l.id} value={String(l.id)}>{l.name}</MenuItem>)}
+                               </Select>
+                               {values.kanbanLaneId && (
+                                 <Typography variant="caption" style={{ color: "#64748b", marginTop: 4, display: "block" }}>
+                                   Lead entra direto nesta lane ao disparar
                                  </Typography>
                                )}
                              </FormControl>

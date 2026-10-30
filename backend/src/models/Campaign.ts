@@ -159,6 +159,11 @@ class Campaign extends Model<Campaign> {
   @Column({ type: DataType.INTEGER, allowNull: true })
   campaignTagId: number;
 
+  // Lane do Kanban aplicada ao ticket criado no disparo da campanha
+  // (tag com kanban=1). Posiciona o lead na fase do funil automaticamente.
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  kanbanLaneId: number;
+
   // Campos de mídia por mensagem (1..5)
   @Column
   mediaUrl1: string;

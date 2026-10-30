@@ -204,6 +204,7 @@ interface CampaignData {
   tagListId: number | null;
   negativeTagListIds: string | null;
   campaignTagId: number | null;
+  kanbanLaneId: number | null;
   statusTicket: string | null;
   // Mensagens
   message1: string | null;
@@ -810,7 +811,7 @@ async function getCampaignLight(id) {
       'mediaPath', 'mediaName',
       'mediaUrl1', 'mediaUrl2', 'mediaUrl3', 'mediaUrl4', 'mediaUrl5',
       'mediaName1', 'mediaName2', 'mediaName3', 'mediaName4', 'mediaName5',
-      'sendMediaSeparately', 'confirmation', 'statusTicket', 'campaignTagId'
+      'sendMediaSeparately', 'confirmation', 'statusTicket', 'campaignTagId', 'kanbanLaneId'
     ]
   });
   return campaign;
@@ -841,6 +842,7 @@ function serializeCampaign(campaign: any): CampaignData {
     tagListId: campaign.tagListId,
     negativeTagListIds: campaign.negativeTagListIds,
     campaignTagId: campaign.campaignTagId,
+    kanbanLaneId: campaign.kanbanLaneId,
     statusTicket: campaign.statusTicket,
     // Mensagens
     message1: campaign.message1,
@@ -1690,7 +1692,7 @@ async function finalizeCampaignRun(campaign: any): Promise<void> {
   // Recarrega campos mínimos: `campaign` pode ser o objeto serializado do
   // job (campaignData), que pode estar desatualizado em relação ao banco.
   const fresh = await Campaign.findByPk(campaignId, {
-    attributes: ["id", "status", "scheduledAt", "recurrence", "recurrenceEndAt", "companyId", "campaignTagId"]
+    attributes: ["id", "status", "scheduledAt", "recurrence", "recurrenceEndAt", "companyId", "campaignTagId", "kanbanLaneId"]
   });
   if (!fresh || fresh.status !== "EM_ANDAMENTO") {
     // Já cancelada/finalizada/reagendada por outro caminho — não mexe
@@ -2208,7 +2210,7 @@ async function handleDispatchCampaign(job) {
 
     // Verificar status atualizado da campanha (consulta leve, apenas status)
     const campaignStatus = await Campaign.findByPk(campaignId, {
-      attributes: ["id", "status", "campaignTagId"]
+      attributes: ["id", "status", "campaignTagId", "kanbanLaneId"]
     });
 
     // Se não tem campaignData, buscar campanha completa (compatibilidade com jobs antigos)
@@ -2220,6 +2222,8 @@ async function handleDispatchCampaign(job) {
       // Reidrata a tag de controle do banco: snapshots serializados antes do
       // campo existir chegam sem campaignTagId e a marcação seria pulada
       campaign.campaignTagId = campaignStatus.campaignTagId;
+      // Idem para a lane do kanban (campo adicionado depois dos snapshots)
+      campaign.kanbanLaneId = campaignStatus.kanbanLaneId;
     }
 
     // Se a campanha foi pausada/cancelada/finalizada, não deve continuar tentando enviar.
@@ -2623,6 +2627,34 @@ async function handleDispatchCampaign(job) {
             }
           }
 
+          // Lane do Kanban: posiciona o lead na fase configurada assim que o
+          // ticket da campanha é criado (mesma semântica do drag-drop —
+          // limpa as lanes anteriores do ticket e aplica a nova).
+          if (campaign.kanbanLaneId && ticket?.id) {
+            try {
+              const currentTags = await TicketTag.findAll({
+                where: { ticketId: ticket.id, companyId: campaign.companyId }
+              });
+              const kanbanTags = await Tag.findAll({
+                where: { id: { [Op.in]: currentTags.map(t => t.tagId) }, kanban: 1, companyId: campaign.companyId }
+              });
+              const kanbanTagIds = kanbanTags.map(t => t.id);
+              if (kanbanTagIds.length > 0) {
+                await TicketTag.destroy({ where: { ticketId: ticket.id, companyId: campaign.companyId, tagId: { [Op.in]: kanbanTagIds } } });
+              }
+              await TicketTag.findOrCreate({
+                where: {
+                  ticketId: ticket.id,
+                  tagId: campaign.kanbanLaneId,
+                  companyId: campaign.companyId
+                }
+              });
+              logger.info(`[DispatchCampaign][Official] Lane ${campaign.kanbanLaneId} aplicada ao ticket ${ticket.id}`);
+            } catch (e) {
+              logger.warn(`[DispatchCampaign][Official] Falha ao aplicar lane ${campaign.kanbanLaneId} no ticket ${ticket.id}: ${e}`);
+            }
+          }
+
           // Enviar template
           const adapter = await GetWhatsAppAdapter(whatsapp);
           if (typeof adapter.sendTemplate === "function") {
@@ -2808,6 +2840,33 @@ async function handleDispatchCampaign(job) {
           }
         } catch (e) {
           logger.warn(`[DispatchCampaign][Baileys] Falha ao aplicar tag ${campaign.campaignTagId} no contato ${contact.id}: ${e}`);
+        }
+      }
+
+      // Lane do Kanban: posiciona o lead na fase configurada assim que o
+      // ticket da campanha é criado (mesma semântica do drag-drop).
+      if (campaign.kanbanLaneId && ticket?.id) {
+        try {
+          const currentTags = await TicketTag.findAll({
+            where: { ticketId: ticket.id, companyId: campaign.companyId }
+          });
+          const kanbanTags = await Tag.findAll({
+            where: { id: { [Op.in]: currentTags.map(t => t.tagId) }, kanban: 1, companyId: campaign.companyId }
+          });
+          const kanbanTagIds = kanbanTags.map(t => t.id);
+          if (kanbanTagIds.length > 0) {
+            await TicketTag.destroy({ where: { ticketId: ticket.id, companyId: campaign.companyId, tagId: { [Op.in]: kanbanTagIds } } });
+          }
+          await TicketTag.findOrCreate({
+            where: {
+              ticketId: ticket.id,
+              tagId: campaign.kanbanLaneId,
+              companyId: campaign.companyId
+            }
+          });
+          logger.info(`[DispatchCampaign][Baileys] Lane ${campaign.kanbanLaneId} aplicada ao ticket ${ticket.id}`);
+        } catch (e) {
+          logger.warn(`[DispatchCampaign][Baileys] Falha ao aplicar lane ${campaign.kanbanLaneId} no ticket ${ticket.id}: ${e}`);
         }
       }
 

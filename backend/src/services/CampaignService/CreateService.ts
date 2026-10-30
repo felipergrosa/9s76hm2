@@ -19,6 +19,7 @@ interface Data {
   tagListId?: string | number | null;
   negativeTagListIds?: number[] | string | null;
   campaignTagId?: string | number | null;
+  kanbanLaneId?: string | number | null;
   message1?: string;
   message2?: string;
   message3?: string;
@@ -159,6 +160,7 @@ const CreateService = async (data: Data): Promise<Campaign> => {
   await assertSameCompany(Tag, toIdList(data.tagListId), data.companyId, "Tag");
   await assertSameCompany(Tag, toIdList(data.negativeTagListIds), data.companyId, "Tags de exclusão");
   await assertSameCompany(Tag, toIdList(data.campaignTagId), data.companyId, "Tag de controle");
+  await assertSameCompany(Tag, toIdList(data.kanbanLaneId), data.companyId, "Lane do Kanban");
   await assertSameCompany(Whatsapp, toIdList(data.whatsappId), data.companyId, "Conexão WhatsApp");
   await assertSameCompany(Whatsapp, toIdList(data.allowedWhatsappIds), data.companyId, "Conexões permitidas");
   await assertWhatsappChannel(
@@ -177,6 +179,12 @@ const CreateService = async (data: Data): Promise<Campaign> => {
     payload.campaignTagId = null;
   } else if (payload.campaignTagId !== null) {
     payload.campaignTagId = Number(payload.campaignTagId);
+  }
+  // "" do formulário ("Sem alteração") → null; id positivo → number
+  if (payload.kanbanLaneId === "" || payload.kanbanLaneId === undefined) {
+    payload.kanbanLaneId = null;
+  } else if (payload.kanbanLaneId !== null) {
+    payload.kanbanLaneId = Number(payload.kanbanLaneId);
   }
   if (
     payload.allowedWhatsappIds != null &&
